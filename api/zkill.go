@@ -121,7 +121,7 @@ func (z ZkillConnection) GetZkillPage(endpoint string, page int, allZkillmails *
 
 	gzipReader, err := gzip.NewReader(resp.Body)
 	if err != nil {
-		comm.Logger.WithError(err).Fatal("Could not decode response from Zkill (gzip decode)")
+		comm.Logger.WithError(err).Error("Could not decode response from Zkill (gzip decode)")
 		return nextPage, err
 	}
 
@@ -130,7 +130,7 @@ func (z ZkillConnection) GetZkillPage(endpoint string, page int, allZkillmails *
 	err = json.NewDecoder(gzipReader).Decode(&thisPageKillmails)
 
 	if err != nil {
-		comm.Logger.WithError(err).Fatal("Could not decode response from Zkill")
+		comm.Logger.WithError(err).Error("Could not decode response from Zkill")
 		return nextPage, err
 	}
 

@@ -1,22 +1,40 @@
 package retrieval
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
 )
 
-func CollectKillmails(target IntelTarget) *[]RawKillmail {
+// ErrIncompleteKillmails is returned alongside the killmails that were collected when some could not be retrieved
+var ErrIncompleteKillmails = errors.New("not all killmails could be collected")
+
+/*
+	CollectKillmails pulls the zkill killmail list for the target, then the full ESI killmail for each.
+
+Parameters:
+  - target: the IntelTarget to collect killmails for
+
+Returns:
+  - *[]RawKillmail: every killmail that was successfully retrieved from both zkill and the ESI
+  - error: nil, or ErrIncompleteKillmails wrapping the underlying errors if the zkill pull was partial or any ESI killmails were skipped - the collected killmails are still returned
+*/
+func CollectKillmails(target IntelTarget) (*[]RawKillmail, error) {
 
 	zkillClient := target.Clients.ZkillClient
 	esiClient := target.Clients.ESIClient
 
 	allRawKillmails := []RawKillmail{}
+	var errs []error
 
 	killmails, err := zkillClient.GetZkillResults(target.IDNumber, target.TypeOfEntity)
 
 	if err != nil {
-		//handle error
+		comm.Logger.WithError(err).Warnf("[Zkill] Only retrieved %d killmails, continuing with partial results", len(*killmails))
+		errs = append(errs, err)
 	}
 
 	for index, km := range *killmails {
@@ -27,16 +45,22 @@ func CollectKillmails(target IntelTarget) *[]RawKillmail {
 		}
 		esiKM, err := esiClient.GetKillmail(km)
 		if err != nil {
-			//handle error
+			comm.Logger.WithError(err).Warnf("[ESI] Skipping killmail %d", km.KillmailID)
+			errs = append(errs, fmt.Errorf("killmail %d: %w", km.KillmailID, err))
+		} else {
+			allRawKillmails = append(allRawKillmails, RawKillmail{Zkillmail: &km, ESIKillmail: esiKM})
 		}
-		allRawKillmails = append(allRawKillmails, RawKillmail{Zkillmail: &km, ESIKillmail: esiKM})
 
 		if index == 10 {
-			return &allRawKillmails
+			break
 		}
 	}
 
-	return &allRawKillmails
+	if len(errs) > 0 {
+		return &allRawKillmails, fmt.Errorf("%w: %w", ErrIncompleteKillmails, errors.Join(errs...))
+	}
+
+	return &allRawKillmails, nil
 }
 
 func (rkm *RawKillmail) Expand(esiClient *api.ESIClient, cached *CachedEveIDs) *Killmail {

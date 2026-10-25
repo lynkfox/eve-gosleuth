@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -138,7 +139,13 @@ func CreateMockZkillResponse(numberOfKillmails int) *MockApiClient {
 	} else {
 		zkillMockResponse = strings.Join([]string{"[", singleKillmail, "]"}, " ")
 	}
-	r := io.NopCloser(bytes.NewReader([]byte(zkillMockResponse)))
+	// zkill responses are gzip encoded
+	var gzipped bytes.Buffer
+	gzipWriter := gzip.NewWriter(&gzipped)
+	gzipWriter.Write([]byte(zkillMockResponse))
+	gzipWriter.Close()
+
+	r := io.NopCloser(&gzipped)
 	// Create a mocked ZkillConnection
 	return &MockApiClient{
 		Method:   "GET",

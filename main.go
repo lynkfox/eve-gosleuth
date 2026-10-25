@@ -28,7 +28,10 @@ func main() {
 
 	target.Expanded = loaded_cache.ExpandPilot(target.IDNumber, true)
 
-	killmails := retrieval.CollectKillmails(target)
+	killmails, err := retrieval.CollectKillmails(target)
+	if err != nil {
+		comm.Logger.WithError(err).Warnf("Continuing with %d collected killmails", len(*killmails))
+	}
 
 	collected_data := aggregate.CollateAllKillmailData(killmails, &target.Clients.ESIClient,
 		loaded_cache)
