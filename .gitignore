@@ -1,0 +1,35 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/go-eve-sleuth
+/go_eve_sleuth
+
+# Delve debug binaries
+__debug_bin*
+
+# Test and profiling output
+*.test
+*.out
+*.prof
+coverage.*
+
+# Go workspace
+go.work
+go.work.sum
+
+# Environment
+.env
+
+# Editor / OS
+.idea/
+*.swp
+.DS_Store
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# Local ESI cache, built per user at runtime
+cached_data.json
