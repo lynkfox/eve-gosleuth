@@ -76,7 +76,7 @@ func TestSettings(t *testing.T) {
 		app := &App{settingsPath: path, settings: loadSettings(path)}
 		assert.NoError(t, app.SetTheme("amarr"))
 
-		chosen := Preferences{IncludeZkillLabels: true, MaxKillmails: 2000, KillmailsNewerThanDays: 30, UseCachedKillmails: true, TimeZone: "local", MaxRecentSearches: 25}
+		chosen := Preferences{IncludeZkillLabels: true, MaxKillmails: 2000, KillmailsNewerThanDays: 30, UseCachedKillmails: true, TimeZone: "local", MaxRecentSearches: 25, HideKilledAllies: true}
 		assert.NoError(t, app.SavePreferences(chosen))
 
 		assert.Equal(t, Settings{Theme: "amarr", Preferences: chosen}, loadSettings(path))

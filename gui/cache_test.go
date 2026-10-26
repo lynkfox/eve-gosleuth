@@ -58,7 +58,7 @@ func TestCacheActions(t *testing.T) {
 	t.Run("clearing saves the cleared cache", func(t *testing.T) {
 		app := newApp(t)
 
-		info, err := app.ClearCache("all")
+		info, err := app.ClearCache("all", false)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 0, info.Entries)
@@ -69,7 +69,7 @@ func TestCacheActions(t *testing.T) {
 	t.Run("an unknown choice clears nothing", func(t *testing.T) {
 		app := newApp(t)
 
-		_, err := app.ClearCache("some")
+		_, err := app.ClearCache("some", false)
 
 		assert.Error(t, err)
 		assert.Equal(t, 1, app.cache.Entries())
@@ -80,7 +80,7 @@ func TestCacheActions(t *testing.T) {
 		app.mu.Lock()
 		defer app.mu.Unlock()
 
-		_, clearErr := app.ClearCache("all")
+		_, clearErr := app.ClearCache("all", false)
 		_, moveErr := app.moveCache(t.TempDir())
 
 		assert.ErrorIs(t, clearErr, errSearchRunning)

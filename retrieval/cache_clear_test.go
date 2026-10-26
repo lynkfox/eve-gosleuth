@@ -44,7 +44,7 @@ func TestClearCache(t *testing.T) {
 		cache := filled(t, false)
 		assert.Equal(t, 12, cache.Entries())
 
-		assert.Equal(t, 12, cache.ClearAll())
+		assert.Equal(t, 12, cache.ClearAll(false))
 		assert.Equal(t, 0, cache.Entries())
 	})
 
@@ -64,8 +64,8 @@ func TestClearCache(t *testing.T) {
 	t.Run("older than a cutoff, killmails included", func(t *testing.T) {
 		cache := filled(t, false)
 
-		assert.Equal(t, 0, cache.ClearOlderThan(time.Now().UTC().Add(-time.Hour)), "nothing is that old")
-		assert.Equal(t, 12, cache.ClearOlderThan(time.Now().UTC().Add(time.Second)))
+		assert.Equal(t, 0, cache.ClearOlderThan(time.Now().UTC().Add(-time.Hour), false), "nothing is that old")
+		assert.Equal(t, 12, cache.ClearOlderThan(time.Now().UTC().Add(time.Second), false))
 		assert.Nil(t, cache.CachedKillmail(139416795))
 	})
 }

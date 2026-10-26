@@ -319,6 +319,58 @@ main {
   letter-spacing: 0.08em;
 }
 
+/* the target's holding links, between its header and detail panels */
+.target-holdings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.holding-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+.holding-label {
+  min-width: 6.5em;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.holding {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 2px 2px;
+  background: var(--panel-raised);
+  border-radius: 4px;
+}
+
+.holding > img { width: 22px; height: 22px; border-radius: 3px; }
+.holding-type { color: var(--muted); font-size: 11px; }
+.holding-note { max-width: 18em; overflow: hidden; color: var(--muted); font-size: 12px; font-style: italic; text-overflow: ellipsis; white-space: nowrap; }
+
+.holding-action {
+  padding: 0 4px;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.holding-action:hover { color: var(--text); }
+.holding-add { padding: 2px 10px; font-size: 12px; }
+
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -972,13 +1024,47 @@ button.danger {
 
 .preference-name { display: block; font-weight: 600; }
 
+/* a setting's name with an i before it, both showing its description on hover */
+.preference-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: help;
+}
+
+.preference-info {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+  color: var(--muted);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.preference-label:hover .preference-info { border-color: var(--accent); color: var(--accent); }
+
 .preference-help { display: block; color: var(--muted); font-size: 12px; }
 
-.preference-warning { margin: -6px 0 0; color: var(--error); font-size: 12px; }
+.preference-warning { margin: 0 0 -6px; color: var(--error); font-size: 12px; }
 
 .window-body { display: grid; gap: 14px; }
 
 .window-body > .preference-help { margin: 0; }
+
+/* the first heading needs no rule above it */
+.window-body > .preference-group:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+
+/* about 10% wider than other windows, the extra going to the setting names: the controls keep their 150px */
+#preferences { width: min(462px, calc(100vw - 32px)); }
 
 .preference-group {
   margin: 4px 0 -4px;
@@ -1038,6 +1124,19 @@ button.danger {
 .clear-choices label > span { display: flex; flex-direction: column; gap: 2px; }
 
 .preferences-error { margin: 0; color: var(--error); font-size: 13px; }
+
+.clear-user-data { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); cursor: pointer; }
+.clear-user-data input { flex: none; margin-top: 4px; padding: 0; accent-color: var(--error); }
+.clear-user-data > span { display: flex; flex-direction: column; gap: 2px; }
+
+/* Holding links: the add or edit popup */
+.holding-dialog { width: min(400px, calc(100vw - 32px)); }
+.holding-dialog form { display: grid; gap: 12px; }
+.holding-dialog .confirm-actions { margin-top: 6px; }
+.holding-title { font-weight: 600; }
+.holding-field { display: grid; gap: 4px; }
+.holding-field input,
+.holding-field select { width: 100%; }
 
 .window-actions {
   display: flex;
@@ -1566,6 +1665,40 @@ tr.roster-divider td {
 
 /* the Overall row above the pilots: the hours of every loss in the tab, its strip lined up with the pilots' */
 .pi-overall { border: 1px solid var(--border); }
+
+/* Allies tab: an ally the target also killed */
+.ally-killed { color: var(--error); }
+
+.ally-ignore { width: 1%; text-align: center; }
+.ally-ignore input,
+.allies-ignored-item input { margin: 0; accent-color: var(--accent); }
+
+/* the allies already ignored for the target, under the table */
+.allies-ignored {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 12px;
+}
+
+.allies-ignored-list { display: contents; }
+
+.allies-ignored-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.allies-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+}
 
 /* Ratters tab: the PI rows, with a wider tag for how sure a ratting loss is */
 .rat-loss { grid-template-columns: 210px minmax(0, 1fr) minmax(0, 1fr) auto 3em; }

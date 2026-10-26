@@ -46,6 +46,9 @@ type App struct {
 	// the Members tab's list for the last corp or alliance searched, with its own lock so paging through it never waits behind a search
 	rosterMu sync.Mutex
 	roster   *roster
+
+	// the last pilot, corp, or alliance search, so SaveIgnoredAllies can rank its allies again. Guarded by mu.
+	lastAllies *alliesSource
 }
 
 // sdeCheckInterval is the least time between checks for a new SDE release, which is what expires cached ESI data
@@ -53,9 +56,10 @@ const sdeCheckInterval = time.Hour
 
 // TargetResult is the frontend representation of a searched target
 type TargetResult struct {
-	ID      int               `json:"id"`
-	Type    string            `json:"type"`
-	Display api.TargetDisplay `json:"display"`
+	ID       int               `json:"id"`
+	Type     string            `json:"type"`
+	Display  api.TargetDisplay `json:"display"`
+	Holdings *Holdings         `json:"holdings"` // a corp or alliance target's holding links, nil for pilots and systems
 }
 
 // IntelReport holds everything built from a target's killmails. New killmail based sections are added here so a single pull feeds them all.
@@ -68,12 +72,15 @@ type IntelReport struct {
 	Members      []Fleetmate          `json:"members"`      // a corp or alliance target's most active pilots, shown the same way as fleetmates
 	Pilots       []Fleetmate          `json:"pilots"`       // a system target's most active pilots
 	Corporations []CorporationSummary `json:"corporations"` // a system target's most active corporations
-	Systems      []SystemSummary      `json:"systems"`
-	Capitals     []CapitalShip        `json:"capitals"`   // a corp or alliance target's capital ships and the members who flew them
-	PIPilots     []PIPilot            `json:"piPilots"`   // a system target's pilots who lost haulers near its planets, or ships with PI aboard
-	Ratters      []Ratter             `json:"ratters"`    // a system target's pilots who lost ships with NPCs on the killmail
-	MemberList   bool                 `json:"memberList"` // a corp or alliance target has a Members tab, its rows come from GetMembers
-	Sources      string               `json:"sources"`    // where the search's data came from, ie "9748 hits from cache, 1763 from the ESI; zKillboard live", for the frontend's summary line
+	Allies       []AllySummary        `json:"allies"`       // a pilot, corp, or alliance target's most common alliances and corps on its kills, outside its own alliance
+	// the allies the user chose to leave out of this target's Allies, see SaveIgnoredAllies
+	IgnoredAllies []retrieval.IgnoredAlly `json:"ignoredAllies"`
+	Systems       []SystemSummary         `json:"systems"`
+	Capitals      []CapitalShip           `json:"capitals"`   // a corp or alliance target's capital ships and the members who flew them
+	PIPilots      []PIPilot               `json:"piPilots"`   // a system target's pilots who lost haulers near its planets, or ships with PI aboard
+	Ratters       []Ratter                `json:"ratters"`    // a system target's pilots who lost ships with NPCs on the killmail
+	MemberList    bool                    `json:"memberList"` // a corp or alliance target has a Members tab, its rows come from GetMembers
+	Sources       string                  `json:"sources"`    // where the search's data came from, ie "9748 hits from cache, 1763 from the ESI; zKillboard live", for the frontend's summary line
 }
 
 // CapitalShip is a capital ship type a corp or alliance target's pilots flew, and who flew it
@@ -366,11 +373,16 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 	}
 	a.cache.AddRecentSearch(retrieval.RecentSearch{Name: foundName, Type: searchType}, a.GetSettings().MaxRecentSearches)
 
-	return TargetResult{
+	result = TargetResult{
 		ID:      target.IDNumber,
 		Type:    target.TypeOfEntity.String(),
 		Display: display,
-	}, nil
+	}
+	if canHold(result.Type) {
+		holdings := a.holdingsFor(result.Type, result.ID)
+		result.Holdings = &holdings
+	}
+	return result, nil
 }
 
 /*
@@ -470,8 +482,11 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		report.Ratters = a.buildRatters(collected.Killmails)
 	}
 
-	// a system target is the only system on its killmails, so it has no top systems
+	// a system target is the only system on its killmails, so it has no top systems, and no side to have allies on
 	if entityType != types.SYSTEM {
+		comm.ReportProgress("Ranking allies")
+		a.lastAllies = &alliesSource{target: target, killmails: collected.Killmails}
+		report.Allies, report.IgnoredAllies = a.rankAllies(a.lastAllies)
 		comm.ReportProgress("Ranking systems")
 		report.Systems = buildSystemSummaries(aggregate.GetMostVisitedSystems(systemLimit, collected.SystemsVisted), collected.Killmails, &target)
 	}

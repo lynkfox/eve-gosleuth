@@ -101,7 +101,7 @@ func TestRecentSearches(t *testing.T) {
 		cache.ClearEntities()
 		assert.Equal(t, []retrieval.RecentSearch{jita}, cache.RecentSearches(keep))
 
-		cache.ClearAll()
+		cache.ClearAll(false)
 		assert.Equal(t, []retrieval.RecentSearch{}, cache.RecentSearches(keep))
 		assert.Equal(t, []retrieval.RecentSearch{}, reloaded(t, cache).RecentSearches(keep))
 	})
@@ -112,7 +112,7 @@ func TestRecentSearches(t *testing.T) {
 		cutoff := time.Now()
 		searched(cache, pilot)
 
-		cache.ClearOlderThan(cutoff)
+		cache.ClearOlderThan(cutoff, false)
 		assert.Equal(t, []retrieval.RecentSearch{pilot}, reloaded(t, cache).RecentSearches(keep))
 	})
 }

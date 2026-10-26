@@ -88,12 +88,13 @@ func (a *App) GetCacheInfo() CacheInfo {
 
 Parameters:
   - scope: "all" for everything, "entities" for pilot, corporation, and alliance data only, or "older" for everything cached more than clearOlderThanDays days ago
+  - includeUserData: also clear what the user set by hand, ignored allies and holding links, which every clear otherwise keeps. "entities" never touches them.
 
 Returns:
   - CacheInfo: the cache after clearing
   - error: a user readable message if a search is running, the scope is unknown, or the cache could not be saved. The data is still cleared from memory if only the save failed.
 */
-func (a *App) ClearCache(scope string) (CacheInfo, error) {
+func (a *App) ClearCache(scope string, includeUserData bool) (CacheInfo, error) {
 	if !a.mu.TryLock() {
 		return a.GetCacheInfo(), errSearchRunning
 	}
@@ -103,11 +104,11 @@ func (a *App) ClearCache(scope string) (CacheInfo, error) {
 	var what string
 	switch scope {
 	case "all":
-		removed, what = a.cache.ClearAll(), "everything"
+		removed, what = a.cache.ClearAll(includeUserData), "everything"
 	case "entities":
 		removed, what = a.cache.ClearEntities(), "pilot, corporation, and alliance data"
 	case "older":
-		removed, what = a.cache.ClearOlderThan(time.Now().UTC().AddDate(0, 0, -clearOlderThanDays)), fmt.Sprintf("data older than %d days", clearOlderThanDays)
+		removed, what = a.cache.ClearOlderThan(time.Now().UTC().AddDate(0, 0, -clearOlderThanDays), includeUserData), fmt.Sprintf("killmails and anything else older than %d days", clearOlderThanDays)
 	default:
 		return a.GetCacheInfo(), fmt.Errorf("Unknown cache clearing choice %q", scope)
 	}

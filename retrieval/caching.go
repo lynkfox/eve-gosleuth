@@ -79,12 +79,15 @@ type CachedEveIDs struct {
 	AllianceHistories    map[int]*CacheEntry    // corporations' alliance histories, by corporation id
 	Affiliations         map[int]*CacheEntry    // characters' current corp and alliance, by character id
 	Searched             map[string]*CacheEntry // the search bar's recent searches, by recentSearchKey. Never expire, see AddRecentSearch.
+	IgnoredAllies        map[string]*CacheEntry // each target's allies left out of its Allies tab, by ignoredAlliesKey. Never expire, see SetIgnoredAllies.
+	Holdings             map[string]*CacheEntry // the user's holding links, by holdingKey. Never expire, see SaveHoldingLink.
 	Client               api.ESIClient          // the uncached client that cache misses are fetched with
 	Path                 string                 // the database file
 	mu                   sync.Mutex
 	counts               CacheCounts // lookups since the app started, for progress messages
 
 	searchedLoaded bool // Searched has every saved recent search, see loadRecentSearches. Guarded by mu.
+	holdingsLoaded bool // Holdings has every saved holding link, see loadHoldings. Guarded by mu.
 
 	db      *sql.DB                // nil if the database could not be opened, the cache then only lasts the session
 	dirty   map[rowKey]*CacheEntry // added since the last SaveCache, guarded by mu
@@ -217,6 +220,12 @@ func (c *CachedEveIDs) ensureMaps() {
 	}
 	if c.Searched == nil {
 		c.Searched = make(map[string]*CacheEntry)
+	}
+	if c.IgnoredAllies == nil {
+		c.IgnoredAllies = make(map[string]*CacheEntry)
+	}
+	if c.Holdings == nil {
+		c.Holdings = make(map[string]*CacheEntry)
 	}
 	if c.dirty == nil {
 		c.dirty = make(map[rowKey]*CacheEntry)

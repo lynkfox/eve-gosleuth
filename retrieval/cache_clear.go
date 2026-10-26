@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/api"
@@ -86,7 +87,7 @@ func (c *CachedEveIDs) Entries() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.db == nil {
-		count := len(c.NameLookups) + len(c.Searched)
+		count := len(c.NameLookups) + len(c.Searched) + len(c.IgnoredAllies) + len(c.Holdings)
 		for _, entries := range c.idMaps() {
 			count += len(entries.entries)
 		}
@@ -147,7 +148,7 @@ func (c *CachedEveIDs) removeWhere(match func(section, *CacheEntry) bool, where 
 	for _, entries := range []struct {
 		section section
 		entries map[string]*CacheEntry
-	}{{sectionNameLookups, c.NameLookups}, {sectionRecentSearches, c.Searched}} {
+	}{{sectionNameLookups, c.NameLookups}, {sectionRecentSearches, c.Searched}, {sectionIgnoredAllies, c.IgnoredAllies}, {sectionHoldings, c.Holdings}} {
 		for key, entry := range entries.entries {
 			if match(entries.section, entry) {
 				delete(entries.entries, key)
@@ -211,9 +212,33 @@ func (c *CachedEveIDs) compact() {
 	}
 }
 
-// ClearAll empties the cache, returning how many entries were removed. The SDE release seen is kept.
-func (c *CachedEveIDs) ClearAll() int {
-	removed := c.removeWhere(func(section, *CacheEntry) bool { return true }, "1 = 1")
+// userSections hold what the user set by hand, not looked up: ignored allies and holding links. Clears leave them unless told to include them.
+var userSections = []section{sectionIgnoredAllies, sectionHoldings}
+
+// isUserSection reports whether a section is one of userSections
+func isUserSection(s section) bool {
+	return slices.Contains(userSections, s)
+}
+
+// keepingUserData narrows a clear to leave userSections out, unless includeUserData, returning its match and SQL condition with args
+func keepingUserData(includeUserData bool, match func(section, *CacheEntry) bool, where string, args ...any) (func(section, *CacheEntry) bool, string, []any) {
+	if includeUserData {
+		return match, where, args
+	}
+	placeholders, sectionArgs := sectionPlaceholders(userSections...)
+	return func(s section, entry *CacheEntry) bool { return !isUserSection(s) && match(s, entry) },
+		fmt.Sprintf("(%s) AND section NOT IN (%s)", where, placeholders), append(args, sectionArgs...)
+}
+
+/*
+	ClearAll empties the cache, returning how many entries were removed. The SDE release seen is kept.
+
+Parameters:
+  - includeUserData: also remove ignored allies and holding links, which are otherwise kept
+*/
+func (c *CachedEveIDs) ClearAll(includeUserData bool) int {
+	match, where, args := keepingUserData(includeUserData, func(section, *CacheEntry) bool { return true }, "1 = 1")
+	removed := c.removeWhere(match, where, args...)
 	c.compact()
 	return removed
 }
@@ -254,9 +279,16 @@ func (c *CachedEveIDs) ClearEntities() int {
 	return removed
 }
 
-// ClearOlderThan removes everything cached before cutoff, killmails and deleted characters included, returning how many entries were removed
-func (c *CachedEveIDs) ClearOlderThan(cutoff time.Time) int {
-	removed := c.removeWhere(func(_ section, entry *CacheEntry) bool { return entry.CachedAt.Before(cutoff) }, "cached_at < ?", msOf(cutoff))
+/*
+	ClearOlderThan removes everything cached before cutoff, killmails and deleted characters included, returning how many entries were removed
+
+Parameters:
+  - cutoff: entries cached before it are removed
+  - includeUserData: also remove ignored allies and holding links saved before it, which are otherwise kept
+*/
+func (c *CachedEveIDs) ClearOlderThan(cutoff time.Time, includeUserData bool) int {
+	match, where, args := keepingUserData(includeUserData, func(_ section, entry *CacheEntry) bool { return entry.CachedAt.Before(cutoff) }, "cached_at < ?", msOf(cutoff))
+	removed := c.removeWhere(match, where, args...)
 	c.compact()
 	return removed
 }

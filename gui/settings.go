@@ -38,6 +38,7 @@ type Preferences struct {
 	UseCachedKillmails     bool   `json:"useCachedKillmails"`     // also use the target's cached killmails beyond the limits above
 	TimeZone               string `json:"timeZone"`               // how killmail times are shown: "eve" for EVE time (UTC), the default, or "local"
 	MaxRecentSearches      int    `json:"maxRecentSearches"`      // how many recent searches the search bar keeps, 1 to retrieval.MaxRecentSearches
+	HideKilledAllies       bool   `json:"hideKilledAllies"`       // leave out of every Allies tab the allies the target also killed. Off by default.
 }
 
 // maxTabs is the most tab ids SetTabOrder keeps, well above the number of tabs, so a bad value from the frontend stays small

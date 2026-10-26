@@ -47,6 +47,9 @@
     <section id="target" class="card target" hidden>
       <div id="target-entities" class="target-header"></div>
 
+      <!-- a corp or alliance target's holding links, which the user sets by hand -->
+      <div id="target-holdings" class="target-holdings" hidden></div>
+
       <div class="grid">
         <div class="field">
           <h2 id="left-details-title"></h2>
@@ -79,6 +82,7 @@
           <button id="tab-systems" class="tab" type="button" role="tab" aria-controls="panel-systems" aria-selected="false">Top Systems</button>
           <button id="tab-capitals" class="tab" type="button" role="tab" aria-controls="panel-capitals" aria-selected="false">Capital Pilots</button>
           <button id="tab-roster" class="tab" type="button" role="tab" aria-controls="panel-roster" aria-selected="false">Members</button>
+          <button id="tab-allies" class="tab" type="button" role="tab" aria-controls="panel-allies" aria-selected="false">Allies</button>
           <div id="tab-key" class="tab-key"></div>
         </div>
 
@@ -121,6 +125,25 @@
             <tbody id="members-body"></tbody>
           </table>
           <p id="members-empty" class="muted" hidden>No members found on the collected killmails.</p>
+        </div>
+
+        <div id="panel-allies" class="tab-panel" role="tabpanel" aria-labelledby="tab-allies" hidden>
+          <table>
+            <thead>
+              <tr><th></th><th>Alliance or Corporation</th><th class="num" title="The target's kills they were on">Kills Together</th><th class="num">Pilots</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th><th class="ally-ignore" title="Leave out of this target's Allies in every search, once saved">Ignore</th></tr>
+            </thead>
+            <tbody id="allies-body"></tbody>
+          </table>
+          <p id="allies-empty" class="muted" hidden>No alliances or corporations outside the target's alliance were on its kills in the collected killmails.</p>
+          <!-- allies already ignored for this target, checked: unchecking and saving brings them back -->
+          <div id="allies-ignored" class="allies-ignored" hidden>
+            <span class="row-detail">Ignored for this target:</span>
+            <span id="allies-ignored-list" class="allies-ignored-list"></span>
+          </div>
+          <div class="allies-actions">
+            <span id="allies-save-note" class="row-detail">Checked allies are left out of this target's Allies in every search, once saved.</span>
+            <button id="allies-save" type="button" disabled>Save ignored</button>
+          </div>
         </div>
 
         <div id="panel-pilots" class="tab-panel" role="tabpanel" aria-labelledby="tab-pilots" hidden>
@@ -212,38 +235,17 @@
       <button id="preferences-close" class="window-close" type="button" aria-label="Close preferences" title="Close">×</button>
     </div>
     <div class="window-body">
-      <label class="preference">
-        <span>
-          <span class="preference-name">Include zKill labels</span>
-          <span class="preference-help">Show zKillboard's labels, such as solo or ganked, on killmail cards</span>
-        </span>
-        <span class="preference-check"><input id="pref-zkill-labels" type="checkbox"></span>
-      </label>
-
-      <label class="preference-field">
-        <span>
-          <span class="preference-name">Show times in</span>
-          <span class="preference-help">Killmail dates and times, and the activity log</span>
-        </span>
-        <select id="pref-time-zone">
-          <option value="eve">EVE time (UTC)</option>
-          <option value="local">Local time</option>
-        </select>
-      </label>
-
-      <h3 class="preference-group">Killmails collected per search</h3>
-      <label class="preference-field">
-        <span>
-          <span class="preference-name">Max killmail count</span>
-          <span class="preference-help">1 to 2,000, the most zKillboard lists (10 pages of 200), or -1 for all of them, still only those newer than below</span>
-        </span>
-        <!-- 2000 is api.ZKILL_MAX_KILLMAILS and -1 retrieval.AllKillmails, which the backend checks again on save -->
-        <input id="pref-max-killmails" type="number" min="-1" max="2000" step="1">
-      </label>
+      <!-- each setting's description is the hover text of its name and the i before it -->
+      <h3 class="preference-group">Data Collection</h3>
       <!-- 1700 is retrieval.MaxUncachedKillmails -->
       <p id="pref-killmail-warning" class="preference-warning" hidden>Over 1,700 killmails may hit the ESI's rate limit, depending on how many are already cached. A search that fetches 1,700 not cached will ask before fetching more.</p>
       <label class="preference-field">
-        <span class="preference-name">Killmails newer than</span>
+        <span class="preference-label" title="1 to 2,000, the most zKillboard lists (10 pages of 200), or -1 for all of them, still only those newer than below"><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Max killmail count</span></span>
+        <!-- 2000 is api.ZKILL_MAX_KILLMAILS and -1 retrieval.AllKillmails, which the backend checks again on save -->
+        <input id="pref-max-killmails" type="number" min="-1" max="2000" step="1">
+      </label>
+      <label class="preference-field">
+        <span class="preference-label" title="Only collect killmails from this far back. A search whose newest killmail is older asks whether to ignore it."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Killmails newer than</span></span>
         <select id="pref-killmail-age">
           <option value="7">1 week</option>
           <option value="30">30 days</option>
@@ -252,30 +254,36 @@
         </select>
       </label>
       <label class="preference">
-        <span>
-          <span class="preference-name">Use killmails in cache for target even if beyond limits above</span>
-          <span class="preference-help">Killmails already in the cache need no ESI calls</span>
-        </span>
+        <span class="preference-label" title="Also use the target's killmails already in the cache, even if beyond the limits above. They need no ESI calls."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Use Killmails in Cache</span></span>
         <span class="preference-check"><input id="pref-use-cached" type="checkbox"></span>
       </label>
       <p class="preference-help">Killmail limits apply from the next search.</p>
 
-      <h3 class="preference-group">Search bar</h3>
+      <h3 class="preference-group">Reports</h3>
       <label class="preference-field">
-        <span>
-          <span class="preference-name">Recent searches kept</span>
-          <span class="preference-help">1 to 25, offered as you type or from the ▾. Lowering it forgets the oldest on Save.</span>
-        </span>
+        <span class="preference-label" title="1 to 25, offered as you type or from the ▾. Lowering it forgets the oldest on Save."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Recent searches kept</span></span>
         <!-- 25 is retrieval.MaxRecentSearches, which the backend checks again on save -->
         <input id="pref-max-recent" type="number" min="1" max="25" step="1" inputmode="numeric">
       </label>
+      <label class="preference">
+        <span class="preference-label" title="Leaves out of every Allies tab the alliances and corps with a pilot the target killed, the next ones taking their places"><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Hide allies the target also killed</span></span>
+        <span class="preference-check"><input id="pref-hide-killed-allies" type="checkbox"></span>
+      </label>
 
-      <h3 class="preference-group">Tabs</h3>
+      <h3 class="preference-group">Display</h3>
+      <label class="preference-field">
+        <span class="preference-label" title="Killmail dates and times, and the activity log"><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Show times in</span></span>
+        <select id="pref-time-zone">
+          <option value="eve">EVE time (UTC)</option>
+          <option value="local">Local time</option>
+        </select>
+      </label>
+      <label class="preference">
+        <span class="preference-label" title="Show zKillboard's labels, such as solo or ganked, on killmail cards"><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Include zKill labels</span></span>
+        <span class="preference-check"><input id="pref-zkill-labels" type="checkbox"></span>
+      </label>
       <div class="preference-field">
-        <span>
-          <span class="preference-name">Tab order</span>
-          <span class="preference-help">Drag a tab, or press Alt + ← / → on one, to move it. Resetting takes effect straight away, without Save.</span>
-        </span>
+        <span class="preference-label" title="Drag a tab, or press Alt + ← / → on one, to move it. Resetting takes effect straight away, without Save."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Tab order</span></span>
         <button id="reset-tab-order" class="secondary" type="button">Reset tab order</button>
       </div>
 
@@ -313,11 +321,16 @@
     <form method="dialog">
       <p id="clear-cache-title" class="confirm-warning">Clear the cache?</p>
       <p class="confirm-detail">Anything cleared is looked up again from the ESI when next needed, so the next searches will be slower. This can not be undone.</p>
+      <p class="confirm-detail">Most of the cache keeps itself fresh: pilots, corporations and alliances are looked up again after 24 hours, and ships, systems and other game data with each EVE data release. Killmails never change, so they are kept until cleared.</p>
       <fieldset class="clear-choices">
-        <label><input type="radio" name="clear-scope" value="older" checked> <span><span class="preference-name">Older than 30 days</span><span class="preference-help">Everything cached more than 30 days ago, killmails included</span></span></label>
-        <label><input type="radio" name="clear-scope" value="entities"> <span><span class="preference-name">Pilots, corporations and alliances</span><span class="preference-help">Their details, memberships and histories. Killmails, ships and systems are kept.</span></span></label>
+        <label><input type="radio" name="clear-scope" value="older" checked> <span><span class="preference-name">Killmails older than 30 days</span><span class="preference-help">Frees the space old killmails take. Anything else cached more than 30 days ago goes too, though little else lasts that long.</span></span></label>
+        <label><input type="radio" name="clear-scope" value="entities"> <span><span class="preference-name">Pilots, corporations and alliances</span><span class="preference-help">Rarely needed, as they are looked up again after 24 hours anyway. Clears their details, memberships and histories now. Killmails, ships and systems are kept.</span></span></label>
         <label><input type="radio" name="clear-scope" value="all"> <span><span class="preference-name">Everything</span><span class="preference-help">The whole cache, killmails included</span></span></label>
       </fieldset>
+      <label class="clear-user-data">
+        <input id="clear-user-data" type="checkbox">
+        <span><span class="preference-name">Also clear what you set by hand</span><span class="preference-help">Ignored allies and holding links. Otherwise every clear keeps them.</span></span>
+      </label>
       <div class="confirm-actions">
         <button class="secondary" value="cancel" autofocus>Cancel</button>
         <button class="danger" value="clear">Clear cache</button>
@@ -333,6 +346,35 @@
       <div class="confirm-actions">
         <button id="large-fetch-hold" class="secondary" value="hold" autofocus></button>
         <button id="large-fetch-all" class="danger" value="all"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- adds a holding to the shown corp or alliance, or changes the note of one it has -->
+  <dialog id="holding-dialog" class="confirm holding-dialog" aria-labelledby="holding-title">
+    <form id="holding-form" method="dialog">
+      <p id="holding-title" class="holding-title">Add holding</p>
+      <p id="holding-main" class="confirm-target"></p>
+      <label class="holding-field">
+        <span class="preference-name">Holding is a</span>
+        <select id="holding-type">
+          <option value="ALLIANCE">Alliance</option>
+          <option value="CORPORATION">Corporation</option>
+        </select>
+      </label>
+      <label class="holding-field">
+        <span class="preference-name">Name</span>
+        <input id="holding-name" type="text" autocomplete="off" spellcheck="false" placeholder="Exact in-game name">
+      </label>
+      <label class="holding-field">
+        <span class="preference-name">Note</span>
+        <!-- 200 is maxHoldingNote, which the backend checks again -->
+        <input id="holding-note" type="text" maxlength="200" autocomplete="off" placeholder="Optional, ie supers parked here">
+      </label>
+      <p id="holding-error" class="preferences-error" role="alert" hidden></p>
+      <div class="confirm-actions">
+        <button class="secondary" value="cancel" formnovalidate>Cancel</button>
+        <button id="holding-save" value="save">Save</button>
       </div>
     </form>
   </dialog>
