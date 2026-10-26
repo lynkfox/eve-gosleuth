@@ -565,6 +565,11 @@ function renderIntelSections(report) {
     renderPIPilots(report.piPilots);
   }
 
+  el("tab-ratters").hidden = !report.ratters;
+  if (report.ratters) {
+    renderRatters(report.ratters);
+  }
+
   el("tab-capitals").hidden = !report.capitals;
   if (report.capitals) {
     renderCapitals(report.capitals);
@@ -680,44 +685,84 @@ function renderCapitals(capitals) {
 
 // renderPIPilots fills the PI Pilots tab of a system search: each pilot with PI losses, haulers near its planets or any ship with PI aboard, newest first
 function renderPIPilots(pilots) {
-  el("pi-list").replaceChildren(...pilots.map((pilot) => {
-    const block = document.createElement("section");
-    block.className = "pi-pilot";
-
-    const header = document.createElement("div");
-    header.className = "pi-pilot-header";
-    header.append(siteLinks(pilot.name, pilot, true));
-    const portrait = document.createElement("img");
-    portrait.src = pilot.imageUrl;
-    portrait.alt = "";
-    portrait.loading = "lazy";
-
-    const who = document.createElement("div");
-    who.className = "pi-who";
-    const name = document.createElement("button");
-    name.type = "button";
-    name.className = "link-button pi-name";
-    name.textContent = pilot.name;
-    name.title = "Search for this";
-    name.addEventListener("click", () => offerSearch({ type: "PILOT", name: pilot.name }));
-    who.append(name);
-    const group = groupLine([pilot.corporationIcon, pilot.corporation], [pilot.allianceIcon, pilot.alliance]);
-    if (group) who.append(group);
-
-    const count = document.createElement("span");
-    count.className = "pi-count";
-    count.textContent = `${pilot.losses.length} ${pilot.losses.length === 1 ? "loss" : "losses"}`;
-    header.append(portrait, who);
-    header.append(hourStrip(pilot.losses.map((loss) => loss.time), "loss", "losses"), count);
-
-    const losses = document.createElement("ol");
-    losses.className = "pi-losses";
-    losses.append(...pilot.losses.map(piLossRow));
-
-    block.append(header, losses);
-    return block;
-  }));
+  el("pi-list").replaceChildren(...overallLossBlock(pilots), ...pilots.map((pilot) => lossPilotBlock(pilot, piLossRow)));
   el("pi-empty").hidden = pilots.length > 0;
+}
+
+// renderRatters fills the Ratters tab of a system search: each pilot who lost a ship with NPCs on it, those with only NPCs or smartbombs on a loss first
+function renderRatters(ratters) {
+  el("ratters-list").replaceChildren(...overallLossBlock(ratters), ...ratters.map((ratter) => lossPilotBlock(ratter, ratLossRow)));
+  el("ratters-empty").hidden = ratters.length > 0;
+}
+
+// OVERALL_ACTIVITY_MIN is the fewest losses a PI Pilots or Ratters tab needs before it shows the hours of them all
+const OVERALL_ACTIVITY_MIN = 3;
+
+// overallLossBlock is the PI Pilots and Ratters tabs' top row: the hours every pilot's losses fell in together. It is left out, an empty list, with too few losses to show a pattern.
+function overallLossBlock(pilots) {
+  const times = pilots.flatMap((pilot) => pilot.losses.map((loss) => loss.time));
+  if (times.length < OVERALL_ACTIVITY_MIN) return [];
+
+  const block = document.createElement("section");
+  block.className = "pi-pilot pi-overall";
+  const header = document.createElement("div");
+  header.className = "pi-pilot-header";
+
+  const who = document.createElement("div");
+  who.className = "pi-who";
+  const title = document.createElement("span");
+  title.className = "pi-name";
+  title.textContent = "Overall";
+  const pilotCount = document.createElement("span");
+  pilotCount.className = "group-line";
+  pilotCount.textContent = `${pilots.length} ${pilots.length === 1 ? "pilot" : "pilots"}`;
+  who.append(title, pilotCount);
+
+  const count = document.createElement("span");
+  count.className = "pi-count";
+  count.textContent = `${times.length} losses`;
+  header.append(who, hourStrip(times, "loss", "losses"), count);
+  block.append(header);
+  return [block];
+}
+
+// lossPilotBlock is a pilot with their losses in the system, for the PI Pilots and Ratters tabs: a header with who they are and when they lose ships, then a row per loss from lossRow
+function lossPilotBlock(pilot, lossRow) {
+  const block = document.createElement("section");
+  block.className = "pi-pilot";
+
+  const header = document.createElement("div");
+  header.className = "pi-pilot-header";
+  header.append(siteLinks(pilot.name, pilot, true));
+  const portrait = document.createElement("img");
+  portrait.src = pilot.imageUrl;
+  portrait.alt = "";
+  portrait.loading = "lazy";
+
+  const who = document.createElement("div");
+  who.className = "pi-who";
+  const name = document.createElement("button");
+  name.type = "button";
+  name.className = "link-button pi-name";
+  name.textContent = pilot.name;
+  name.title = "Search for this";
+  name.addEventListener("click", () => offerSearch({ type: "PILOT", name: pilot.name }));
+  who.append(name);
+  const group = groupLine([pilot.corporationIcon, pilot.corporation], [pilot.allianceIcon, pilot.alliance]);
+  if (group) who.append(group);
+
+  const count = document.createElement("span");
+  count.className = "pi-count";
+  count.textContent = `${pilot.losses.length} ${pilot.losses.length === 1 ? "loss" : "losses"}`;
+  header.append(portrait, who);
+  header.append(hourStrip(pilot.losses.map((loss) => loss.time), "loss", "losses"), count);
+
+  const losses = document.createElement("ol");
+  losses.className = "pi-losses";
+  losses.append(...pilot.losses.map(lossRow));
+
+  block.append(header, losses);
+  return block;
 }
 
 /*
@@ -811,6 +856,81 @@ function piLossRow(loss) {
     cargo.append(heading, items, hint);
     row.append(cargo);
   }
+
+  const open = () => window.runtime.BrowserOpenURL(loss.url);
+  row.addEventListener("click", open);
+  row.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") open();
+  });
+  return row;
+}
+
+// RAT_KINDS label a ratting loss by who was on it, surest first: its tag, and the tag's tooltip
+const RAT_KINDS = {
+  npc: ["NPC", "Only NPCs were on this killmail"],
+  smartbomb: ["SB", "NPCs, and players who only hit it with smartbombs"],
+  players: ["PVP", "NPCs, and players with other weapons"],
+};
+
+// ratLossRow is one ratting loss: when, the ship, the nearest celestial, its value, and who was on it. The NPCs and players on it show on hover. Clicking it opens the killmail on zKillboard.
+function ratLossRow(loss) {
+  const row = document.createElement("li");
+  row.className = "pi-loss rat-loss";
+  row.tabIndex = 0;
+
+  const time = document.createElement("span");
+  time.className = "pi-time";
+  time.textContent = formatKillmailTime(loss.time);
+
+  const ship = document.createElement("span");
+  ship.className = "pi-ship";
+  const shipImage = document.createElement("img");
+  shipImage.src = loss.shipImageUrl;
+  shipImage.alt = "";
+  shipImage.loading = "lazy";
+  ship.append(shipImage, loss.shipName);
+
+  const location = document.createElement("span");
+  location.className = "pi-planet";
+  location.textContent = loss.location || "—";
+  if (!loss.location) location.title = "No nearest celestial";
+
+  const value = document.createElement("span");
+  value.className = "pi-value";
+  value.textContent = formatIsk(loss.totalValue);
+
+  const [label, meaning] = RAT_KINDS[loss.kind] || ["", ""];
+  const tag = document.createElement("span");
+  tag.className = `pi-tag rat-kind-${loss.kind}`;
+  tag.textContent = label;
+
+  row.append(time, ship, location, value, tag);
+
+  // the NPCs and players on it, shown while hovering over or focused on the row
+  const attackers = document.createElement("div");
+  attackers.className = "pi-cargo";
+  attackers.setAttribute("role", "tooltip");
+  const heading = document.createElement("div");
+  heading.className = "pi-cargo-heading";
+  heading.textContent = meaning;
+  const items = document.createElement("ul");
+  const line = (text, count) => {
+    const item = document.createElement("li");
+    const name = document.createElement("span");
+    name.textContent = text;
+    const quantity = document.createElement("span");
+    quantity.className = "pi-cargo-quantity";
+    quantity.textContent = `×${count.toLocaleString("en-US")}`;
+    item.append(name, quantity);
+    return item;
+  };
+  items.append(...loss.rats.map((rat) => line(rat.name || "Unknown NPC", rat.count)));
+  if (loss.players) items.append(line(loss.players === 1 ? "Player" : "Players", loss.players));
+  const hint = document.createElement("div");
+  hint.className = "pi-cargo-hint";
+  hint.textContent = "Click to open on zKillboard";
+  attackers.append(heading, items, hint);
+  row.append(attackers);
 
   const open = () => window.runtime.BrowserOpenURL(loss.url);
   row.addEventListener("click", open);
@@ -965,6 +1085,13 @@ const TAB_HELP = {
     "Any hauler lost near a planet, or any ship carrying PI materials lost anywhere in this system.",
     "Losses marked PI had PI materials aboard: hover over one to see them.",
     "A — for the planet means the loss was not near one.",
+    "With 3 or more losses, the Overall row at the top shows the hours of them all.",
+  ],
+  "tab-ratters": [
+    "Any ship lost in this system with NPCs on the killmail.",
+    "Pilots with a loss tagged NPC, only NPCs on it, come first, then SB, NPCs and players who only used smartbombs, then PVP, NPCs and players with other weapons.",
+    "Hover over a loss to see the NPCs and players on it. A — for the location means it had no nearest celestial.",
+    "With 3 or more losses, the Overall row at the top shows the hours of them all.",
   ],
   "tab-capitals": [
     "Every capital ship flown by this corporation's or alliance's pilots on the reviewed killmails, and who flew it. Click a pilot to search for them.",

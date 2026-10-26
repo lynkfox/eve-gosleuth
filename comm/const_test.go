@@ -22,6 +22,7 @@ func TestLoadStaticData(t *testing.T) {
 		assert.True(t, comm.HaulerGroups.ContainsIDNumber(28))
 		assert.True(t, comm.HaulerExclusions.ContainsName("Noctis"))
 		assert.True(t, comm.PIMaterialGroups.ContainsIDNumber(1042))
+		assert.True(t, comm.SmartbombGroups.ContainsIDNumber(72))
 	})
 
 	t.Run("an edited copy in an override folder replaces the built in file", func(t *testing.T) {

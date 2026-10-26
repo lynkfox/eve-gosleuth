@@ -15,6 +15,7 @@ var (
 	HaulerGroups     StaticData // the ESI groups of the ships that count as PI haulers: T1 haulers and T2 transports, not freighters
 	HaulerExclusions StaticData // ship types in HaulerGroups that are not haulers, ie the Noctis salvager
 	PIMaterialGroups StaticData // the ESI groups of Planetary Industry resources and commodities
+	SmartbombGroups  StaticData // the ESI groups of smartbomb modules, the weapon a player on a ratting loss may have only bombed it with
 )
 
 func newStaticValues() *StaticValues {
@@ -44,6 +45,7 @@ func InitStaticData(staticFiles fs.FS, overrides ...fs.FS) error {
 	HaulerGroups = newStaticValues()
 	HaulerExclusions = newStaticValues()
 	PIMaterialGroups = newStaticValues()
+	SmartbombGroups = newStaticValues()
 	Spaces = SpaceClasses{WormholeRegionClasses: map[string]string{}, RegionSpaceLabels: map[string]string{}}
 
 	var errs []error
@@ -57,6 +59,7 @@ func InitStaticData(staticFiles fs.FS, overrides ...fs.FS) error {
 		{"hauler_groups.json", HaulerGroups.LoadStaticType},
 		{"hauler_exclusions.json", HaulerExclusions.LoadStaticType},
 		{"pi_material_groups.json", PIMaterialGroups.LoadStaticType},
+		{"smartbomb_groups.json", SmartbombGroups.LoadStaticType},
 		{"jspace_statics.json", LoadJSpaceStatics},
 		{"space_classes.json", LoadSpaceClasses},
 	} {

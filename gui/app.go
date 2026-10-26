@@ -62,6 +62,7 @@ type IntelReport struct {
 	Systems      []SystemSummary      `json:"systems"`
 	Capitals     []CapitalShip        `json:"capitals"`   // a corp or alliance target's capital ships and the members who flew them
 	PIPilots     []PIPilot            `json:"piPilots"`   // a system target's pilots who lost haulers near its planets, or ships with PI aboard
+	Ratters      []Ratter             `json:"ratters"`    // a system target's pilots who lost ships with NPCs on the killmail
 	MemberList   bool                 `json:"memberList"` // a corp or alliance target has a Members tab, its rows come from GetMembers
 	Sources      string               `json:"sources"`    // where the search's data came from, ie "9748 hits from cache, 1763 from the ESI; zKillboard live", for the frontend's summary line
 }
@@ -429,6 +430,8 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		report.Corporations = buildCorporationSummaries(aggregate.GetTopCorporations(corporationLimit, collected.Killmails))
 		comm.ReportProgress("Finding PI pilots")
 		report.PIPilots = a.buildPIPilots(targetID, collected.Killmails)
+		comm.ReportProgress("Finding ratters")
+		report.Ratters = a.buildRatters(collected.Killmails)
 	}
 
 	// a system target is the only system on its killmails, so it has no top systems
