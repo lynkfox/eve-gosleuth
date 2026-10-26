@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/aggregate"
@@ -31,6 +32,12 @@ type App struct {
 	sde          api.SDEClient
 	sdeCheckedAt time.Time
 
+	promptAnswers chan bool // AnswerPrompt hands the frontend's answer to the search waiting in ask
+
+	// StopSearch sets stopRequested and halts esiGuard, which every ESI request goes through, so the running search sends nothing more
+	esiGuard      *api.RateGuard
+	stopRequested atomic.Bool
+
 	// settings have their own lock, so changing the theme never waits behind a running search
 	settingsMu   sync.Mutex
 	settings     Settings
@@ -54,7 +61,9 @@ type TargetResult struct {
 // IntelReport holds everything built from a target's killmails. New killmail based sections are added here so a single pull feeds them all.
 type IntelReport struct {
 	Killmails    []KillmailCard       `json:"killmails"`
-	LabelNames   map[string]string    `json:"labelNames"` // names for the killmails' zKillboard labels that need a lookup, ie cat:6 is Ship. Other labels the frontend names itself.
+	Stopped      bool                 `json:"stopped"`     // the user stopped the search, so the report is built from what was collected by then
+	RateLimited  bool                 `json:"rateLimited"` // the ESI rate limited the search, so the report is built from the killmails collected before it
+	LabelNames   map[string]string    `json:"labelNames"`  // names for the killmails' zKillboard labels that need a lookup, ie cat:6 is Ship. Other labels the frontend names itself.
 	Fleetmates   []Fleetmate          `json:"fleetmates"`
 	Members      []Fleetmate          `json:"members"`      // a corp or alliance target's most active pilots, shown the same way as fleetmates
 	Pilots       []Fleetmate          `json:"pilots"`       // a system target's most active pilots
@@ -216,6 +225,8 @@ func (a *App) startup(ctx context.Context) {
 	comm.SetProgressReporter(func(message string) {
 		runtime.EventsEmit(a.ctx, progressEvent, message)
 	})
+	comm.SetRateLimitReporter(a.reportRateLimited)
+	a.promptAnswers = make(chan bool, 1)
 
 	if err := comm.InitStaticData(staticdata.Files, staticdata.Overrides()...); err != nil {
 		comm.Logger.WithError(err).Error("Failed to load static data")
@@ -224,7 +235,9 @@ func (a *App) startup(ctx context.Context) {
 	a.settingsPath = settingsPath()
 	a.settings = loadSettings(a.settingsPath)
 
-	cache, err := retrieval.LoadCache(api.NewESIClient(), cachePathFor(a.settings))
+	esi := api.NewESIClient()
+	a.esiGuard = esi.Guard()
+	cache, err := retrieval.LoadCache(esi, cachePathFor(a.settings))
 	if err != nil {
 		comm.Logger.WithError(err).Warn("Starting with an empty cache")
 	}
@@ -292,6 +305,11 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	defer recoverAsError(&err)
+
+	// a new search starts unstopped, and the ESI is let through again once this part of it is done even if it was stopped
+	a.stopRequested.Store(false)
+	a.esiGuard.Resume()
+	defer a.esiGuard.Resume()
 
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -371,6 +389,12 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 	defer a.mu.Unlock()
 	defer recoverAsError(&err)
 
+	// stopped between finding the target and collecting its intel
+	if a.stopRequested.Load() {
+		return report, errors.New("Search stopped")
+	}
+	defer a.esiGuard.Resume()
+
 	lookupsBefore := a.cache.Counts()
 
 	entityType, ok := searchTypes[targetType]
@@ -395,10 +419,22 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		target.Expanded = a.cache.ExpandSystem(targetID)
 	}
 
-	killmails, collectErr := retrieval.CollectKillmails(target, a.GetSettings().KillmailLimits(time.Now().UTC()))
+	limits := a.GetSettings().KillmailLimits(time.Now().UTC())
+	limits.ConfirmOverLimit = a.confirmLargeFetch
+	limits.ConfirmIgnoreDate = a.confirmIgnoreDate(limits.NewerThan)
+	killmails, collectErr := retrieval.CollectKillmails(target, limits)
+	// the frontend has already shown the rate limit warning, the report is built from the killmails collected before it
+	rateLimited := errors.Is(collectErr, api.ErrRateLimited)
 	if collectErr != nil {
 		comm.Logger.WithError(collectErr).Warnf("Continuing with %d collected killmails", len(*killmails))
 		if len(*killmails) == 0 {
+			if a.stopRequested.Load() {
+				a.saveCache()
+				return report, errors.New("Search stopped before any killmails were collected")
+			}
+			if rateLimited {
+				return report, errors.New("The ESI has limited your requests before any killmails were collected. You will need to wait 15 minutes before continuing.")
+			}
 			return report, fmt.Errorf("Could not retrieve killmails for this target: %s", api.FailureReason(collectErr))
 		}
 	}
@@ -444,7 +480,15 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 	comm.ReportProgress("Saving cache")
 	a.saveCache()
 
+	// stopped at any point, the ESI was refused from then on, so the report may be missing killmails and details not cached
+	report.Stopped = a.stopRequested.Load()
+	report.RateLimited = rateLimited
 	sources := []string{"zKillboard live"}
+	if report.Stopped {
+		sources = append(sources, "stopped early")
+	} else if rateLimited {
+		sources = append(sources, "stopped early, the ESI rate limited killmails")
+	}
 	if source := a.cache.Counts().Since(lookupsBefore).Source(); source != "" {
 		sources = append([]string{source}, sources...)
 	}

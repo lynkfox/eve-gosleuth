@@ -18,6 +18,11 @@ function setStatus(message, isError = false) {
 
 function setBusy(busy) {
   searching = busy;
+  el("ticker-stop").hidden = !busy;
+  el("ticker-stop").disabled = false;
+  el("ticker-stop").textContent = "Stop";
+  if (busy) startSearchTimer();
+  else stopSearchTimer();
   el("search-button").disabled = busy;
   el("search-input").disabled = busy;
   el("search-type").disabled = busy;
@@ -28,6 +33,51 @@ function setBusy(busy) {
 
 // searching is true while a search runs, see setBusy
 let searching = false;
+// stopRequested is true once the running search's Stop was pressed
+let stopRequested = false;
+
+// searchTimer counts the running search's time in the ticker, the interval updating it while one runs
+let searchTimer = null;
+
+// startSearchTimer shows the ticker's timer from 0:00, counting up each second
+function startSearchTimer() {
+  clearInterval(searchTimer);
+  const started = performance.now();
+  const timer = el("ticker-timer");
+  const show = () => { timer.textContent = formatTimer(performance.now() - started); };
+  show();
+  timer.classList.remove("idle");
+  searchTimer = setInterval(show, 1000);
+}
+
+// stopSearchTimer hides the timer once the search's own summary with its time is in the ticker, keeping its space
+function stopSearchTimer() {
+  clearInterval(searchTimer);
+  searchTimer = null;
+  el("ticker-timer").classList.add("idle");
+}
+
+// formatTimer writes elapsed time as the ticker's timer shows it, ie 0:07, 2:05, or 1:02:05
+function formatTimer(milliseconds) {
+  const total = Math.floor(milliseconds / 1000);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = pad2(total % 60);
+  return hours ? `${hours}:${pad2(minutes)}:${seconds}` : `${minutes}:${seconds}`;
+}
+
+// stopSearch asks the backend to stop the running search where it is. It builds the report from what it has collected, if anything.
+function stopSearch() {
+  if (!searching || stopRequested) return;
+  stopRequested = true;
+  el("ticker-stop").disabled = true;
+  el("ticker-stop").textContent = "Stopping…";
+  // a search waiting on a question is answered by the stop
+  for (const id of SEARCH_PROMPTS) {
+    if (el(id).open) el(id).close("stop");
+  }
+  backend().StopSearch().catch(() => {});
+}
 
 /*
   tickerPush shows a status update in the ticker bar and adds it, timestamped, to the top of the history list.
@@ -1771,6 +1821,7 @@ function renderSystems(systems) {
 function clearIntel() {
   intelReport = null;
   roster = null;
+  el("report-warning").hidden = true;
   el("intel").hidden = true;
   el("intel-tabs").hidden = true;
 }
@@ -1956,6 +2007,7 @@ async function search(event) {
   }
   const searchType = el("search-type").value;
 
+  stopRequested = false;
   setBusy(true);
   setStatus("");
   clearIntel();
@@ -1972,6 +2024,7 @@ async function search(event) {
     renderTarget(target);
     // SearchTarget cached the found target as a recent search
     loadRecentSearches();
+    if (stopRequested) return;
 
     el("intel-loading").hidden = false;
     el("intel").hidden = false;
@@ -1979,6 +2032,7 @@ async function search(event) {
 
     if (report) {
       renderIntel(report);
+      showReportWarning(report);
       retrievedName = target.display.Name;
     } else {
       el("intel").hidden = true;
@@ -1991,6 +2045,20 @@ async function search(event) {
 
   // the Members tab looks up its first pages in the background, after the summary, so its progress only goes in the history
   if (report && report.memberList) startRoster(target.id, target.type);
+}
+
+// showReportWarning explains, between the target and its report, that the report was built from part of its data
+function showReportWarning(report) {
+  const count = (report.killmails || []).length.toLocaleString("en-US");
+  const killmails = (report.killmails || []).length === 1 ? "killmail" : "killmails";
+  let message = "";
+  if (report.stopped) {
+    message = `This report was stopped before data collection finished. It is built from the ${count} ${killmails} collected, and some details may be missing.`;
+  } else if (report.rateLimited) {
+    message = `The ESI rate limited this search, so this report is built from the ${count} ${killmails} collected before it.`;
+  }
+  el("report-warning").textContent = message;
+  el("report-warning").hidden = !message;
 }
 
 // searchSummary is a finished search's ticker line, ie Info Retrieved on URSA. in 26.1s from 100 killmails (9748 hits from cache, 1763 from the ESI; zKillboard live)
@@ -2140,6 +2208,8 @@ function closeThemesMenu() {
 const MAX_KILLMAILS = 2000;
 // ALL_KILLMAILS as the max killmail count collects every killmail zKillboard lists (retrieval.AllKillmails)
 const ALL_KILLMAILS = -1;
+// RATE_LIMIT_KILLMAILS is the most killmails a search fetches from the ESI without asking first (retrieval.MaxUncachedKillmails)
+const RATE_LIMIT_KILLMAILS = 1700;
 // MAX_RECENT_SEARCHES is the most recent searches the search bar can keep (retrieval.MaxRecentSearches)
 const MAX_RECENT_SEARCHES = 25;
 
@@ -2175,6 +2245,13 @@ function fillPreferencesForm(chosen) {
   el("pref-use-cached").checked = chosen.useCachedKillmails;
   el("pref-time-zone").value = chosen.timeZone;
   el("pref-max-recent").value = String(chosen.maxRecentSearches);
+  showKillmailCountWarning();
+}
+
+// showKillmailCountWarning warns in Preferences when the max killmail count, or all of them, is more than a search fetches from the ESI without asking
+function showKillmailCountWarning() {
+  const count = Number(el("pref-max-killmails").value);
+  el("pref-killmail-warning").hidden = !(count === ALL_KILLMAILS || count > RATE_LIMIT_KILLMAILS);
 }
 
 // preferencesForm reads the Preferences window, the max count as typed (NaN if it is not a number)
@@ -2373,3 +2450,43 @@ for (const tab of document.querySelectorAll(".tab")) {
 
 // progress events come from comm.ReportProgress in the Go backend
 window.runtime.EventsOn("progress", (message) => tickerPush(message, true));
+
+// a search that has fetched as many killmails not cached as the ESI's rate limit comfortably allows waits on this: fetch the rest, or stop there
+window.runtime.EventsOn("large-fetch", ({ fetched, remaining }) => {
+  const count = (n) => n.toLocaleString("en-US");
+  el("large-fetch-title").textContent = `This search needs ${count(remaining)} more killmails from the ESI`;
+  el("large-fetch-detail").textContent = `It has fetched ${count(fetched)} killmails that were not cached. Following through on this search may use up the ESI's killmail rate limit, `
+    + `and leave the app unable to pull ESI data for 15 minutes. Stopping here builds the report from the killmails it has.`;
+  el("large-fetch-hold").textContent = `Stop at ${count(fetched)}`;
+  el("large-fetch-all").textContent = `Fetch ${count(remaining)} more`;
+  el("large-fetch-confirm").returnValue = "";
+  el("large-fetch-confirm").showModal();
+});
+el("pref-max-killmails").addEventListener("input", showKillmailCountWarning);
+// the newest killmail is older than the date limit in Preferences, so the search would collect none: ignore the limit for this search, or keep it
+window.runtime.EventsOn("date-limit", ({ newest, newerThan }) => {
+  el("date-limit-detail").textContent = `The newest killmail for this target is from ${spokenDate(newest)}, older than the date limit of ${spokenDate(newerThan)} set in Preferences, `
+    + `so this search would find none. Ignoring the limit collects them for this search only, still up to the max killmail count.`;
+  el("date-limit-confirm").returnValue = "";
+  el("date-limit-confirm").showModal();
+});
+
+// SEARCH_PROMPTS are the questions a running search waits on, each answering the backend with the value of its go ahead button
+const SEARCH_PROMPTS = ["large-fetch-confirm", "date-limit-confirm"];
+const PROMPT_YES = { "large-fetch-confirm": "all", "date-limit-confirm": "ignore" };
+for (const id of SEARCH_PROMPTS) {
+  el(id).addEventListener("close", () => {
+    // Stop has already answered it
+    if (el(id).returnValue === "stop") return;
+    backend().AnswerPrompt(el(id).returnValue === PROMPT_YES[id]).catch(() => {});
+  });
+}
+el("ticker-stop").addEventListener("click", stopSearch);
+
+// the ESI answered a 429: the search stops, and its requests are held until the time sent
+window.runtime.EventsOn("rate-limited", (until) => {
+  const zone = preferences.timeZone === "local" ? "local" : "EVE";
+  el("rate-limited-detail").textContent = `You will need to wait 15 minutes before continuing, until ${clockTime(timeParts(until))} ${zone}. This search's report is built from the killmails collected before it.`;
+  if (!el("rate-limited").open) el("rate-limited").showModal();
+});
+

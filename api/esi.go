@@ -64,6 +64,14 @@ func NewESIClient() *ESIConnection {
 	return connection
 }
 
+// Guard returns the RateGuard every request of the connection goes through, nil when it has none, ie a test client
+func (e *ESIConnection) Guard() *RateGuard {
+	if connection, ok := e.Client.(APIConnection); ok {
+		return connection.Guard
+	}
+	return nil
+}
+
 /*
 	GetEveIDsFromNames resolves exact names to their eve IDs with the bulk ESI universe/ids endpoint. Names are sent in batches of 500, the ESI limit per request.
 

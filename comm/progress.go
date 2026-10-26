@@ -1,6 +1,9 @@
 package comm
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // ProgressReporter receives human readable status updates during long running work, such as the GUI ticker
 type ProgressReporter func(message string)
@@ -20,5 +23,22 @@ func ReportProgress(format string, args ...any) {
 
 	if progressReporter != nil {
 		progressReporter(message)
+	}
+}
+
+// RateLimitReporter is told when the ESI has rate limited requests, and until when they are held, such as to show the GUI's warning
+type RateLimitReporter func(until time.Time)
+
+var rateLimitReporter RateLimitReporter
+
+// SetRateLimitReporter registers the reporter that ReportRateLimited forwards to. Pass nil to stop forwarding.
+func SetRateLimitReporter(reporter RateLimitReporter) {
+	rateLimitReporter = reporter
+}
+
+// ReportRateLimited forwards that the ESI has rate limited requests until a time to the rate limit reporter, if one is set
+func ReportRateLimited(until time.Time) {
+	if rateLimitReporter != nil {
+		rateLimitReporter(until)
 	}
 }

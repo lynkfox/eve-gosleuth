@@ -196,6 +196,8 @@ main {
 
 .status.error { border-left-color: var(--error); }
 
+.status.warning { border-left-color: var(--error); }
+
 .empty {
   padding: 48px 0;
   color: var(--muted);
@@ -972,6 +974,8 @@ button.danger {
 
 .preference-help { display: block; color: var(--muted); font-size: 12px; }
 
+.preference-warning { margin: -6px 0 0; color: var(--error); font-size: 12px; }
+
 .window-body { display: grid; gap: 14px; }
 
 .window-body > .preference-help { margin: 0; }
@@ -1138,12 +1142,39 @@ body { padding-bottom: 40px; }
   border-top: 1px solid var(--border);
 }
 
-.ticker-bar {
+/* the timer, the bar with the dot and message, and the Stop button in a row */
+.ticker-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
-  padding: 8px 24px;
+  padding: 0 24px;
+}
+
+.ticker-timer {
+  flex: none;
+  min-width: 4.5ch;
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* hidden without giving up its space */
+.ticker-timer.idle { visibility: hidden; }
+
+.ticker-stop {
+  flex: none;
+  padding: 2px 12px;
+  font-size: 12px;
+}
+
+.ticker-bar {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 0;
   background: none;
   border-radius: 0;
   color: var(--muted);

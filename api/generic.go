@@ -162,7 +162,10 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 
 		// Send the request
 		if c.Guard != nil {
-			release := c.Guard.wait(route)
+			release, refused := c.Guard.wait(route)
+			if refused != nil {
+				return nil, fmt.Errorf("%w: %w", ErrRequestFailedToComplete, refused)
+			}
 			resp, err = c.HTTPClient.Do(req)
 			if err == nil {
 				c.Guard.observe(route, resp)
@@ -192,6 +195,12 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 			break
 		}
 
+		// the guard now holds the rate limited group, so sending it again would only fail
+		if c.Guard != nil && resp != nil && resp.StatusCode == http.StatusTooManyRequests {
+			comm.Logger.WithError(err).Error("Could not complete request, rate limited")
+			return nil, fmt.Errorf("%w: %w: %w", ErrRequestFailedToComplete, ErrRateLimited, err)
+		}
+
 		if attempt != c.MaxRetries {
 			backoffDuration := c.Backoff * time.Duration(math.Pow(2, float64(attempt-1)))
 
@@ -202,8 +211,8 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 
 			comm.Logger.WithFields(defaultFields.AddTemporaryDebugOnlyFields(logrus.Fields{"body": body, "status": status,
 				"nextBackoff": backoffDuration})).WithError(err).Warn("Request failed, retrying")
-			// after a 420 or 429 the guard waits as long as the server asked, instead
-			if c.Guard == nil || (status != http.StatusTooManyRequests && status != 420) {
+			// after a 420 the guard waits as long as the server asked, instead
+			if c.Guard == nil || status != 420 {
 				time.Sleep(backoffDuration)
 			}
 		}

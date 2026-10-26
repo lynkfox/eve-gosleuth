@@ -59,6 +59,9 @@
       </div>
     </section>
 
+    <!-- a report built from part of its data: the search was stopped, or the ESI rate limited it -->
+    <p id="report-warning" class="status warning" hidden></p>
+
     <section id="intel" class="card intel" hidden>
       <p id="intel-loading" class="muted">Pulling killmails from zKillboard and the ESI. This can take a while, progress is shown in the bar below.</p>
 
@@ -237,6 +240,8 @@
         <!-- 2000 is api.ZKILL_MAX_KILLMAILS and -1 retrieval.AllKillmails, which the backend checks again on save -->
         <input id="pref-max-killmails" type="number" min="-1" max="2000" step="1">
       </label>
+      <!-- 1700 is retrieval.MaxUncachedKillmails -->
+      <p id="pref-killmail-warning" class="preference-warning" hidden>Over 1,700 killmails may hit the ESI's rate limit, depending on how many are already cached. A search that fetches 1,700 not cached will ask before fetching more.</p>
       <label class="preference-field">
         <span class="preference-name">Killmails newer than</span>
         <select id="pref-killmail-age">
@@ -320,12 +325,51 @@
     </form>
   </dialog>
 
+  <!-- raised by a search that has fetched as many killmails as the ESI's rate limit comfortably allows: closing it any other way stops there -->
+  <dialog id="large-fetch-confirm" class="confirm" aria-labelledby="large-fetch-title">
+    <form method="dialog">
+      <p id="large-fetch-title" class="confirm-warning"></p>
+      <p id="large-fetch-detail" class="confirm-detail"></p>
+      <div class="confirm-actions">
+        <button id="large-fetch-hold" class="secondary" value="hold" autofocus></button>
+        <button id="large-fetch-all" class="danger" value="all"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- raised when even the newest killmail is older than the date limit in Preferences: closing it any other way keeps the limit -->
+  <dialog id="date-limit-confirm" class="confirm" aria-labelledby="date-limit-title">
+    <form method="dialog">
+      <p id="date-limit-title" class="confirm-warning">No killmails within the date limit</p>
+      <p id="date-limit-detail" class="confirm-detail"></p>
+      <div class="confirm-actions">
+        <button class="secondary" value="keep" autofocus>Keep the limit</button>
+        <button value="ignore">Ignore it this search</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="rate-limited" class="confirm" aria-labelledby="rate-limited-title">
+    <form method="dialog">
+      <p id="rate-limited-title" class="confirm-warning">The ESI has limited your requests</p>
+      <p id="rate-limited-detail" class="confirm-detail"></p>
+      <div class="confirm-actions">
+        <button value="ok" autofocus>OK</button>
+      </div>
+    </form>
+  </dialog>
+
   <footer id="ticker" class="ticker">
     <ol id="ticker-history" class="ticker-history" hidden></ol>
-    <button id="ticker-bar" class="ticker-bar" type="button" title="Show recent activity">
-      <span id="ticker-indicator" class="ticker-indicator"></span>
-      <span id="ticker-message" class="ticker-message">Ready</span>
-    </button>
+    <div class="ticker-row">
+      <!-- the running search's time, its space kept while hidden so the message never moves -->
+      <span id="ticker-timer" class="ticker-timer idle" aria-hidden="true">0:00</span>
+      <button id="ticker-bar" class="ticker-bar" type="button" title="Show recent activity">
+        <span id="ticker-indicator" class="ticker-indicator"></span>
+        <span id="ticker-message" class="ticker-message">Ready</span>
+      </button>
+      <button id="ticker-stop" class="danger ticker-stop" type="button" title="Stop the search, building the report from what it has collected" hidden>Stop</button>
+    </div>
   </footer>
 
   <script src="main.js"></script>

@@ -2,6 +2,7 @@ package retrieval_test
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"testing"
@@ -196,6 +197,19 @@ func TestCollectKillmailsLimits(t *testing.T) {
 		assert.Subset(t, fetched, []int{1, 2, 3}, "killmail 3 is fetched to find its date, and the older ones may be fetched alongside it")
 	})
 
+	t.Run("when even the newest killmail is older than NewerThan, it asks to drop the date limit", func(t *testing.T) {
+		var asked time.Time
+		ids, _ := collect(retrieval.KillmailLimits{Max: 3, NewerThan: now.AddDate(0, 0, -2), ConfirmIgnoreDate: func(time.Time) bool { t.Error("asked"); return true }})
+		assert.Equal(t, []int{1}, ids, "a newer killmail first never asks")
+
+		ids, _ = collect(retrieval.KillmailLimits{Max: 3, NewerThan: now, ConfirmIgnoreDate: func(newest time.Time) bool { asked = newest; return false }})
+		assert.Empty(t, ids, "kept the date limit")
+		assert.Equal(t, times[1], asked, "asked with the newest killmail's time")
+
+		ids, _ = collect(retrieval.KillmailLimits{Max: 3, NewerThan: now, ConfirmIgnoreDate: func(time.Time) bool { return true }})
+		assert.Equal(t, []int{1, 2, 3}, ids, "dropped the date limit, Max still applies")
+	})
+
 	t.Run("with IncludeCached, cached killmails beyond Max are used without fetching them", func(t *testing.T) {
 		ids, fetched := collect(retrieval.KillmailLimits{Max: 2, IncludeCached: true}, 4)
 
@@ -215,4 +229,79 @@ func TestCollectKillmailsLimits(t *testing.T) {
 
 		assert.Equal(t, []int{1, 2}, ids)
 	})
+}
+
+func TestCollectKillmailsUncachedLimit(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+
+	over := retrieval.MaxUncachedKillmails + 5
+	ids := make([]int, over)
+	for index := range ids {
+		ids[index] = index + 1
+	}
+	target := CreateTarget(MockZkillClient{killmails: CreateZkillmails(ids...)}, MockESIClient{})
+	collect := func(confirm func(int) bool) int {
+		killmails, err := retrieval.CollectKillmails(target, retrieval.KillmailLimits{Max: retrieval.AllKillmails, ConfirmOverLimit: confirm})
+		assert.NoError(t, err)
+		return len(*killmails)
+	}
+
+	t.Run("after MaxUncachedKillmails not cached it asks about the rest, and stops when told to", func(t *testing.T) {
+		asked := 0
+		assert.Equal(t, retrieval.MaxUncachedKillmails, collect(func(remaining int) bool { asked = remaining; return false }))
+		assert.Equal(t, 5, asked)
+	})
+
+	t.Run("confirming fetches them all", func(t *testing.T) {
+		assert.Equal(t, over, collect(func(int) bool { return true }))
+	})
+
+	t.Run("a date limit reached first never asks", func(t *testing.T) {
+		// the mock's killmails have no time, so the first is already older than any NewerThan
+		killmails, err := retrieval.CollectKillmails(target, retrieval.KillmailLimits{Max: retrieval.AllKillmails, NewerThan: time.Now().AddDate(0, 0, -90), ConfirmOverLimit: func(int) bool {
+			t.Error("asked to confirm")
+			return true
+		}})
+		assert.NoError(t, err)
+		assert.Empty(t, *killmails)
+	})
+
+	t.Run("with no one to ask, it stops", func(t *testing.T) {
+		assert.Equal(t, retrieval.MaxUncachedKillmails, collect(nil))
+	})
+
+	t.Run("at MaxUncachedKillmails or fewer, it does not ask", func(t *testing.T) {
+		under := CreateTarget(MockZkillClient{killmails: CreateZkillmails(ids[:retrieval.MaxUncachedKillmails]...)}, MockESIClient{})
+		killmails, err := retrieval.CollectKillmails(under, retrieval.KillmailLimits{Max: retrieval.AllKillmails, ConfirmOverLimit: func(int) bool {
+			t.Error("asked to confirm")
+			return true
+		}})
+		assert.NoError(t, err)
+		assert.Len(t, *killmails, retrieval.MaxUncachedKillmails)
+	})
+}
+
+func TestCollectKillmailsRateLimited(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+
+	limited := fmt.Errorf("%w: %w", api.ErrRequestFailedToComplete, api.ErrRateLimited)
+	target := CreateTarget(MockZkillClient{killmails: CreateZkillmails(1, 2, 3, 4, 5)}, MockESIClient{failingIDs: map[int]error{3: limited, 4: limited, 5: limited}})
+
+	killmails, err := retrieval.CollectKillmails(target, retrieval.KillmailLimits{Max: retrieval.AllKillmails})
+
+	assert.ErrorIs(t, err, api.ErrRateLimited, "a 429 stops the collection")
+	assert.ErrorIs(t, err, retrieval.ErrIncompleteKillmails)
+	assert.Len(t, *killmails, 2, "with the killmails collected before it")
+}
+
+func TestCollectKillmailsStopped(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+
+	stopped := fmt.Errorf("%w: %w", api.ErrRequestFailedToComplete, api.ErrStopped)
+	target := CreateTarget(MockZkillClient{killmails: CreateZkillmails(1, 2, 3, 4)}, MockESIClient{failingIDs: map[int]error{2: stopped, 3: stopped, 4: stopped}})
+
+	killmails, err := retrieval.CollectKillmails(target, retrieval.KillmailLimits{Max: retrieval.AllKillmails})
+
+	assert.ErrorIs(t, err, api.ErrStopped, "a stopped search collects no more")
+	assert.Len(t, *killmails, 1, "with the killmails collected before it")
 }

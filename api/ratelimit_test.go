@@ -36,22 +36,49 @@ func TestRateGuard(t *testing.T) {
 		assert.Equal(t, int32(1), calls.Load())
 	})
 
-	t.Run("a 429 waits for its Retry-After, then succeeds", func(t *testing.T) {
-		answered := atomic.Int32{}
+	t.Run("a 429 is not sent again, and holds its group for 15 minutes", func(t *testing.T) {
+		reported := []time.Time{}
+		comm.SetRateLimitReporter(func(until time.Time) { reported = append(reported, until) })
+		defer comm.SetRateLimitReporter(nil)
 		connection, calls := guarded(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("X-Ratelimit-Group", "killmail")
-			if answered.Add(1) == 1 {
+			w.Header().Set("X-Ratelimit-Group", r.URL.Query().Get("group"))
+			if r.URL.Query().Get("group") == "killmail" {
 				w.Header().Set("Retry-After", "1")
 				w.WriteHeader(http.StatusTooManyRequests)
 			}
 		})
+		killmail := "killmails/1/0123456789abcdef0123456789abcdef/?group=killmail"
 
 		started := time.Now()
-		_, err := connection.Request("GET", "killmails/1/0123456789abcdef0123456789abcdef/", nil)
+		_, err := connection.Request("GET", killmail, nil)
 
+		assert.ErrorIs(t, err, api.ErrRateLimited)
+		assert.Equal(t, int32(1), calls.Load())
+		assert.Less(t, time.Since(started), 500*time.Millisecond, "no waiting for the Retry-After")
+		if assert.Len(t, reported, 1) {
+			assert.WithinDuration(t, started.Add(api.ESI_RATE_LIMIT_HOLD), reported[0], 5*time.Second, "held for 15 minutes, longer than the Retry-After")
+		}
+
+		_, err = connection.Request("GET", "killmails/2/0123456789abcdef0123456789abcdef/?group=killmail", nil)
+		assert.ErrorIs(t, err, api.ErrRateLimited)
+		assert.Equal(t, int32(1), calls.Load(), "the held group's requests are not sent")
+
+		_, err = connection.Request("GET", "characters/1/?group=character", nil)
+		assert.NoError(t, err, "other groups carry on")
+		assert.Len(t, reported, 1)
+	})
+
+	t.Run("a halted guard refuses every request until resumed", func(t *testing.T) {
+		connection, calls := guarded(func(w http.ResponseWriter, r *http.Request) {})
+
+		connection.Guard.Halt()
+		_, err := connection.Request("GET", "characters/1/", nil)
+		assert.ErrorIs(t, err, api.ErrStopped)
+		assert.Equal(t, int32(0), calls.Load())
+
+		connection.Guard.Resume()
+		_, err = connection.Request("GET", "characters/1/", nil)
 		assert.NoError(t, err)
-		assert.Equal(t, int32(2), calls.Load())
-		assert.GreaterOrEqual(t, time.Since(started), 900*time.Millisecond)
 	})
 
 	t.Run("a group low on tokens spaces its requests to the refill rate", func(t *testing.T) {
