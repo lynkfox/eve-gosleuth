@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os/user"
 	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
@@ -18,7 +17,6 @@ var ErrOnlyPartialZkillPull = errors.New("zkill pull failed to complete all page
 
 type ZkillClient interface {
 	GetZkillResults(entityId int, entityType types.EntityType) (*[]ZkbResponse, error)
-	addUserHeader()
 }
 
 type ZkillConnection struct {
@@ -36,13 +34,12 @@ func NewZkillClient() *ZkillConnection {
 			},
 			Headers: map[string]string{
 				"Accept-Encoding": "gzip",
+				"User-Agent":      USER_AGENT,
 			},
 			MaxRetries: 3,
 			Backoff:    1 * time.Second,
 		},
 	}
-
-	connection.addUserHeader()
 
 	return connection
 }
@@ -70,7 +67,9 @@ func (z ZkillConnection) GetZkillResults(entityId int, typeOfEntity types.Entity
 	allZkillmails := &[]ZkbResponse{}
 
 	pageNumber := 1
-	for pageNumber <= 10 {
+	for pageNumber <= ZKILL_MAX_PAGES {
+		comm.ReportProgress("Fetching zKillboard page %d (live, %d killmails so far)", pageNumber, len(*allZkillmails))
+
 		nextPage, err := z.GetZkillPage(endpoint, pageNumber, allZkillmails)
 
 		pageNumber = nextPage
@@ -82,6 +81,15 @@ func (z ZkillConnection) GetZkillResults(entityId int, typeOfEntity types.Entity
 
 	return allZkillmails, nil
 
+}
+
+// zkillRateLimitPause is how long to wait after zKillboard rate limits a page, before one more try
+var zkillRateLimitPause = 30 * time.Second
+
+// isRateLimited reports whether a request failed because the server answered 429 Too Many Requests, after Request's own retries
+func isRateLimited(err error) bool {
+	var statusErr *StatusError
+	return errors.As(err, &statusErr) && statusErr.Status == http.StatusTooManyRequests
 }
 
 /*
@@ -101,20 +109,19 @@ func (z ZkillConnection) GetZkillPage(endpoint string, page int, allZkillmails *
 	url := fmt.Sprintf("%s/page/%d/", endpoint, page)
 	resp, err := z.Client.Request("GET", url, nil)
 
+	// errors.As would write the found error into a shared sentinel, so sentinels are matched with errors.Is
+	if errors.Is(err, ErrRequestFailedToSend) {
+		comm.Logger.WithError(err).Error("Failed to initiate request - check body")
+		return nextPage, err
+	}
+	if isRateLimited(err) {
+		comm.Logger.WithError(err).Warn("zKillboard is rate limiting - 30 second pause")
+		comm.ReportProgress("zKillboard is rate limiting, waiting 30 seconds before retrying")
+		time.Sleep(zkillRateLimitPause)
+		resp, err = z.Client.Request("GET", url, nil)
+	}
 	if err != nil {
-		if errors.As(err, &ErrRequestFailedToSend) {
-			comm.Logger.WithError(err).Error("Failed to initiate request - check body")
-			return nextPage, err
-		}
-		if errors.As(err, &ErrRequestFailedToComplete) {
-			comm.Logger.WithError(err).Error("Request was blocked - 30 second pause")
-			time.Sleep(30 * time.Second)
-			resp, err = z.Client.Request("GET", url, nil)
-
-			if err != nil {
-				return nextPage, err
-			}
-		}
+		return nextPage, err
 	}
 
 	defer resp.Body.Close()
@@ -134,24 +141,11 @@ func (z ZkillConnection) GetZkillPage(endpoint string, page int, allZkillmails *
 		return nextPage, err
 	}
 
-	if len(thisPageKillmails) >= 200 {
+	if len(thisPageKillmails) >= ZKILL_PAGE_SIZE {
 		nextPage = page + 1
 	}
 
 	*allZkillmails = append(*allZkillmails, thisPageKillmails...)
 
 	return nextPage, nil
-}
-
-func (c *ZkillConnection) addUserHeader() {
-
-	var username string = "Generic User"
-	currentUser, err := user.Current()
-	if err != nil {
-		username = "Generic User"
-	} else {
-		username = currentUser.Username
-	}
-
-	c.Client.UpdateHeaders(map[string]string{"User-Agent": fmt.Sprintf("go-eve-sleuth/v%s (%s)", comm.VERSION, username)})
 }

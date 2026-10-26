@@ -11,32 +11,33 @@ type AggregateResults interface {
 }
 
 type CollectedData struct {
+	Killmails        []*retrieval.Killmail // every killmail that was expanded, in the order collected
 	PilotsSeen       map[int]PilotSeen
 	SystemsVisted    map[int]SystemVisted
 	ShipsFlown       map[int]ShipFlown
 	BattlesFought    map[string]BattleFought
-	CapitalPilots    map[int]CapitalPilot
 	AlliancesSeen    map[int]AllianceSeen
 	CorporationsSeen map[int]CorporationSeen
 }
 
+// AllianceSeen is an alliance whose pilots were on the killmails. Its pilots and systems are ids, looked up in CollectedData's PilotsSeen and SystemsVisted.
 type AllianceSeen struct {
 	Alliance       *retrieval.Alliance
-	Pilots         map[int]*PilotSeen
-	SystemsVisited map[int]*SystemVisted
-	Activity       []time.Time
+	PilotIDs       map[int]struct{}
+	SystemIDs      map[int]struct{}
+	Activity       []time.Time // one per killmail
 	TotalKillmails int
 	KillmailIDs    map[int]struct{}
 
 	BattlesFoughtIDs map[string]struct{}
 }
 
+// CorporationSeen is a corporation whose pilots were on the killmails. Its pilots and systems are ids, looked up in CollectedData's PilotsSeen and SystemsVisted.
 type CorporationSeen struct {
 	Corporation    *retrieval.Corporation
-	ALliance       *retrieval.Alliance
-	Pilots         map[int]*PilotSeen
-	SystemsVisited map[int]*SystemVisted
-	Activity       []time.Time
+	PilotIDs       map[int]struct{}
+	SystemIDs      map[int]struct{}
+	Activity       []time.Time // one per killmail
 	TotalKillmails int
 	KillmailIDs    map[int]struct{}
 
@@ -49,19 +50,21 @@ type SystemVisted struct {
 	KillmailIDs      []int
 	Activity         []time.Time
 	BattlesFoughtIDs map[string]struct{}
-	StructuresSeen   map[string]*Structure // key is structureTypeID-corporationID
+	StructuresSeen   map[string]*Structure // key is structureTypeID-corporationID-allianceID, allianceID is 0 for a corp with no alliance
 	StructuresBashed map[time.Time]Structure
 }
 
+// Structure is an upwell structure, control tower, or deployable seen on killmails in a system, owned by one corp and alliance combination
 type Structure struct {
 	Structure        *retrieval.Item
+	Corporation      *retrieval.Corporation // owner at the time of the killmail
+	Alliance         *retrieval.Alliance    // owner's alliance at the time of the killmail, nil if the corp had none
 	Fits             map[string][]*retrieval.FitItem
 	TotalKillmails   int
 	KillmailIDs      []int
 	Activity         []time.Time
 	BattlesFoughtIDs map[string]struct{}
 	Destroyed        int
-	Owner            string
 }
 
 type ShipFlown struct {
@@ -82,14 +85,4 @@ type BattleFought struct {
 	SystemID          int
 	UniquePilots      map[int]struct{}
 	KillmailIDs       []int
-}
-
-type CapitalPilot struct {
-	Pilot          string
-	Corporation    string
-	Alliance       string
-	TotalKillmails int
-	KillmailIDs    []int
-	Activity       []time.Time
-	Ships          map[int]*ShipFlown
 }

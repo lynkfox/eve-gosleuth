@@ -3,11 +3,13 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"math"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
@@ -25,6 +27,70 @@ func (e *RequestError) Error() string {
 var ErrRequestFailedToSend = &RequestError{Message: "request failed to send"}
 var ErrRequestFailedToComplete = &RequestError{Message: "request failed to complete"}
 
+// StatusError is a request the server answered with an error status, ie the ESI's 404 for a deleted character
+type StatusError struct {
+	Host    string // ie esi.evetech.net
+	Status  int
+	Message string // the server's own explanation, when it sent one, ie Character not found
+}
+
+func (e *StatusError) Error() string {
+	text := fmt.Sprintf("%s returned %d %s", e.Host, e.Status, http.StatusText(e.Status))
+	if e.Message != "" {
+		text += ": " + e.Message
+	}
+	return text
+}
+
+// newStatusError reads why a request failed from its response. The ESI and zKillboard explain errors as {"error": "..."}.
+func newStatusError(req *http.Request, resp *http.Response) *StatusError {
+	statusErr := &StatusError{Host: req.URL.Host, Status: resp.StatusCode}
+
+	explanation := struct {
+		Error string `json:"error"`
+	}{}
+	if body, err := io.ReadAll(io.LimitReader(resp.Body, 4096)); err == nil && json.Unmarshal(body, &explanation) == nil {
+		statusErr.Message = explanation.Error
+	}
+	return statusErr
+}
+
+// IsNotFound reports whether a request failed because the server has no such entity, a 404, as opposed to failing to answer
+func IsNotFound(err error) bool {
+	var statusErr *StatusError
+	return errors.As(err, &statusErr) && statusErr.Status == http.StatusNotFound
+}
+
+/*
+	FailureReason says in a few words why a request failed, for progress messages
+
+Parameters:
+  - err: the error from a request, possibly wrapped
+
+Returns:
+  - string: ie "esi.evetech.net returned 502 Bad Gateway", "timed out reaching esi.evetech.net", or the error itself if it is not a request error
+*/
+func FailureReason(err error) string {
+	var statusErr *StatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.Error()
+	}
+
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		host := urlErr.URL
+		if parsed, parseErr := url.Parse(urlErr.URL); parseErr == nil {
+			host = parsed.Host
+		}
+		if urlErr.Timeout() {
+			return "timed out reaching " + host
+		}
+		return "could not reach " + host
+	}
+
+	return err.Error()
+}
+
 type APIClient interface {
 	Request(method, endpoint string, body interface{}) (*http.Response, error)
 	UpdateHeaders(newHeaders map[string]string)
@@ -36,6 +102,7 @@ type APIConnection struct {
 	Headers    map[string]string
 	MaxRetries int
 	Backoff    time.Duration
+	Guard      *RateGuard // keeps requests within the server's rate limits, nil for none
 }
 
 func (c APIConnection) UpdateHeaders(newHeaders map[string]string) {
@@ -48,15 +115,17 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 	url := fmt.Sprintf("%s/%s", c.BaseURL, endpoint)
 
 	// Serialize the body if provided
-	var bodyReader io.Reader
+	var jsonBody []byte
 	if body != nil {
-		jsonBody, err := json.Marshal(body)
+		var err error
+		jsonBody, err = json.Marshal(body)
 		if err != nil {
 			comm.Logger.WithError(err).Error("Failed to serialize body of request")
 			return nil, fmt.Errorf("%w: %w", ErrRequestFailedToSend, err)
 		}
-		bodyReader = bytes.NewBuffer(jsonBody)
 	}
+
+	route := routeOf(endpoint)
 
 	// Retry loop with backoff
 	var resp *http.Response
@@ -74,6 +143,12 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 			"maxRetries": c.MaxRetries,
 		})
 
+		// a reader is consumed by sending, so each attempt needs a fresh one
+		var bodyReader io.Reader
+		if jsonBody != nil {
+			bodyReader = bytes.NewReader(jsonBody)
+		}
+
 		req, reqErr := http.NewRequest(method, url, bodyReader)
 		if reqErr != nil {
 			comm.Logger.WithFields(logrus.Fields(defaultFields)).WithError(err).Error("Could not create request")
@@ -86,11 +161,25 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 		}
 
 		// Send the request
-		resp, err = c.HTTPClient.Do(req)
+		if c.Guard != nil {
+			release := c.Guard.wait(route)
+			resp, err = c.HTTPClient.Do(req)
+			if err == nil {
+				c.Guard.observe(route, resp)
+			}
+			release()
+		} else {
+			resp, err = c.HTTPClient.Do(req)
+		}
 		if err == nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			comm.Logger.WithFields(defaultFields.AddTemporaryDebugOnlyFields(logrus.Fields{"status": resp.StatusCode})).Debug("Request succeeded")
 
 			return resp, nil
+		}
+
+		// an answered request failed on its status, keep why for the error
+		if err == nil {
+			err = newStatusError(req, resp)
 		}
 
 		// Close response body if available to avoid resource leaks
@@ -98,16 +187,29 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 			resp.Body.Close()
 		}
 
+		// a 404 or other final answer will not change, so it is not sent again
+		if resp != nil && !retryable(resp.StatusCode) {
+			break
+		}
+
 		if attempt != c.MaxRetries {
 			backoffDuration := c.Backoff * time.Duration(math.Pow(2, float64(attempt-1)))
 
-			comm.Logger.WithFields(defaultFields.AddTemporaryDebugOnlyFields(logrus.Fields{"body": body, "status": resp.StatusCode,
+			status := 0
+			if resp != nil {
+				status = resp.StatusCode
+			}
+
+			comm.Logger.WithFields(defaultFields.AddTemporaryDebugOnlyFields(logrus.Fields{"body": body, "status": status,
 				"nextBackoff": backoffDuration})).WithError(err).Warn("Request failed, retrying")
-			time.Sleep(backoffDuration)
+			// after a 420 or 429 the guard waits as long as the server asked, instead
+			if c.Guard == nil || (status != http.StatusTooManyRequests && status != 420) {
+				time.Sleep(backoffDuration)
+			}
 		}
 
 	}
 
 	comm.Logger.WithError(err).Error("Could not complete request")
-	return nil, fmt.Errorf("%w after %d retries: %w", ErrRequestFailedToComplete, c.MaxRetries, err)
+	return nil, fmt.Errorf("%w: %w", ErrRequestFailedToComplete, err)
 }

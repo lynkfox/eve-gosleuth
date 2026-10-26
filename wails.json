@@ -1,0 +1,11 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "eve-gosleuth",
+  "outputfilename": "eve-gosleuth",
+  "frontend:install": "",
+  "frontend:build": "",
+  "author": {
+    "name": "lynkfox",
+    "email": "lynkfox@gmail.com"
+  }
+}

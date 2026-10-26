@@ -1,6 +1,10 @@
 package api_test
 
 import (
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/lynkfox/go_eve_sleuth/api"
@@ -52,6 +56,9 @@ func TestGetEveIdsOrNames(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, "Umbrian Dawn", result[98739641])
+		assert.Equal(t, "POST", mock.Method)
+		assert.Equal(t, "universe/names/", mock.Endpoint)
+		assert.Equal(t, []int{123, 234, 456, 789}, mock.Body)
 
 	})
 
@@ -85,6 +92,37 @@ func TestGetEveIdsOrNames(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, "Umbrian Dawn", result[98739641].Name)
+		assert.Equal(t, "POST", mock.Method)
+		assert.Equal(t, "universe/ids/", mock.Endpoint)
+		assert.Equal(t, []string{"abc", "dbe", "efg"}, mock.Body)
+	})
+
+	t.Run("GetEveIDsFromNames sets category from the response group", func(t *testing.T) {
+		jsonData := `{
+			"characters": [{"id": 2112625428, "name": "CCP Zoetrope"}],
+			"corporations": [{"id": 98739641, "name": "Umbrian Dawn"}]
+		  }`
+
+		esiClient := api.ESIConnection{
+			Client: CreateMockResposne(jsonData, "POST", "universe/ids/", 200),
+		}
+
+		result, err := esiClient.GetEveIDsFromNames([]string{"CCP Zoetrope", "Umbrian Dawn"})
+
+		assert.NoError(t, err)
+		assert.Equal(t, "characters", result[2112625428].Category)
+		assert.Equal(t, "corporations", result[98739641].Category)
+	})
+
+	t.Run("GetEveIDsFromNames with no matches returns an empty map", func(t *testing.T) {
+		esiClient := api.ESIConnection{
+			Client: CreateMockResposne(`{}`, "POST", "universe/ids/", 200),
+		}
+
+		result, err := esiClient.GetEveIDsFromNames([]string{"Not A Real Pilot Name"})
+
+		assert.NoError(t, err)
+		assert.Empty(t, result)
 	})
 
 	t.Run("GetCharacterInfo returns the character and adds id number to response", func(t *testing.T) {
@@ -114,4 +152,61 @@ func TestGetEveIdsOrNames(t *testing.T) {
 		assert.Equal(t, "Luxxianna Seraph", result.Name)
 
 	})
+}
+
+// BatchMockApiClient returns a fresh copy of the same response on every call and records each request body
+type BatchMockApiClient struct {
+	jsonData string
+	Bodies   []interface{}
+}
+
+func (m *BatchMockApiClient) Request(method, endpoint string, body interface{}) (*http.Response, error) {
+	m.Bodies = append(m.Bodies, body)
+	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(m.jsonData))}, nil
+}
+
+func (m *BatchMockApiClient) UpdateHeaders(newHeaders map[string]string) {}
+
+func TestGetEveIDsFromNamesBatches(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+
+	names := make([]string, 1201)
+	for i := range names {
+		names[i] = fmt.Sprintf("Pilot %d", i)
+	}
+
+	mock := &BatchMockApiClient{jsonData: `{"characters": [{"id": 2112625428, "name": "CCP Zoetrope"}]}`}
+	esiClient := api.ESIConnection{Client: mock}
+
+	result, err := esiClient.GetEveIDsFromNames(names)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result))
+	assert.Equal(t, 3, len(mock.Bodies))
+	assert.Equal(t, 500, len(mock.Bodies[0].([]string)))
+	assert.Equal(t, 500, len(mock.Bodies[1].([]string)))
+	assert.Equal(t, 201, len(mock.Bodies[2].([]string)))
+	assert.Equal(t, "Pilot 1200", mock.Bodies[2].([]string)[200])
+}
+
+func TestGetCharacterAffiliations(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+
+	characterIDs := make([]int, 1201)
+	for i := range characterIDs {
+		characterIDs[i] = 2112000000 + i
+	}
+
+	// a deleted character is answered in Doomheim, with no alliance
+	mock := &BatchMockApiClient{jsonData: `[{"alliance_id":99010517,"character_id":1003998291,"corporation_id":98652614},{"character_id":2112483758,"corporation_id":1000001}]`}
+	esiClient := api.ESIConnection{Client: mock}
+
+	result, err := esiClient.GetCharacterAffiliations(characterIDs)
+
+	assert.NoError(t, err)
+	assert.Equal(t, api.ESIAffiliation{CharacterID: 1003998291, CorporationID: 98652614, AllianceID: 99010517}, result[1003998291])
+	assert.Equal(t, api.DOOMHEIM_CORPORATION_ID, result[2112483758].CorporationID)
+	assert.Equal(t, 2, len(mock.Bodies), "1000 ids a request")
+	assert.Equal(t, 1000, len(mock.Bodies[0].([]int)))
+	assert.Equal(t, 201, len(mock.Bodies[1].([]int)))
 }

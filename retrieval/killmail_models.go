@@ -19,6 +19,8 @@ type Killmail struct {
 	System         *System
 	Position       *api.ESIPosition
 	FittedValue    float64
+	DroppableValue float64  // zKillboard's totalDroppableValue
+	Labels         []string // zKillboard's tags, ie tz:eu, loc:w-space
 	DestroyedValue float64
 	DroppedValue   float64
 	TotalValue     float64
@@ -36,6 +38,7 @@ type KillmailAttacker struct {
 	Ship           *Item
 	Weapon         *Item
 	DamageDone     int
+	FinalBlow      bool
 }
 
 type KillmailVictim struct {
@@ -86,17 +89,13 @@ type Corporation struct {
 	CeoID         int       `json:"ceo_id"`
 	Alliance      *Alliance `json:"alliance"`
 	Ticker        string    `json:"ticker"`
+
+	AllianceChecked bool `json:"alliance_checked,omitempty"` // the alliance was looked up, so a nil Alliance means the corp is in none
 }
 
 func (c *Corporation) GetCEO(cached *CachedEveIDs) *Pilot {
-	alreadyExpanded := cached.FetchExpanded(c.CeoID)
-	if alreadyExpanded != nil {
-		casted := (*alreadyExpanded).(Pilot)
-		return &casted
-	}
-	ceo := cached.ExpandPilot(c.CeoID, false)
-
-	return ceo
+	// ExpandPilot checks the cache first
+	return cached.ExpandPilot(c.CeoID, false)
 }
 
 type Alliance struct {
@@ -108,12 +107,6 @@ type Alliance struct {
 }
 
 func (a *Alliance) GetExecutorCorp(cached *CachedEveIDs) *Corporation {
-	alreadyExpanded := cached.FetchExpanded(a.ExecutorCorporationID)
-	if alreadyExpanded != nil {
-		casted := (*alreadyExpanded).(Corporation)
-		return &casted
-	}
-	executorCorp := cached.ExpandCorporation(a.ExecutorCorporationID, false)
-
-	return executorCorp
+	// ExpandCorporation checks the cache first
+	return cached.ExpandCorporation(a.ExecutorCorporationID, false)
 }

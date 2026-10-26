@@ -2,6 +2,7 @@ package retrieval
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
@@ -29,16 +30,18 @@ type IntelTarget struct {
 }
 
 type CollectionClientPool struct {
-	ZkillClient api.ZkillClient
-	ESIClient   api.ESIClient
+	ZkillClient  api.ZkillClient
+	ESIClient    api.ESIClient
+	EveWhoClient api.EveWhoClient
 }
 
-func InitTarget(name string) IntelTarget {
+// InitTarget looks up a target by name, making its ESI calls through the cache
+func InitTarget(name string, cache *CachedEveIDs) IntelTarget {
 	target := IntelTarget{
 		Name: name,
 		Clients: CollectionClientPool{
 			ZkillClient: api.NewZkillClient(),
-			ESIClient:   api.NewESIClient(),
+			ESIClient:   cache,
 		},
 	}
 
@@ -47,15 +50,34 @@ func InitTarget(name string) IntelTarget {
 	return target
 }
 
-func (t *IntelTarget) GetTargetInfo() {
+// targetCategories maps the ESI name lookup categories to the entity type they represent
+var targetCategories = map[string]types.EntityType{
+	"alliances":       types.ALLIANCE,
+	"characters":      types.PILOT,
+	"corporations":    types.CORPORATION,
+	"systems":         types.SYSTEM,
+	"inventory_types": types.ITEM,
+}
 
-	dispatch := map[string]types.EntityType{
-		"alliances":       types.ALLIANCE,
-		"characters":      types.PILOT,
-		"corporations":    types.CORPORATION,
-		"systems":         types.SYSTEM,
-		"inventory_types": types.ITEM,
-	}
+/*
+GetTargetInfo looks up the target by Name on the ESI, setting its ID, type, and Data. If the name matches more than one kind of entity, Error is set to ErrTooManyTargets.
+*/
+func (t *IntelTarget) GetTargetInfo() {
+	t.lookupTarget(nil)
+}
+
+/*
+	GetTargetInfoOfType looks up the target by Name on the ESI, only accepting a match of the given type, then sets its ID and Data.
+
+Parameters:
+  - entityType: the type of entity the user searched for. Other entities that share the name are ignored.
+*/
+func (t *IntelTarget) GetTargetInfoOfType(entityType types.EntityType) {
+	t.TypeOfEntity = entityType
+	t.lookupTarget(&entityType)
+}
+
+func (t *IntelTarget) lookupTarget(onlyType *types.EntityType) {
 
 	var (
 		data interface{}
@@ -66,15 +88,33 @@ func (t *IntelTarget) GetTargetInfo() {
 
 	if err != nil {
 		t.Error = fmt.Errorf("Unable to find Target ID: %w", err)
+		t.DisplayMessage = "Could not search the ESI: " + api.FailureReason(err)
+		return
+	}
+
+	if len(names) == 0 {
+		t.Error = fmt.Errorf("No ESI match for %s", t.Name)
 		t.DisplayMessage = "Nothing found by that name. Check spelling?"
 		return
 	}
 
-	if len(names) > 1 {
+	if onlyType != nil {
+		for _, value := range names {
+			if targetCategories[value.Category] == *onlyType {
+				t.IDNumber = value.ID
+			}
+		}
+
+		if t.IDNumber == 0 {
+			t.Error = fmt.Errorf("No %s match for %s", onlyType.String(), t.Name)
+			t.DisplayMessage = fmt.Sprintf("No %s found by that name. Check spelling or search type?", strings.ToLower(onlyType.String()))
+			return
+		}
+	} else if len(names) > 1 {
 
 		if t.TypeOfEntity.String() != "UNKNOWN" {
 			for _, value := range names {
-				if dispatch[value.Category] == t.TypeOfEntity {
+				if targetCategories[value.Category] == t.TypeOfEntity {
 					t.IDNumber = value.ID
 				}
 			}
@@ -87,7 +127,7 @@ func (t *IntelTarget) GetTargetInfo() {
 		}
 	} else {
 		for _, value := range names {
-			t.TypeOfEntity = dispatch[value.Category]
+			t.TypeOfEntity = targetCategories[value.Category]
 			t.IDNumber = value.ID
 		}
 	}
@@ -104,7 +144,9 @@ func (t *IntelTarget) GetTargetInfo() {
 
 	}
 	if err != nil {
-		// handle error
+		t.Error = fmt.Errorf("Unable to retrieve Target info: %w", err)
+		t.DisplayMessage = "Could not load details for that target: " + api.FailureReason(err)
+		return
 	}
 
 	t.Data = data

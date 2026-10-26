@@ -3,6 +3,7 @@ package aggregate
 import (
 	"slices"
 	"sort"
+	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
@@ -23,6 +24,10 @@ type PilotSeen struct {
 	DaysActive            []string             `json:"days_active"`
 	BattlesFoughtIDs      map[string]struct{}  `json:"-"`
 	UniqueDays            int                  `json:"unique_days"`
+	CorporationsAtKill    map[int]struct{}     `json:"-"`          // every corp the pilot was in on the collected killmails
+	AlliancesAtKill       map[int]struct{}     `json:"-"`          // every alliance the pilot was in on the collected killmails
+	FirstSeen             time.Time            `json:"first_seen"` // time of the oldest killmail this pilot is on
+	LastSeen              time.Time            `json:"last_seen"`  // time of the most recent killmail this pilot is on
 }
 
 func GetMostFrequentFleetmates(limit int, pilots map[int]PilotSeen, target *retrieval.IntelTarget) []PilotSeen {
@@ -42,7 +47,8 @@ func GetMostFrequentFleetmates(limit int, pilots map[int]PilotSeen, target *retr
 
 	for id, pilot := range pilots {
 
-		if target.TypeOfEntity == types.PILOT && IsTarget(target, pilot.Pilot.CharacterID) {
+		// NPC and structure attackers are only ship types, not fleetmates
+		if pilot.Pilot.NPC || (target.TypeOfEntity == types.PILOT && IsTarget(target, pilot.Pilot.CharacterID)) {
 			continue
 		}
 
@@ -55,20 +61,82 @@ func GetMostFrequentFleetmates(limit int, pilots map[int]PilotSeen, target *retr
 		}
 	}
 
-	sort.Slice(pilotStats, func(i, j int) bool {
-		if pilotStats[i].TotalKillmails == pilotStats[j].TotalKillmails {
-			return pilotStats[i].UniqueDays > pilotStats[j].UniqueDays
-		} else {
-			return pilotStats[i].TotalKillmails > pilotStats[j].TotalKillmails
-		}
-	})
-
-	var topPilots []PilotSeen
-	for i := 0; i < limit && i < len(pilotStats); i++ {
-		topPilots = append(topPilots, pilotStats[i].Pilot)
+	candidates := []PilotSeen{}
+	for _, stat := range pilotStats {
+		candidates = append(candidates, stat.Pilot)
 	}
 
-	return topPilots
+	return rankPilots(limit, candidates)
+}
+
+/*
+	GetTopMembers ranks the pilots who flew for a corporation or alliance target on its killmails
+
+A pilot counts as a member if they were in the target corp or alliance on at least one collected killmail, so pilots who have since left are included.
+
+Parameters:
+  - limit: the maximum number of members to return
+  - pilots: the PilotsSeen from CollectedData
+  - target: a CORPORATION or ALLIANCE target, other types have no members
+
+Returns:
+  - []PilotSeen: the top members, most killmails first, ties broken by the most unique days active
+*/
+func GetTopMembers(limit int, pilots map[int]PilotSeen, target *retrieval.IntelTarget) []PilotSeen {
+	members := []PilotSeen{}
+	for _, pilot := range pilots {
+		if pilot.FlewFor(target) {
+			members = append(members, pilot)
+		}
+	}
+
+	return rankPilots(limit, members)
+}
+
+/*
+	GetTopPilots ranks every pilot on the killmails, such as for a system target. NPC and structure attackers are left out.
+
+Parameters:
+  - limit: the maximum number of pilots to return
+  - pilots: the PilotsSeen from CollectedData
+
+Returns:
+  - []PilotSeen: the top pilots, most killmails first, ties broken by the most unique days active
+*/
+func GetTopPilots(limit int, pilots map[int]PilotSeen) []PilotSeen {
+	players := []PilotSeen{}
+	for _, pilot := range pilots {
+		if !pilot.Pilot.NPC {
+			players = append(players, pilot)
+		}
+	}
+
+	return rankPilots(limit, players)
+}
+
+// FlewFor returns true if the pilot was in the target corporation or alliance on any collected killmail
+func (p PilotSeen) FlewFor(target *retrieval.IntelTarget) bool {
+	switch target.TypeOfEntity {
+	case types.CORPORATION:
+		_, found := p.CorporationsAtKill[target.IDNumber]
+		return found
+	case types.ALLIANCE:
+		_, found := p.AlliancesAtKill[target.IDNumber]
+		return found
+	}
+	return false
+}
+
+// rankPilots sorts pilots by most killmails, ties broken by most unique days, and returns up to limit of them
+func rankPilots(limit int, pilots []PilotSeen) []PilotSeen {
+	sort.Slice(pilots, func(i, j int) bool {
+		if pilots[i].TotalKillmails == pilots[j].TotalKillmails {
+			return pilots[i].UniqueDays > pilots[j].UniqueDays
+		}
+		return pilots[i].TotalKillmails > pilots[j].TotalKillmails
+	})
+
+	return pilots[:min(limit, len(pilots))]
 }
 
 func (p *PilotSeen) CalculateDaysSeenOverTime() int {

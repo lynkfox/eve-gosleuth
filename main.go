@@ -1,46 +1,39 @@
 package main
 
 import (
-	"fmt"
+	"embed"
 
-	"github.com/lynkfox/go_eve_sleuth/aggregate"
-	"github.com/lynkfox/go_eve_sleuth/api"
-	"github.com/lynkfox/go_eve_sleuth/comm"
-	"github.com/lynkfox/go_eve_sleuth/retrieval"
-	"github.com/sirupsen/logrus"
+	"github.com/lynkfox/go_eve_sleuth/gui"
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
 
+//go:embed all:frontend/dist
+var assets embed.FS
+
 func main() {
+	app := gui.NewApp()
+	startup, shutdown := gui.Lifecycle(app)
 
-	comm.InitLogger(logrus.DebugLevel)
-	comm.InitStaticData("./static_data")
-
-	target := retrieval.IntelTarget{
-		IDNumber: 2121139046,
-		Name:     "Luxxianna Seraph",
-		Clients: retrieval.CollectionClientPool{
-			ZkillClient: api.NewZkillClient(),
-			ESIClient:   api.NewESIClient(),
+	err := wails.Run(&options.App{
+		Title:     "EVE GoSleuth",
+		Width:     1100,
+		Height:    800,
+		MinWidth:  720,
+		MinHeight: 560,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
 		},
-	}
+		BackgroundColour: &options.RGBA{R: 11, G: 14, B: 19, A: 1},
+		OnStartup:        startup,
+		OnShutdown:       shutdown,
+		Bind: []interface{}{
+			app,
+		},
+	})
 
-	loaded_cache, _ := retrieval.LoadCache(target.Clients.ESIClient)
-
-	target.Expanded = loaded_cache.ExpandPilot(target.IDNumber, true)
-
-	killmails, err := retrieval.CollectKillmails(target)
 	if err != nil {
-		comm.Logger.WithError(err).Warnf("Continuing with %d collected killmails", len(*killmails))
+		println("Error:", err.Error())
 	}
-
-	collected_data := aggregate.CollateAllKillmailData(killmails, &target.Clients.ESIClient,
-		loaded_cache)
-
-	fleetmates := aggregate.GetMostFrequentFleetmates(10, collected_data.PilotsSeen, &target)
-
-	for i := range fleetmates {
-		fmt.Printf("\nPilot Name: %s | KMs Shared: %d | Over Days: %d", fleetmates[i].Pilot.Name, fleetmates[i].TotalKillmails, fleetmates[i].UniqueDays)
-	}
-
-	retrieval.SaveCache(*loaded_cache)
 }

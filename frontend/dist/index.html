@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EVE GoSleuth</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">EVE <span>GoSleuth</span></div>
+    <form id="search-form" class="search" autocomplete="off">
+      <select id="search-type" aria-label="Search type">
+        <option value="PILOT">Pilot</option>
+        <option value="CORPORATION">Corporation</option>
+        <option value="ALLIANCE">Alliance</option>
+        <option value="SYSTEM">System</option>
+      </select>
+      <input id="search-input" type="text" placeholder="Exact in-game name" spellcheck="false" autofocus>
+      <button id="search-button" type="submit">Search</button>
+    </form>
+
+    <nav class="app-menu" aria-label="App menu">
+      <div class="menu-anchor">
+        <button id="themes-button" class="menu-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="themes-menu">Theme</button>
+        <div id="themes-menu" class="menu-dropdown menu-themes" role="menu" aria-label="Theme" hidden>
+          <h3>Presets</h3>
+          <div id="theme-list"></div>
+        </div>
+      </div>
+      <button id="preferences-button" class="menu-button" type="button" aria-haspopup="dialog">Preferences</button>
+    </nav>
+  </header>
+
+  <main>
+    <p id="status" class="status" hidden></p>
+
+    <section id="empty" class="empty">
+      <p>Search for a target by its exact in-game name to begin.</p>
+    </section>
+
+    <section id="target" class="card target" hidden>
+      <div id="target-entities" class="target-header"></div>
+
+      <div class="grid">
+        <div class="field">
+          <h2 id="left-details-title"></h2>
+          <div id="left-details-value" class="details"></div>
+        </div>
+        <div class="field">
+          <h2 id="right-details-title"></h2>
+          <div id="right-details-value" class="details"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="intel" class="card intel" hidden>
+      <p id="intel-loading" class="muted">Pulling killmails from zKillboard and the ESI. This can take a while, progress is shown in the bar below.</p>
+
+      <div id="intel-tabs" hidden>
+        <div class="tabs" role="tablist">
+          <button id="tab-killmails" class="tab" type="button" role="tab" aria-controls="panel-killmails" aria-selected="true">Killmails <span id="killmail-count" class="tab-count"></span></button>
+          <button id="tab-activity" class="tab" type="button" role="tab" aria-controls="panel-activity" aria-selected="false">Activity</button>
+          <button id="tab-fleetmates" class="tab" type="button" role="tab" aria-controls="panel-fleetmates" aria-selected="false">Top Fleetmates</button>
+          <button id="tab-members" class="tab" type="button" role="tab" aria-controls="panel-members" aria-selected="false">Top Members</button>
+          <button id="tab-pilots" class="tab" type="button" role="tab" aria-controls="panel-pilots" aria-selected="false">Top Pilots</button>
+          <button id="tab-corps" class="tab" type="button" role="tab" aria-controls="panel-corps" aria-selected="false">Top Corps</button>
+          <button id="tab-systems" class="tab" type="button" role="tab" aria-controls="panel-systems" aria-selected="false">Top Systems</button>
+          <button id="tab-capitals" class="tab" type="button" role="tab" aria-controls="panel-capitals" aria-selected="false">Capital Pilots</button>
+          <button id="tab-roster" class="tab" type="button" role="tab" aria-controls="panel-roster" aria-selected="false">Members</button>
+          <div id="tab-key" class="tab-key"></div>
+        </div>
+
+        <div id="panel-killmails" class="tab-panel" role="tabpanel" aria-labelledby="tab-killmails">
+          <ol id="killmail-list" class="killmail-list"></ol>
+          <p id="killmails-empty" class="muted" hidden>No killmails found on zKillboard for this target.</p>
+          <nav id="killmail-pager" class="pager" hidden>
+            <button id="page-first" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
+            <button id="page-prev" class="secondary" type="button">Previous</button>
+            <span id="page-label"></span>
+            <button id="page-next" class="secondary" type="button">Next</button>
+            <button id="page-last" class="secondary page-jump" type="button" title="Last page" aria-label="Last page">»</button>
+          </nav>
+        </div>
+
+        <div id="panel-activity" class="tab-panel" role="tabpanel" aria-labelledby="tab-activity" hidden>
+          <p id="activity-span" class="activity-span"></p>
+          <div class="activity-scroll">
+            <div id="activity-grid" class="activity" role="table" aria-label="Killmails by day of the week and hour"></div>
+          </div>
+          <p id="activity-note" class="muted activity-note"></p>
+          <p id="activity-empty" class="muted" hidden>No killmails to chart.</p>
+        </div>
+
+        <div id="panel-fleetmates" class="tab-panel" role="tabpanel" aria-labelledby="tab-fleetmates" hidden>
+          <table>
+            <thead>
+              <tr><th></th><th>Pilot</th><th class="num">Killmails Shared</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
+            </thead>
+            <tbody id="fleetmates-body"></tbody>
+          </table>
+          <p id="fleetmates-empty" class="muted" hidden>No related pilots found on the collected killmails.</p>
+        </div>
+
+        <div id="panel-members" class="tab-panel" role="tabpanel" aria-labelledby="tab-members" hidden>
+          <table>
+            <thead>
+              <tr><th></th><th>Pilot</th><th class="num">Killmails</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
+            </thead>
+            <tbody id="members-body"></tbody>
+          </table>
+          <p id="members-empty" class="muted" hidden>No members found on the collected killmails.</p>
+        </div>
+
+        <div id="panel-pilots" class="tab-panel" role="tabpanel" aria-labelledby="tab-pilots" hidden>
+          <table>
+            <thead>
+              <tr><th></th><th>Pilot</th><th class="num">Killmails</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
+            </thead>
+            <tbody id="pilots-body"></tbody>
+          </table>
+          <p id="pilots-empty" class="muted" hidden>No pilots found on the collected killmails.</p>
+        </div>
+
+        <div id="panel-corps" class="tab-panel" role="tabpanel" aria-labelledby="tab-corps" hidden>
+          <table>
+            <thead>
+              <tr><th></th><th>Corporation</th><th class="num">Killmails</th><th class="num">Kills</th><th class="num">Losses</th><th class="num">Pilots</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
+            </thead>
+            <tbody id="corps-body"></tbody>
+          </table>
+          <p id="corps-empty" class="muted" hidden>No corporations found on the collected killmails.</p>
+        </div>
+
+        <div id="panel-systems" class="tab-panel" role="tabpanel" aria-labelledby="tab-systems" hidden>
+          <table>
+            <thead>
+              <tr><th></th><th>System</th><th class="num">Killmails</th><th class="num">Kills</th><th class="num">Losses</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
+            </thead>
+            <tbody id="systems-body"></tbody>
+          </table>
+          <p id="systems-empty" class="muted" hidden>No systems found on the collected killmails.</p>
+        </div>
+
+        <div id="panel-capitals" class="tab-panel" role="tabpanel" aria-labelledby="tab-capitals" hidden>
+          <div id="capitals-list" class="capitals"></div>
+          <p id="capitals-empty" class="muted" hidden>No members flying capitals on the collected killmails.</p>
+        </div>
+
+        <div id="panel-roster" class="tab-panel" role="tabpanel" aria-labelledby="tab-roster" hidden>
+          <table>
+            <thead id="roster-head"></thead>
+            <tbody id="roster-body"></tbody>
+          </table>
+          <p id="roster-status" class="muted" hidden></p>
+          <nav id="roster-pager" class="pager" hidden>
+            <button id="roster-first" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
+            <button id="roster-prev" class="secondary" type="button">Previous</button>
+            <span id="roster-label"></span>
+            <button id="roster-next" class="secondary" type="button">Next</button>
+            <button id="roster-last" class="secondary page-jump" type="button" title="Last page" aria-label="Last page">»</button>
+          </nav>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="search-confirm" class="confirm">
+    <form method="dialog">
+      <p>Do you want to start a search for this?</p>
+      <p id="search-confirm-target" class="confirm-target"></p>
+      <div class="confirm-actions">
+        <button class="secondary" value="no">No</button>
+        <button value="yes" autofocus>Yes</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="preferences" class="window" aria-labelledby="preferences-title">
+    <div class="window-titlebar">
+      <h2 id="preferences-title">Preferences</h2>
+      <button id="preferences-close" class="window-close" type="button" aria-label="Close preferences" title="Close">×</button>
+    </div>
+    <div class="window-body">
+      <label class="preference">
+        <input id="pref-zkill-labels" type="checkbox">
+        <span>
+          <span class="preference-name">Include zKill labels</span>
+          <span class="preference-help">Show zKillboard's labels, such as solo or ganked, on killmail cards</span>
+        </span>
+      </label>
+
+      <label class="preference-field">
+        <span>
+          <span class="preference-name">Show times in</span>
+          <span class="preference-help">Killmail dates and times, and the activity log</span>
+        </span>
+        <select id="pref-time-zone">
+          <option value="eve">EVE time (UTC)</option>
+          <option value="local">Local time</option>
+        </select>
+      </label>
+
+      <h3 class="preference-group">Killmails collected per search</h3>
+      <label class="preference-field">
+        <span>
+          <span class="preference-name">Max killmail count</span>
+          <span class="preference-help">1 to 2,000, the most zKillboard lists (10 pages of 200)</span>
+        </span>
+        <!-- 2000 is api.ZKILL_MAX_KILLMAILS, which the backend checks again on save -->
+        <input id="pref-max-killmails" type="number" min="1" max="2000" step="1" inputmode="numeric">
+      </label>
+      <label class="preference-field">
+        <span class="preference-name">Killmails newer than</span>
+        <select id="pref-killmail-age">
+          <option value="7">1 week</option>
+          <option value="30">30 days</option>
+          <option value="90">90 days</option>
+          <option value="0">All</option>
+        </select>
+      </label>
+      <label class="preference">
+        <input id="pref-use-cached" type="checkbox">
+        <span>
+          <span class="preference-name">Use killmails in cache for target even if beyond limits above</span>
+          <span class="preference-help">Killmails already in the cache need no ESI calls</span>
+        </span>
+      </label>
+      <p class="preference-help">Killmail limits apply from the next search.</p>
+
+      <h3 class="preference-group">Cache</h3>
+      <div class="cache-location">
+        <span class="preference-name">Location</span>
+        <span id="cache-path" class="cache-path"></span>
+        <span id="cache-summary" class="preference-help"></span>
+      </div>
+      <div class="cache-actions">
+        <button id="cache-move" class="secondary" type="button">Move…</button>
+        <button id="cache-default" class="secondary" type="button">Use default location</button>
+        <button id="cache-clear" class="danger" type="button">Clear cache…</button>
+      </div>
+      <p class="preference-help">The cache actions take effect straight away, without Save. Moving into a folder that already has a GoSleuth cache replaces it.</p>
+      <p id="preferences-error" class="preferences-error" role="alert" hidden></p>
+    </div>
+    <div class="window-actions">
+      <button id="preferences-save" type="button">Save</button>
+    </div>
+  </dialog>
+
+  <dialog id="discard-confirm" class="confirm">
+    <form method="dialog">
+      <p>You are closing without saving.</p>
+      <p class="confirm-target">Your changes to Preferences will be lost.</p>
+      <div class="confirm-actions">
+        <button class="secondary" value="keep">Keep editing</button>
+        <button value="discard" autofocus>Close without saving</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="clear-cache-confirm" class="confirm" aria-labelledby="clear-cache-title">
+    <form method="dialog">
+      <p id="clear-cache-title" class="confirm-warning">Clear the cache?</p>
+      <p class="confirm-detail">Anything cleared is looked up again from the ESI when next needed, so the next searches will be slower. This can not be undone.</p>
+      <fieldset class="clear-choices">
+        <label><input type="radio" name="clear-scope" value="older" checked> <span><span class="preference-name">Older than 30 days</span><span class="preference-help">Everything cached more than 30 days ago, killmails included</span></span></label>
+        <label><input type="radio" name="clear-scope" value="entities"> <span><span class="preference-name">Pilots, corporations and alliances</span><span class="preference-help">Their details, memberships and histories. Killmails, ships and systems are kept.</span></span></label>
+        <label><input type="radio" name="clear-scope" value="all"> <span><span class="preference-name">Everything</span><span class="preference-help">The whole cache, killmails included</span></span></label>
+      </fieldset>
+      <div class="confirm-actions">
+        <button class="secondary" value="cancel" autofocus>Cancel</button>
+        <button class="danger" value="clear">Clear cache</button>
+      </div>
+    </form>
+  </dialog>
+
+  <footer id="ticker" class="ticker">
+    <ol id="ticker-history" class="ticker-history" hidden></ol>
+    <button id="ticker-bar" class="ticker-bar" type="button" title="Show recent activity">
+      <span id="ticker-indicator" class="ticker-indicator"></span>
+      <span id="ticker-message" class="ticker-message">Ready</span>
+    </button>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

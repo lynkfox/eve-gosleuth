@@ -33,3 +33,6 @@ go.work.sum
 
 # Local ESI cache, built per user at runtime
 cached_data.json
+
+# Wails build output
+build/bin/

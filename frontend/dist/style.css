@@ -1,0 +1,1221 @@
+:root {
+  --bg: #0b0e13;
+  --panel: #131820;
+  --panel-raised: #1a212c;
+  --border: #263040;
+  --text: #d8dee9;
+  --muted: #7d8899;
+  --accent: #e0a526;
+  --accent-text: #0b0e13;
+  --highlight: #e0a526; /* a theme's second color: badges, the active tab, the brand */
+  --sec-low: #e0a526; /* lowsec keeps this color whatever the theme */
+  --error: #e5534b;
+  --sec-trig: #dc2a4f; /* Triglavian space, a crimson set apart from the nullsec red */
+  --kill: #4fae6e;
+  --sec-high: #5aa9e6;
+  --space-hs: #4fae6e;
+  --space-c1-3: #9ccfff;
+  --space-c4-5: #5b9ef0;
+  --space-c6: #4a78e0;
+  --radius: 6px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.brand span { color: var(--highlight); }
+
+.search {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  max-width: 640px;
+}
+
+input, select {
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+}
+
+input { flex: 1; }
+
+select { cursor: pointer; }
+
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+button {
+  padding: 8px 16px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.status {
+  margin: 0;
+  padding: 10px 14px;
+  background: var(--panel-raised);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.status.error { border-left-color: var(--error); }
+
+.empty {
+  padding: 48px 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.card {
+  padding: 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* Target panel: kept compact, the four fields sit in one row */
+
+.card.target { padding: 14px; }
+
+.target-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 32px;
+  margin-bottom: 12px;
+}
+
+/* The target's corp and alliance (or CEO, executor) sit at the right of the header */
+.related-entities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  margin-left: auto;
+}
+
+/* An entity block: portrait with site link icons under it, beside a label and name */
+
+.entity {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.entity-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.entity-text { min-width: 0; }
+
+.entity-name {
+  margin: 4px 0 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-target .entity-name { font-size: 20px; }
+
+.entity-name-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  min-width: 0;
+}
+
+.entity-name-line .entity-name { margin: 0; }
+
+.portrait {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.entity-target .portrait {
+  width: 64px;
+  height: 64px;
+}
+
+.site-links {
+  display: flex;
+  gap: 4px;
+}
+
+.site-link {
+  display: flex;
+  padding: 2px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  opacity: 0.75;
+}
+
+.site-link:hover,
+.site-link:focus-visible {
+  border-color: var(--border);
+  opacity: 1;
+}
+
+.site-link img {
+  width: 16px;
+  height: 16px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--highlight);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.field {
+  padding: 8px 12px;
+  background: var(--panel-raised);
+  border-radius: var(--radius);
+}
+
+.field h2, .section-title {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.section-title { margin-bottom: 12px; }
+
+.field p { margin: 0; }
+
+/* long values such as a corp history scroll after four lines rather than stretching the panel */
+.details {
+  max-height: 6em;
+  overflow-y: auto;
+  font-size: 13px;
+  white-space: pre-line;
+}
+
+/* Target details as label and value columns, ie a system's security, region, stations, and planets */
+.detail-grid {
+  display: grid;
+  grid-template-columns: max-content auto;
+  gap: 2px 12px;
+  white-space: nowrap;
+}
+
+.detail-label { color: var(--muted); }
+
+/* the details are a short fixed list, so they show in full rather than scrolling like the corp history */
+#left-details-value { max-height: none; }
+
+/* Corp history: one row per corp, columns line up the names and dates */
+.corp-history {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto auto auto;
+  gap: 3px 8px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.corp-history img {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+}
+
+.corp-history strong {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.corp-history em {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.corp-history-arrow { color: var(--muted); }
+
+/* Stargates: connected system names, each a search link, beside their security */
+.stargates {
+  display: grid;
+  grid-template-columns: max-content auto;
+  gap: 2px 12px;
+  align-items: center;
+}
+
+.stargates span { font-variant-numeric: tabular-nums; }
+
+/* An alliance's member corps: logo, name, and member count in columns */
+.member-corps {
+  display: grid;
+  grid-template-columns: 16px minmax(0, max-content) auto;
+  gap: 3px 8px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.member-corps img { width: 16px; height: 16px; border-radius: 2px; }
+
+.member-corps .link-button { overflow: hidden; text-overflow: ellipsis; text-align: left; }
+
+.member-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.link-button {
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+}
+
+.link-button:hover,
+.link-button:focus-visible {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.muted { color: var(--muted); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+td.avatar { width: 1%; } /* as narrow as its links and image */
+
+/* a row's site links stacked to the left of its portrait or logo */
+.avatar-with-links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.site-links-vertical {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.site-links-vertical .site-link { padding: 1px; }
+.site-links-vertical .site-link img { width: 14px; height: 14px; }
+
+.row-detail {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.avatar-with-links > img {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+button.secondary {
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 400;
+}
+
+/* Intel tabs: one panel per killmail based report section */
+
+.intel > p { margin: 0; }
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin: -4px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  margin-bottom: -1px;
+  padding: 8px 14px;
+  background: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.tab:hover { color: var(--text); }
+
+.tab[aria-selected="true"] {
+  border-bottom-color: var(--highlight);
+  color: var(--text);
+}
+
+.tab-key {
+  align-self: center;
+  margin-left: auto;
+}
+
+/* Color key: a small button whose popup explains the colors used in a tab, shown on hover or keyboard focus */
+
+.color-key { position: relative; }
+
+.color-key-toggle {
+  padding: 2px 10px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: help;
+}
+
+.color-key-popup {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
+  width: 300px;
+  padding: 12px 14px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
+}
+
+.color-key:hover .color-key-popup,
+.color-key:focus-within .color-key-popup { display: block; }
+
+.color-key:hover .color-key-toggle,
+.color-key:focus-within .color-key-toggle { color: var(--text); }
+
+.color-key-popup h3 {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.color-key-popup h3:not(:first-child) { margin-top: 12px; }
+
+.color-key-popup dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.color-key-popup dt {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.color-key-popup dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+.key-kill,
+.key-loss {
+  padding-left: 8px;
+  border-left: 3px solid var(--kill);
+  color: var(--kill);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.key-loss {
+  border-left-color: var(--error);
+  color: var(--error);
+}
+
+.key-neutral {
+  padding-left: 8px;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+
+.tab-count {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* Killmail cards: one wide row per killmail, edge colored by whether it was a kill or a loss for the target */
+
+.killmail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* a killmail card: the victim, ship, attackers, and total value headings along the top line, then the ship image and each heading's details below */
+.killmail {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  align-items: start;
+  padding: 10px 14px;
+  background: var(--panel-raised);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.killmail.kill { border-left-color: var(--kill); }
+
+.killmail.loss { border-left-color: var(--error); }
+
+.killmail:hover { outline: 1px solid var(--border); }
+
+.killmail:focus-visible { outline: 1px solid var(--accent); }
+
+/* only the ship image, the card's first column, not the logos inside its other columns */
+.killmail > img {
+  grid-row: 2;
+  grid-column: 1;
+  display: block;
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+}
+
+.killmail-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.killmail-col > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.killmail-heading {
+  grid-row: 1;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* the victim's name starts above the ship image, its corp and alliance sit beside the image */
+.killmail-heading.killmail-victim { grid-column: 1 / 3; }
+.killmail-heading.killmail-ship { grid-column: 3; }
+.killmail-heading.killmail-attackers { grid-column: 4; }
+.killmail-heading.killmail-total { grid-column: 5; text-align: right; font-variant-numeric: tabular-nums; }
+
+.killmail-col { grid-row: 2; }
+.killmail-col.killmail-victim { grid-column: 2; }
+.killmail-col.killmail-ship { grid-column: 3; }
+.killmail-col.killmail-attackers { grid-column: 4; }
+.killmail-col.killmail-value { grid-column: 5; align-self: stretch; }
+
+/* the date: a small faded square label in the card's bottom right corner */
+.killmail-col > .killmail-time {
+  margin-top: auto;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--muted);
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* a corp and alliance on a killmail card, each with a 16px logo before its name */
+.group-line img {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  border-radius: 2px;
+  vertical-align: -3px;
+}
+
+/* only the column's own lines are muted, so colored spans inside them (security, class, outcome) keep their color */
+.killmail-col > span { color: var(--muted); font-size: 13px; }
+
+.killmail-value {
+  align-items: flex-end;
+  text-align: right;
+}
+
+
+.outcome {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--kill);
+}
+
+.loss .outcome { color: var(--error); }
+
+/* zKillboard tags on a killmail card, on their own row under the columns */
+.killmail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  grid-row: 3;
+  grid-column: 2 / -1;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.label-chip {
+  padding: 1px 7px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.sec-high { color: var(--sec-high); }
+
+/* Wormhole classes and static destinations */
+
+.space { font-weight: 600; }
+.space-hs { color: var(--space-hs); }
+.space-ls { color: var(--sec-low); }
+.space-ns { color: var(--error); }
+.space-c1-3 { color: var(--space-c1-3); }
+.space-c4-5 { color: var(--space-c4-5); }
+.space-c6 { color: var(--space-c6); font-style: italic; } /* italic as well, as its blue is close to C4 and C5 */
+.sec-low { color: var(--sec-low); }
+.sec-null { color: var(--error); }
+.sec-trig { color: var(--sec-trig); }
+
+/* A system's kind of space beside its name: a square tag, its color on the border and text */
+.space-tag {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 16px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A label pill that starts a search for its entity */
+
+button.badge-search {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+button.badge-search:hover,
+button.badge-search:focus-visible {
+  border-color: var(--accent);
+  background: var(--panel);
+}
+
+button.danger {
+  background: var(--error);
+  color: #fff;
+}
+
+/* Confirmation dialog */
+
+.confirm {
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+  color: var(--text);
+}
+
+#clear-cache-confirm { width: min(440px, calc(100vw - 32px)); }
+
+.confirm::backdrop { background: rgb(0 0 0 / 0.55); }
+
+.confirm p { margin: 0; }
+
+.confirm .confirm-target {
+  margin-top: 6px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+/*
+  A popup window over the app: a title bar with a close button, a body, and optional actions.
+  Every titled popup uses this, so a body too tall for the screen scrolls on its own, with the title bar and actions kept in view.
+*/
+
+.window {
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+  color: var(--text);
+}
+
+/* only while open, so a closed dialog stays hidden */
+.window[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.window-titlebar,
+.window-actions { flex: none; }
+
+.window::backdrop { background: rgb(0 0 0 / 0.55); }
+
+.window-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 8px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.window-titlebar h2 {
+  margin: 0;
+  color: var(--highlight);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.window-close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.window-close:hover,
+.window-close:focus-visible { background: var(--panel-raised); color: var(--text); }
+
+.window-body {
+  flex: 1 1 auto;
+  min-height: 0; /* lets the body shrink below its content so it scrolls */
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.preference {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.preference input { flex: none; margin-top: 4px; padding: 0; accent-color: var(--accent); } /* checkboxes keep their own size, unlike the search box */
+
+.preference-name { display: block; font-weight: 600; }
+
+.preference-help { display: block; color: var(--muted); font-size: 12px; }
+
+.window-body { display: grid; gap: 14px; }
+
+.window-body > .preference-help { margin: 0; }
+
+.preference-group {
+  margin: 4px 0 -4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* a named setting with its control at the right, ie Max killmail count and its number box */
+.preference-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.preference-field input,
+.preference-field select { flex: none; width: 150px; }
+
+.cache-location {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cache-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+
+.cache-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.confirm .confirm-warning { color: var(--error); font-weight: 600; }
+.confirm .confirm-detail { margin-top: 6px; color: var(--muted); font-size: 13px; }
+
+.clear-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  border: none;
+}
+
+.clear-choices label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.clear-choices input { flex: none; margin-top: 4px; padding: 0; accent-color: var(--error); }
+.clear-choices label > span { display: flex; flex-direction: column; gap: 2px; }
+
+.preferences-error { margin: 0; color: var(--error); font-size: 13px; }
+
+.window-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* App menu: Themes and Preferences at the right of the top bar. Themes drops down its list, Preferences opens its window. */
+
+.app-menu {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.menu-anchor { position: relative; }
+
+.menu-button {
+  padding: 6px 12px;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.menu-button:hover,
+.menu-button[aria-expanded="true"] {
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.menu-dropdown {
+  position: absolute;
+  z-index: 20;
+  padding: 6px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.5);
+}
+
+.menu-themes {
+  top: calc(100% + 6px);
+  right: 0;
+  width: 280px;
+}
+
+.menu-themes h3 {
+  margin: 4px 10px 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* a theme row: its two colors, a gap, its accent, then its name, as in EVE's theme settings */
+.theme-option {
+  display: grid;
+  grid-template-columns: 16px 16px 16px 1fr;
+  gap: 4px;
+  align-items: center;
+  width: 100%;
+  padding: 5px 10px;
+  background: none;
+  border-radius: 4px;
+  color: var(--text);
+  font-weight: 400;
+  text-align: left;
+}
+
+.theme-option:hover,
+.theme-option:focus-visible { background: var(--panel); }
+
+.theme-option[aria-checked="true"] {
+  background: var(--panel);
+  box-shadow: inset 2px 0 0 var(--highlight);
+}
+
+.theme-swatch {
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgb(0 0 0 / 0.4);
+}
+
+.theme-swatch.theme-accent { margin-left: 4px; }
+
+.theme-option span:last-child { margin-left: 10px; }
+
+/* Ticker: fixed status bar reporting backend progress events, click to expand recent history */
+
+body { padding-bottom: 40px; }
+
+.ticker {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+
+.ticker-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 24px;
+  background: none;
+  border-radius: 0;
+  color: var(--muted);
+  font-weight: 400;
+  text-align: left;
+}
+
+.ticker-bar:hover { color: var(--text); }
+
+.ticker-indicator {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--border);
+  border-radius: 50%;
+}
+
+.ticker.busy .ticker-indicator {
+  background: var(--accent);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.ticker.busy .ticker-message { color: var(--text); }
+
+.ticker-message {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticker-history time {
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ticker-history {
+  max-height: 220px;
+  margin: 0;
+  padding: 8px 24px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border);
+  list-style: none;
+}
+
+.ticker-history li {
+  display: flex;
+  gap: 12px;
+  padding: 2px 0;
+  color: var(--muted);
+}
+
+.ticker-history time { padding-top: 1px; }
+
+@keyframes pulse {
+  50% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker.busy .ticker-indicator { animation: none; }
+}
+
+[hidden] { display: none !important; }
+
+/* Capital Pilots: each capital ship type with its image, then its pilots indented below in a list that can be collapsed */
+
+/* the Activity tab: a day by hour grid, with a column for the day names and one for each day's total */
+.activity-scroll { overflow-x: auto; }
+
+.activity {
+  display: grid;
+  grid-template-columns: 3em repeat(24, minmax(28px, 1fr)) 3.5em;
+  gap: 2px;
+  min-width: 760px;
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-hour,
+.activity-day {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.activity-hour { text-align: center; padding-bottom: 2px; }
+.activity-day { display: flex; align-items: center; }
+
+.activity-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  border-radius: 3px;
+  background: var(--panel-raised);
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.activity-cell.activity-strong { color: var(--accent-text); font-weight: 600; }
+.activity-cell.activity-total { background: none; color: var(--muted); }
+.activity-hour.activity-total { text-align: right; }
+.activity-span { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+.activity-note { margin-top: 8px; font-size: 0.8rem; }
+
+.capitals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.capital {
+  background: var(--panel-raised);
+  border-radius: var(--radius);
+}
+
+.capital summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.capital summary::-webkit-details-marker { display: none; }
+
+/* an arrow that turns down when the pilot list is open */
+.capital summary::before {
+  content: "▸";
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.capital[open] summary::before { transform: rotate(90deg); }
+
+.capital summary img {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+}
+
+.capital-name { font-weight: 600; }
+
+.capital-count { color: var(--muted); font-size: 13px; }
+
+.capital-pilots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+  padding: 0 14px 10px 82px;
+  list-style: none;
+}
+
+.capital-pilots li {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.capital-pilots li > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capital-pilots .link-button { text-align: left; }
+
+/* their current corp and alliance, under the name */
+.capital-pilots .group-line { color: var(--muted); font-size: 12px; }
+
+/* a pilot who has left the target's alliance since flying the capital */
+.capital-left { text-decoration: line-through; opacity: 0.7; }
+.capital-left:hover,
+.capital-left:focus-visible { text-decoration: line-through underline; }
+
+/* Page links between a pager's Previous and Next, once there are more than five pages; the current page is highlighted */
+.page-link {
+  min-width: 32px;
+  padding: 4px 8px;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-link:hover,
+.page-link:focus-visible { border-color: var(--border); color: var(--text); }
+
+.page-link.page-current {
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: default;
+}
+
+.page-of { margin-left: 6px; }
+
+/* the first and last page buttons, unseen but still taking their place while their page is one of the links */
+.page-jump { min-width: 36px; padding: 8px 10px; }
+.page-jump.page-jump-off { visibility: hidden; }
+
+/* the middle of a pager lines its page links up in a row */
+.pager > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* a member EveWho still lists who has left the corp: a red underline along their row */
+tr.member-left td { border-bottom: 2px solid var(--error); }
+
+/* the line on a corp's Members tab between the members seen on killmails and those with none */
+tr.roster-divider td {
+  padding: 14px 10px 6px;
+  border-top: 2px solid var(--highlight);
+  border-bottom: 1px solid var(--border);
+  color: var(--highlight);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

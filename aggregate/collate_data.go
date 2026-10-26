@@ -48,6 +48,22 @@ func IsSameGroupAsTarget(target *retrieval.IntelTarget, other_entity any) bool {
 	return false
 }
 
+// IsTargetLoss returns true if the killmail's victim is the target: the pilot itself, or a pilot or structure of the target corp or alliance
+func IsTargetLoss(target *retrieval.IntelTarget, killmail *retrieval.Killmail) bool {
+	victim := killmail.Victim
+
+	switch target.TypeOfEntity {
+	case types.PILOT:
+		return victim.Pilot != nil && victim.Pilot.CharacterID == target.IDNumber
+	case types.CORPORATION:
+		return victim.CorpAtKill != nil && victim.CorpAtKill.CorporationID == target.IDNumber
+	case types.ALLIANCE:
+		return victim.AllianceAtKill != nil && victim.AllianceAtKill.AllianceID == target.IDNumber
+	}
+
+	return false
+}
+
 func IsTarget(target *retrieval.IntelTarget, idNumber int) bool {
 
 	return target.IDNumber == idNumber
@@ -79,7 +95,7 @@ func isSameAlliance(target *retrieval.IntelTarget, other_id_number int) bool {
 	case types.CORPORATION:
 		alliance := target.Expanded.(*retrieval.Corporation).Alliance
 		if alliance != nil {
-			return target.IDNumber == other_id_number
+			return alliance.AllianceID == other_id_number
 		}
 
 	case types.ALLIANCE:
@@ -97,25 +113,27 @@ func CollateAllKillmailData(killmails *[]retrieval.RawKillmail, esiClient *api.E
 		SystemsVisted:    make(map[int]SystemVisted),
 		ShipsFlown:       make(map[int]ShipFlown),
 		BattlesFought:    make(map[string]BattleFought),
-		CapitalPilots:    map[int]CapitalPilot{},
 		AlliancesSeen:    make(map[int]AllianceSeen),
 		CorporationsSeen: make(map[int]CorporationSeen),
 	}
 
-	currentBattle := &BattleFought{
-		TotalKillmails: 0,
-		UniquePilots:   make(map[int]struct{}),
-		KillmailIDs:    []int{},
-	}
+	// empty until the first killmail starts a battle
+	currentBattle := &BattleFought{}
+
+	// looked up together first, in bulk and in parallel, so expanding each killmail is answered from the cache
+	cachedData.PrefetchKillmailEntities(*killmails)
 
 	for index, km := range *killmails {
 
-		if (index >= 5 && index%5 == 0) || index == 0 {
-
-			comm.Logger.Infof("Processing KM %d/%d", index, len(*killmails))
-		}
-
+		before := cachedData.Counts()
 		expandedKM := km.Expand(esiClient, cachedData)
+		comm.ReportProgress("%s", cachedData.Counts().Since(before).Annotate(fmt.Sprintf("Processed killmail %d/%d #%d", index+1, len(*killmails), km.ESIKillmail.KillmailID)))
+
+		if expandedKM == nil {
+			comm.Logger.Warnf("Skipping killmail %d, it could not be expanded", km.ESIKillmail.KillmailID)
+			continue
+		}
+		results.Killmails = append(results.Killmails, expandedKM)
 
 		lastKillmailTime := km.ESIKillmail.KillmailTime
 		previousKillmailSystem := km.ESIKillmail.SolarSystemID
@@ -129,19 +147,27 @@ func CollateAllKillmailData(killmails *[]retrieval.RawKillmail, esiClient *api.E
 
 		results.UpdateOrAddSystem(&km, expandedKM.System, currentBattle.BattleIDReference)
 
-		results.UpdateOrAddPilot(&km, expandedKM, expandedKM.Victim.Pilot, expandedKM.Victim.Ship, currentBattle.BattleIDReference, true)
+		results.UpdateOrAddStructures(&km, expandedKM, currentBattle.BattleIDReference)
+
+		// structure and deployable losses have no victim pilot to record
+		if expandedKM.Victim.Pilot != nil {
+			results.UpdateOrAddPilot(&km, expandedKM, expandedKM.Victim.Pilot, expandedKM.Victim.Ship, expandedKM.Victim.CorpAtKill, expandedKM.Victim.AllianceAtKill, currentBattle.BattleIDReference, true)
+		}
 
 		for _, attacker := range expandedKM.Attackers {
-			results.UpdateOrAddPilot(&km, expandedKM, attacker.Pilot, attacker.Ship, currentBattle.BattleIDReference, false)
+			results.UpdateOrAddPilot(&km, expandedKM, attacker.Pilot, attacker.Ship, attacker.CorpAtKill, attacker.AllianceAtKill, currentBattle.BattleIDReference, false)
 		}
 
 	}
+
+	// the last battle has no next killmail to close it
+	results.SaveBattle(currentBattle)
 
 	return results
 
 }
 
-func (results *CollectedData) UpdateOrAddPilot(km *retrieval.RawKillmail, expandedKillmail *retrieval.Killmail, character *retrieval.Pilot, ship *retrieval.Item, currentBattleID string, isVictim bool) {
+func (results *CollectedData) UpdateOrAddPilot(km *retrieval.RawKillmail, expandedKillmail *retrieval.Killmail, character *retrieval.Pilot, ship *retrieval.Item, corpAtKill *retrieval.Corporation, allianceAtKill *retrieval.Alliance, currentBattleID string, isVictim bool) {
 	pilot, found := results.PilotsSeen[character.CharacterID]
 
 	if !found {
@@ -159,6 +185,8 @@ func (results *CollectedData) UpdateOrAddPilot(km *retrieval.RawKillmail, expand
 			BattlesFoughtIDs:      make(map[string]struct{}),
 			HoursActive:           make(map[int]int),
 			DaysActive:            []string{},
+			CorporationsAtKill:    make(map[int]struct{}),
+			AlliancesAtKill:       make(map[int]struct{}),
 		}
 
 	} else {
@@ -188,22 +216,10 @@ func (results *CollectedData) UpdateOrAddPilot(km *retrieval.RawKillmail, expand
 	}
 
 	pilotShipFlown, found := pilot.ShipsFlown[ship.ItemID]
-	newPilotShipFlown := UpdateShipFlown(found, &pilotShipFlown, expandedKillmail, km, isVictim)
-	if newPilotShipFlown != nil {
-		pilot.ShipsFlown[ship.ItemID] = *newPilotShipFlown
-	}
+	pilot.ShipsFlown[ship.ItemID] = UpdateShipFlown(found, pilotShipFlown, ship, expandedKillmail, km, isVictim)
 
 	shipFlown, found := results.ShipsFlown[ship.ItemID]
-	newShipFlown := UpdateShipFlown(found, &shipFlown, expandedKillmail, km, isVictim)
-	if newShipFlown != nil {
-		results.ShipsFlown[ship.ItemID] = *newShipFlown
-		shipFlown = *newShipFlown
-
-	}
-
-	if comm.CapitalShips.Contains(ship.ItemID) {
-		results.UpdateCapitalPilot(&pilot, &shipFlown, *expandedKillmail)
-	}
+	results.ShipsFlown[ship.ItemID] = UpdateShipFlown(found, shipFlown, ship, expandedKillmail, km, isVictim)
 
 	systemVisited, found := pilot.SystemsVisited[km.ESIKillmail.SolarSystemID]
 
@@ -214,20 +230,15 @@ func (results *CollectedData) UpdateOrAddPilot(km *retrieval.RawKillmail, expand
 			KillmailIDs:    []int{km.ESIKillmail.KillmailID},
 			Activity:       []time.Time{km.ESIKillmail.KillmailTime},
 		}
-		pilot.SystemsVisited[km.ESIKillmail.SolarSystemID] = systemVisited
 	} else {
 		systemVisited.TotalKillmails = 1 + systemVisited.TotalKillmails
 		systemVisited.KillmailIDs = append(systemVisited.KillmailIDs, km.ESIKillmail.KillmailID)
 		systemVisited.Activity = append(systemVisited.Activity, km.ESIKillmail.KillmailTime)
-
 	}
+	pilot.SystemsVisited[km.ESIKillmail.SolarSystemID] = systemVisited
 
-	results.UpdateOrAddAlliance(&pilot, &systemVisited, expandedKillmail, currentBattleID)
-	results.UpdateOrAddCoproration(&pilot, &systemVisited, expandedKillmail, currentBattleID)
-
-	if comm.UpwellStructures.Contains(ship.ItemID) {
-		systemVisited.UpdateOrAddStructure(pilotShipFlown, character, expandedKillmail, currentBattleID, isVictim)
-	}
+	results.UpdateOrAddAlliance(pilot.Pilot, km.ESIKillmail.SolarSystemID, expandedKillmail, currentBattleID)
+	results.UpdateOrAddCoproration(pilot.Pilot, km.ESIKillmail.SolarSystemID, expandedKillmail, currentBattleID)
 
 	pilot.BattlesFoughtIDs[currentBattleID] = struct{}{}
 
@@ -244,145 +255,123 @@ func (results *CollectedData) UpdateOrAddPilot(km *retrieval.RawKillmail, expand
 		pilot.HoursActive[activityHour] = 1
 	}
 
+	if corpAtKill != nil {
+		pilot.CorporationsAtKill[corpAtKill.CorporationID] = struct{}{}
+	}
+	if allianceAtKill != nil {
+		pilot.AlliancesAtKill[allianceAtKill.AllianceID] = struct{}{}
+	}
+
+	// killmails are not collected in time order
+	if pilot.FirstSeen.IsZero() || expandedKillmail.KillmailTime.Before(pilot.FirstSeen) {
+		pilot.FirstSeen = expandedKillmail.KillmailTime
+	}
+	if expandedKillmail.KillmailTime.After(pilot.LastSeen) {
+		pilot.LastSeen = expandedKillmail.KillmailTime
+	}
+
 	pilot.CalculateDaysSeenOverTime()
 	results.PilotsSeen[character.CharacterID] = pilot
 
 }
 
-func (results *CollectedData) UpdateOrAddAlliance(pilot *PilotSeen, system *SystemVisted, km *retrieval.Killmail, currentBattleId string) {
-	if pilot.Pilot.Corporation == nil || pilot.Pilot.Corporation.Alliance == nil {
+// UpdateOrAddAlliance counts a killmail for the pilot's current alliance, once per killmail however many of its pilots were on it
+func (results *CollectedData) UpdateOrAddAlliance(pilot *retrieval.Pilot, systemID int, km *retrieval.Killmail, currentBattleId string) {
+	if pilot.Corporation == nil || pilot.Corporation.Alliance == nil {
 		return
 	}
 
-	alliance, found := results.AlliancesSeen[pilot.Pilot.Corporation.Alliance.AllianceID]
-
+	allianceID := pilot.Corporation.Alliance.AllianceID
+	alliance, found := results.AlliancesSeen[allianceID]
 	if !found {
 		alliance = AllianceSeen{
-			Alliance:         pilot.Pilot.Corporation.Alliance,
-			Pilots:           map[int]*PilotSeen{pilot.Pilot.CharacterID: pilot},
-			SystemsVisited:   map[int]*SystemVisted{system.System.SystemID: system},
-			Activity:         []time.Time{km.KillmailTime},
-			TotalKillmails:   0,
-			KillmailIDs:      map[int]struct{}{km.KillmailID: struct{}{}},
-			BattlesFoughtIDs: map[string]struct{}{currentBattleId: struct{}{}},
+			Alliance:         pilot.Corporation.Alliance,
+			PilotIDs:         map[int]struct{}{},
+			SystemIDs:        map[int]struct{}{},
+			KillmailIDs:      map[int]struct{}{},
+			BattlesFoughtIDs: map[string]struct{}{},
 		}
-		results.AlliancesSeen[pilot.Pilot.Corporation.Alliance.AllianceID] = alliance
-	} else {
-
-		if _, found := alliance.KillmailIDs[km.KillmailID]; !found {
-			alliance.Activity = append(alliance.Activity, km.KillmailTime)
-			alliance.TotalKillmails = alliance.TotalKillmails + 1
-		}
-
-		if _, found := alliance.Pilots[pilot.Pilot.CharacterID]; !found {
-			alliance.Pilots[pilot.Pilot.CharacterID] = pilot
-		}
-
-		if _, found := alliance.SystemsVisited[system.System.SystemID]; !found {
-			alliance.SystemsVisited[system.System.SystemID] = system
-		}
-
-		alliance.BattlesFoughtIDs[currentBattleId] = struct{}{}
-
 	}
+
+	if _, counted := alliance.KillmailIDs[km.KillmailID]; !counted {
+		alliance.KillmailIDs[km.KillmailID] = struct{}{}
+		alliance.Activity = append(alliance.Activity, km.KillmailTime)
+		alliance.TotalKillmails = 1 + alliance.TotalKillmails
+	}
+	alliance.PilotIDs[pilot.CharacterID] = struct{}{}
+	alliance.SystemIDs[systemID] = struct{}{}
+	alliance.BattlesFoughtIDs[currentBattleId] = struct{}{}
+
+	results.AlliancesSeen[allianceID] = alliance
 }
 
-func (results *CollectedData) UpdateOrAddCoproration(pilot *PilotSeen, system *SystemVisted, km *retrieval.Killmail, currentBattleId string) {
-	if pilot.Pilot.Corporation == nil { // TODO exclude NPC Corporations too
+// UpdateOrAddCoproration counts a killmail for the pilot's current corporation, once per killmail however many of its pilots were on it
+func (results *CollectedData) UpdateOrAddCoproration(pilot *retrieval.Pilot, systemID int, km *retrieval.Killmail, currentBattleId string) {
+	if pilot.Corporation == nil { // TODO exclude NPC Corporations too
 		return
 	}
 
-	corporation, found := results.CorporationsSeen[pilot.Pilot.Corporation.CorporationID]
-
+	corporationID := pilot.Corporation.CorporationID
+	corporation, found := results.CorporationsSeen[corporationID]
 	if !found {
 		corporation = CorporationSeen{
-			Corporation:      pilot.Pilot.Corporation,
-			Pilots:           map[int]*PilotSeen{pilot.Pilot.CharacterID: pilot},
-			SystemsVisited:   map[int]*SystemVisted{system.System.SystemID: system},
-			Activity:         []time.Time{km.KillmailTime},
-			TotalKillmails:   0,
-			KillmailIDs:      map[int]struct{}{km.KillmailID: struct{}{}},
-			BattlesFoughtIDs: map[string]struct{}{currentBattleId: struct{}{}},
+			Corporation:      pilot.Corporation,
+			PilotIDs:         map[int]struct{}{},
+			SystemIDs:        map[int]struct{}{},
+			KillmailIDs:      map[int]struct{}{},
+			BattlesFoughtIDs: map[string]struct{}{},
 		}
-		results.CorporationsSeen[pilot.Pilot.Corporation.CorporationID] = corporation
-	} else {
-
-		if _, found := corporation.KillmailIDs[km.KillmailID]; !found {
-			corporation.Activity = append(corporation.Activity, km.KillmailTime)
-			corporation.TotalKillmails = corporation.TotalKillmails + 1
-		}
-
-		if _, found := corporation.Pilots[pilot.Pilot.CharacterID]; !found {
-			corporation.Pilots[pilot.Pilot.CharacterID] = pilot
-		}
-
-		if _, found := corporation.SystemsVisited[system.System.SystemID]; !found {
-			corporation.SystemsVisited[system.System.SystemID] = system
-		}
-
-		corporation.BattlesFoughtIDs[currentBattleId] = struct{}{}
-
 	}
+
+	if _, counted := corporation.KillmailIDs[km.KillmailID]; !counted {
+		corporation.KillmailIDs[km.KillmailID] = struct{}{}
+		corporation.Activity = append(corporation.Activity, km.KillmailTime)
+		corporation.TotalKillmails = 1 + corporation.TotalKillmails
+	}
+	corporation.PilotIDs[pilot.CharacterID] = struct{}{}
+	corporation.SystemIDs[systemID] = struct{}{}
+	corporation.BattlesFoughtIDs[currentBattleId] = struct{}{}
+
+	results.CorporationsSeen[corporationID] = corporation
 }
 
-func UpdateShipFlown(found bool, shipFlown *ShipFlown, expandedKillmail *retrieval.Killmail, km *retrieval.RawKillmail, isVictim bool) *ShipFlown {
+/*
+	UpdateShipFlown counts a killmail a ship type was on, as the victim's ship (destroyed) or an attacker's
+
+Parameters:
+  - found: whether shipFlown is already being counted, if not it starts a new count
+  - shipFlown: the count so far
+  - ship: the ship type, the victim's or the attacker's
+  - expandedKillmail, km: the killmail
+  - isVictim: true if the ship was the victim
+
+Returns:
+  - ShipFlown: the updated count, to store back in its map
+*/
+func UpdateShipFlown(found bool, shipFlown ShipFlown, ship *retrieval.Item, expandedKillmail *retrieval.Killmail, km *retrieval.RawKillmail, isVictim bool) ShipFlown {
 	if !found {
-		shipFlown = &ShipFlown{
-			Ship:                expandedKillmail.Victim.Ship,
-			TotalKillmails:      1,
-			Activity:            []time.Time{km.ESIKillmail.KillmailTime},
+		shipFlown = ShipFlown{
+			Ship:                ship,
 			Fits:                make(map[string][]*retrieval.FitItem),
-			Destroyed:           1,
 			AttackerKillmailIDs: []int{},
-			VictimKillmailIDs:   []int{km.ESIKillmail.KillmailID},
+			VictimKillmailIDs:   []int{},
 		}
+	}
 
-		if isVictim {
-			if len(expandedKillmail.Victim.Fit) > 0 {
-				shipFlown.Fits[fmt.Sprintf("%d-%d", km.ESIKillmail.KillmailID, expandedKillmail.Victim.Ship.ItemID)] = expandedKillmail.Victim.Fit
-			}
-			//if len(km.ESIKillmail.Victim.Items) > 0{
-			//shipFlown.Fits[fmt.Sprintf("%d-%d", km.ESIKillmail.KillmailID, expandedKillmail.Victim.Ship.ItemID)] = km.ESIKillmail.Victim.Items
-			//} // TODO: convert fit to structure for use.
-		}
+	shipFlown.TotalKillmails = 1 + shipFlown.TotalKillmails
+	shipFlown.Activity = append(shipFlown.Activity, km.ESIKillmail.KillmailTime)
 
-		return shipFlown
-	} else {
-		shipFlown.TotalKillmails = 1 + shipFlown.TotalKillmails
-		shipFlown.Activity = append(shipFlown.Activity, km.ESIKillmail.KillmailTime)
+	if isVictim {
 		shipFlown.Destroyed = 1 + shipFlown.Destroyed
 		shipFlown.VictimKillmailIDs = append(shipFlown.VictimKillmailIDs, km.ESIKillmail.KillmailID)
-		shipFlown.Fits[fmt.Sprintf("%d-%d", km.ESIKillmail.KillmailID, expandedKillmail.Victim.Ship.ItemID)] = expandedKillmail.Victim.Fit
-	}
-
-	return nil
-}
-
-func (results *CollectedData) UpdateCapitalPilot(pilot *PilotSeen, ship *ShipFlown, expandedKM retrieval.Killmail) {
-	capitalPilot, found := results.CapitalPilots[pilot.Pilot.CharacterID]
-	if !found {
-		capitalPilot = CapitalPilot{
-			Pilot:          pilot.Pilot.Name,
-			Corporation:    pilot.Pilot.Corporation.Name,
-			TotalKillmails: 1,
-			KillmailIDs:    []int{expandedKM.KillmailID},
-			Activity:       []time.Time{expandedKM.KillmailTime},
-			Ships:          make(map[int]*ShipFlown),
-		}
-		if pilot.Pilot.Corporation.Alliance != nil {
-			capitalPilot.Alliance = pilot.Pilot.Corporation.Alliance.Name
+		if len(expandedKillmail.Victim.Fit) > 0 {
+			shipFlown.Fits[fmt.Sprintf("%d-%d", km.ESIKillmail.KillmailID, ship.ItemID)] = expandedKillmail.Victim.Fit
 		}
 	} else {
-		capitalPilot.TotalKillmails = capitalPilot.TotalKillmails + 1
-		capitalPilot.Activity = append(capitalPilot.Activity, expandedKM.KillmailTime)
-		capitalPilot.KillmailIDs = append(capitalPilot.KillmailIDs, expandedKM.KillmailID)
+		shipFlown.AttackerKillmailIDs = append(shipFlown.AttackerKillmailIDs, km.ESIKillmail.KillmailID)
 	}
 
-	_, found = capitalPilot.Ships[ship.Ship.ItemID]
-	if !found {
-		capitalPilot.Ships[ship.Ship.ItemID] = ship
-	}
-
+	return shipFlown
 }
 
 // UpdateOrAddSystem either adds a new system to the collected data or updates the total killmails, killmail ids, and activity times of an existing system.
@@ -399,7 +388,7 @@ func (results *CollectedData) UpdateOrAddSystem(km *retrieval.RawKillmail, expan
 			StructuresSeen:   make(map[string]*Structure),
 			StructuresBashed: make(map[time.Time]Structure),
 		}
-		results.SystemsVisted[km.ESIKillmail.KillmailID] = system
+		results.SystemsVisted[km.ESIKillmail.SolarSystemID] = system
 	} else {
 		_, foundBattle := system.BattlesFoughtIDs[currentBattleID]
 		if !foundBattle {
@@ -408,78 +397,146 @@ func (results *CollectedData) UpdateOrAddSystem(km *retrieval.RawKillmail, expan
 		system.TotalKillmails = 1 + system.TotalKillmails
 		system.KillmailIDs = append(system.KillmailIDs, km.ESIKillmail.KillmailID)
 		system.Activity = append(system.Activity, km.ESIKillmail.KillmailTime)
+		results.SystemsVisted[km.ESIKillmail.SolarSystemID] = system
 	}
 }
 
-func (s *SystemVisted) UpdateOrAddStructure(structure ShipFlown, pilot *retrieval.Pilot, expandedKillmail *retrieval.Killmail, currentBattleID string, wasDestroyed bool) {
+/*
+	UpdateOrAddStructures records every structure on a killmail against the killmail's system: a victim with no pilot (upwell structure, control tower, or deployable) as destroyed, and any upwell structure or control tower attacker as seen.
 
-	identifier := fmt.Sprintf("%d-%d", structure.Ship.ItemID, pilot.Corporation.CorporationID)
+Parameters:
+  - km: the raw killmail, its system must already be in SystemsVisted
+  - expandedKillmail: the expanded form of km
+  - currentBattleID: the battle the killmail belongs to
+*/
+func (results *CollectedData) UpdateOrAddStructures(km *retrieval.RawKillmail, expandedKillmail *retrieval.Killmail, currentBattleID string) {
+	// StructuresSeen and StructuresBashed are maps, so updating them through this copy of the system is kept
+	system, found := results.SystemsVisted[km.ESIKillmail.SolarSystemID]
+	if !found {
+		return
+	}
+
+	victim := expandedKillmail.Victim
+	if victim.Pilot == nil {
+		system.UpdateOrAddStructure(victim.Ship, victim.CorpAtKill, victim.AllianceAtKill, expandedKillmail, currentBattleID, true)
+	}
+
+	for _, attacker := range expandedKillmail.Attackers {
+		if IsStructure(attacker.Ship) {
+			system.UpdateOrAddStructure(attacker.Ship, attacker.CorpAtKill, attacker.AllianceAtKill, expandedKillmail, currentBattleID, false)
+		}
+	}
+}
+
+// IsStructure returns true if the item is an upwell structure or control tower
+func IsStructure(item *retrieval.Item) bool {
+	return item != nil && (comm.UpwellStructures.Contains(item.ItemID) || comm.ControlTowers.Contains(item.ItemID))
+}
+
+// StructureIdentifier is the StructuresSeen key for a structure type owned by a corp and alliance combination. A nil corp or alliance is keyed as 0.
+func StructureIdentifier(structureType *retrieval.Item, corp *retrieval.Corporation, alliance *retrieval.Alliance) string {
+	corpID, allianceID := 0, 0
+	if corp != nil {
+		corpID = corp.CorporationID
+	}
+	if alliance != nil {
+		allianceID = alliance.AllianceID
+	}
+	return fmt.Sprintf("%d-%d-%d", structureType.ItemID, corpID, allianceID)
+}
+
+/*
+	UpdateOrAddStructure adds or updates a structure in the system, tracked separately for each corp and alliance combination that owned it, since corps change alliances over time.
+
+Parameters:
+  - structureType: the structure's item type
+  - corp: the owning corp at the time of the killmail
+  - alliance: the owning corp's alliance at the time of the killmail, nil if it had none
+  - expandedKillmail: the killmail the structure was seen on
+  - currentBattleID: the battle the killmail belongs to
+  - wasDestroyed: true if the structure was the victim
+*/
+func (s *SystemVisted) UpdateOrAddStructure(structureType *retrieval.Item, corp *retrieval.Corporation, alliance *retrieval.Alliance, expandedKillmail *retrieval.Killmail, currentBattleID string, wasDestroyed bool) {
+
+	identifier := StructureIdentifier(structureType, corp, alliance)
 
 	structureFound, found := s.StructuresSeen[identifier]
 
 	if !found {
 		structureFound = &Structure{
-			Structure:        structure.Ship,
+			Structure:        structureType,
+			Corporation:      corp,
+			Alliance:         alliance,
+			Fits:             make(map[string][]*retrieval.FitItem),
 			TotalKillmails:   1,
 			KillmailIDs:      []int{expandedKillmail.KillmailID},
 			Activity:         []time.Time{expandedKillmail.KillmailTime},
-			BattlesFoughtIDs: map[string]struct{}{currentBattleID: struct{}{}},
+			BattlesFoughtIDs: map[string]struct{}{currentBattleID: {}},
 			Destroyed:        0,
-			Owner:            pilot.Corporation.Name,
 		}
 		s.StructuresSeen[identifier] = structureFound
 	} else {
 		structureFound.TotalKillmails = structureFound.TotalKillmails + 1
 		structureFound.Activity = append(structureFound.Activity, expandedKillmail.KillmailTime)
 		structureFound.KillmailIDs = append(structureFound.KillmailIDs, expandedKillmail.KillmailID)
+		structureFound.BattlesFoughtIDs[currentBattleID] = struct{}{}
 	}
 
 	if wasDestroyed {
 		structureFound.Destroyed = structureFound.Destroyed + 1
 
-		fitIDentifier := fmt.Sprintf("%s %s (%s)", pilot.Corporation.Name, structure.Ship.Name, expandedKillmail.KillmailTime.Format("2006-01-02:15:04"))
-		structureFound.Fits[fitIDentifier] = expandedKillmail.Victim.Fit
+		fitIdentifier := fmt.Sprintf("%s %s (%s)", identifier, structureType.Name, expandedKillmail.KillmailTime.Format("2006-01-02:15:04"))
+		structureFound.Fits[fitIdentifier] = expandedKillmail.Victim.Fit
 
 		s.StructuresBashed[expandedKillmail.KillmailTime] = Structure{
-			Structure:        structure.Ship,
-			Fits:             map[string][]*retrieval.FitItem{fitIDentifier: expandedKillmail.Victim.Fit},
-			BattlesFoughtIDs: map[string]struct{}{currentBattleID: struct{}{}},
+			Structure:        structureType,
+			Corporation:      corp,
+			Alliance:         alliance,
+			Fits:             map[string][]*retrieval.FitItem{fitIdentifier: expandedKillmail.Victim.Fit},
+			TotalKillmails:   1,
 			KillmailIDs:      []int{expandedKillmail.KillmailID},
+			Activity:         []time.Time{expandedKillmail.KillmailTime},
+			BattlesFoughtIDs: map[string]struct{}{currentBattleID: {}},
+			Destroyed:        1,
 		}
 	}
 
 }
 
 /*
-	UpdateOrCreateCurrentBattle checks if two killmails were withinin 15 mins of each other in the same sy stem, if so then updates the CurrentBattle.
+	UpdateOrCreateCurrentBattle adds a killmail to the current battle if it was within 15 minutes of the previous killmail in the same system.
+	Otherwise the current battle is saved and the killmail starts a new one, so every killmail belongs to a battle with an id.
 
-If they are not within 15 mins and same system, it appends the any previous battle (killmails >1) to the battleFought references and returns a clean battle.
+Parameters:
+  - lastKillmailTime, previousKillmailSystem: when and where the previous killmail happened
+  - km: the killmail to add
+  - currentBattle: the battle so far, empty before the first killmail
+
+Returns:
+  - *BattleFought: the battle the killmail is now in
 */
 func (c *CollectedData) UpdateOrCreateCurrentBattle(lastKillmailTime time.Time, km *retrieval.RawKillmail, previousKillmailSystem int, currentBattle *BattleFought) *BattleFought {
-	if WithinFifteenMinutes(lastKillmailTime, km.ESIKillmail.KillmailTime) && previousKillmailSystem == km.ESIKillmail.SolarSystemID {
-
-		if currentBattle.TotalKillmails == 0 {
-			currentBattle.BattleIDReference = fmt.Sprintf("%d/%s", km.ESIKillmail.SolarSystemID, km.ESIKillmail.KillmailTime.Format("200601021504"))
-			currentBattle.SystemID = km.ESIKillmail.SolarSystemID
-		}
-
-		currentBattle.TotalKillmails = 1 + currentBattle.TotalKillmails
-		currentBattle.KillmailIDs = append(currentBattle.KillmailIDs, km.ESIKillmail.KillmailID)
-
-	} else {
-		if currentBattle.TotalKillmails > 1 {
-			lastBattle := currentBattle
-			c.BattlesFought[lastBattle.BattleIDReference] = *lastBattle
-		}
-
+	sameFight := WithinFifteenMinutes(lastKillmailTime, km.ESIKillmail.KillmailTime) && previousKillmailSystem == km.ESIKillmail.SolarSystemID
+	if currentBattle.TotalKillmails == 0 || !sameFight {
+		c.SaveBattle(currentBattle)
 		currentBattle = &BattleFought{
-			TotalKillmails: 0,
-			UniquePilots:   make(map[int]struct{}),
-			KillmailIDs:    []int{},
+			BattleIDReference: fmt.Sprintf("%d/%s", km.ESIKillmail.SolarSystemID, km.ESIKillmail.KillmailTime.Format("200601021504")),
+			SystemID:          km.ESIKillmail.SolarSystemID,
+			UniquePilots:      make(map[int]struct{}),
+			KillmailIDs:       []int{},
 		}
-
 	}
+
+	currentBattle.TotalKillmails = 1 + currentBattle.TotalKillmails
+	currentBattle.KillmailIDs = append(currentBattle.KillmailIDs, km.ESIKillmail.KillmailID)
 	return currentBattle
+}
+
+// SaveBattle records a battle in BattlesFought if it had more than one killmail, a single killmail is not a battle
+func (c *CollectedData) SaveBattle(battle *BattleFought) {
+	if battle.TotalKillmails > 1 {
+		c.BattlesFought[battle.BattleIDReference] = *battle
+	}
 }
 
 func WithinFifteenMinutes(previousKillmailTime time.Time, currentKillmailTime time.Time) bool {

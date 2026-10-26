@@ -1,6 +1,6 @@
 package comm
 
-import "fmt"
+import "io/fs"
 
 const VERSION = "0.0.2"
 
@@ -10,7 +10,13 @@ var (
 	UpwellStructures StaticData
 )
 
-func InitStaticData(staticDataPath string) (err error) {
+/*
+	InitStaticData loads the static data json files into the package level StaticData values
+
+Parameters:
+  - staticFiles: a filesystem containing the static data json files at its root, normally staticdata.Files
+*/
+func InitStaticData(staticFiles fs.FS) (err error) {
 	Logger.Info("Loading Static Data")
 	CapitalShips = &StaticValues{
 		IDToNames: make(map[int]string),
@@ -28,20 +34,24 @@ func InitStaticData(staticDataPath string) (err error) {
 	}
 
 	Logger.Debug("Loading Capital Ships")
-	err = CapitalShips.LoadStaticType(fmt.Sprintf("%s/capital_ships.json", staticDataPath))
+	err = CapitalShips.LoadStaticType(staticFiles, "capital_ships.json")
 	if err != nil {
 		return err
 
 	}
 
 	Logger.Debug("Loading Upwell Structures")
-	err = UpwellStructures.LoadStaticType(fmt.Sprintf("%s/upwell_structures.json", staticDataPath))
+	err = UpwellStructures.LoadStaticType(staticFiles, "upwell_structures.json")
 	if err != nil {
 		return err
 	}
 
 	Logger.Debug("Loading Control Towers")
-	err = ControlTowers.LoadStaticType(fmt.Sprintf("%s/control_towers.json", staticDataPath))
+	err = ControlTowers.LoadStaticType(staticFiles, "control_towers.json")
+	if err != nil {
+		return err
+	}
 
-	return err
+	Logger.Debug("Loading J-Space Statics")
+	return LoadJSpaceStatics(staticFiles, "jspace_statics.json")
 }

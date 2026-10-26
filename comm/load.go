@@ -3,11 +3,11 @@ package comm
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+	"io/fs"
 )
 
 type StaticData interface {
-	LoadStaticType(filename string) error
+	LoadStaticType(staticFiles fs.FS, filename string) error
 	ContainsIDNumber(idNumber int) bool
 	ContainsName(name string) bool
 	Contains(identifier interface{}) bool
@@ -18,9 +18,9 @@ type StaticValues struct {
 	NameToIDs map[string]int
 }
 
-func (s *StaticValues) LoadStaticType(filename string) error {
+func (s *StaticValues) LoadStaticType(staticFiles fs.FS, filename string) error {
 
-	file, err := os.Open(filename)
+	file, err := staticFiles.Open(filename)
 	if err != nil {
 		return fmt.Errorf("unable to load file %s: %w", filename, err)
 	}

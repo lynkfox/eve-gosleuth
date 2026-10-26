@@ -3,57 +3,126 @@ package retrieval
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
 )
 
+// DefaultKillmailLimit is how many killmails are collected unless the user sets another limit in Preferences
+const DefaultKillmailLimit = 20
+
 // ErrIncompleteKillmails is returned alongside the killmails that were collected when some could not be retrieved
 var ErrIncompleteKillmails = errors.New("not all killmails could be collected")
 
+// KillmailLimits are the Preferences that decide which of a target's killmails are collected
+type KillmailLimits struct {
+	Max           int       // the most killmails to collect from zKillboard's list, newest first
+	NewerThan     time.Time // only killmails after this, the zero time for no date limit
+	IncludeCached bool      // also use killmails already in the cache that are beyond Max or NewerThan
+}
+
+// DefaultKillmailLimits collects the newest DefaultKillmailLimit killmails of any age
+func DefaultKillmailLimits() KillmailLimits {
+	return KillmailLimits{Max: DefaultKillmailLimit}
+}
+
+// killmailCache is a client that can say whether it already holds a killmail without fetching it, ie CachedEveIDs
+type killmailCache interface {
+	CachedKillmail(killmailID int) *api.ESIKillmail
+}
+
+// killmailWorkers is how many killmails are fetched from the ESI at once. The api.RateGuard keeps them within the ESI's limits.
+const killmailWorkers = 10
+
 /*
-	CollectKillmails pulls the zkill killmail list for the target, then the full ESI killmail for each.
+	CollectKillmails pulls the zkill killmail list for the target, then the full ESI killmail for each, newest first, until the limits are reached.
+	Killmails are fetched killmailWorkers at a time and used in list order, so up to killmailWorkers-1 past the NewerThan limit may be fetched, and cached, before it is seen.
 
 Parameters:
   - target: the IntelTarget to collect killmails for
+  - limits: how many killmails, and how far back, to collect. With IncludeCached, killmails beyond the limits are still used if they are in the cache, without calling the ESI.
 
 Returns:
   - *[]RawKillmail: every killmail that was successfully retrieved from both zkill and the ESI
   - error: nil, or ErrIncompleteKillmails wrapping the underlying errors if the zkill pull was partial or any ESI killmails were skipped - the collected killmails are still returned
 */
-func CollectKillmails(target IntelTarget) (*[]RawKillmail, error) {
+func CollectKillmails(target IntelTarget, limits KillmailLimits) (*[]RawKillmail, error) {
 
 	zkillClient := target.Clients.ZkillClient
 	esiClient := target.Clients.ESIClient
+	cache, _ := esiClient.(killmailCache)
 
 	allRawKillmails := []RawKillmail{}
 	var errs []error
+
+	comm.ReportProgress("Fetching killmail list from zKillboard (live, zKillboard is not cached)")
 
 	killmails, err := zkillClient.GetZkillResults(target.IDNumber, target.TypeOfEntity)
 
 	if err != nil {
 		comm.Logger.WithError(err).Warnf("[Zkill] Only retrieved %d killmails, continuing with partial results", len(*killmails))
+		comm.ReportProgress("zKillboard pull incomplete (%s), continuing with %d killmails", api.FailureReason(err), len(*killmails))
 		errs = append(errs, err)
 	}
 
-	for index, km := range *killmails {
-
-		if (index >= 10 && index%10 == 0) || index == 0 {
-			comm.Logger.Infof("[ESI] Fetching killmails: %d/%d", index, len(*killmails))
-
+	// what the cache held before any fetching, so a killmail fetched ahead of the NewerThan limit is not then used as if it had been cached
+	cached := make([]*api.ESIKillmail, len(*killmails))
+	if cache != nil {
+		for index, km := range *killmails {
+			cached[index] = cache.CachedKillmail(km.KillmailID)
 		}
-		esiKM, err := esiClient.GetKillmail(km)
-		if err != nil {
-			comm.Logger.WithError(err).Warnf("[ESI] Skipping killmail %d", km.KillmailID)
-			errs = append(errs, fmt.Errorf("killmail %d: %w", km.KillmailID, err))
-		} else {
-			allRawKillmails = append(allRawKillmails, RawKillmail{Zkillmail: &km, ESIKillmail: esiKM})
+	}
+
+	total := min(len(*killmails), limits.Max)
+	stop := make(chan struct{})
+	defer close(stop)
+	results := fetchKillmails(esiClient, (*killmails)[:total], stop)
+
+	beyondLimits := total // where the killmails only used from cache begin
+	for index, km := range (*killmails)[:total] {
+		result := <-results[index]
+
+		progress := fmt.Sprintf("Killmail details %d/%d #%d", index+1, total, km.KillmailID)
+		source := CacheCounts{Fetched: 1}
+		if result.err != nil {
+			progress = fmt.Sprintf("Skipped killmail %d/%d #%d", index+1, total, km.KillmailID)
+			source = CacheCounts{Failed: 1, Reason: api.FailureReason(result.err)}
+		} else if cached[index] != nil {
+			source = CacheCounts{Cached: 1}
+		}
+		comm.ReportProgress("%s", source.Annotate(progress))
+
+		if result.err != nil {
+			comm.Logger.WithError(result.err).Warnf("[ESI] Skipping killmail %d", km.KillmailID)
+			errs = append(errs, fmt.Errorf("killmail %d: %w", km.KillmailID, result.err))
+			continue
 		}
 
-		if index == 10 {
+		// zKillboard lists newest first, so once one killmail is too old the rest are too
+		if !limits.NewerThan.IsZero() && !result.killmail.KillmailTime.After(limits.NewerThan) {
+			comm.ReportProgress("Reached killmails older than %s", api.FormatShortDate(limits.NewerThan))
+			beyondLimits = index
 			break
 		}
+
+		allRawKillmails = append(allRawKillmails, RawKillmail{Zkillmail: &km, ESIKillmail: result.killmail})
+	}
+
+	// beyond the limits, only killmails the cache already held are used
+	extraFromCache := 0
+	if limits.IncludeCached {
+		for index := beyondLimits; index < len(*killmails); index++ {
+			if cached[index] != nil {
+				allRawKillmails = append(allRawKillmails, RawKillmail{Zkillmail: &(*killmails)[index], ESIKillmail: cached[index]})
+				extraFromCache++
+			}
+		}
+	}
+
+	if extraFromCache > 0 {
+		comm.ReportProgress("Added %d more killmails from cache beyond the limits", extraFromCache)
 	}
 
 	if len(errs) > 0 {
@@ -61,6 +130,48 @@ func CollectKillmails(target IntelTarget) (*[]RawKillmail, error) {
 	}
 
 	return &allRawKillmails, nil
+}
+
+// fetchedKillmail is the ESI's answer for one killmail
+type fetchedKillmail struct {
+	killmail *api.ESIKillmail
+	err      error
+}
+
+/*
+	fetchKillmails starts fetching killmails from the ESI in the background, killmailWorkers at a time, in list order
+
+Parameters:
+  - client: the ESI client, normally the cache
+  - killmails: the zKillboard list entries to fetch
+  - stop: closing it starts no more fetches, those already started still finish
+
+Returns:
+  - []chan fetchedKillmail: one per killmail, in the same order, each receiving its result once fetched
+*/
+func fetchKillmails(client api.ESIClient, killmails []api.ZkbResponse, stop <-chan struct{}) []chan fetchedKillmail {
+	results := make([]chan fetchedKillmail, len(killmails))
+	for index := range results {
+		results[index] = make(chan fetchedKillmail, 1)
+	}
+
+	go func() {
+		workers := make(chan struct{}, killmailWorkers)
+		for index, km := range killmails {
+			select {
+			case <-stop:
+				return
+			case workers <- struct{}{}:
+			}
+			go func() {
+				defer func() { <-workers }()
+				killmail, err := client.GetKillmail(km)
+				results[index] <- fetchedKillmail{killmail: killmail, err: err}
+			}()
+		}
+	}()
+
+	return results
 }
 
 func (rkm *RawKillmail) Expand(esiClient *api.ESIClient, cached *CachedEveIDs) *Killmail {
@@ -78,6 +189,8 @@ func (rkm *RawKillmail) Expand(esiClient *api.ESIClient, cached *CachedEveIDs) *
 		DroppedValue:   rkm.Zkillmail.Zkb.DroppedValue,
 		DestroyedValue: rkm.Zkillmail.Zkb.DestroyedValue,
 		TotalValue:     rkm.Zkillmail.Zkb.TotalValue,
+		DroppableValue: rkm.Zkillmail.Zkb.TotalDroppableValue,
+		Labels:         rkm.Zkillmail.Zkb.Labels,
 		NPC:            rkm.Zkillmail.Zkb.NPC,
 		Solo:           rkm.Zkillmail.Zkb.Solo,
 		Awox:           rkm.Zkillmail.Zkb.Awox,
@@ -87,9 +200,12 @@ func (rkm *RawKillmail) Expand(esiClient *api.ESIClient, cached *CachedEveIDs) *
 	killmail.System = cached.ExpandSystem(rkm.ESIKillmail.SolarSystemID)
 
 	killmail.Victim = &KillmailVictim{
-		Pilot:       cached.ExpandPilot(*rkm.ESIKillmail.Victim.CharacterID, true),
 		Ship:        cached.ExpandItem(rkm.ESIKillmail.Victim.ShipTypeID),
 		DamageTaken: rkm.ESIKillmail.Victim.DamageTaken,
+	}
+	// structure and deployable losses have no pilot, only the owning corp and alliance
+	if rkm.ESIKillmail.Victim.CharacterID != nil {
+		killmail.Victim.Pilot = cached.ExpandPilot(*rkm.ESIKillmail.Victim.CharacterID, true)
 	}
 	if rkm.ESIKillmail.Victim.CorporationID != nil {
 		killmail.Victim.CorpAtKill = cached.ExpandCorporation(*rkm.ESIKillmail.Victim.CorporationID, false)
@@ -101,15 +217,9 @@ func (rkm *RawKillmail) Expand(esiClient *api.ESIClient, cached *CachedEveIDs) *
 
 	attackersExpanded := []*KillmailAttacker{}
 	for _, attacker := range rkm.ESIKillmail.Attackers {
-
-		defer func() {
-			if r := recover(); r != nil {
-				comm.Logger.Errorf("!!!!****!!!! Failed to expand killmail %d on attacker in ship type %d !!!!****!!!!", rkm.ESIKillmail.KillmailID, attacker.ShipTypeID)
-			}
-		}()
-
 		atkr := &KillmailAttacker{
 			DamageDone: attacker.DamageDone,
+			FinalBlow:  attacker.FinalBlow,
 			Ship:       cached.ExpandItem(attacker.ShipTypeID),
 		}
 
@@ -154,27 +264,30 @@ Returns
 */
 func (cached *CachedEveIDs) ExpandPilot(characterID int, expandCorporation bool) *Pilot {
 
-	alreadyExpanded := cached.FetchExpanded(characterID)
-	if alreadyExpanded != nil {
-
-		casted, err := CastExpanded[Pilot](alreadyExpanded)
-		if err != nil {
-			comm.Logger.Errorf("Could not expand Pilot %d: %v", characterID, err)
-		}
-		return casted
-
+	if alreadyExpanded := FetchExpanded[Pilot](cached, characterID); alreadyExpanded != nil {
+		return alreadyExpanded
 	}
 
-	temp, _ := cached.GetIfNotCached(characterID, types.PILOT)
-	pilot := (*temp).(*api.ESICharacter)
+	temp, err := cached.GetIfNotCached(characterID, types.PILOT)
+	pilot, _ := (*temp).(*api.ESICharacter)
+	if err != nil || pilot == nil {
+		// the killmail is still used, with the pilot unnamed for now. Not cached, so the next search tries the ESI again.
+		comm.Logger.WithError(err).Warnf("Unable to pull Character ID %d, showing it as unknown", characterID)
+		return &Pilot{CharacterID: characterID, Name: "(Unknown pilot)"}
+	}
 
+	return cached.buildPilot(characterID, pilot.Name, pilot.CorporationID, expandCorporation)
+}
+
+// buildPilot makes and caches the Pilot model from a character's name and current corp. A deleted character's corp may be 0, the killmail still has the corp they flew for.
+func (cached *CachedEveIDs) buildPilot(characterID int, name string, corporationID int, expandCorporation bool) *Pilot {
 	expanded := &Pilot{
 		CharacterID: characterID,
-		Name:        pilot.Name,
+		Name:        name,
 	}
 
-	if expandCorporation && expanded.Corporation == nil {
-		expanded.Corporation = cached.ExpandCorporation(pilot.CorporationID, true)
+	if expandCorporation && corporationID != 0 {
+		expanded.Corporation = cached.ExpandCorporation(corporationID, true)
 	}
 
 	cached.UpdateExpanded(characterID, expanded)
@@ -184,21 +297,19 @@ func (cached *CachedEveIDs) ExpandPilot(characterID int, expandCorporation bool)
 
 func (cached *CachedEveIDs) ExpandCorporation(corporationID int, expandAlliance bool) *Corporation {
 
-	alreadyExpanded := cached.FetchExpanded(corporationID)
-
-	if alreadyExpanded != nil {
-
-		casted, err := CastExpanded[Corporation](alreadyExpanded)
-		if err != nil {
-			comm.Logger.Errorf("Could not expand Corporation %d: %v", corporationID, err)
-		}
-		return casted
-
+	// a corp first cached without its alliance looked up (ie from a killmail) is rebuilt when the alliance is wanted, from the raw esi cache.
+	// One in no alliance has been looked up already, AllianceChecked says so.
+	if alreadyExpanded := FetchExpanded[Corporation](cached, corporationID); alreadyExpanded != nil && (!expandAlliance || alreadyExpanded.AllianceChecked) {
+		return alreadyExpanded
 	}
 
-	temp, _ := cached.GetIfNotCached(corporationID, types.CORPORATION)
-
-	corp := (*temp).(*api.ESICorporation)
+	temp, err := cached.GetIfNotCached(corporationID, types.CORPORATION)
+	corp, _ := (*temp).(*api.ESICorporation)
+	if corp == nil {
+		// not cached, so the next search tries the ESI again
+		comm.Logger.WithError(err).Warnf("Unable to pull Corporation ID %d, showing it as unknown", corporationID)
+		return &Corporation{CorporationID: corporationID, Name: "(Unknown corporation)"}
+	}
 
 	expanded := &Corporation{
 		CorporationID: corporationID,
@@ -207,8 +318,12 @@ func (cached *CachedEveIDs) ExpandCorporation(corporationID int, expandAlliance 
 		Ticker:        corp.Ticker,
 	}
 
-	if expandAlliance && expanded.Alliance == nil {
+	if expandAlliance {
 		expanded.Alliance = cached.ExpandAlliance(corp.AllianceID)
+		if expanded.Alliance != nil && expanded.Alliance.Name == unknownAllianceName {
+			return expanded // not cached with a placeholder alliance, so the next lookup tries the ESI again
+		}
+		expanded.AllianceChecked = true
 	}
 
 	cached.UpdateExpanded(corporationID, expanded)
@@ -216,24 +331,31 @@ func (cached *CachedEveIDs) ExpandCorporation(corporationID int, expandAlliance 
 	return expanded
 }
 
+// unknownAllianceName, unknownTypeName, and unknownSystemName stand in for an alliance, type, or system the ESI could not be reached for. They are never cached.
+const (
+	unknownAllianceName = "(Unknown alliance)"
+	unknownTypeName     = "(Unknown type)"
+	unknownSystemName   = "(Unknown system)"
+)
+
+// noTypeName names type 0, an attacker's ship or weapon the killmail does not give
+const noTypeName = "Unknown"
+
 func (cached *CachedEveIDs) ExpandAlliance(allianceID int) *Alliance {
 
 	if allianceID == 0 {
 		return nil
 	}
-	alreadyExpanded := cached.FetchExpanded(allianceID)
-	if alreadyExpanded != nil {
-
-		casted, err := CastExpanded[Alliance](alreadyExpanded)
-		if err != nil {
-			comm.Logger.Errorf("Could not expand Alliance %d: %v", allianceID, err)
-		}
-		return casted
-
+	if alreadyExpanded := FetchExpanded[Alliance](cached, allianceID); alreadyExpanded != nil {
+		return alreadyExpanded
 	}
 
-	temp, _ := cached.GetIfNotCached(allianceID, types.ALLIANCE)
-	alliance := (*temp).(*api.ESIAlliance)
+	temp, err := cached.GetIfNotCached(allianceID, types.ALLIANCE)
+	alliance, _ := (*temp).(*api.ESIAlliance)
+	if alliance == nil {
+		comm.Logger.WithError(err).Warnf("Unable to pull Alliance ID %d, showing it as unknown", allianceID)
+		return &Alliance{AllianceID: allianceID, Name: unknownAllianceName}
+	}
 
 	expanded := &Alliance{
 		AllianceID:            allianceID,
@@ -242,24 +364,28 @@ func (cached *CachedEveIDs) ExpandAlliance(allianceID int) *Alliance {
 		Ticker:                alliance.Ticker,
 	}
 
+	cached.UpdateExpanded(allianceID, expanded)
+
 	return expanded
 
 }
 
 func (cached *CachedEveIDs) ExpandItem(itemID int) *Item {
-	alreadyExpanded := cached.FetchExpanded(itemID)
-	if alreadyExpanded != nil {
-
-		casted, err := CastExpanded[Item](alreadyExpanded)
-		if err != nil {
-			comm.Logger.Errorf("Could not expand Item %d: %v", itemID, err)
-		}
-		return casted
-
+	// a killmail gives type 0 for an attacker with no known ship or weapon. The ESI answers it with a placeholder that has no id, which is never cached, so it is not asked for.
+	if itemID == 0 {
+		return &Item{ItemID: 0, TypeOfEntity: types.ITEM, Name: noTypeName}
+	}
+	if alreadyExpanded := FetchExpanded[Item](cached, itemID); alreadyExpanded != nil {
+		return alreadyExpanded
 	}
 
-	temp, _ := cached.GetIfNotCached(itemID, types.ITEM)
-	item := (*temp).(*api.ESIItem)
+	temp, err := cached.GetIfNotCached(itemID, types.ITEM)
+	item, _ := (*temp).(*api.ESIItem)
+	if item == nil {
+		// the killmail is still used, with the type unnamed. Not cached, so the next lookup tries the ESI again.
+		comm.Logger.WithError(err).Warnf("Unable to pull Type ID %d, showing it as unknown", itemID)
+		return &Item{ItemID: itemID, TypeOfEntity: types.ITEM, Name: unknownTypeName}
+	}
 
 	expanded := &Item{
 		ItemID:       itemID,
@@ -273,36 +399,36 @@ func (cached *CachedEveIDs) ExpandItem(itemID int) *Item {
 }
 
 func (cached *CachedEveIDs) ExpandSystem(systemID int) *System {
-	alreadyExpanded := cached.FetchExpanded(systemID)
-	if alreadyExpanded != nil {
-
-		casted, err := CastExpanded[System](alreadyExpanded)
-		if err != nil {
-			comm.Logger.Errorf("Could not expand System %d: %v", systemID, err)
-		}
-		return casted
-
+	if alreadyExpanded := FetchExpanded[System](cached, systemID); alreadyExpanded != nil {
+		return alreadyExpanded
 	}
-	temp, _ := cached.GetIfNotCached(systemID, types.SYSTEM)
-	system := (*temp).(*api.ESISystem)
+	temp, err := cached.GetIfNotCached(systemID, types.SYSTEM)
+	system, _ := (*temp).(*api.ESISystem)
+	if system == nil {
+		comm.Logger.WithError(err).Warnf("Unable to pull System ID %d, showing it as unknown", systemID)
+		return &System{SystemID: systemID, Name: unknownSystemName}
+	}
 
 	expanded := &System{
 		SystemID:       systemID,
 		Name:           system.Name,
 		SecurityStatus: system.SecurityStatus,
 	}
-	tempCon, _ := cached.Client.GetEsiResponse(system.ConstellationID, types.CONSTELLATION)
 
-	if tempCon != nil {
-		constellation := tempCon.(*api.ESIConstellation)
-		expanded.Constellation = constellation.Name
-		tempReg, _ := cached.Client.GetEsiResponse(constellation.RegionID, types.REGION)
-
-		if tempReg != nil {
-			region := tempReg.(*api.ESIRegion)
-			expanded.Region = region.Name
-		}
+	// without its constellation and region the system is still used, but not cached, so they are tried again next time
+	tempCon, _ := cached.GetEsiResponse(system.ConstellationID, types.CONSTELLATION)
+	constellation, _ := tempCon.(*api.ESIConstellation)
+	if constellation == nil {
+		return expanded
 	}
+	expanded.Constellation = constellation.Name
+
+	tempReg, _ := cached.GetEsiResponse(constellation.RegionID, types.REGION)
+	region, _ := tempReg.(*api.ESIRegion)
+	if region == nil {
+		return expanded
+	}
+	expanded.Region = region.Name
 
 	cached.UpdateExpanded(systemID, expanded)
 
