@@ -17,17 +17,35 @@ type WormholeStatic struct {
 // JSpaceStatics maps a j-space system name to its statics. It is empty until InitStaticData is called.
 var JSpaceStatics = map[string][]WormholeStatic{}
 
-// wormholeRegionClasses maps the first letter of a wormhole region name (ie E-R00024) to the class of every system in it
-var wormholeRegionClasses = map[string]string{
-	"A": "C1",
-	"B": "C2",
-	"C": "C3",
-	"D": "C4",
-	"E": "C5",
-	"F": "C6",
-	"G": "Thera",
-	"H": "C13",
-	"K": "Drifter",
+// SpaceClasses are the kinds of space that a system's region decides, from space_classes.json. Empty until InitStaticData is called.
+type SpaceClasses struct {
+	WormholeRegionClasses map[string]string `json:"wormhole_region_classes"` // the first letter of a wormhole region name (ie E-R00024) to the class of every system in it
+	RegionSpaceLabels     map[string]string `json:"region_space_labels"`     // whole k-space regions with their own kind of space, ie Pochven to Triglavian
+}
+
+// Spaces is the loaded space_classes.json
+var Spaces = SpaceClasses{WormholeRegionClasses: map[string]string{}, RegionSpaceLabels: map[string]string{}}
+
+// LoadSpaceClasses reads the space classes file into Spaces, leaving it as it was if the file can not be read
+func LoadSpaceClasses(staticFiles fs.FS, filename string) error {
+	file, err := staticFiles.Open(filename)
+	if err != nil {
+		return fmt.Errorf("unable to load file %s: %w", filename, err)
+	}
+	defer file.Close()
+
+	classes := SpaceClasses{}
+	if err := json.NewDecoder(file).Decode(&classes); err != nil {
+		return fmt.Errorf("failed to unmarshal the json file %s: %w", filename, err)
+	}
+	if classes.WormholeRegionClasses == nil {
+		classes.WormholeRegionClasses = map[string]string{}
+	}
+	if classes.RegionSpaceLabels == nil {
+		classes.RegionSpaceLabels = map[string]string{}
+	}
+	Spaces = classes
+	return nil
 }
 
 // LoadJSpaceStatics reads the j-space system statics file into JSpaceStatics
@@ -75,7 +93,7 @@ func WormholeClass(systemName string, regionName string) string {
 	}
 
 	if _, isJSpace := JSpaceStatics[systemName]; isJSpace && strings.Contains(regionName, "-R") {
-		return wormholeRegionClasses[regionName[:1]]
+		return Spaces.WormholeRegionClasses[regionName[:1]]
 	}
 
 	return ""

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,12 +54,14 @@ type TargetResult struct {
 // IntelReport holds everything built from a target's killmails. New killmail based sections are added here so a single pull feeds them all.
 type IntelReport struct {
 	Killmails    []KillmailCard       `json:"killmails"`
+	LabelNames   map[string]string    `json:"labelNames"` // names for the killmails' zKillboard labels that need a lookup, ie cat:6 is Ship. Other labels the frontend names itself.
 	Fleetmates   []Fleetmate          `json:"fleetmates"`
 	Members      []Fleetmate          `json:"members"`      // a corp or alliance target's most active pilots, shown the same way as fleetmates
 	Pilots       []Fleetmate          `json:"pilots"`       // a system target's most active pilots
 	Corporations []CorporationSummary `json:"corporations"` // a system target's most active corporations
 	Systems      []SystemSummary      `json:"systems"`
 	Capitals     []CapitalShip        `json:"capitals"`   // a corp or alliance target's capital ships and the members who flew them
+	PIPilots     []PIPilot            `json:"piPilots"`   // a system target's pilots who lost haulers near its planets, or ships with PI aboard
 	MemberList   bool                 `json:"memberList"` // a corp or alliance target has a Members tab, its rows come from GetMembers
 	Sources      string               `json:"sources"`    // where the search's data came from, ie "9748 hits from cache, 1763 from the ESI; zKillboard live", for the frontend's summary line
 }
@@ -87,6 +90,7 @@ type SystemSummary struct {
 	ID             int                `json:"id"`
 	Name           string             `json:"name"`
 	SecurityStatus float64            `json:"securityStatus"`
+	SecurityBand   string             `json:"securityBand"` // high, low, or null, see api.SecurityBand
 	Region         string             `json:"region"`
 	Class          string             `json:"class"`   // wormhole class for j-space systems, empty elsewhere
 	Statics        []api.SystemStatic `json:"statics"` // known statics for j-space systems
@@ -112,6 +116,7 @@ type KillmailCard struct {
 	Labels            []string  `json:"labels"`       // zKillboard's tags, ie tz:eu, loc:w-space, shown as chips
 	SystemName        string    `json:"systemName"`
 	SecurityStatus    float64   `json:"securityStatus"`
+	SecurityBand      string    `json:"securityBand"` // high, low, or null, see api.SecurityBand
 	Region            string    `json:"region"`
 	Class             string    `json:"class"` // wormhole class for j-space systems, empty elsewhere
 	ShipName          string    `json:"shipName"`
@@ -211,7 +216,7 @@ func (a *App) startup(ctx context.Context) {
 		runtime.EventsEmit(a.ctx, progressEvent, message)
 	})
 
-	if err := comm.InitStaticData(staticdata.Files); err != nil {
+	if err := comm.InitStaticData(staticdata.Files, staticdata.Overrides()...); err != nil {
 		comm.Logger.WithError(err).Error("Failed to load static data")
 	}
 
@@ -336,6 +341,11 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 		sources = append(sources, "EveWho live")
 	}
 	comm.ReportProgress("Found %s (%s)", display.Name, strings.Join(sources, "; "))
+	foundName := display.Name
+	if foundName == "" {
+		foundName = name
+	}
+	a.cache.AddRecentSearch(retrieval.RecentSearch{Name: foundName, Type: searchType}, a.GetSettings().MaxRecentSearches)
 
 	return TargetResult{
 		ID:      target.IDNumber,
@@ -393,6 +403,7 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 	}
 	collected := aggregate.CollateAllKillmailData(killmails, &a.clients.ESIClient, a.cache)
 	report.Killmails = buildKillmailCards(collected.Killmails, &target)
+	report.LabelNames = labelNames(report.Killmails, a.clients.ESIClient)
 
 	// each target type gets its own sections: who flies with a pilot, who flies for a corp or alliance, and who is active in a system
 	switch entityType {
@@ -416,6 +427,8 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		comm.ReportProgress("Ranking pilots and corporations")
 		report.Pilots = buildFleetmates(aggregate.GetTopPilots(pilotLimit, collected.PilotsSeen))
 		report.Corporations = buildCorporationSummaries(aggregate.GetTopCorporations(corporationLimit, collected.Killmails))
+		comm.ReportProgress("Finding PI pilots")
+		report.PIPilots = a.buildPIPilots(targetID, collected.Killmails)
 	}
 
 	// a system target is the only system on its killmails, so it has no top systems
@@ -443,6 +456,39 @@ func (a *App) setRoster(members *roster) {
 	a.rosterMu.Lock()
 	defer a.rosterMu.Unlock()
 	a.roster = members
+}
+
+/*
+	labelNames looks up the names of the item categories zKillboard's cat: labels give by id, ie cat:6 is Ship
+
+Parameters:
+  - cards: the killmail cards, whose labels are checked
+  - esi: looks up each category, ie the cache
+
+Returns:
+  - map[string]string: each cat: label to its category's name. A category that can not be looked up is left out, and the frontend shows its id.
+*/
+func labelNames(cards []KillmailCard, esi api.ESIClient) map[string]string {
+	names := map[string]string{}
+	for _, card := range cards {
+		for _, label := range card.Labels {
+			if _, done := names[label]; done {
+				continue
+			}
+			value, isCategory := strings.CutPrefix(label, "cat:")
+			categoryID, err := strconv.Atoi(value)
+			if !isCategory || err != nil {
+				continue
+			}
+			category, err := esi.GetCategoryInfo(categoryID)
+			if err != nil || category == nil || category.Name == "" {
+				comm.Logger.WithError(err).Warnf("Unable to look up item category %d for its zKillboard label", categoryID)
+				continue
+			}
+			names[label] = category.Name
+		}
+	}
+	return names
 }
 
 // buildCapitalShips turns the capital ship types and their pilots into the frontend's Capital Pilots list, with each pilot's current corp and alliance
@@ -482,6 +528,7 @@ func buildKillmailCards(killmails []*retrieval.Killmail, target *retrieval.Intel
 		if km.System != nil {
 			card.SystemName = km.System.Name
 			card.SecurityStatus = km.System.SecurityStatus
+			card.SecurityBand = api.SecurityBand(km.System.SecurityStatus)
 			card.Region = km.System.Region
 			card.Class = comm.WormholeClass(km.System.Name, km.System.Region)
 		}
@@ -579,6 +626,7 @@ func buildSystemSummaries(top []aggregate.SystemVisted, killmails []*retrieval.K
 			ID:             visited.System.SystemID,
 			Name:           visited.System.Name,
 			SecurityStatus: visited.System.SecurityStatus,
+			SecurityBand:   api.SecurityBand(visited.System.SecurityStatus),
 			Region:         visited.System.Region,
 			Class:          comm.WormholeClass(visited.System.Name, visited.System.Region),
 			Statics:        api.SystemStaticsFor(visited.System.Name),

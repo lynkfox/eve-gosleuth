@@ -24,6 +24,8 @@ type ESIClient interface {
 	GetItemInfo(idNumber int) (*ESIItem, error)
 	GetStargateInfo(idNumber int) (*ESIStargate, error)
 	GetStarInfo(idNumber int) (*ESIStar, error)
+	GetPlanetInfo(idNumber int) (*ESIPlanetInfo, error)
+	GetCategoryInfo(idNumber int) (*ESICategory, error)
 	GetAllianceCorporations(allianceID int) (*ESIAllianceCorporations, error)
 	GetCorporationHistory(characterID int) (*ESICorporationHistory, error)
 	GetAllianceHistory(corporationID int) (*ESIAllianceHistory, error)
@@ -275,6 +277,24 @@ func (e ESIConnection) GetStarInfo(idNumber int) (*ESIStar, error) {
 		return nil, err
 	}
 	return star, nil
+}
+
+// GetPlanetInfo takes a planet ID and returns its name and planet type
+func (e ESIConnection) GetPlanetInfo(idNumber int) (*ESIPlanetInfo, error) {
+	planet := &ESIPlanetInfo{}
+	if err := e.getEsiResponseFromEndpointWithID(idNumber, planet, "universe/planets"); err != nil {
+		return nil, err
+	}
+	return planet, nil
+}
+
+// GetCategoryInfo takes an item category ID and returns its name
+func (e ESIConnection) GetCategoryInfo(idNumber int) (*ESICategory, error) {
+	category := &ESICategory{}
+	if err := e.getEsiResponseFromEndpointWithID(idNumber, category, "universe/categories"); err != nil {
+		return nil, err
+	}
+	return category, nil
 }
 
 // GetKillmail takes a zkillmail response that includes an id number and a hash and retrieves the same killmail from the esi

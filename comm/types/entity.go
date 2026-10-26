@@ -12,6 +12,8 @@ const (
 	REGION                          // 7
 	STARGATE                        // 8
 	STAR                            // 9
+	PLANET                          // 10
+	CATEGORY                        // 11
 )
 
 func (e EntityType) String() string {
@@ -34,6 +36,10 @@ func (e EntityType) String() string {
 		return "STARGATE"
 	case STAR:
 		return "STAR"
+	case PLANET:
+		return "PLANET"
+	case CATEGORY:
+		return "CATEGORY"
 	default:
 		return "UNKNOWN"
 	}

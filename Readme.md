@@ -36,13 +36,10 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
 
 * Pilot:
  * Fits
- * Activity Histogram
 
 * Corporation/Alliances
  * History of alliances/corps
- * Activity Histogram
  * Fits
 
 * Systems
  * Epithal / Squall killmails and their common times
- * Activity Histogram

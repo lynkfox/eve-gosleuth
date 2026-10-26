@@ -123,7 +123,7 @@ func TestBuildDisplayRelated(t *testing.T) {
 		pilot := api.ESICharacter{CharacterID: 1, Name: "Solo", CorporationID: 1000045, SecurityStatus: 1.26}.BuildDisplay(esi, OfflineEveWhoClient{})
 		assert.Equal(t, []string{"Born", "Security status"}, rowLabels(pilot.DetailRows))
 		assert.Equal(t, "1.3", pilot.DetailRows[1].Value)
-		assert.Nil(t, pilot.DetailRows[1].Security, "a pilot's security status is not a system's, so it is not colored like one")
+		assert.Empty(t, pilot.DetailRows[1].SecurityBand, "a pilot's security status is not a system's, so it is not colored like one")
 
 		corp := api.ESICorporation{CorporationID: 98744491, Name: "URSA PRIMUS", CeoID: 2117000001}.BuildDisplay(esi, OfflineEveWhoClient{})
 		assert.Equal(t, []string{"Founded", "Members"}, rowLabels(corp.DetailRows))
@@ -197,6 +197,14 @@ func (m SystemESIClient) GetStarInfo(idNumber int) (*api.ESIStar, error) {
 	return &api.ESIStar{SolarSystemID: 30000142, TypeID: 45041}, nil
 }
 
+func (m SystemESIClient) GetPlanetInfo(idNumber int) (*api.ESIPlanetInfo, error) {
+	return nil, api.ErrRequestFailedToComplete
+}
+
+func (m SystemESIClient) GetCategoryInfo(idNumber int) (*api.ESICategory, error) {
+	return nil, api.ErrRequestFailedToComplete
+}
+
 func (m SystemESIClient) GetSystemInfo(idNumber int) (*api.ESISystem, error) {
 	systems := map[int]api.ESISystem{30000144: {Name: "Perimeter", SecurityStatus: 0.95}, 30000140: {Name: "Maurasi", SecurityStatus: 0.66}}
 	system := systems[idNumber]
@@ -228,9 +236,8 @@ func TestSystemBuildDisplay(t *testing.T) {
 		system := api.ESISystem{SystemID: 30000142, Name: "Jita", SecurityStatus: 0.9459, StarID: 40009076, Stargates: []int{1, 2, 3}, Stations: []int{1, 2}, Planets: []api.ESIPlanet{{}, {}, {}}}
 		display := system.BuildDisplay(SystemESIClient{regionName: "The Forge"}, OfflineEveWhoClient{})
 
-		security := 0.9459
 		assert.Equal(t, []api.DetailRow{
-			{Label: "Security status", Value: "0.9", Security: &security},
+			{Label: "Security status", Value: "0.9", SecurityBand: api.SECURITY_HIGH},
 			{Label: "Constellation", Value: "E-C00261"},
 			{Label: "Region", Value: "The Forge"},
 			{Label: "Stations", Value: "2"},
@@ -240,7 +247,7 @@ func TestSystemBuildDisplay(t *testing.T) {
 		assert.Equal(t, "https://images.evetech.net/types/45041/render?size=128", display.TargetImageUrl)
 		assert.Equal(t, "High Sec", display.SpaceLabel)
 		assert.Equal(t, "Stargates", display.RightDetailsTitle)
-		assert.Equal(t, []api.SystemLink{{SystemID: 30000140, Name: "Maurasi", SecurityStatus: 0.66}, {SystemID: 30000144, Name: "Perimeter", SecurityStatus: 0.95}}, display.Stargates)
+		assert.Equal(t, []api.SystemLink{{SystemID: 30000140, Name: "Maurasi", SecurityStatus: 0.66, SecurityBand: api.SECURITY_HIGH}, {SystemID: 30000144, Name: "Perimeter", SecurityStatus: 0.95, SecurityBand: api.SECURITY_HIGH}}, display.Stargates)
 		assert.Empty(t, display.Statics)
 	})
 
@@ -253,7 +260,18 @@ func TestSystemBuildDisplay(t *testing.T) {
 	})
 }
 
+func TestSecurityBand(t *testing.T) {
+	assert.Equal(t, api.SECURITY_HIGH, api.SecurityBand(0.45), "0.45 rounds to 0.5")
+	assert.Equal(t, api.SECURITY_LOW, api.SecurityBand(0.44))
+	assert.Equal(t, api.SECURITY_LOW, api.SecurityBand(0.01), "any positive security shows as at least 0.1")
+	assert.Equal(t, api.SECURITY_NULL, api.SecurityBand(0))
+	assert.Equal(t, api.SECURITY_NULL, api.SecurityBand(-0.99))
+}
+
 func TestSpaceLabel(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+	assert.NoError(t, comm.InitStaticData(staticdata.Files))
+
 	cases := []struct {
 		name     string
 		class    string

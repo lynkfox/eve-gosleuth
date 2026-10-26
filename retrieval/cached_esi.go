@@ -47,6 +47,14 @@ func (c *CachedEveIDs) GetStarInfo(idNumber int) (*api.ESIStar, error) {
 	return cachedCall[api.ESIStar](c, idNumber, types.STAR)
 }
 
+func (c *CachedEveIDs) GetPlanetInfo(idNumber int) (*api.ESIPlanetInfo, error) {
+	return cachedCall[api.ESIPlanetInfo](c, idNumber, types.PLANET)
+}
+
+func (c *CachedEveIDs) GetCategoryInfo(idNumber int) (*api.ESICategory, error) {
+	return cachedCall[api.ESICategory](c, idNumber, types.CATEGORY)
+}
+
 func (c *CachedEveIDs) GetEsiResponse(idNumber int, typeOfEntity types.EntityType) (interface{}, error) {
 	response, err := c.GetIfNotCached(idNumber, typeOfEntity)
 	if err != nil {

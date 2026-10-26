@@ -16,7 +16,12 @@
         <option value="ALLIANCE">Alliance</option>
         <option value="SYSTEM">System</option>
       </select>
-      <input id="search-input" type="text" placeholder="Exact in-game name" spellcheck="false" autofocus>
+      <div class="search-field">
+        <input id="search-input" type="text" placeholder="Exact in-game name" spellcheck="false" autofocus
+          role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="recent-list">
+        <button id="recent-toggle" class="recent-toggle" type="button" title="Recent searches" aria-label="Recent searches" aria-expanded="false" aria-controls="recent-list" tabindex="-1">▾</button>
+        <ul id="recent-list" class="menu-dropdown recent-list" role="listbox" aria-label="Recent searches" hidden></ul>
+      </div>
       <button id="search-button" type="submit">Search</button>
     </form>
 
@@ -58,13 +63,15 @@
       <p id="intel-loading" class="muted">Pulling killmails from zKillboard and the ESI. This can take a while, progress is shown in the bar below.</p>
 
       <div id="intel-tabs" hidden>
-        <div class="tabs" role="tablist">
+        <!-- the tabs can be dragged into another order, which is saved: the order here is the default -->
+        <div id="tab-list" class="tabs" role="tablist">
           <button id="tab-killmails" class="tab" type="button" role="tab" aria-controls="panel-killmails" aria-selected="true">Killmails <span id="killmail-count" class="tab-count"></span></button>
           <button id="tab-activity" class="tab" type="button" role="tab" aria-controls="panel-activity" aria-selected="false">Activity</button>
           <button id="tab-fleetmates" class="tab" type="button" role="tab" aria-controls="panel-fleetmates" aria-selected="false">Top Fleetmates</button>
           <button id="tab-members" class="tab" type="button" role="tab" aria-controls="panel-members" aria-selected="false">Top Members</button>
           <button id="tab-pilots" class="tab" type="button" role="tab" aria-controls="panel-pilots" aria-selected="false">Top Pilots</button>
           <button id="tab-corps" class="tab" type="button" role="tab" aria-controls="panel-corps" aria-selected="false">Top Corps</button>
+          <button id="tab-pi" class="tab" type="button" role="tab" aria-controls="panel-pi" aria-selected="false">PI Pilots</button>
           <button id="tab-systems" class="tab" type="button" role="tab" aria-controls="panel-systems" aria-selected="false">Top Systems</button>
           <button id="tab-capitals" class="tab" type="button" role="tab" aria-controls="panel-capitals" aria-selected="false">Capital Pilots</button>
           <button id="tab-roster" class="tab" type="button" role="tab" aria-controls="panel-roster" aria-selected="false">Members</button>
@@ -142,6 +149,11 @@
           <p id="systems-empty" class="muted" hidden>No systems found on the collected killmails.</p>
         </div>
 
+        <div id="panel-pi" class="tab-panel" role="tabpanel" aria-labelledby="tab-pi" hidden>
+          <div id="pi-list" class="pi-pilots"></div>
+          <p id="pi-empty" class="muted" hidden>No hauler losses near this system's planets, and no ships lost with PI aboard, on the collected killmails.</p>
+        </div>
+
         <div id="panel-capitals" class="tab-panel" role="tabpanel" aria-labelledby="tab-capitals" hidden>
           <div id="capitals-list" class="capitals"></div>
           <p id="capitals-empty" class="muted" hidden>No members flying capitals on the collected killmails.</p>
@@ -176,6 +188,15 @@
     </form>
   </dialog>
 
+  <!-- the selected tab's help, popped out of its ? button: it stays open, can be dragged by its title bar, and follows the tab -->
+  <dialog id="help-window" class="window help-window" aria-labelledby="help-window-title">
+    <div id="help-window-titlebar" class="window-titlebar help-window-titlebar">
+      <h2 id="help-window-title">Help</h2>
+      <button id="help-window-close" class="window-close" type="button" aria-label="Close help" title="Close">×</button>
+    </div>
+    <div id="help-window-body" class="window-body help-window-body help-content"></div>
+  </dialog>
+
   <dialog id="preferences" class="window" aria-labelledby="preferences-title">
     <div class="window-titlebar">
       <h2 id="preferences-title">Preferences</h2>
@@ -183,11 +204,11 @@
     </div>
     <div class="window-body">
       <label class="preference">
-        <input id="pref-zkill-labels" type="checkbox">
         <span>
           <span class="preference-name">Include zKill labels</span>
           <span class="preference-help">Show zKillboard's labels, such as solo or ganked, on killmail cards</span>
         </span>
+        <span class="preference-check"><input id="pref-zkill-labels" type="checkbox"></span>
       </label>
 
       <label class="preference-field">
@@ -205,10 +226,10 @@
       <label class="preference-field">
         <span>
           <span class="preference-name">Max killmail count</span>
-          <span class="preference-help">1 to 2,000, the most zKillboard lists (10 pages of 200)</span>
+          <span class="preference-help">1 to 2,000, the most zKillboard lists (10 pages of 200), or -1 for all of them, still only those newer than below</span>
         </span>
-        <!-- 2000 is api.ZKILL_MAX_KILLMAILS, which the backend checks again on save -->
-        <input id="pref-max-killmails" type="number" min="1" max="2000" step="1" inputmode="numeric">
+        <!-- 2000 is api.ZKILL_MAX_KILLMAILS and -1 retrieval.AllKillmails, which the backend checks again on save -->
+        <input id="pref-max-killmails" type="number" min="-1" max="2000" step="1">
       </label>
       <label class="preference-field">
         <span class="preference-name">Killmails newer than</span>
@@ -220,13 +241,32 @@
         </select>
       </label>
       <label class="preference">
-        <input id="pref-use-cached" type="checkbox">
         <span>
           <span class="preference-name">Use killmails in cache for target even if beyond limits above</span>
           <span class="preference-help">Killmails already in the cache need no ESI calls</span>
         </span>
+        <span class="preference-check"><input id="pref-use-cached" type="checkbox"></span>
       </label>
       <p class="preference-help">Killmail limits apply from the next search.</p>
+
+      <h3 class="preference-group">Search bar</h3>
+      <label class="preference-field">
+        <span>
+          <span class="preference-name">Recent searches kept</span>
+          <span class="preference-help">1 to 25, offered as you type or from the ▾. Lowering it forgets the oldest on Save.</span>
+        </span>
+        <!-- 25 is retrieval.MaxRecentSearches, which the backend checks again on save -->
+        <input id="pref-max-recent" type="number" min="1" max="25" step="1" inputmode="numeric">
+      </label>
+
+      <h3 class="preference-group">Tabs</h3>
+      <div class="preference-field">
+        <span>
+          <span class="preference-name">Tab order</span>
+          <span class="preference-help">Drag a tab, or press Alt + ← / → on one, to move it. Resetting takes effect straight away, without Save.</span>
+        </span>
+        <button id="reset-tab-order" class="secondary" type="button">Reset tab order</button>
+      </div>
 
       <h3 class="preference-group">Cache</h3>
       <div class="cache-location">

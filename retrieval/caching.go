@@ -78,10 +78,13 @@ type CachedEveIDs struct {
 	CorporationHistories map[int]*CacheEntry    // characters' corp histories, by character id
 	AllianceHistories    map[int]*CacheEntry    // corporations' alliance histories, by corporation id
 	Affiliations         map[int]*CacheEntry    // characters' current corp and alliance, by character id
+	Searched             map[string]*CacheEntry // the search bar's recent searches, by recentSearchKey. Never expire, see AddRecentSearch.
 	Client               api.ESIClient          // the uncached client that cache misses are fetched with
 	Path                 string                 // the database file
 	mu                   sync.Mutex
 	counts               CacheCounts // lookups since the app started, for progress messages
+
+	searchedLoaded bool // Searched has every saved recent search, see loadRecentSearches. Guarded by mu.
 
 	db      *sql.DB                // nil if the database could not be opened, the cache then only lasts the session
 	dirty   map[rowKey]*CacheEntry // added since the last SaveCache, guarded by mu
@@ -211,6 +214,9 @@ func (c *CachedEveIDs) ensureMaps() {
 	}
 	if c.Affiliations == nil {
 		c.Affiliations = make(map[int]*CacheEntry)
+	}
+	if c.Searched == nil {
+		c.Searched = make(map[string]*CacheEntry)
 	}
 	if c.dirty == nil {
 		c.dirty = make(map[rowKey]*CacheEntry)
@@ -488,6 +494,10 @@ func missingID(value any) bool {
 		return typed.CharacterID == 0
 	case *api.ESIStar:
 		return typed.TypeID == 0 // a star response has no id of its own
+	case *api.ESIPlanetInfo:
+		return typed.PlanetID == 0
+	case *api.ESICategory:
+		return typed.CategoryID == 0
 	case *api.ESIItem:
 		return typed.ItemId == 0
 	case *api.ESIKillmail:
@@ -563,6 +573,10 @@ func (c *CachedEveIDs) GetIfNotCached(idNumber int, typeOfEntity types.EntityTyp
 		found = knownAs[api.ESIStargate](c, idNumber)
 	case types.STAR:
 		found = knownAs[api.ESIStar](c, idNumber)
+	case types.PLANET:
+		found = knownAs[api.ESIPlanetInfo](c, idNumber)
+	case types.CATEGORY:
+		found = knownAs[api.ESICategory](c, idNumber)
 	}
 
 	if found != nil && !missingID(found) {
@@ -593,6 +607,10 @@ func (c *CachedEveIDs) GetIfNotCached(idNumber int, typeOfEntity types.EntityTyp
 		output, err = c.Client.GetStargateInfo(idNumber)
 	case types.STAR:
 		output, err = c.Client.GetStarInfo(idNumber)
+	case types.PLANET:
+		output, err = c.Client.GetPlanetInfo(idNumber)
+	case types.CATEGORY:
+		output, err = c.Client.GetCategoryInfo(idNumber)
 	default:
 		err = fmt.Errorf("%s data is not cached", typeOfEntity)
 	}

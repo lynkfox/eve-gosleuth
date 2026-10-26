@@ -18,10 +18,13 @@ var ErrIncompleteKillmails = errors.New("not all killmails could be collected")
 
 // KillmailLimits are the Preferences that decide which of a target's killmails are collected
 type KillmailLimits struct {
-	Max           int       // the most killmails to collect from zKillboard's list, newest first
+	Max           int       // the most killmails to collect from zKillboard's list, newest first, or AllKillmails for every one it lists
 	NewerThan     time.Time // only killmails after this, the zero time for no date limit
 	IncludeCached bool      // also use killmails already in the cache that are beyond Max or NewerThan
 }
+
+// AllKillmails as KillmailLimits.Max collects every killmail zKillboard lists, up to api.ZKILL_MAX_KILLMAILS, still stopping at NewerThan
+const AllKillmails = -1
 
 // DefaultKillmailLimits collects the newest DefaultKillmailLimit killmails of any age
 func DefaultKillmailLimits() KillmailLimits {
@@ -75,7 +78,10 @@ func CollectKillmails(target IntelTarget, limits KillmailLimits) (*[]RawKillmail
 		}
 	}
 
-	total := min(len(*killmails), limits.Max)
+	total := len(*killmails)
+	if limits.Max != AllKillmails {
+		total = min(total, limits.Max)
+	}
 	stop := make(chan struct{})
 	defer close(stop)
 	results := fetchKillmails(esiClient, (*killmails)[:total], stop)
@@ -195,6 +201,7 @@ func (rkm *RawKillmail) Expand(esiClient *api.ESIClient, cached *CachedEveIDs) *
 		Solo:           rkm.Zkillmail.Zkb.Solo,
 		Awox:           rkm.Zkillmail.Zkb.Awox,
 		Position:       &rkm.ESIKillmail.Victim.Position,
+		LocationID:     rkm.Zkillmail.Zkb.LocationID,
 	}
 
 	killmail.System = cached.ExpandSystem(rkm.ESIKillmail.SolarSystemID)
@@ -202,6 +209,7 @@ func (rkm *RawKillmail) Expand(esiClient *api.ESIClient, cached *CachedEveIDs) *
 	killmail.Victim = &KillmailVictim{
 		Ship:        cached.ExpandItem(rkm.ESIKillmail.Victim.ShipTypeID),
 		DamageTaken: rkm.ESIKillmail.Victim.DamageTaken,
+		Items:       rkm.ESIKillmail.Victim.Items,
 	}
 	// structure and deployable losses have no pilot, only the owning corp and alliance
 	if rkm.ESIKillmail.Victim.CharacterID != nil {

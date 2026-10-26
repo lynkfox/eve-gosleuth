@@ -34,6 +34,43 @@ func cachePathFor(settings Settings) string {
 	return retrieval.CachePathIn(settings.CacheDir)
 }
 
+/*
+	GetRecentSearches returns the targets recent searches found, newest first, for the search bar. It does not wait for a running search, the cache has its own lock.
+
+Returns:
+  - []retrieval.RecentSearch: the recent searches of a type the search bar has
+  - error: a user readable message if they could not be read
+*/
+func (a *App) GetRecentSearches() (recent []retrieval.RecentSearch, err error) {
+	defer recoverAsError(&err)
+
+	recent = []retrieval.RecentSearch{}
+	for _, search := range a.cache.RecentSearches(a.GetSettings().MaxRecentSearches) {
+		if _, ok := searchTypes[search.Type]; ok {
+			recent = append(recent, search)
+		}
+	}
+	return recent, nil
+}
+
+/*
+	RemoveRecentSearch forgets one recent search, from the search bar's × button
+
+Parameters:
+  - name: the search's name, as GetRecentSearches gave it
+  - searchType: PILOT, CORPORATION, ALLIANCE, or SYSTEM
+
+Returns:
+  - []retrieval.RecentSearch: the recent searches left, newest first
+  - error: a user readable message if they could not be read
+*/
+func (a *App) RemoveRecentSearch(name string, searchType string) (recent []retrieval.RecentSearch, err error) {
+	defer recoverAsError(&err)
+
+	a.cache.RemoveRecentSearch(retrieval.RecentSearch{Name: name, Type: searchType})
+	return a.GetRecentSearches()
+}
+
 // GetCacheInfo returns where the cache is kept and how much it holds
 func (a *App) GetCacheInfo() CacheInfo {
 	path := a.cache.CurrentPath()

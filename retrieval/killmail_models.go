@@ -18,6 +18,7 @@ type Killmail struct {
 	KillmailTime   time.Time
 	System         *System
 	Position       *api.ESIPosition
+	LocationID     int // zKillboard's nearest celestial, ie a planet, moon, or stargate, 0 when it has none
 	FittedValue    float64
 	DroppableValue float64  // zKillboard's totalDroppableValue
 	Labels         []string // zKillboard's tags, ie tz:eu, loc:w-space
@@ -48,6 +49,7 @@ type KillmailVictim struct {
 	Ship           *Item
 	DamageTaken    int
 	Fit            []*FitItem
+	Items          []api.ESIKillmailItem // what the victim had fitted and carried, as the ESI lists it. Unlike Fit, the item types are not looked up.
 }
 
 type Item struct {

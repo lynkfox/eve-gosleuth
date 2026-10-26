@@ -85,12 +85,11 @@ func SystemStaticsFor(systemName string) []SystemStatic {
 	return statics
 }
 
-// SystemLink is a system a stargate leads to
 // DetailRow is one labelled line of the target details, ie Region: The Forge
 type DetailRow struct {
-	Label    string
-	Value    string
-	Security *float64 // set when the value is a security status, so it can be colored
+	Label        string
+	Value        string
+	SecurityBand string // set when the value is a system's security status, so it can be colored: see SecurityBand
 }
 
 // MemberCorp is one of an alliance's member corporations
@@ -101,8 +100,10 @@ type MemberCorp struct {
 	MemberCount   int
 }
 
+// SystemLink is a system a stargate leads to
 type SystemLink struct {
 	SystemID       int
 	Name           string
 	SecurityStatus float64
+	SecurityBand   string // see SecurityBand
 }

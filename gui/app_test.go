@@ -7,8 +7,10 @@ import (
 
 	"github.com/lynkfox/go_eve_sleuth/aggregate"
 	"github.com/lynkfox/go_eve_sleuth/api"
+	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -101,4 +103,33 @@ func TestBuildCapitalShips(t *testing.T) {
 			}}}, ships)
 		assert.Equal(t, []CapitalShip{}, buildCapitalShips(nil, target))
 	})
+}
+
+// categoryESIClient knows the Ship and Structure categories, and fails for any other
+type categoryESIClient struct {
+	api.ESIClient
+	lookups *int
+}
+
+func (m categoryESIClient) GetCategoryInfo(idNumber int) (*api.ESICategory, error) {
+	*m.lookups++
+	names := map[int]string{6: "Ship", 65: "Structure"}
+	if name, found := names[idNumber]; found {
+		return &api.ESICategory{CategoryID: idNumber, Name: name}, nil
+	}
+	return nil, api.ErrRequestFailedToComplete
+}
+
+func TestLabelNames(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+	lookups := 0
+	cards := []KillmailCard{
+		{Labels: []string{"cat:6", "solo", "loc:highsec"}},
+		{Labels: []string{"cat:6", "cat:65", "cat:999", "cat:x"}},
+	}
+
+	names := labelNames(cards, categoryESIClient{lookups: &lookups})
+
+	assert.Equal(t, map[string]string{"cat:6": "Ship", "cat:65": "Structure"}, names, "a category that can not be looked up is left for the frontend to show by id")
+	assert.Equal(t, 3, lookups, "each category is looked up once")
 }

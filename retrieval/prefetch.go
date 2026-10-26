@@ -108,6 +108,37 @@ func (cached *CachedEveIDs) PrefetchKillmailEntities(killmails []RawKillmail) {
 		fmt.Sprintf("Looked up %d pilots in bulk and %d other ids in %s", built, len(lookups), time.Since(started).Round(time.Millisecond))))
 }
 
+/*
+	PrefetchItemTypes looks up item types that are not cached yet, prefetchWorkers at a time, ie everything the victims of a system's killmails carried
+	before checking it for PI materials. Each type is cached until a newer SDE, so later searches look up only types not seen before.
+
+Parameters:
+  - typeIDs: the item types, repeats are looked up once
+*/
+func (cached *CachedEveIDs) PrefetchItemTypes(typeIDs []int) {
+	started := time.Now()
+	before := cached.Counts()
+
+	seen := map[int]struct{}{}
+	lookups := []func(){}
+	for _, typeID := range typeIDs {
+		if _, done := seen[typeID]; done || typeID == 0 {
+			continue
+		}
+		seen[typeID] = struct{}{}
+		if !held[api.ESIItem](cached, sectionKnown, cached.Known, typeID) {
+			lookups = append(lookups, func() { _, _ = cached.GetIfNotCached(typeID, types.ITEM) })
+		}
+	}
+	if len(lookups) == 0 {
+		return
+	}
+
+	comm.ReportProgress("Looking up %d item types", len(lookups))
+	runParallel(lookups, prefetchWorkers)
+	comm.ReportProgress("%s", cached.Counts().Since(before).Annotate(fmt.Sprintf("Looked up %d item types in %s", len(lookups), time.Since(started).Round(time.Millisecond))))
+}
+
 // idsOnKillmails collects the unique ids the killmails refer to. NPC attackers have no character.
 func idsOnKillmails(killmails []RawKillmail) (pilots, corporations, alliances, items, systems map[int]struct{}) {
 	pilots, corporations, alliances, items, systems = map[int]struct{}{}, map[int]struct{}{}, map[int]struct{}{}, map[int]struct{}{}, map[int]struct{}{}

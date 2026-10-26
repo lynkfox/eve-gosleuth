@@ -177,6 +177,18 @@ func TestCollectKillmailsLimits(t *testing.T) {
 		assert.Equal(t, []int{1, 2}, fetched)
 	})
 
+	t.Run("AllKillmails collects every killmail listed", func(t *testing.T) {
+		ids, _ := collect(retrieval.KillmailLimits{Max: retrieval.AllKillmails})
+
+		assert.Equal(t, []int{1, 2, 3, 4, 5}, ids)
+	})
+
+	t.Run("AllKillmails still stops at the first killmail older than NewerThan", func(t *testing.T) {
+		ids, _ := collect(retrieval.KillmailLimits{Max: retrieval.AllKillmails, NewerThan: now.AddDate(0, 0, -7)})
+
+		assert.Equal(t, []int{1, 2}, ids)
+	})
+
 	t.Run("stops at the first killmail older than NewerThan", func(t *testing.T) {
 		ids, fetched := collect(retrieval.KillmailLimits{Max: 20, NewerThan: now.AddDate(0, 0, -7)})
 

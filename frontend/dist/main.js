@@ -21,6 +21,8 @@ function setBusy(busy) {
   el("search-button").disabled = busy;
   el("search-input").disabled = busy;
   el("search-type").disabled = busy;
+  el("recent-toggle").disabled = busy;
+  if (busy) setRecentOpen(false);
   el("ticker").classList.toggle("busy", busy);
 }
 
@@ -61,18 +63,22 @@ function isSearchable(type) {
   return [...el("search-type").options].some((option) => option.value === type);
 }
 
+// searchTypeLabel is the search type dropdown's name for an entity type, ie Pilot for PILOT
+function searchTypeLabel(type) {
+  const option = [...el("search-type").options].find((choice) => choice.value === type);
+  return option ? option.textContent : type;
+}
+
 // offerSearch fills the search bar with an entity from the target panel, then asks before searching for it
 function offerSearch(entity) {
   if (el("search-button").disabled) {
     return; // a search is already running
   }
 
-  const searchType = el("search-type");
-  searchType.value = entity.type;
+  el("search-type").value = entity.type;
   el("search-input").value = entity.name;
 
-  const typeLabel = [...searchType.options].find((option) => option.value === entity.type).textContent;
-  el("search-confirm-target").textContent = `${typeLabel}: ${entity.name}`;
+  el("search-confirm-target").textContent = `${searchTypeLabel(entity.type)}: ${entity.name}`;
 
   const dialog = el("search-confirm");
   dialog.returnValue = "";
@@ -228,7 +234,7 @@ function stargateGrid(stargates) {
     name.addEventListener("click", () => offerSearch({ type: "SYSTEM", name: gate.Name }));
 
     const security = document.createElement("span");
-    security.className = securityClass(gate.SecurityStatus);
+    security.className = securityClass(gate.SecurityBand);
     security.textContent = gate.SecurityStatus.toFixed(1);
 
     grid.append(name, security);
@@ -277,7 +283,7 @@ function detailGrid(rows) {
 
     const value = document.createElement("span");
     value.textContent = row.Value;
-    if (row.Security !== null && row.Security !== undefined) value.className = securityClass(row.Security);
+    if (row.SecurityBand) value.className = securityClass(row.SecurityBand);
 
     grid.append(label, value);
   }
@@ -554,6 +560,11 @@ function renderIntelSections(report) {
     renderSystems(report.systems);
   }
 
+  el("tab-pi").hidden = !report.piPilots;
+  if (report.piPilots) {
+    renderPIPilots(report.piPilots);
+  }
+
   el("tab-capitals").hidden = !report.capitals;
   if (report.capitals) {
     renderCapitals(report.capitals);
@@ -667,9 +678,312 @@ function renderCapitals(capitals) {
   el("capitals-empty").hidden = capitals.length > 0;
 }
 
+// renderPIPilots fills the PI Pilots tab of a system search: each pilot with PI losses, haulers near its planets or any ship with PI aboard, newest first
+function renderPIPilots(pilots) {
+  el("pi-list").replaceChildren(...pilots.map((pilot) => {
+    const block = document.createElement("section");
+    block.className = "pi-pilot";
+
+    const header = document.createElement("div");
+    header.className = "pi-pilot-header";
+    header.append(siteLinks(pilot.name, pilot, true));
+    const portrait = document.createElement("img");
+    portrait.src = pilot.imageUrl;
+    portrait.alt = "";
+    portrait.loading = "lazy";
+
+    const who = document.createElement("div");
+    who.className = "pi-who";
+    const name = document.createElement("button");
+    name.type = "button";
+    name.className = "link-button pi-name";
+    name.textContent = pilot.name;
+    name.title = "Search for this";
+    name.addEventListener("click", () => offerSearch({ type: "PILOT", name: pilot.name }));
+    who.append(name);
+    const group = groupLine([pilot.corporationIcon, pilot.corporation], [pilot.allianceIcon, pilot.alliance]);
+    if (group) who.append(group);
+
+    const count = document.createElement("span");
+    count.className = "pi-count";
+    count.textContent = `${pilot.losses.length} ${pilot.losses.length === 1 ? "loss" : "losses"}`;
+    header.append(portrait, who);
+    header.append(hourStrip(pilot.losses.map((loss) => loss.time), "loss", "losses"), count);
+
+    const losses = document.createElement("ol");
+    losses.className = "pi-losses";
+    losses.append(...pilot.losses.map(piLossRow));
+
+    block.append(header, losses);
+    return block;
+  }));
+  el("pi-empty").hidden = pilots.length > 0;
+}
+
+/*
+  hourStrip is a one row histogram of the hours, 00 to 23, that times fall in, shaded like the Activity tab and in EVE or local time as chosen.
+  noun and nouns name what was counted, for each hour's tooltip, ie loss and losses.
+*/
+function hourStrip(times, noun, nouns) {
+  const counts = Array(24).fill(0);
+  for (const time of times) counts[timeParts(time).hour]++;
+  const busiest = Math.max(0, ...counts);
+  const zone = preferences.timeZone === "local" ? "local" : "EVE";
+
+  const strip = document.createElement("div");
+  strip.className = "hour-strip";
+  counts.forEach((count, hour) => {
+    const cell = document.createElement("span");
+    cell.className = "hour-cell";
+    cell.title = `${pad2(hour)}:00–${pad2(hour)}:59 ${zone}: ${count} ${count === 1 ? noun : nouns}`;
+    if (count) cell.style.background = `color-mix(in srgb, var(--accent) ${Math.round(25 + 75 * (count / busiest))}%, var(--panel))`;
+    strip.append(cell);
+  });
+  // a few hour marks under the cells
+  for (const hour of [0, 6, 12, 18]) {
+    const mark = document.createElement("span");
+    mark.className = "hour-mark";
+    mark.style.gridColumn = `${hour + 1} / span 6`;
+    mark.textContent = pad2(hour);
+    strip.append(mark);
+  }
+  return strip;
+}
+
+// piLossRow is one PI loss: when, the ship, which planet if it was near one, its value, and the PI materials aboard. Clicking it opens the killmail on zKillboard.
+function piLossRow(loss) {
+  const row = document.createElement("li");
+  const carried = loss.cargo.length > 0;
+  row.className = "pi-loss";
+  row.tabIndex = 0;
+  // a loss with cargo shows it on hover instead, which would sit under this tooltip
+  if (!carried) row.title = "Open on zKillboard";
+
+  const time = document.createElement("span");
+  time.className = "pi-time";
+  time.textContent = formatKillmailTime(loss.time);
+
+  const ship = document.createElement("span");
+  ship.className = "pi-ship";
+  const shipImage = document.createElement("img");
+  shipImage.src = loss.shipImageUrl;
+  shipImage.alt = "";
+  shipImage.loading = "lazy";
+  ship.append(shipImage, loss.shipName);
+
+  const planet = document.createElement("span");
+  planet.className = "pi-planet";
+  planet.textContent = loss.planet || "—";
+  if (!loss.planet) planet.title = "Not near a planet";
+
+  const value = document.createElement("span");
+  value.className = "pi-value";
+  value.textContent = formatIsk(loss.totalValue);
+
+  const tag = document.createElement("span");
+  tag.className = "pi-tag";
+  tag.textContent = carried ? "PI" : ""; // only a loss with PI aboard is marked
+
+  row.append(time, ship, planet, value, tag);
+
+  // the PI materials aboard, shown while hovering over or focused on the row
+  if (carried) {
+    const cargo = document.createElement("div");
+    cargo.className = "pi-cargo";
+    cargo.setAttribute("role", "tooltip");
+    const heading = document.createElement("div");
+    heading.className = "pi-cargo-heading";
+    heading.textContent = "PI cargo";
+    const items = document.createElement("ul");
+    items.append(...loss.cargo.map((item) => {
+      const line = document.createElement("li");
+      const name = document.createElement("span");
+      name.textContent = item.name;
+      const quantity = document.createElement("span");
+      quantity.className = "pi-cargo-quantity";
+      quantity.textContent = `×${item.quantity.toLocaleString("en-US")}`;
+      line.append(name, quantity);
+      return line;
+    }));
+    const hint = document.createElement("div");
+    hint.className = "pi-cargo-hint";
+    hint.textContent = "Click to open on zKillboard";
+    cargo.append(heading, items, hint);
+    row.append(cargo);
+  }
+
+  const open = () => window.runtime.BrowserOpenURL(loss.url);
+  row.addEventListener("click", open);
+  row.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") open();
+  });
+  return row;
+}
+
+// DEFAULT_TAB_ORDER is the tabs' ids as index.html lists them, read before a saved order moves them
+const DEFAULT_TAB_ORDER = [...document.querySelectorAll("#tab-list .tab")].map((tab) => tab.id);
+
+/*
+  tabOrderFrom turns a saved tab order into the order to show: the saved tabs fill the places they have in the default order, in their saved order,
+  so a tab the saved order does not know, ie one added in a later version, keeps its default place. Ids that are not tabs are ignored.
+*/
+function tabOrderFrom(saved) {
+  const known = saved.filter((id, index) => DEFAULT_TAB_ORDER.includes(id) && saved.indexOf(id) === index);
+  let next = 0;
+  return DEFAULT_TAB_ORDER.map((id) => (known.includes(id) ? known[next++] : id));
+}
+
+// arrangeTabs puts the tabs in an order, hidden ones included, before the help button at the end of the row
+function arrangeTabs(order) {
+  for (const id of order) el("tab-list").insertBefore(el(id), el("tab-key"));
+}
+
+// saveTabOrder saves the tabs' order as shown. If it can not be saved it still applies for this session.
+function saveTabOrder() {
+  backend().SetTabOrder(shownTabOrder()).catch((err) => setStatus(String(err), true));
+}
+
+// shownTabOrder is the tabs' ids in the order they are shown
+function shownTabOrder() {
+  return [...el("tab-list").querySelectorAll(".tab")].map((tab) => tab.id);
+}
+
+// showTabOrderReset enables the Preferences window's Reset tab order button only when the tabs have been moved
+function showTabOrderReset() {
+  el("reset-tab-order").disabled = shownTabOrder().every((id, index) => id === DEFAULT_TAB_ORDER[index]);
+}
+
+// resetTabOrder puts the tabs back in their default order and saves that, from the Preferences window
+function resetTabOrder() {
+  arrangeTabs(DEFAULT_TAB_ORDER);
+  showTabOrderReset();
+  backend().SetTabOrder([])
+    .then(() => tickerPush("Tab order reset"))
+    .catch((err) => showPreferencesError(String(err)));
+}
+
+// draggedTab is the tab being dragged to a new place, null when none is
+let draggedTab = null;
+
+function clearTabDropMarks() {
+  for (const tab of el("tab-list").querySelectorAll(".tab")) tab.classList.remove("tab-drop-before", "tab-drop-after");
+}
+
+// dropsBefore reports whether a drag over a tab would put the dragged tab before it, from which half of the tab the pointer is over
+function dropsBefore(tab, event) {
+  const box = tab.getBoundingClientRect();
+  return event.clientX < box.left + box.width / 2;
+}
+
+/*
+  wireTabMoving lets a tab be dragged into a new place among the others, or moved one place with Alt and the left or right arrow.
+  Either way the new order is saved.
+*/
+function wireTabMoving(tab) {
+  tab.draggable = true;
+
+  tab.addEventListener("dragstart", (event) => {
+    draggedTab = tab;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", tab.id);
+    tab.classList.add("tab-dragging");
+  });
+  tab.addEventListener("dragover", (event) => {
+    if (!draggedTab || draggedTab === tab) return;
+    event.preventDefault(); // allows the drop
+    event.dataTransfer.dropEffect = "move";
+    const before = dropsBefore(tab, event);
+    clearTabDropMarks();
+    tab.classList.add(before ? "tab-drop-before" : "tab-drop-after");
+  });
+  tab.addEventListener("dragleave", () => tab.classList.remove("tab-drop-before", "tab-drop-after"));
+  tab.addEventListener("drop", (event) => {
+    if (!draggedTab || draggedTab === tab) return;
+    event.preventDefault();
+    el("tab-list").insertBefore(draggedTab, dropsBefore(tab, event) ? tab : tab.nextSibling);
+    clearTabDropMarks();
+    saveTabOrder();
+  });
+  tab.addEventListener("dragend", () => {
+    tab.classList.remove("tab-dragging");
+    clearTabDropMarks();
+    draggedTab = null;
+  });
+
+  tab.addEventListener("keydown", (event) => {
+    if (!event.altKey || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
+    event.preventDefault();
+    // past the next tab that is shown, hidden ones are skipped over
+    const shown = [...el("tab-list").querySelectorAll(".tab")].filter((other) => !other.hidden);
+    const at = shown.indexOf(tab);
+    const neighbour = shown[at + (event.key === "ArrowLeft" ? -1 : 1)];
+    if (!neighbour) return;
+    el("tab-list").insertBefore(tab, event.key === "ArrowLeft" ? neighbour : neighbour.nextSibling);
+    tab.focus();
+    saveTabOrder();
+  });
+}
+
+// UNIQUE_DAYS_HELP explains the Unique Days column the ranked tabs share
+const UNIQUE_DAYS_HELP = "The number in parentheses on Unique Days is the number of days from their first to last killmail reviewed.";
+
+/*
+  TAB_HELP explains each tab as bullet points, shown with its color key, if any, on hover over the tab's ? button.
+  An entry is a list of points, or a function of the target type (PILOT, CORPORATION, ALLIANCE, or SYSTEM) for a tab that differs by target.
+*/
+const TAB_HELP = {
+  "tab-killmails": [
+    "Every killmail collected for this search, newest first. Click one to open it on zKillboard.",
+    "How many are collected, and how far back, is set in Preferences.",
+  ],
+  "tab-activity": [
+    "A display, zKillboard style, of when killmails were recorded, for potential activity times.",
+    "Only uses the killmails that were analyzed during this search.",
+  ],
+  "tab-fleetmates": [
+    "The 10 pilots on the most killmails with this pilot, who are in the same corporation or alliance now or attacked alongside them, ties going to the most unique days.",
+    UNIQUE_DAYS_HELP,
+  ],
+  "tab-members": [
+    "The 10 pilots on the most killmails flying for this corporation or alliance, counted by who they flew for at the time, ties going to the most unique days.",
+    UNIQUE_DAYS_HELP,
+  ],
+  "tab-pilots": [
+    "A list of the 10 pilots with the most killmails over the most unique days.",
+    UNIQUE_DAYS_HELP,
+  ],
+  "tab-corps": [
+    "A list of the 10 corporations with the most killmails over the most unique days.",
+    UNIQUE_DAYS_HELP,
+    "Pilots is the number of different pilots seen with that corp on reviewed killmails.",
+  ],
+  "tab-systems": [
+    "The 10 systems with the most of this target's killmails, ties going to the most unique days. Kills and Losses are from the target's side.",
+    UNIQUE_DAYS_HELP,
+  ],
+  "tab-pi": [
+    "Any hauler lost near a planet, or any ship carrying PI materials lost anywhere in this system.",
+    "Losses marked PI had PI materials aboard: hover over one to see them.",
+    "A — for the planet means the loss was not near one.",
+  ],
+  "tab-capitals": [
+    "Every capital ship flown by this corporation's or alliance's pilots on the reviewed killmails, and who flew it. Click a pilot to search for them.",
+    "A struck through pilot has since left the alliance.",
+  ],
+  "tab-roster": (type) => type === "ALLIANCE"
+    ? ["This alliance's current member corporations, with their member counts and how long they have been in the alliance."]
+    : [
+      "This corporation's current members: first those on the reviewed killmails, most recently seen first, then the rest from EveWho's records.",
+      "A red underline means EveWho still lists them, but the ESI has them out of the corporation.",
+    ],
+};
+
 function selectTab(tabId) {
+  const help = typeof TAB_HELP[tabId] === "function" ? TAB_HELP[tabId](roster ? roster.type : "") : TAB_HELP[tabId];
   const key = TAB_COLOR_KEYS[tabId];
-  el("tab-key").replaceChildren(...(key ? [colorKey(key)] : []));
+  shownHelp = help || key ? { title: el(tabId).firstChild.textContent.trim(), points: help || [], sections: key || [] } : null;
+  el("tab-key").replaceChildren(...(shownHelp ? [tabHelp(shownHelp.points, shownHelp.sections)] : []));
+  if (el("help-window").open) renderHelpWindow();
 
   for (const tab of document.querySelectorAll(".tab")) {
     const selected = tab.id === tabId;
@@ -717,26 +1031,48 @@ function formatKillmailTime(isoTime) {
 }
 
 /*
-  colorKey builds a small "Key" button that pops up on hover or keyboard focus, explaining what each color means.
+  tabHelp builds a tab's round ? button, whose popup shows on hover or keyboard focus: what the tab shows, then what each of its colors means.
 
-  sections: [{ title, items: [{ sample, className, meaning }] }]
+  points: the tab's explanation, one bullet point each
+  sections: its color key, [{ title, items: [{ sample, className, meaning }] }], empty for a tab without colored data
     - sample: example text shown in the color, ie "0.9" or "B274"
     - className: the css class that colors the sample, the same one the data uses
     - meaning: what the color means
 */
-function colorKey(sections) {
-  const key = document.createElement("div");
-  key.className = "color-key";
+function tabHelp(points, sections) {
+  const help = document.createElement("div");
+  help.className = "tab-help";
 
   const toggle = document.createElement("button");
   toggle.type = "button";
-  toggle.className = "color-key-toggle";
-  toggle.textContent = "Key";
-  toggle.setAttribute("aria-label", "Color key");
+  toggle.className = "tab-help-toggle";
+  toggle.textContent = "?";
+  toggle.title = "Click to keep this open in its own window";
+  toggle.setAttribute("aria-label", "About this tab");
+  toggle.setAttribute("aria-expanded", String(el("help-window").open));
+  toggle.addEventListener("click", () => toggleHelpWindow(toggle));
 
   const popup = document.createElement("div");
-  popup.className = "color-key-popup";
+  popup.className = "tab-help-popup help-content";
   popup.setAttribute("role", "tooltip");
+  popup.append(...helpContent(points, sections));
+
+  help.append(toggle, popup);
+  return help;
+}
+
+// helpContent is a tab's help, the same in the ? popup and the help window: its bullet points, then a line, then its color key
+function helpContent(points, sections) {
+  const parts = [];
+  if (points.length > 0) {
+    const list = document.createElement("ul");
+    list.append(...points.map((text) => {
+      const point = document.createElement("li");
+      point.textContent = text;
+      return point;
+    }));
+    parts.push(list);
+  }
 
   for (const section of sections) {
     const title = document.createElement("h3");
@@ -752,11 +1088,81 @@ function colorKey(sections) {
       list.append(sample, meaning);
     }
 
-    popup.append(title, list);
+    parts.push(title, list);
   }
+  return parts;
+}
 
-  key.append(toggle, popup);
-  return key;
+// shownHelp is the selected tab's help, { title, points, sections }, null for a tab with none. The help window shows it.
+let shownHelp = null;
+// helpWindowPlace is where the help window was last dragged to, kept for this session, null to open it by the ? button
+let helpWindowPlace = null;
+
+function renderHelpWindow() {
+  el("help-window-title").textContent = shownHelp ? `${shownHelp.title} help` : "Help";
+  el("help-window-body").replaceChildren(...(shownHelp ? helpContent(shownHelp.points, shownHelp.sections) : []));
+  if (!shownHelp) {
+    const none = document.createElement("p");
+    none.className = "muted";
+    none.textContent = "This tab has no help.";
+    el("help-window-body").append(none);
+  }
+}
+
+// placeHelpWindow moves the help window, keeping its title bar on screen so it can always be dragged back
+function placeHelpWindow(left, top) {
+  const box = el("help-window").getBoundingClientRect();
+  const x = Math.min(Math.max(left, 0), Math.max(window.innerWidth - box.width, 0));
+  const y = Math.min(Math.max(top, 0), Math.max(window.innerHeight - 40, 0));
+  el("help-window").style.left = `${x}px`;
+  el("help-window").style.top = `${y}px`;
+  return { left: x, top: y };
+}
+
+function setHelpWindowOpen(open, anchor) {
+  const help = el("help-window");
+  if (open && !help.open) {
+    renderHelpWindow();
+    help.show(); // not modal, the app stays usable around it
+    if (helpWindowPlace) {
+      helpWindowPlace = placeHelpWindow(helpWindowPlace.left, helpWindowPlace.top);
+    } else if (anchor) {
+      // first time, under the ? button, lined up with its right edge
+      const button = anchor.getBoundingClientRect();
+      placeHelpWindow(button.right - help.getBoundingClientRect().width, button.bottom + 8);
+    }
+  } else if (!open && help.open) {
+    help.close();
+  }
+  // while it is open, hovering over the ? does not show the same help again
+  document.body.classList.toggle("help-popped", open);
+  for (const toggle of document.querySelectorAll(".tab-help-toggle")) toggle.setAttribute("aria-expanded", String(open));
+}
+
+function toggleHelpWindow(anchor) {
+  setHelpWindowOpen(!el("help-window").open, anchor);
+}
+
+// dragging the help window by its title bar
+function startHelpDrag(event) {
+  if (event.button !== 0 || event.target.closest("button")) return;
+  const titlebar = el("help-window-titlebar");
+  const box = el("help-window").getBoundingClientRect();
+  const offset = { x: event.clientX - box.left, y: event.clientY - box.top };
+  titlebar.setPointerCapture(event.pointerId);
+  event.preventDefault();
+
+  const move = (moveEvent) => {
+    helpWindowPlace = placeHelpWindow(moveEvent.clientX - offset.x, moveEvent.clientY - offset.y);
+  };
+  const stop = () => {
+    titlebar.removeEventListener("pointermove", move);
+    titlebar.removeEventListener("pointerup", stop);
+    titlebar.removeEventListener("pointercancel", stop);
+  };
+  titlebar.addEventListener("pointermove", move);
+  titlebar.addEventListener("pointerup", stop);
+  titlebar.addEventListener("pointercancel", stop);
 }
 
 const SECURITY_KEY = {
@@ -804,10 +1210,9 @@ const TAB_COLOR_KEYS = {
   "tab-systems": [SECURITY_KEY, WORMHOLE_KEY],
 };
 
-function securityClass(security) {
-  if (security >= 0.45) return "sec-high";
-  if (security > 0) return "sec-low";
-  return "sec-null";
+// securityClass colors a security status by its band, high, low, or null, which the backend decides (api.SecurityBand)
+function securityClass(band) {
+  return band ? `sec-${band}` : "";
 }
 
 // cardHeading builds one of a killmail card's bold headings, which share its top line
@@ -865,9 +1270,6 @@ const LABEL_TEXT = {
   "isk:1t+": "1t+ ISK",
 };
 
-// CATEGORY_NAMES are the victim item categories zKillboard tags as cat:N
-const CATEGORY_NAMES = { 6: "Ship", 18: "Drone", 22: "Deployable", 23: "Starbase", 40: "Sovereignty structure", 46: "Orbital", 65: "Structure", 87: "Fighter" };
-
 // FACTION_WARZONES names the faction warfare tags, ie fw:calgal
 const FACTION_WARZONES = { amarr: "Amarr", caldari: "Caldari", gallente: "Gallente", minmatar: "Minmatar", amamin: "Amarr/Minmatar", calgal: "Caldari/Gallente" };
 
@@ -875,7 +1277,8 @@ function labelText(label) {
   if (LABEL_TEXT[label]) return LABEL_TEXT[label];
 
   const [prefix, value] = label.split(":");
-  if (prefix === "cat") return CATEGORY_NAMES[value] || `Category ${value}`;
+  // the backend looks up category names from the ESI, see IntelReport.LabelNames
+  if (prefix === "cat") return (intelReport && intelReport.labelNames && intelReport.labelNames[label]) || `Category ${value}`;
   if (prefix === "#") return value === "1" ? "1 pilot" : `${value} pilots`;
   if (prefix === "fw") return `FW ${FACTION_WARZONES[value] || value}`;
   return label;
@@ -928,7 +1331,7 @@ function renderKillmailCard(km) {
 
   const location = document.createElement("span");
   const security = document.createElement("span");
-  security.className = securityClass(km.securityStatus);
+  security.className = securityClass(km.securityBand);
   security.textContent = km.securityStatus.toFixed(1);
   location.append(`${km.systemName} `, security);
 
@@ -1218,7 +1621,7 @@ function renderSystems(systems) {
     const nameCell = document.createElement("td");
     const name = document.createElement("div");
     const security = document.createElement("span");
-    security.className = securityClass(system.securityStatus);
+    security.className = securityClass(system.securityBand);
     security.textContent = system.securityStatus.toFixed(1);
     name.append(`${system.name} `, security);
     const detail = document.createElement("div");
@@ -1256,6 +1659,166 @@ async function runBackend(call) {
   }
 }
 
+// recentSearches are the targets past searches found, newest first, as the backend's RecentSearch: { name, type }
+let recentSearches = [];
+// recentShown are the recent searches in the open list, and recentActive the index of the one the arrow keys are on, -1 for none
+let recentShown = [];
+let recentActive = -1;
+// recentAll is true while the list shows every recent search, from the toggle or the down arrow, rather than those matching the typed name
+let recentAll = false;
+
+// loadRecentSearches reads the recent searches from the backend's cache, keeping the last list if that fails
+function loadRecentSearches() {
+  backend().GetRecentSearches().then((recent) => { recentSearches = recent || []; }).catch(() => {});
+}
+
+// matchingRecent returns the recent searches whose name starts with the typed text, then those that contain it, ignoring case. No text matches them all.
+function matchingRecent(typed) {
+  if (!typed) return recentSearches;
+  const starting = [];
+  const containing = [];
+  for (const entry of recentSearches) {
+    const at = entry.name.toLowerCase().indexOf(typed);
+    if (at === 0) starting.push(entry);
+    else if (at > 0) containing.push(entry);
+  }
+  return [...starting, ...containing];
+}
+
+function setRecentOpen(open) {
+  el("recent-list").hidden = !open;
+  el("search-input").setAttribute("aria-expanded", String(open));
+  el("recent-toggle").setAttribute("aria-expanded", String(open));
+  if (!open) setRecentActive(-1);
+}
+
+// recentOption is one row of the list: the name with the typed part highlighted, then its type
+function recentOption(entry, index, typed) {
+  const option = document.createElement("li");
+  option.id = `recent-${index}`;
+  option.className = "recent-option";
+  option.setAttribute("role", "option");
+  option.setAttribute("aria-selected", "false");
+
+  const name = document.createElement("span");
+  name.className = "recent-name";
+  const at = typed ? entry.name.toLowerCase().indexOf(typed) : -1;
+  if (at >= 0) {
+    const match = document.createElement("span");
+    match.className = "recent-match";
+    match.textContent = entry.name.slice(at, at + typed.length);
+    name.append(entry.name.slice(0, at), match, entry.name.slice(at + typed.length));
+  } else {
+    name.textContent = entry.name;
+  }
+
+  const type = document.createElement("span");
+  type.className = "recent-type";
+  type.textContent = searchTypeLabel(entry.type);
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "recent-remove";
+  remove.tabIndex = -1;
+  remove.textContent = "×";
+  remove.title = "Remove from recent searches";
+  remove.setAttribute("aria-label", `Remove ${entry.name} from recent searches`);
+  remove.addEventListener("click", (event) => {
+    event.stopPropagation(); // not a pick of the row
+    removeRecent(entry);
+  });
+
+  option.append(name, type, remove);
+  // mousedown would take focus from the search box, whose blur closes the list before the click lands
+  option.addEventListener("mousedown", (event) => event.preventDefault());
+  option.addEventListener("click", () => pickRecent(entry));
+  return option;
+}
+
+// removeRecent forgets a recent search, from its × or the Delete key, keeping the list open on what is left
+async function removeRecent(entry) {
+  try {
+    recentSearches = (await backend().RemoveRecentSearch(entry.name, entry.type)) || [];
+  } catch (err) {
+    setStatus(String(err), true);
+    return;
+  }
+  const active = recentActive;
+  showRecent(recentAll);
+  if (active >= 0 && recentShown.length > 0) setRecentActive(Math.min(active, recentShown.length - 1));
+}
+
+/*
+  showRecent opens the recent searches list: all of them from the toggle or the down arrow, or as a name is typed, those that match it.
+  Typing that matches none, or clearing the box, closes it.
+*/
+function showRecent(all) {
+  recentAll = all;
+  const typed = all ? "" : el("search-input").value.trim().toLowerCase();
+  recentShown = matchingRecent(typed);
+  if (!all && (!typed || recentShown.length === 0)) {
+    setRecentOpen(false);
+    return;
+  }
+
+  const list = el("recent-list");
+  if (recentShown.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "recent-empty";
+    empty.textContent = "No recent searches yet";
+    list.replaceChildren(empty);
+  } else {
+    list.replaceChildren(...recentShown.map((entry, index) => recentOption(entry, index, typed)));
+  }
+  setRecentOpen(true);
+  setRecentActive(-1);
+}
+
+function setRecentActive(index) {
+  recentActive = index;
+  const options = el("recent-list").querySelectorAll(".recent-option");
+  options.forEach((option, at) => option.setAttribute("aria-selected", String(at === index)));
+  if (index >= 0 && options[index]) {
+    el("search-input").setAttribute("aria-activedescendant", options[index].id);
+    options[index].scrollIntoView({ block: "nearest" });
+  } else {
+    el("search-input").removeAttribute("aria-activedescendant");
+  }
+}
+
+// moveRecent moves the arrow keys' place in the list by step, wrapping around, opening the full list first if it is closed
+function moveRecent(step) {
+  if (el("recent-list").hidden) showRecent(true);
+  const count = recentShown.length;
+  if (count === 0) return;
+  setRecentActive(recentActive < 0 ? (step > 0 ? 0 : count - 1) : (recentActive + step + count) % count);
+}
+
+// pickRecent fills the search bar with a recent search and runs it
+function pickRecent(entry) {
+  setRecentOpen(false);
+  el("search-type").value = entry.type;
+  el("search-input").value = entry.name;
+  el("search-form").requestSubmit();
+}
+
+function recentKeydown(event) {
+  const open = !el("recent-list").hidden;
+  if (event.key === "ArrowDown" || (event.key === "ArrowUp" && open)) {
+    event.preventDefault();
+    moveRecent(event.key === "ArrowDown" ? 1 : -1);
+  } else if (event.key === "Enter" && open && recentActive >= 0) {
+    event.preventDefault();
+    pickRecent(recentShown[recentActive]);
+  } else if (event.key === "Delete" && open && recentActive >= 0) {
+    // only with a row picked by the arrow keys, otherwise Delete edits the typed name as usual
+    event.preventDefault();
+    removeRecent(recentShown[recentActive]);
+  } else if (event.key === "Escape" && open) {
+    setRecentOpen(false);
+  }
+}
+
 // search looks up the target, then immediately pulls its killmails, since every intel section is built from them
 async function search(event) {
   event.preventDefault();
@@ -1280,6 +1843,8 @@ async function search(event) {
       return;
     }
     renderTarget(target);
+    // SearchTarget cached the found target as a recent search
+    loadRecentSearches();
 
     el("intel-loading").hidden = false;
     el("intel").hidden = false;
@@ -1446,19 +2011,25 @@ function closeThemesMenu() {
 
 // MAX_KILLMAILS is the most killmails zKillboard lists, 10 pages of 200 (api.ZKILL_MAX_KILLMAILS)
 const MAX_KILLMAILS = 2000;
+// ALL_KILLMAILS as the max killmail count collects every killmail zKillboard lists (retrieval.AllKillmails)
+const ALL_KILLMAILS = -1;
+// MAX_RECENT_SEARCHES is the most recent searches the search bar can keep (retrieval.MaxRecentSearches)
+const MAX_RECENT_SEARCHES = 25;
 
 // preferences are the saved Preferences window choices, as the backend's Preferences
-let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve" };
+let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5 };
 
 // applySettings sets the saved theme and preferences on the app
 function applySettings(settings) {
   applyTheme(settings.theme);
+  arrangeTabs(tabOrderFrom(settings.tabOrder || []));
   preferences = {
     includeZkillLabels: Boolean(settings.includeZkillLabels),
     maxKillmails: settings.maxKillmails || 20,
     killmailsNewerThanDays: settings.killmailsNewerThanDays || 0,
     useCachedKillmails: Boolean(settings.useCachedKillmails),
     timeZone: settings.timeZone === "local" ? "local" : "eve",
+    maxRecentSearches: settings.maxRecentSearches || 5,
   };
   showKillmailLabels = preferences.includeZkillLabels;
   redrawIntel();
@@ -1476,6 +2047,7 @@ function fillPreferencesForm(chosen) {
   el("pref-killmail-age").value = String(chosen.killmailsNewerThanDays);
   el("pref-use-cached").checked = chosen.useCachedKillmails;
   el("pref-time-zone").value = chosen.timeZone;
+  el("pref-max-recent").value = String(chosen.maxRecentSearches);
 }
 
 // preferencesForm reads the Preferences window, the max count as typed (NaN if it is not a number)
@@ -1486,6 +2058,7 @@ function preferencesForm() {
     killmailsNewerThanDays: Number(el("pref-killmail-age").value),
     useCachedKillmails: el("pref-use-cached").checked,
     timeZone: el("pref-time-zone").value,
+    maxRecentSearches: Number(el("pref-max-recent").value),
   };
 }
 
@@ -1503,6 +2076,7 @@ function openPreferences() {
   closeThemesMenu();
   fillPreferencesForm(preferences);
   showPreferencesError("");
+  showTabOrderReset();
   el("preferences").showModal();
   backend().GetCacheInfo().then(showCacheInfo).catch(() => {});
 }
@@ -1572,8 +2146,13 @@ function closePreferences() {
 // savePreferences checks and saves the window, applies the labels choice straight away, and closes it
 async function savePreferences() {
   const chosen = preferencesForm();
-  if (!Number.isInteger(chosen.maxKillmails) || chosen.maxKillmails < 1 || chosen.maxKillmails > MAX_KILLMAILS) {
-    showPreferencesError(`Max killmail count must be a whole number from 1 to ${MAX_KILLMAILS.toLocaleString("en-US")}`);
+  const killmailCountOk = chosen.maxKillmails === ALL_KILLMAILS || (Number.isInteger(chosen.maxKillmails) && chosen.maxKillmails >= 1 && chosen.maxKillmails <= MAX_KILLMAILS);
+  if (!killmailCountOk) {
+    showPreferencesError(`Max killmail count must be a whole number from 1 to ${MAX_KILLMAILS.toLocaleString("en-US")}, or -1 for all`);
+    return;
+  }
+  if (!Number.isInteger(chosen.maxRecentSearches) || chosen.maxRecentSearches < 1 || chosen.maxRecentSearches > MAX_RECENT_SEARCHES) {
+    showPreferencesError(`Recent searches kept must be a whole number from 1 to ${MAX_RECENT_SEARCHES}`);
     return;
   }
 
@@ -1583,8 +2162,11 @@ async function savePreferences() {
     showPreferencesError(String(err));
     // the backend may still be using the new preferences for this session, so match what it has
     backend().GetSettings().then(applySettings).catch(() => {});
+    loadRecentSearches();
     return;
   }
+  // a lower number of recent searches kept forgets the oldest
+  loadRecentSearches();
 
   preferences = chosen;
   showKillmailLabels = chosen.includeZkillLabels;
@@ -1599,12 +2181,16 @@ document.addEventListener("click", (event) => {
   if (!event.target.closest || !event.target.closest(".menu-anchor")) closeThemesMenu();
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeThemesMenu();
+  if (event.key === "Escape") {
+    closeThemesMenu();
+    setHelpWindowOpen(false);
+  }
 });
 
 renderThemeList();
 applyTheme("");
 backend().GetSettings().then(applySettings).catch(() => applyTheme(""));
+loadRecentSearches();
 el("preferences-button").addEventListener("click", openPreferences);
 el("preferences-close").addEventListener("click", closePreferences);
 el("preferences-save").addEventListener("click", savePreferences);
@@ -1616,6 +2202,7 @@ el("preferences").addEventListener("cancel", (event) => {
 el("cache-move").addEventListener("click", () => cacheAction(() => backend().ChooseCacheFolder()));
 el("cache-default").addEventListener("click", () => cacheAction(() => backend().ResetCacheFolder()));
 el("cache-clear").addEventListener("click", openClearCache);
+el("reset-tab-order").addEventListener("click", resetTabOrder);
 el("clear-cache-confirm").addEventListener("close", () => {
   if (el("clear-cache-confirm").returnValue === "clear") cacheAction(() => backend().ClearCache(clearCacheScope()));
 });
@@ -1623,7 +2210,23 @@ el("discard-confirm").addEventListener("close", () => {
   if (el("discard-confirm").returnValue === "discard") el("preferences").close();
 });
 
+el("help-window-close").addEventListener("click", () => setHelpWindowOpen(false));
+el("help-window-titlebar").addEventListener("pointerdown", startHelpDrag);
+// a smaller window can leave the help window off screen, so it is moved back on
+window.addEventListener("resize", () => {
+  if (el("help-window").open) helpWindowPlace = placeHelpWindow(parseFloat(el("help-window").style.left) || 0, parseFloat(el("help-window").style.top) || 0);
+});
 el("search-form").addEventListener("submit", search);
+el("search-input").addEventListener("input", () => showRecent(false));
+el("search-input").addEventListener("keydown", recentKeydown);
+el("search-input").addEventListener("blur", () => setRecentOpen(false));
+// the toggle keeps focus in the search box, so its blur does not close the list the toggle is opening
+el("recent-toggle").addEventListener("mousedown", (event) => event.preventDefault());
+el("recent-toggle").addEventListener("click", () => {
+  if (el("recent-list").hidden) showRecent(true);
+  else setRecentOpen(false);
+  el("search-input").focus();
+});
 el("ticker-bar").addEventListener("click", toggleTickerHistory);
 el("search-confirm").addEventListener("close", () => {
   if (el("search-confirm").returnValue === "yes") {
@@ -1638,6 +2241,7 @@ wirePagerJumps(el("roster-first"), el("roster-last"), () => (roster ? rosterPage
 el("roster-next").addEventListener("click", () => changeRosterPage(1));
 for (const tab of document.querySelectorAll(".tab")) {
   tab.addEventListener("click", () => selectTab(tab.id));
+  wireTabMoving(tab);
 }
 
 // progress events come from comm.ReportProgress in the Go backend

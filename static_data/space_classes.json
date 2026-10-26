@@ -1,0 +1,16 @@
+{
+    "wormhole_region_classes": {
+        "A": "C1",
+        "B": "C2",
+        "C": "C3",
+        "D": "C4",
+        "E": "C5",
+        "F": "C6",
+        "G": "Thera",
+        "H": "C13",
+        "K": "Drifter"
+    },
+    "region_space_labels": {
+        "Pochven": "Triglavian"
+    }
+}

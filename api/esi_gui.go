@@ -391,8 +391,7 @@ func (e ESISystem) BuildDisplay(client ESIClient, eveWho EveWhoClient) TargetDis
 	// j-space has no meaningful security status or stations, its class is shown beside the name
 	rows := []DetailRow{}
 	if class == "" {
-		security := e.SecurityStatus
-		rows = append(rows, DetailRow{Label: "Security status", Value: fmt.Sprintf("%.1f", security), Security: &security})
+		rows = append(rows, DetailRow{Label: "Security status", Value: fmt.Sprintf("%.1f", e.SecurityStatus), SecurityBand: SecurityBand(e.SecurityStatus)})
 	}
 	rows = append(rows, DetailRow{Label: "Constellation", Value: constellationName}, DetailRow{Label: "Region", Value: regionName})
 	if class == "" {
@@ -432,32 +431,49 @@ func (e ESISystem) BuildDisplay(client ESIClient, eveWho EveWhoClient) TargetDis
 	return display
 }
 
-// POCHVEN_REGION is the region of the Triglavian systems
-const POCHVEN_REGION = "Pochven"
-
 /*
 	SpaceLabel names the kind of space a system is in, as shown beside its name
 
 Parameters:
   - class: the system's wormhole class, empty for k-space
-  - regionName: the system's region, to find Triglavian (Pochven) systems
+  - regionName: the system's region, to find regions with their own kind of space (comm.Spaces.RegionSpaceLabels), ie Pochven is Triglavian
   - security: the system's true security status. Any positive security shows in game as at least 0.1, so it is lowsec.
 
 Returns:
-  - string: the wormhole class, ie C5, or High Sec, Low Sec, Null Sec, or Triglavian
+  - string: the wormhole class, ie C5, the region's own label, ie Triglavian, or High Sec, Low Sec, or Null Sec
 */
 func SpaceLabel(class string, regionName string, security float64) string {
-	switch {
-	case class != "":
+	if class != "" {
 		return class
-	case regionName == POCHVEN_REGION:
-		return "Triglavian"
-	case security >= 0.45:
-		return "High Sec"
-	case security > 0:
-		return "Low Sec"
 	}
-	return "Null Sec"
+	if label := comm.Spaces.RegionSpaceLabels[regionName]; label != "" {
+		return label
+	}
+	return map[string]string{SECURITY_HIGH: "High Sec", SECURITY_LOW: "Low Sec", SECURITY_NULL: "Null Sec"}[SecurityBand(security)]
+}
+
+// the security bands, as SecurityBand names them. The frontend colors each as sec-<band>.
+const (
+	SECURITY_HIGH = "high"
+	SECURITY_LOW  = "low"
+	SECURITY_NULL = "null"
+)
+
+/*
+	SecurityBand names the band a true security status falls in, the one place the app decides it. The game rounds security to one decimal,
+	so 0.45 and up is highsec, and any positive security shows as at least 0.1, so lowsec.
+
+Returns:
+  - string: SECURITY_HIGH, SECURITY_LOW, or SECURITY_NULL (0.0 and below, which includes j-space)
+*/
+func SecurityBand(security float64) string {
+	switch {
+	case security >= 0.45:
+		return SECURITY_HIGH
+	case security > 0:
+		return SECURITY_LOW
+	}
+	return SECURITY_NULL
 }
 
 // starImageURL returns the image server render of a system's star, or an empty string if the system has no star or it can not be looked up
@@ -504,7 +520,7 @@ func StargateLinks(system ESISystem, client ESIClient) []SystemLink {
 				return
 			}
 
-			found[index] = &SystemLink{SystemID: stargate.Destination.SystemID, Name: destination.Name, SecurityStatus: destination.SecurityStatus}
+			found[index] = &SystemLink{SystemID: stargate.Destination.SystemID, Name: destination.Name, SecurityStatus: destination.SecurityStatus, SecurityBand: SecurityBand(destination.SecurityStatus)}
 		}()
 	}
 	wait.Wait()

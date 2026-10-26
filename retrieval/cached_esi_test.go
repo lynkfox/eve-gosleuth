@@ -90,6 +90,16 @@ func (m *RawESIClient) GetStarInfo(idNumber int) (*api.ESIStar, error) {
 	return &api.ESIStar{SolarSystemID: 30000142, TypeID: 45041}, nil
 }
 
+func (m *RawESIClient) GetPlanetInfo(idNumber int) (*api.ESIPlanetInfo, error) {
+	m.count("planet")
+	return &api.ESIPlanetInfo{PlanetID: idNumber, Name: "Jita IV", SystemID: 30000142, TypeID: 11}, nil
+}
+
+func (m *RawESIClient) GetCategoryInfo(idNumber int) (*api.ESICategory, error) {
+	m.count("category")
+	return &api.ESICategory{CategoryID: idNumber, Name: "Ship"}, nil
+}
+
 func (m *RawESIClient) GetEsiResponse(idNumber int, typeOfEntity types.EntityType) (interface{}, error) {
 	m.count(typeOfEntity.String())
 	if typeOfEntity == types.REGION {

@@ -86,7 +86,7 @@ func (c *CachedEveIDs) Entries() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.db == nil {
-		count := len(c.NameLookups)
+		count := len(c.NameLookups) + len(c.Searched)
 		for _, entries := range c.idMaps() {
 			count += len(entries.entries)
 		}
@@ -144,10 +144,15 @@ func (c *CachedEveIDs) removeWhere(match func(section, *CacheEntry) bool, where 
 			}
 		}
 	}
-	for name, entry := range c.NameLookups {
-		if match(sectionNameLookups, entry) {
-			delete(c.NameLookups, name)
-			removed[rowKey{sectionNameLookups, name}] = struct{}{}
+	for _, entries := range []struct {
+		section section
+		entries map[string]*CacheEntry
+	}{{sectionNameLookups, c.NameLookups}, {sectionRecentSearches, c.Searched}} {
+		for key, entry := range entries.entries {
+			if match(entries.section, entry) {
+				delete(entries.entries, key)
+				removed[rowKey{entries.section, key}] = struct{}{}
+			}
 		}
 	}
 	for key := range removed {

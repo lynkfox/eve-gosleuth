@@ -54,6 +54,7 @@ const (
 	sectionCorporationHistories section = "corporation_history"
 	sectionAllianceHistories    section = "alliance_history"
 	sectionAffiliations         section = "affiliation"
+	sectionRecentSearches       section = "recent_search"
 )
 
 // compressed reports whether a section's values are gzipped. Killmails are most of the cache and shrink about 7 times, the rest are small.

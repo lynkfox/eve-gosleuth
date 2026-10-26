@@ -183,6 +183,20 @@ type ESIStargate struct {
 	} `json:"destination"`
 }
 
+// ESIPlanetInfo is the universe/planets response. Its type id is the planet type, ie Planet (Barren).
+type ESIPlanetInfo struct {
+	PlanetID int    `json:"planet_id"`
+	Name     string `json:"name"` // ie Jita IV
+	SystemID int    `json:"system_id"`
+	TypeID   int    `json:"type_id"`
+}
+
+// ESICategory is the universe/categories response, ie 6 is Ship. zKillboard's cat: labels name a category by its id.
+type ESICategory struct {
+	CategoryID int    `json:"category_id"`
+	Name       string `json:"name"`
+}
+
 // ESIStar is the universe/stars response, the sun of a system. Its type id picks the star's image.
 type ESIStar struct {
 	Name          string `json:"name"` // ie Jita - Star

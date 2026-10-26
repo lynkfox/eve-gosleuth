@@ -14,7 +14,7 @@ import (
 func main() {
 
 	comm.InitLogger(logrus.DebugLevel)
-	comm.InitStaticData(staticdata.Files)
+	comm.InitStaticData(staticdata.Files, staticdata.Overrides()...)
 
 	loaded_cache, err := retrieval.LoadCache(api.NewESIClient(), retrieval.DefaultCachePath())
 	if err != nil {
