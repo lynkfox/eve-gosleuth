@@ -34,11 +34,13 @@ type Settings struct {
 type Preferences struct {
 	IncludeZkillLabels     bool   `json:"includeZkillLabels"`     // show zKillboard's labels, ie solo or ganked, on killmail cards. Off by default.
 	MaxKillmails           int    `json:"maxKillmails"`           // the most killmails collected per search, 1 to api.ZKILL_MAX_KILLMAILS, or retrieval.AllKillmails (-1) for all
+	KillmailPages          int    `json:"killmailPages"`          // how many zKillboard pages of 200 are listed when MaxKillmails is -1, 1 to api.ZKILL_MAX_PAGES
 	KillmailsNewerThanDays int    `json:"killmailsNewerThanDays"` // only collect killmails from the last 7, 30, or 90 days, 0 for any age
 	UseCachedKillmails     bool   `json:"useCachedKillmails"`     // also use the target's cached killmails beyond the limits above
 	TimeZone               string `json:"timeZone"`               // how killmail times are shown: "eve" for EVE time (UTC), the default, or "local"
 	MaxRecentSearches      int    `json:"maxRecentSearches"`      // how many recent searches the search bar keeps, 1 to retrieval.MaxRecentSearches
 	HideKilledAllies       bool   `json:"hideKilledAllies"`       // leave out of every Allies tab the allies the target also killed. Off by default.
+	IncludeHoldings        bool   `json:"includeHoldings"`        // a corp or alliance search also collects its holdings' killmails, counted as its own. On by default.
 }
 
 // maxTabs is the most tab ids SetTabOrder keeps, well above the number of tabs, so a bad value from the frontend stays small
@@ -69,13 +71,16 @@ var killmailAgeChoices = []int{0, 7, 30, 90}
 
 // defaultSettings are the settings before the user changes anything
 func defaultSettings() Settings {
-	return Settings{Preferences: Preferences{MaxKillmails: retrieval.DefaultKillmailLimit, TimeZone: "eve", MaxRecentSearches: retrieval.DefaultRecentSearches}}
+	return Settings{Preferences: Preferences{MaxKillmails: retrieval.DefaultKillmailLimit, KillmailPages: retrieval.DefaultKillmailPages, TimeZone: "eve", MaxRecentSearches: retrieval.DefaultRecentSearches, IncludeHoldings: true}}
 }
 
 // validate returns a user readable error for a preference out of range
 func (p Preferences) validate() error {
 	if p.MaxKillmails != retrieval.AllKillmails && (p.MaxKillmails < 1 || p.MaxKillmails > api.ZKILL_MAX_KILLMAILS) {
 		return fmt.Errorf("Max killmail count must be from 1 to %d, or -1 for all", api.ZKILL_MAX_KILLMAILS)
+	}
+	if p.KillmailPages < 1 || p.KillmailPages > api.ZKILL_MAX_PAGES {
+		return fmt.Errorf("zKillboard pages must be from 1 to %d", api.ZKILL_MAX_PAGES)
 	}
 	if !slices.Contains(killmailAgeChoices, p.KillmailsNewerThanDays) {
 		return fmt.Errorf("Killmails newer than must be 7, 30, or 90 days, or all")
@@ -96,10 +101,10 @@ Parameters:
   - now: the current time, which the age limit counts back from
 
 Returns:
-  - retrieval.KillmailLimits: the max count (retrieval.AllKillmails for all), the oldest killmail time (zero for any age), and whether to use cached killmails beyond them
+  - retrieval.KillmailLimits: the max count (retrieval.AllKillmails for all), the pages to list for all, the oldest killmail time (zero for any age), and whether to use cached killmails beyond them
 */
 func (p Preferences) KillmailLimits(now time.Time) retrieval.KillmailLimits {
-	limits := retrieval.KillmailLimits{Max: p.MaxKillmails, IncludeCached: p.UseCachedKillmails}
+	limits := retrieval.KillmailLimits{Max: p.MaxKillmails, Pages: p.KillmailPages, IncludeCached: p.UseCachedKillmails}
 	if p.KillmailsNewerThanDays > 0 {
 		limits.NewerThan = now.AddDate(0, 0, -p.KillmailsNewerThanDays)
 	}

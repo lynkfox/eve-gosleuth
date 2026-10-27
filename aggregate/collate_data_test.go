@@ -203,11 +203,55 @@ func TestIsTargetLoss(t *testing.T) {
 		{"the victim's corp lost it", retrieval.IntelTarget{IDNumber: victimCorpID, TypeOfEntity: types.CORPORATION}, true},
 		{"an attacking pilot got a kill", retrieval.IntelTarget{IDNumber: 2121909368, TypeOfEntity: types.PILOT}, false},
 		{"an attacking alliance got a kill", retrieval.IntelTarget{IDNumber: 99013330, TypeOfEntity: types.ALLIANCE}, false},
+		{"the victim's corp is a holding of another alliance, which lost it", retrieval.IntelTarget{IDNumber: 99000777, TypeOfEntity: types.ALLIANCE,
+			Holdings: []retrieval.TargetGroup{{Type: types.CORPORATION, ID: victimCorpID}}}, true},
+		{"the victim's alliance is a holding of another corp, which lost it", retrieval.IntelTarget{IDNumber: 98000777, TypeOfEntity: types.CORPORATION,
+			Holdings: []retrieval.TargetGroup{{Type: types.ALLIANCE, ID: victimAllianceID}}}, true},
+		{"the attacking alliance as a holding got a kill", retrieval.IntelTarget{IDNumber: 99000777, TypeOfEntity: types.ALLIANCE,
+			Holdings: []retrieval.TargetGroup{{Type: types.ALLIANCE, ID: 99013330}}}, false},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			assert.Equal(t, c.loss, aggregate.IsTargetLoss(&c.target, killmail))
+		})
+	}
+}
+
+func TestIsInternal(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+	assert.NoError(t, comm.InitStaticData(staticdata.Files))
+
+	// the attackers on killmail 139416795 all flew for URSA PRIMUS in URSA.
+	const attackerCorpID, attackerAllianceID = 98744491, 99013330
+	killmail := collate(t, deployableLoss(t, 139416795)).Killmails[0]
+
+	withNPC := deployableLoss(t, 139416796)
+	npcCorp := 1000125
+	withNPC.Attackers = append(withNPC.Attackers, api.ESIAttacker{CorporationID: &npcCorp, ShipTypeID: 2836})
+	npcKillmail := collate(t, withNPC).Killmails[0]
+
+	victimSide := func(holdings ...retrieval.TargetGroup) retrieval.IntelTarget {
+		return retrieval.IntelTarget{IDNumber: victimAllianceID, TypeOfEntity: types.ALLIANCE, Holdings: holdings}
+	}
+
+	cases := []struct {
+		name     string
+		target   retrieval.IntelTarget
+		killmail *retrieval.Killmail
+		internal bool
+	}{
+		{"every attacker is a holding alliance of the victim's", victimSide(retrieval.TargetGroup{Type: types.ALLIANCE, ID: attackerAllianceID}), killmail, true},
+		{"every attacker is a holding corp of the victim's", victimSide(retrieval.TargetGroup{Type: types.CORPORATION, ID: attackerCorpID}), killmail, true},
+		{"the attackers are not the target's", victimSide(), killmail, false},
+		{"an NPC attacker as well is from outside", victimSide(retrieval.TargetGroup{Type: types.ALLIANCE, ID: attackerAllianceID}), npcKillmail, false},
+		{"the target got the kill, not the loss", retrieval.IntelTarget{IDNumber: attackerAllianceID, TypeOfEntity: types.ALLIANCE,
+			Holdings: []retrieval.TargetGroup{{Type: types.ALLIANCE, ID: 99000777}}}, killmail, false},
+		{"pilots are never internal", retrieval.IntelTarget{IDNumber: 2121909368, TypeOfEntity: types.PILOT}, killmail, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.internal, aggregate.IsInternal(&c.target, c.killmail))
 		})
 	}
 }
@@ -260,6 +304,15 @@ func TestGetTopMembers(t *testing.T) {
 		assert.Equal(t, 2121909368, members[0].Pilot.CharacterID)
 		assert.Equal(t, 2, members[0].TotalKillmails)
 		assert.Len(t, aggregate.GetTopMembers(2, collected.PilotsSeen, &alliance), 2)
+	})
+
+	t.Run("pilots who flew for one of the target's holdings are members too", func(t *testing.T) {
+		collected := collate(t, deployableLoss(t, 1))
+		withHolding := retrieval.IntelTarget{IDNumber: 99000777, TypeOfEntity: types.ALLIANCE, Holdings: []retrieval.TargetGroup{{Type: types.CORPORATION, ID: attackerCorpID}}}
+		without := retrieval.IntelTarget{IDNumber: 99000777, TypeOfEntity: types.ALLIANCE}
+
+		assert.ElementsMatch(t, []int{2121911624, 2121877924, 2121909368}, memberIDs(aggregate.GetTopMembers(10, collected.PilotsSeen, &withHolding)))
+		assert.Empty(t, aggregate.GetTopMembers(10, collected.PilotsSeen, &without))
 	})
 
 	t.Run("membership uses the corp and alliance on the killmail, so pilots who have since left still count", func(t *testing.T) {

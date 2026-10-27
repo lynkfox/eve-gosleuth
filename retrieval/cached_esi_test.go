@@ -349,7 +349,7 @@ func TestCacheCounts(t *testing.T) {
 		assert.Equal(t, retrieval.CacheCounts{}, cache.Counts().Since(cache.Counts()), "no failures since now, so no reason")
 	})
 
-	t.Run("killmail progress says whether each killmail came from the cache", func(t *testing.T) {
+	t.Run("killmail progress says where each killmail came from", func(t *testing.T) {
 		raw := &RawESIClient{}
 		cache := retrieval.NewCache(raw, filepath.Join(t.TempDir(), "cached_data.json"))
 		target := retrieval.IntelTarget{IDNumber: 1, Clients: retrieval.CollectionClientPool{
@@ -366,9 +366,30 @@ func TestCacheCounts(t *testing.T) {
 		_, err = retrieval.CollectKillmails(target, retrieval.DefaultKillmailLimits())
 		assert.NoError(t, err)
 
-		assert.Contains(t, messages, "Killmail details 1/2 #1 (1 from the ESI)")
-		assert.Contains(t, messages, "Killmail details 2/2 #2 (1 hit from cache)")
+		assert.Contains(t, messages, "Killmail details from the ESI 1/2 #1 (1 from the ESI)")
+		assert.Contains(t, messages, "Killmails read: 0 from zKillboard, 0 from cache, 2 from the ESI")
+		assert.Contains(t, messages, "Killmails read: 0 from zKillboard, 2 from cache, 0 from the ESI")
 		assert.Contains(t, messages, "Fetching killmail list from zKillboard (live, zKillboard is not cached)")
+	})
+
+	t.Run("a killmail zKillboard sent whole is cached without asking the ESI", func(t *testing.T) {
+		raw := &RawESIClient{}
+		cache := retrieval.NewCache(raw, filepath.Join(t.TempDir(), "cached_data.json"))
+		at := time.Date(2026, 10, 26, 21, 50, 1, 0, time.UTC)
+		target := retrieval.IntelTarget{IDNumber: 1, Clients: retrieval.CollectionClientPool{
+			ZkillClient: MockZkillClient{killmails: []api.ZkbResponse{WholeZkillmail(7, at)}},
+			ESIClient:   cache,
+		}}
+		before := cache.Counts()
+
+		killmails, err := retrieval.CollectKillmails(target, retrieval.DefaultKillmailLimits())
+
+		assert.NoError(t, err)
+		assert.Len(t, *killmails, 1)
+		assert.Equal(t, retrieval.CacheCounts{}, cache.Counts().Since(before), "nothing was asked of the ESI")
+		cached := cache.CachedKillmail(7)
+		assert.NotNil(t, cached)
+		assert.Equal(t, at, cached.KillmailTime)
 	})
 }
 

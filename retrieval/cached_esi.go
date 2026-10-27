@@ -75,6 +75,16 @@ func (c *CachedEveIDs) CachedKillmail(killmailID int) *api.ESIKillmail {
 	return cached
 }
 
+// StoreKillmail caches a killmail that came from elsewhere, ie zKillboard's copy of the ESI's. Killmails never change, so it is kept like a fetched one.
+func (c *CachedEveIDs) StoreKillmail(killmail *api.ESIKillmail) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	entry := newEntry(killmail)
+	entry.Permanent = true
+	put(c, sectionKillmails, c.Killmails, killmail.KillmailID, entry)
+}
+
 // GetKillmail returns a killmail from the cache, or fetches and caches it. Killmails never change, so they are never refetched.
 func (c *CachedEveIDs) GetKillmail(zkillmail api.ZkbResponse) (*api.ESIKillmail, error) {
 	c.mu.Lock()

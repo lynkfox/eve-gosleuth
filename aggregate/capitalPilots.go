@@ -34,15 +34,9 @@ func participants(km *retrieval.Killmail) []killmailParticipant {
 	return found
 }
 
-// flewForTarget reports whether a corp and alliance on a killmail are a corp or alliance target
+// flewForTarget reports whether a corp and alliance on a killmail are a corp or alliance target, or one of its holdings
 func flewForTarget(corp *retrieval.Corporation, alliance *retrieval.Alliance, target *retrieval.IntelTarget) bool {
-	switch target.TypeOfEntity {
-	case types.CORPORATION:
-		return corp != nil && corp.CorporationID == target.IDNumber
-	case types.ALLIANCE:
-		return alliance != nil && alliance.AllianceID == target.IDNumber
-	}
-	return false
+	return target.IsGroup(groupIDs(corp, alliance))
 }
 
 /*
@@ -113,6 +107,10 @@ func HasLeftTarget(pilot *retrieval.Pilot, target *retrieval.IntelTarget) bool {
 	allianceID := 0
 	if corp.Alliance != nil {
 		allianceID = corp.Alliance.AllianceID
+	}
+	// moving to one of the target's holdings is not leaving
+	if target.IsGroup(corp.CorporationID, allianceID) {
+		return false
 	}
 
 	switch target.TypeOfEntity {

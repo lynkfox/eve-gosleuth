@@ -26,15 +26,15 @@ func TestSettings(t *testing.T) {
 		assert.Equal(t, defaultSettings(), loadSettings(corrupt))
 	})
 
-	t.Run("the defaults collect 20 killmails of any age, without labels or extra cached killmails, in EVE time, keeping 5 recent searches", func(t *testing.T) {
-		assert.Equal(t, Preferences{MaxKillmails: 20, TimeZone: "eve", MaxRecentSearches: 5}, defaultSettings().Preferences)
+	t.Run("the defaults collect 20 killmails of any age, or 10 pages for all, with holdings, without labels or extra cached killmails, in EVE time, keeping 5 recent searches", func(t *testing.T) {
+		assert.Equal(t, Preferences{MaxKillmails: 20, KillmailPages: 10, TimeZone: "eve", MaxRecentSearches: 5, IncludeHoldings: true}, defaultSettings().Preferences)
 	})
 
 	t.Run("settings saved before the killmail preferences existed keep their choices and get the default limits", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "settings.json")
 		assert.NoError(t, os.WriteFile(path, []byte(`{"theme": "amarr", "includeZkillLabels": true}`), 0o600))
 
-		assert.Equal(t, Settings{Theme: "amarr", Preferences: Preferences{IncludeZkillLabels: true, MaxKillmails: 20, TimeZone: "eve", MaxRecentSearches: 5}}, loadSettings(path))
+		assert.Equal(t, Settings{Theme: "amarr", Preferences: Preferences{IncludeZkillLabels: true, MaxKillmails: 20, KillmailPages: 10, TimeZone: "eve", MaxRecentSearches: 5, IncludeHoldings: true}}, loadSettings(path))
 	})
 
 	t.Run("a preference edited out of range in the file resets the preferences", func(t *testing.T) {
@@ -76,7 +76,7 @@ func TestSettings(t *testing.T) {
 		app := &App{settingsPath: path, settings: loadSettings(path)}
 		assert.NoError(t, app.SetTheme("amarr"))
 
-		chosen := Preferences{IncludeZkillLabels: true, MaxKillmails: 2000, KillmailsNewerThanDays: 30, UseCachedKillmails: true, TimeZone: "local", MaxRecentSearches: 25, HideKilledAllies: true}
+		chosen := Preferences{IncludeZkillLabels: true, MaxKillmails: 20000, KillmailPages: 100, KillmailsNewerThanDays: 30, UseCachedKillmails: true, TimeZone: "local", MaxRecentSearches: 25, HideKilledAllies: true}
 		assert.NoError(t, app.SavePreferences(chosen))
 
 		assert.Equal(t, Settings{Theme: "amarr", Preferences: chosen}, loadSettings(path))
@@ -91,7 +91,9 @@ func TestSettings(t *testing.T) {
 		for _, change := range []func(*Preferences){
 			func(p *Preferences) { p.MaxKillmails = 0 },
 			func(p *Preferences) { p.MaxKillmails = -2 },
-			func(p *Preferences) { p.MaxKillmails = 2001 },
+			func(p *Preferences) { p.MaxKillmails = 20001 },
+			func(p *Preferences) { p.KillmailPages = 0 },
+			func(p *Preferences) { p.KillmailPages = 101 },
 			func(p *Preferences) { p.KillmailsNewerThanDays = 14 },
 			func(p *Preferences) { p.TimeZone = "mars" },
 			func(p *Preferences) { p.MaxRecentSearches = 0 },
@@ -110,11 +112,12 @@ func TestSettings(t *testing.T) {
 		app := &App{settingsPath: filepath.Join(t.TempDir(), "settings.json"), settings: defaultSettings()}
 		chosen := defaultSettings().Preferences
 		chosen.MaxKillmails = -1
+		chosen.KillmailPages = 25
 		chosen.KillmailsNewerThanDays = 7
 
 		assert.NoError(t, app.SavePreferences(chosen))
 		now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
-		assert.Equal(t, retrieval.KillmailLimits{Max: retrieval.AllKillmails, NewerThan: now.AddDate(0, 0, -7)}, chosen.KillmailLimits(now))
+		assert.Equal(t, retrieval.KillmailLimits{Max: retrieval.AllKillmails, Pages: 25, NewerThan: now.AddDate(0, 0, -7)}, chosen.KillmailLimits(now))
 	})
 
 	t.Run("a tab order is saved and loaded again, keeping only ids that look like tabs, each once", func(t *testing.T) {
@@ -140,8 +143,8 @@ func TestSettings(t *testing.T) {
 	t.Run("preferences become killmail limits", func(t *testing.T) {
 		now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 
-		assert.Equal(t, retrieval.KillmailLimits{Max: 20}, defaultSettings().KillmailLimits(now))
-		assert.Equal(t, retrieval.KillmailLimits{Max: 500, NewerThan: time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC), IncludeCached: true},
-			Preferences{MaxKillmails: 500, KillmailsNewerThanDays: 30, UseCachedKillmails: true}.KillmailLimits(now))
+		assert.Equal(t, retrieval.KillmailLimits{Max: 20, Pages: 10}, defaultSettings().KillmailLimits(now))
+		assert.Equal(t, retrieval.KillmailLimits{Max: 500, Pages: 5, NewerThan: time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC), IncludeCached: true},
+			Preferences{MaxKillmails: 500, KillmailPages: 5, KillmailsNewerThanDays: 30, UseCachedKillmails: true}.KillmailLimits(now))
 	})
 }

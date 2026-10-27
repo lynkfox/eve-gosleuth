@@ -27,6 +27,70 @@ type IntelTarget struct {
 	Error          error
 	DisplayMessage string
 	Expanded       interface{}
+	Holdings       []TargetGroup // a corp or alliance target's holdings, whose killmails are collected and counted as the target's own
+}
+
+// TargetGroup is a corporation or alliance searched along with a target, ie one of its holdings
+type TargetGroup struct {
+	Type types.EntityType // CORPORATION or ALLIANCE
+	ID   int
+	Name string
+}
+
+// displayName is the target's name as EVE spells it, from its expanded model when it has one
+func (t *IntelTarget) displayName() string {
+	switch expanded := t.Expanded.(type) {
+	case *Corporation:
+		if expanded != nil {
+			return expanded.Name
+		}
+	case *Alliance:
+		if expanded != nil {
+			return expanded.Name
+		}
+	}
+	if t.Name != "" {
+		return t.Name
+	}
+	return "the target"
+}
+
+/*
+	IsGroup reports whether a corporation or alliance on a killmail is a corp or alliance target, or one of its Holdings. Always false for pilot and system targets.
+
+Parameters:
+  - corporationID, allianceID: the corp and alliance on the killmail, 0 when there is none
+*/
+func (t *IntelTarget) IsGroup(corporationID int, allianceID int) bool {
+	switch t.TypeOfEntity {
+	case types.CORPORATION:
+		if corporationID != 0 && corporationID == t.IDNumber {
+			return true
+		}
+	case types.ALLIANCE:
+		if allianceID != 0 && allianceID == t.IDNumber {
+			return true
+		}
+	default:
+		return false
+	}
+	for _, holding := range t.Holdings {
+		if holding.Includes(corporationID, allianceID) {
+			return true
+		}
+	}
+	return false
+}
+
+// Includes reports whether a corporation or alliance on a killmail is this group: the corp itself, or any corp in the alliance. 0 is never a group.
+func (g TargetGroup) Includes(corporationID int, allianceID int) bool {
+	switch g.Type {
+	case types.CORPORATION:
+		return corporationID != 0 && corporationID == g.ID
+	case types.ALLIANCE:
+		return allianceID != 0 && allianceID == g.ID
+	}
+	return false
 }
 
 type CollectionClientPool struct {

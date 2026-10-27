@@ -38,7 +38,7 @@ type RecordingZkillClient struct {
 	requestedType types.EntityType
 }
 
-func (m *RecordingZkillClient) GetZkillResults(entityId int, entityType types.EntityType) (*[]api.ZkbResponse, error) {
+func (m *RecordingZkillClient) GetZkillResults(entityId int, entityType types.EntityType, paging api.ZkillPaging) (*[]api.ZkbResponse, error) {
 	m.requestedID = entityId
 	m.requestedType = entityType
 	return &[]api.ZkbResponse{}, nil
@@ -130,4 +130,36 @@ func TestGetTargetInfoOfType(t *testing.T) {
 		assert.Equal(t, 0, target.IDNumber)
 		assert.Nil(t, target.Data)
 	})
+}
+
+func TestIntelTargetIsGroup(t *testing.T) {
+	alliance := retrieval.IntelTarget{IDNumber: 99000001, TypeOfEntity: types.ALLIANCE, Holdings: []retrieval.TargetGroup{
+		{Type: types.CORPORATION, ID: 98000002}, {Type: types.ALLIANCE, ID: 99000003},
+	}}
+
+	assert.True(t, alliance.IsGroup(98000009, 99000001), "the alliance itself")
+	assert.True(t, alliance.IsGroup(98000002, 0), "a holding corp in no alliance")
+	assert.True(t, alliance.IsGroup(98000002, 99000777), "a holding corp in another alliance")
+	assert.True(t, alliance.IsGroup(98000009, 99000003), "a corp in a holding alliance")
+	assert.False(t, alliance.IsGroup(98000009, 99000777))
+	assert.False(t, alliance.IsGroup(0, 0))
+	assert.False(t, alliance.IsGroup(99000001, 0), "an alliance id as a corp is not the alliance")
+
+	corp := retrieval.IntelTarget{IDNumber: 98000001, TypeOfEntity: types.CORPORATION}
+	assert.True(t, corp.IsGroup(98000001, 99000777))
+	assert.False(t, corp.IsGroup(98000002, 0))
+
+	pilot := retrieval.IntelTarget{IDNumber: 98000001, TypeOfEntity: types.PILOT, Holdings: alliance.Holdings}
+	assert.False(t, pilot.IsGroup(98000002, 0), "pilots have no groups")
+}
+
+func TestTargetGroupIncludes(t *testing.T) {
+	corp := retrieval.TargetGroup{Type: types.CORPORATION, ID: 98000002}
+	alliance := retrieval.TargetGroup{Type: types.ALLIANCE, ID: 99000003}
+
+	assert.True(t, corp.Includes(98000002, 99000777))
+	assert.False(t, corp.Includes(99000003, 98000002), "a corp id as an alliance is not the corp")
+	assert.True(t, alliance.Includes(98000009, 99000003), "any corp in the alliance")
+	assert.False(t, alliance.Includes(99000003, 0))
+	assert.False(t, retrieval.TargetGroup{Type: types.CORPORATION}.Includes(0, 0), "0 is never a group")
 }

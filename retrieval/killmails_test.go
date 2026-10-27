@@ -21,9 +21,18 @@ type MockZkillClient struct {
 	api.ZkillClient
 	killmails []api.ZkbResponse
 	err       error
+	paging    *api.ZkillPaging          // when set, records the paging it was asked for
+	byID      map[int][]api.ZkbResponse // when set, each entity's own list, and killmails the list for any other
+	errByID   map[int]error
 }
 
-func (m MockZkillClient) GetZkillResults(entityId int, entityType types.EntityType) (*[]api.ZkbResponse, error) {
+func (m MockZkillClient) GetZkillResults(entityId int, entityType types.EntityType, paging api.ZkillPaging) (*[]api.ZkbResponse, error) {
+	if m.paging != nil {
+		*m.paging = paging
+	}
+	if list, found := m.byID[entityId]; found {
+		return &list, m.errByID[entityId]
+	}
 	return &m.killmails, m.err
 }
 
@@ -120,23 +129,42 @@ func TestCollectKillmails(t *testing.T) {
 	})
 }
 
-// DatedESIClient serves killmails with set times and can say which it already holds, like the cache. It records which killmails it was asked to fetch.
+// DatedESIClient serves killmails with set times and can say which it already holds, like the cache. It records which killmails it was asked to fetch, and which to keep.
 type DatedESIClient struct {
 	api.ESIClient
 	times   map[int]time.Time
 	cached  map[int]bool
 	mu      *sync.Mutex // killmails are fetched in parallel
 	fetched *[]int
+	stored  *[]int
+	failing map[int]error
+	lookups *[]int // the killmails the cache was asked whether it holds
+}
+
+func (m DatedESIClient) StoreKillmail(killmail *api.ESIKillmail) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.stored != nil {
+		*m.stored = append(*m.stored, killmail.KillmailID)
+	}
 }
 
 func (m DatedESIClient) GetKillmail(zkillmail api.ZkbResponse) (*api.ESIKillmail, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	*m.fetched = append(*m.fetched, zkillmail.KillmailID)
+	if err, found := m.failing[zkillmail.KillmailID]; found {
+		return nil, err
+	}
 	return &api.ESIKillmail{KillmailID: zkillmail.KillmailID, KillmailTime: m.times[zkillmail.KillmailID]}, nil
 }
 
 func (m DatedESIClient) CachedKillmail(killmailID int) *api.ESIKillmail {
+	if m.lookups != nil {
+		m.mu.Lock()
+		*m.lookups = append(*m.lookups, killmailID)
+		m.mu.Unlock()
+	}
 	if !m.cached[killmailID] {
 		return nil
 	}
@@ -221,63 +249,14 @@ func TestCollectKillmailsLimits(t *testing.T) {
 		ids, fetched := collect(retrieval.KillmailLimits{Max: 20, NewerThan: now.AddDate(0, 0, -7), IncludeCached: true}, 3, 5)
 
 		assert.Equal(t, []int{1, 2, 3, 5}, ids)
-		assert.Subset(t, fetched, []int{1, 2, 3})
+		assert.Subset(t, fetched, []int{1, 2})
+		assert.NotContains(t, fetched, 3, "the cache's copy gives its date")
 	})
 
 	t.Run("without IncludeCached, cached killmails beyond the limits are left out", func(t *testing.T) {
 		ids, _ := collect(retrieval.KillmailLimits{Max: 2}, 3, 4, 5)
 
 		assert.Equal(t, []int{1, 2}, ids)
-	})
-}
-
-func TestCollectKillmailsUncachedLimit(t *testing.T) {
-	comm.InitLogger(logrus.InfoLevel)
-
-	over := retrieval.MaxUncachedKillmails + 5
-	ids := make([]int, over)
-	for index := range ids {
-		ids[index] = index + 1
-	}
-	target := CreateTarget(MockZkillClient{killmails: CreateZkillmails(ids...)}, MockESIClient{})
-	collect := func(confirm func(int) bool) int {
-		killmails, err := retrieval.CollectKillmails(target, retrieval.KillmailLimits{Max: retrieval.AllKillmails, ConfirmOverLimit: confirm})
-		assert.NoError(t, err)
-		return len(*killmails)
-	}
-
-	t.Run("after MaxUncachedKillmails not cached it asks about the rest, and stops when told to", func(t *testing.T) {
-		asked := 0
-		assert.Equal(t, retrieval.MaxUncachedKillmails, collect(func(remaining int) bool { asked = remaining; return false }))
-		assert.Equal(t, 5, asked)
-	})
-
-	t.Run("confirming fetches them all", func(t *testing.T) {
-		assert.Equal(t, over, collect(func(int) bool { return true }))
-	})
-
-	t.Run("a date limit reached first never asks", func(t *testing.T) {
-		// the mock's killmails have no time, so the first is already older than any NewerThan
-		killmails, err := retrieval.CollectKillmails(target, retrieval.KillmailLimits{Max: retrieval.AllKillmails, NewerThan: time.Now().AddDate(0, 0, -90), ConfirmOverLimit: func(int) bool {
-			t.Error("asked to confirm")
-			return true
-		}})
-		assert.NoError(t, err)
-		assert.Empty(t, *killmails)
-	})
-
-	t.Run("with no one to ask, it stops", func(t *testing.T) {
-		assert.Equal(t, retrieval.MaxUncachedKillmails, collect(nil))
-	})
-
-	t.Run("at MaxUncachedKillmails or fewer, it does not ask", func(t *testing.T) {
-		under := CreateTarget(MockZkillClient{killmails: CreateZkillmails(ids[:retrieval.MaxUncachedKillmails]...)}, MockESIClient{})
-		killmails, err := retrieval.CollectKillmails(under, retrieval.KillmailLimits{Max: retrieval.AllKillmails, ConfirmOverLimit: func(int) bool {
-			t.Error("asked to confirm")
-			return true
-		}})
-		assert.NoError(t, err)
-		assert.Len(t, *killmails, retrieval.MaxUncachedKillmails)
 	})
 }
 
@@ -289,9 +268,9 @@ func TestCollectKillmailsRateLimited(t *testing.T) {
 
 	killmails, err := retrieval.CollectKillmails(target, retrieval.KillmailLimits{Max: retrieval.AllKillmails})
 
-	assert.ErrorIs(t, err, api.ErrRateLimited, "a 429 stops the collection")
+	assert.ErrorIs(t, err, api.ErrRateLimited)
 	assert.ErrorIs(t, err, retrieval.ErrIncompleteKillmails)
-	assert.Len(t, *killmails, 2, "with the killmails collected before it")
+	assert.Len(t, *killmails, 2, "the killmails the ESI rate limited are skipped")
 }
 
 func TestCollectKillmailsStopped(t *testing.T) {
@@ -304,4 +283,246 @@ func TestCollectKillmailsStopped(t *testing.T) {
 
 	assert.ErrorIs(t, err, api.ErrStopped, "a stopped search collects no more")
 	assert.Len(t, *killmails, 1, "with the killmails collected before it")
+}
+
+// WholeZkillmail is a zKillboard list entry with the whole killmail, as zKillboard sends them
+func WholeZkillmail(id int, at time.Time) api.ZkbResponse {
+	return api.ZkbResponse{KillmailID: id, KillmailTime: at, SolarSystemID: 30000142, Victim: api.ESIVictim{ShipTypeID: 587}, Attackers: []api.ESIAttacker{{ShipTypeID: 11202}}}
+}
+
+func TestCollectKillmailsFromZkill(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	times := map[int]time.Time{1: now.AddDate(0, 0, -1), 2: now.AddDate(0, 0, -2), 3: now.AddDate(0, 0, -3), 4: now.AddDate(0, -2, 0)}
+
+	collect := func(list []api.ZkbResponse, limits retrieval.KillmailLimits, failing map[int]error, cached ...int) (ids, fetched, stored []int, err error) {
+		esi := DatedESIClient{times: times, cached: map[int]bool{}, mu: &sync.Mutex{}, fetched: &fetched, stored: &stored, failing: failing}
+		for _, id := range cached {
+			esi.cached[id] = true
+		}
+		target := retrieval.IntelTarget{IDNumber: 12345, TypeOfEntity: types.PILOT, Clients: retrieval.CollectionClientPool{
+			ZkillClient: MockZkillClient{killmails: list},
+			ESIClient:   esi,
+		}}
+
+		killmails, err := retrieval.CollectKillmails(target, limits)
+		esi.mu.Lock()
+		defer esi.mu.Unlock()
+		for _, km := range *killmails {
+			ids = append(ids, km.ESIKillmail.KillmailID)
+		}
+		return ids, fetched, stored, err
+	}
+
+	t.Run("killmails zKillboard sent whole are read from it and cached, only one sent in part is fetched from the ESI", func(t *testing.T) {
+		list := []api.ZkbResponse{WholeZkillmail(1, times[1]), {KillmailID: 2}, WholeZkillmail(3, times[3])}
+
+		ids, fetched, stored, err := collect(list, retrieval.KillmailLimits{Max: retrieval.AllKillmails}, nil)
+
+		assert.NoError(t, err)
+		assert.Equal(t, []int{1, 2, 3}, ids)
+		assert.Equal(t, []int{2}, fetched)
+		assert.Equal(t, []int{1, 3}, stored)
+	})
+
+	t.Run("the cache's copy is used before zKillboard's, and not stored again", func(t *testing.T) {
+		list := []api.ZkbResponse{WholeZkillmail(1, times[1]), WholeZkillmail(2, times[2])}
+
+		ids, fetched, stored, err := collect(list, retrieval.KillmailLimits{Max: retrieval.AllKillmails}, nil, 2)
+
+		assert.NoError(t, err)
+		assert.Equal(t, []int{1, 2}, ids)
+		assert.Empty(t, fetched)
+		assert.Equal(t, []int{1}, stored)
+	})
+
+	t.Run("the date limit is read from zKillboard's copies, and those past it are not cached", func(t *testing.T) {
+		list := []api.ZkbResponse{WholeZkillmail(1, times[1]), WholeZkillmail(2, times[2]), WholeZkillmail(4, times[4])}
+
+		ids, fetched, stored, err := collect(list, retrieval.KillmailLimits{Max: retrieval.AllKillmails, NewerThan: now.AddDate(0, 0, -7)}, nil)
+
+		assert.NoError(t, err)
+		assert.Equal(t, []int{1, 2}, ids)
+		assert.Empty(t, fetched)
+		assert.Equal(t, []int{1, 2}, stored)
+	})
+
+	t.Run("after a 429, killmails zKillboard sent whole are still used", func(t *testing.T) {
+		limited := fmt.Errorf("%w: %w", api.ErrRequestFailedToComplete, api.ErrRateLimited)
+		list := []api.ZkbResponse{WholeZkillmail(1, times[1]), {KillmailID: 2}, WholeZkillmail(3, times[3])}
+
+		ids, _, _, err := collect(list, retrieval.KillmailLimits{Max: retrieval.AllKillmails}, map[int]error{2: limited})
+
+		assert.ErrorIs(t, err, api.ErrRateLimited)
+		assert.Equal(t, []int{1, 3}, ids)
+	})
+}
+
+func TestCollectKillmailsPaging(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+
+	paged := func(limits retrieval.KillmailLimits) api.ZkillPaging {
+		var paging api.ZkillPaging
+		target := CreateTarget(MockZkillClient{paging: &paging}, MockESIClient{})
+		_, err := retrieval.CollectKillmails(target, limits)
+		assert.NoError(t, err)
+		return paging
+	}
+
+	t.Run("a max count pages until that many are listed, as far as zKillboard serves", func(t *testing.T) {
+		assert.Equal(t, api.ZkillPaging{Killmails: 5000, MaxPages: api.ZKILL_MAX_PAGES}, paged(retrieval.KillmailLimits{Max: 5000, Pages: 3}))
+	})
+
+	t.Run("all killmails pages as far as Pages, or DefaultKillmailPages", func(t *testing.T) {
+		assert.Equal(t, api.ZkillPaging{MaxPages: 40}, paged(retrieval.KillmailLimits{Max: retrieval.AllKillmails, Pages: 40}))
+		assert.Equal(t, api.ZkillPaging{MaxPages: retrieval.DefaultKillmailPages}, paged(retrieval.KillmailLimits{Max: retrieval.AllKillmails}))
+	})
+
+	t.Run("with IncludeCached a max count still pages to Pages, to find cached killmails beyond it", func(t *testing.T) {
+		assert.Equal(t, api.ZkillPaging{Killmails: 20, MinPages: 4, MaxPages: api.ZKILL_MAX_PAGES}, paged(retrieval.KillmailLimits{Max: 20, Pages: 4, IncludeCached: true}))
+	})
+}
+
+func TestCollectKillmailsWithHoldings(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	hours := func(n int) time.Time { return now.Add(-time.Duration(n) * time.Hour) }
+	holdingCorp := retrieval.TargetGroup{Type: types.CORPORATION, ID: 98000002, Name: "Holding Corp"}
+	holdingAlliance := retrieval.TargetGroup{Type: types.ALLIANCE, ID: 99000003, Name: "Holding Alliance"}
+	zkill := MockZkillClient{byID: map[int][]api.ZkbResponse{
+		99000001: {WholeZkillmail(10, hours(1)), WholeZkillmail(11, hours(4)), WholeZkillmail(12, hours(8))},
+		98000002: {WholeZkillmail(20, hours(2)), WholeZkillmail(11, hours(4)), WholeZkillmail(21, hours(6))},
+		99000003: {WholeZkillmail(30, hours(3))},
+	}}
+	target := func(holdings ...retrieval.TargetGroup) retrieval.IntelTarget {
+		return retrieval.IntelTarget{IDNumber: 99000001, TypeOfEntity: types.ALLIANCE, Holdings: holdings,
+			Clients: retrieval.CollectionClientPool{ZkillClient: zkill, ESIClient: MockESIClient{}}}
+	}
+	collect := func(target retrieval.IntelTarget, limits retrieval.KillmailLimits) (ids []int, via map[int]string, err error) {
+		killmails, err := retrieval.CollectKillmails(target, limits)
+		via = map[int]string{}
+		for _, km := range *killmails {
+			ids = append(ids, km.ESIKillmail.KillmailID)
+			if km.Via != nil {
+				via[km.ESIKillmail.KillmailID] = km.Via.Name
+			}
+		}
+		return ids, via, err
+	}
+
+	t.Run("the holdings' killmails are merged in newest first, each once, one on both lists being the target's", func(t *testing.T) {
+		ids, via, err := collect(target(holdingCorp, holdingAlliance), retrieval.KillmailLimits{Max: retrieval.AllKillmails})
+
+		assert.NoError(t, err)
+		assert.Equal(t, []int{10, 20, 30, 11, 21, 12}, ids)
+		assert.Equal(t, map[int]string{20: "Holding Corp", 21: "Holding Corp", 30: "Holding Alliance"}, via)
+	})
+
+	t.Run("Max and the date limit apply to the merged list", func(t *testing.T) {
+		ids, _, _ := collect(target(holdingCorp, holdingAlliance), retrieval.KillmailLimits{Max: 3})
+		assert.Equal(t, []int{10, 20, 30}, ids)
+
+		ids, _, _ = collect(target(holdingCorp, holdingAlliance), retrieval.KillmailLimits{Max: retrieval.AllKillmails, NewerThan: hours(5)})
+		assert.Equal(t, []int{10, 20, 30, 11}, ids)
+	})
+
+	t.Run("with holdings each list's progress says whose it is", func(t *testing.T) {
+		var asked []string
+		recording := target(holdingCorp)
+		recording.Expanded = &retrieval.Alliance{AllianceID: 99000001, Name: "Main Alliance"}
+		recording.Clients.ZkillClient = forClient{MockZkillClient: zkill, asked: &asked}
+
+		_, _, err := collect(recording, retrieval.KillmailLimits{Max: retrieval.AllKillmails})
+
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"Main Alliance (main)", "holding Holding Corp"}, asked)
+	})
+
+	t.Run("lists zKillboard sent without times are merged by killmail id", func(t *testing.T) {
+		untimed := target(holdingCorp)
+		untimed.Clients.ZkillClient = MockZkillClient{byID: map[int][]api.ZkbResponse{
+			99000001: CreateZkillmails(30, 10),
+			98000002: CreateZkillmails(40, 20),
+		}}
+
+		ids, via, err := collect(untimed, retrieval.KillmailLimits{Max: 3})
+
+		assert.NoError(t, err)
+		assert.Equal(t, []int{40, 30, 20}, ids, "the holding's newest are not left behind the target's whole list")
+		assert.Equal(t, map[int]string{40: "Holding Corp", 20: "Holding Corp"}, via)
+	})
+
+	t.Run("without holdings only the target's list is used", func(t *testing.T) {
+		ids, via, err := collect(target(), retrieval.KillmailLimits{Max: retrieval.AllKillmails})
+
+		assert.NoError(t, err)
+		assert.Equal(t, []int{10, 11, 12}, ids)
+		assert.Empty(t, via)
+	})
+
+	t.Run("a holding's list failing still uses what was listed, and says which holding", func(t *testing.T) {
+		failing := target(holdingCorp)
+		failingZkill := zkill
+		failingZkill.errByID = map[int]error{98000002: api.ErrOnlyPartialZkillPull}
+		failing.Clients.ZkillClient = failingZkill
+
+		ids, _, err := collect(failing, retrieval.KillmailLimits{Max: retrieval.AllKillmails})
+
+		assert.ErrorIs(t, err, api.ErrOnlyPartialZkillPull)
+		assert.ErrorContains(t, err, "Holding Corp")
+		assert.Equal(t, []int{10, 20, 11, 21, 12}, ids)
+	})
+}
+
+// forClient records whose list each zKillboard pull says it is
+type forClient struct {
+	MockZkillClient
+	asked *[]string
+}
+
+func (f forClient) GetZkillResults(entityId int, entityType types.EntityType, paging api.ZkillPaging) (*[]api.ZkbResponse, error) {
+	*f.asked = append(*f.asked, paging.For)
+	return f.MockZkillClient.GetZkillResults(entityId, entityType, paging)
+}
+
+func TestCollectKillmailsCacheLookups(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+
+	lookedUp := func(limits retrieval.KillmailLimits) []int {
+		var fetched, lookups []int
+		esi := DatedESIClient{times: map[int]time.Time{}, cached: map[int]bool{}, mu: &sync.Mutex{}, fetched: &fetched, lookups: &lookups}
+		target := CreateTarget(MockZkillClient{killmails: CreateZkillmails(1, 2, 3, 4, 5)}, MockESIClient{})
+		target.Clients.ESIClient = esi
+		_, err := retrieval.CollectKillmails(target, limits)
+		assert.NoError(t, err)
+		return lookups
+	}
+
+	t.Run("only the killmails within Max are looked up in the cache", func(t *testing.T) {
+		assert.Equal(t, []int{1, 2}, lookedUp(retrieval.KillmailLimits{Max: 2}))
+	})
+
+	t.Run("with IncludeCached every listed killmail is", func(t *testing.T) {
+		assert.Equal(t, []int{1, 2, 3, 4, 5}, lookedUp(retrieval.KillmailLimits{Max: 2, IncludeCached: true}))
+	})
+}
+
+func TestCollectKillmailsESILimit(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+
+	over := retrieval.MaxESIKillmails + 5
+	ids := make([]int, over)
+	for index := range ids {
+		ids[index] = index + 1
+	}
+	// entries zKillboard sent without their killmails, each needing the ESI
+	target := CreateTarget(MockZkillClient{killmails: CreateZkillmails(ids...)}, MockESIClient{})
+
+	killmails, err := retrieval.CollectKillmails(target, retrieval.KillmailLimits{Max: retrieval.AllKillmails})
+
+	assert.ErrorIs(t, err, retrieval.ErrTooManyESIKillmails)
+	assert.ErrorIs(t, err, retrieval.ErrIncompleteKillmails)
+	assert.Len(t, *killmails, retrieval.MaxESIKillmails, "the rest are skipped")
 }

@@ -80,17 +80,18 @@ Parameters:
   - skipKilled: also leave out every ally the target killed one of on these killmails, its Killed above 0
 
 Returns:
-  - []AllyActivity: the top allies, every alliance before the corporations in none, then most shared kills first,
-    ties broken by the most unique days, then the most pilots, then by name. Empty when there are none.
+  - AllyRanking: the top allies, how many allies the target also killed, and the kills each ignored ally was on
 */
-func GetTopAllies(limit int, killmails []*retrieval.Killmail, target *retrieval.IntelTarget, ignored map[AllyKey]bool, skipKilled bool) []AllyActivity {
+func GetTopAllies(limit int, killmails []*retrieval.Killmail, target *retrieval.IntelTarget, ignored map[AllyKey]bool, skipKilled bool) AllyRanking {
 	allies := map[types.EntityType]map[int]*AllyActivity{types.ALLIANCE: {}, types.CORPORATION: {}}
 	type key = AllyKey
 	killed := map[key]int{} // the target's kills by the victim's alliance, or corp in none
+	ignoredKillmails := map[key]int{}
 
 	for _, km := range killmails {
 		ownAlliance, ownCorp, attacked := targetGroupOnKill(km, target)
-		if !attacked {
+		// a loss of the target's is no kill, even with its own pilots among the attackers, ie an awox or a holding's pilot killed
+		if !attacked || IsTargetLoss(target, km) {
 			continue
 		}
 		if victim := km.Victim; victim != nil {
@@ -114,7 +115,15 @@ func GetTopAllies(limit int, killmails []*retrieval.Killmail, target *retrieval.
 			if (ally.Alliance != nil && ally.Alliance.AllianceID == ownAlliance) || (ally.Alliance == nil && ally.Corporation.CorporationID == ownCorp) {
 				continue
 			}
+			// a corp or alliance target and its holdings are all its own, whichever of them was found first on the kill
+			if target.IsGroup(groupIDs(attacker.CorpAtKill, attacker.AllianceAtKill)) {
+				continue
+			}
 			if ignored[key{ally.Type(), ally.ID()}] {
+				if !onThisKillmail[ally.Type()][ally.ID()] {
+					onThisKillmail[ally.Type()][ally.ID()] = true
+					ignoredKillmails[key{ally.Type(), ally.ID()}]++
+				}
 				continue
 			}
 
@@ -136,11 +145,15 @@ func GetTopAllies(limit int, killmails []*retrieval.Killmail, target *retrieval.
 	// unique days by ally, counted once rather than in every comparison
 	ranked := []AllyActivity{}
 	days := map[key]int{}
+	killedAllies := 0
 	for _, byID := range allies {
 		for _, ally := range byID {
 			ally.Killed = killed[key{ally.Type(), ally.ID()}]
-			if skipKilled && ally.Killed > 0 {
-				continue
+			if ally.Killed > 0 {
+				killedAllies++
+				if skipKilled {
+					continue
+				}
 			}
 			ranked = append(ranked, *ally)
 			days[key{ally.Type(), ally.ID()}] = ally.UniqueDays()
@@ -166,7 +179,14 @@ func GetTopAllies(limit int, killmails []*retrieval.Killmail, target *retrieval.
 		return cmp.Compare(a.Name(), b.Name())
 	})
 
-	return ranked[:min(limit, len(ranked))]
+	return AllyRanking{Top: ranked[:min(limit, len(ranked))], KilledAllies: killedAllies, IgnoredKillmails: ignoredKillmails}
+}
+
+// AllyRanking is what GetTopAllies finds
+type AllyRanking struct {
+	Top              []AllyActivity  // the top allies
+	KilledAllies     int             // how many allies, not ignored, the target also killed, whether or not skipKilled left them out
+	IgnoredKillmails map[AllyKey]int // the target's kills each ignored ally was on, those on none left out
 }
 
 /*
@@ -183,10 +203,8 @@ func targetGroupOnKill(km *retrieval.Killmail, target *retrieval.IntelTarget) (a
 		switch target.TypeOfEntity {
 		case types.PILOT:
 			attacked = attacker.Pilot != nil && !attacker.Pilot.NPC && attacker.Pilot.CharacterID == target.IDNumber
-		case types.CORPORATION:
-			attacked = corp != nil && corp.CorporationID == target.IDNumber
-		case types.ALLIANCE:
-			attacked = alliance != nil && alliance.AllianceID == target.IDNumber
+		case types.CORPORATION, types.ALLIANCE:
+			attacked = target.IsGroup(groupIDs(corp, alliance))
 		}
 		if !attacked {
 			continue
@@ -200,4 +218,45 @@ func targetGroupOnKill(km *retrieval.Killmail, target *retrieval.IntelTarget) (a
 		return allianceID, corporationID, true
 	}
 	return 0, 0, false
+}
+
+/*
+	HoldingKillsTogether counts, for each of a corp or alliance target's holdings, the target's kills where pilots of the target itself and of the holding were both attackers.
+	The target's losses, internal ones too, are no kills.
+
+Parameters:
+  - killmails: the expanded killmails from CollectedData
+  - target: a CORPORATION or ALLIANCE target, its own Holdings not counted as itself here
+  - holdings: the holdings to count, whether or not their killmails were collected
+
+Returns:
+  - map[AllyKey]int: the kills together by holding, those with none left out
+*/
+func HoldingKillsTogether(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, holdings []retrieval.TargetGroup) map[AllyKey]int {
+	main := retrieval.IntelTarget{IDNumber: target.IDNumber, TypeOfEntity: target.TypeOfEntity}
+	counts := map[AllyKey]int{}
+	for _, km := range killmails {
+		if IsTargetLoss(target, km) {
+			continue
+		}
+		mainOn := false
+		on := map[AllyKey]bool{}
+		for _, attacker := range km.Attackers {
+			corporationID, allianceID := groupIDs(attacker.CorpAtKill, attacker.AllianceAtKill)
+			if main.IsGroup(corporationID, allianceID) {
+				mainOn = true
+			}
+			for _, holding := range holdings {
+				if holding.Includes(corporationID, allianceID) {
+					on[AllyKey{Type: holding.Type, ID: holding.ID}] = true
+				}
+			}
+		}
+		if mainOn {
+			for key := range on {
+				counts[key]++
+			}
+		}
+	}
+	return counts
 }

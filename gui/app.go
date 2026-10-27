@@ -60,6 +60,8 @@ type TargetResult struct {
 	Type     string            `json:"type"`
 	Display  api.TargetDisplay `json:"display"`
 	Holdings *Holdings         `json:"holdings"` // a corp or alliance target's holding links, nil for pilots and systems
+	// the holding that was searched for, when the search went to its main instead, empty otherwise
+	SearchedHolding string `json:"searchedHolding,omitempty"`
 }
 
 // IntelReport holds everything built from a target's killmails. New killmail based sections are added here so a single pull feeds them all.
@@ -74,13 +76,17 @@ type IntelReport struct {
 	Corporations []CorporationSummary `json:"corporations"` // a system target's most active corporations
 	Allies       []AllySummary        `json:"allies"`       // a pilot, corp, or alliance target's most common alliances and corps on its kills, outside its own alliance
 	// the allies the user chose to leave out of this target's Allies, see SaveIgnoredAllies
-	IgnoredAllies []retrieval.IgnoredAlly `json:"ignoredAllies"`
-	Systems       []SystemSummary         `json:"systems"`
-	Capitals      []CapitalShip           `json:"capitals"`   // a corp or alliance target's capital ships and the members who flew them
-	PIPilots      []PIPilot               `json:"piPilots"`   // a system target's pilots who lost haulers near its planets, or ships with PI aboard
-	Ratters       []Ratter                `json:"ratters"`    // a system target's pilots who lost ships with NPCs on the killmail
-	MemberList    bool                    `json:"memberList"` // a corp or alliance target has a Members tab, its rows come from GetMembers
-	Sources       string                  `json:"sources"`    // where the search's data came from, ie "9748 hits from cache, 1763 from the ESI; zKillboard live", for the frontend's summary line
+	IgnoredAllies []IgnoredAllySummary `json:"ignoredAllies"`
+	// how many allies the target also killed, which the Hide killed allies preference leaves out of Allies
+	KilledAllies int `json:"killedAllies"`
+	// a corp or alliance target's holdings, with the kills each shared with it, for the line at the top of Allies
+	Holdings   []HoldingActivity `json:"holdings"`
+	Systems    []SystemSummary   `json:"systems"`
+	Capitals   []CapitalShip     `json:"capitals"`   // a corp or alliance target's capital ships and the members who flew them
+	PIPilots   []PIPilot         `json:"piPilots"`   // a system target's pilots who lost haulers near its planets, or ships with PI aboard
+	Ratters    []Ratter          `json:"ratters"`    // a system target's pilots who lost ships with NPCs on the killmail
+	MemberList bool              `json:"memberList"` // a corp or alliance target has a Members tab, its rows come from GetMembers
+	Sources    string            `json:"sources"`    // where the search's data came from, ie "9748 hits from cache, 1763 from the ESI; zKillboard live", for the frontend's summary line
 }
 
 // CapitalShip is a capital ship type a corp or alliance target's pilots flew, and who flew it
@@ -100,6 +106,8 @@ type CapitalPilot struct {
 	CorporationIcon string `json:"corporationIcon"`
 	AllianceIcon    string `json:"allianceIcon"`
 	Left            bool   `json:"left"` // no longer in the target's alliance, see aggregate.HasLeftTarget
+	ZkillURL        string `json:"zkillUrl"`
+	EveWhoURL       string `json:"evewhoUrl"`
 }
 
 // SystemSummary is the frontend representation of a system the target's killmails happened in
@@ -126,7 +134,7 @@ type KillmailCard struct {
 	ID                int       `json:"id"`
 	URL               string    `json:"url"`
 	Time              time.Time `json:"time"`
-	Outcome           string    `json:"outcome"` // kill or loss from the target's side, empty for a system target
+	Outcome           string    `json:"outcome"` // kill, loss, or internal (the target's own killed it, see aggregate.IsInternal) from the target's side, empty for a system target
 	Solo              bool      `json:"solo"`
 	TotalValue        float64   `json:"totalValue"`
 	DroppedValue      float64   `json:"droppedValue"` // value of what actually dropped from the victim
@@ -150,6 +158,7 @@ type KillmailCard struct {
 	FinalBlowCorpIcon     string `json:"finalBlowCorpIcon"`
 	FinalBlowAllianceIcon string `json:"finalBlowAllianceIcon"`
 	AttackerCount         int    `json:"attackerCount"`
+	Via                   string `json:"via,omitempty"` // the holding whose killmail list it came from, empty when it is on the target's own
 }
 
 // CorporationSummary is the frontend representation of a corporation active on the target's killmails
@@ -297,6 +306,43 @@ func (a *App) saveCache() {
 	}
 }
 
+// lookupTarget finds a target by name and type, returning the user readable reason when it can not
+func (a *App) lookupTarget(name string, entityType types.EntityType) (retrieval.IntelTarget, api.TargetEntity, error) {
+	comm.ReportProgress("Looking up %s %s", strings.ToLower(entityType.String()), name)
+
+	target := retrieval.IntelTarget{Name: name, Clients: a.clients}
+	target.GetTargetInfoOfType(entityType)
+
+	if target.Error != nil {
+		comm.Logger.WithError(target.Error).Warnf("Search for %s failed", name)
+		return target, nil, errors.New(target.DisplayMessage)
+	}
+
+	entity, ok := target.Data.(api.TargetEntity)
+	if !ok {
+		return target, nil, fmt.Errorf("No details available for %s", name)
+	}
+	return target, entity, nil
+}
+
+/*
+holdingMain finds the main a corp or alliance target is a holding of, while the Include holdings preference is on.
+With more than one, the first by name is used. A main that is itself a holding is not followed further.
+*/
+func (a *App) holdingMain(target *retrieval.IntelTarget) (retrieval.HoldingLink, bool) {
+	if !a.GetSettings().IncludeHoldings || !canHold(target.TypeOfEntity.String()) {
+		return retrieval.HoldingLink{}, false
+	}
+	_, heldFor := a.cache.HoldingLinks(target.TypeOfEntity.String(), target.IDNumber)
+	if len(heldFor) == 0 {
+		return retrieval.HoldingLink{}, false
+	}
+	if len(heldFor) > 1 {
+		comm.ReportProgress("%s is a holding of %d mains, using %s", heldFor[0].HoldingName, len(heldFor), heldFor[0].MainName)
+	}
+	return heldFor[0], true
+}
+
 /*
 	SearchTarget looks up a pilot, corporation, alliance, or system by name and builds its display values
 
@@ -331,19 +377,21 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 	}
 
 	lookupsBefore := a.cache.Counts()
-	comm.ReportProgress("Looking up %s %s", strings.ToLower(searchType), name)
-
-	target := retrieval.IntelTarget{Name: name, Clients: a.clients}
-	target.GetTargetInfoOfType(entityType)
-
-	if target.Error != nil {
-		comm.Logger.WithError(target.Error).Warnf("Search for %s failed", name)
-		return result, errors.New(target.DisplayMessage)
+	target, entity, err := a.lookupTarget(name, entityType)
+	if err != nil {
+		return result, err
 	}
 
-	entity, ok := target.Data.(api.TargetEntity)
-	if !ok {
-		return result, fmt.Errorf("No details available for %s", name)
+	// a holding is searched as its main, which collects the holding's killmails with its own
+	searchedHolding := ""
+	if main, found := a.holdingMain(&target); found {
+		comm.ReportProgress("%s is a holding of %s, searching %s with its holdings", main.HoldingName, main.MainName, main.MainName)
+		if mainTarget, mainEntity, mainErr := a.lookupTarget(main.MainName, searchTypes[main.MainType]); mainErr == nil {
+			target, entity, searchedHolding = mainTarget, mainEntity, main.HoldingName
+			searchType = main.MainType
+		} else {
+			comm.ReportProgress("Could not look up %s (%s), searching %s itself", main.MainName, mainErr, main.HoldingName)
+		}
 	}
 
 	comm.ReportProgress("Loading %s details", strings.ToLower(target.TypeOfEntity.String()))
@@ -374,9 +422,10 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 	a.cache.AddRecentSearch(retrieval.RecentSearch{Name: foundName, Type: searchType}, a.GetSettings().MaxRecentSearches)
 
 	result = TargetResult{
-		ID:      target.IDNumber,
-		Type:    target.TypeOfEntity.String(),
-		Display: display,
+		ID:              target.IDNumber,
+		Type:            target.TypeOfEntity.String(),
+		Display:         display,
+		SearchedHolding: searchedHolding,
 	}
 	if canHold(result.Type) {
 		holdings := a.holdingsFor(result.Type, result.ID)
@@ -431,11 +480,14 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		target.Expanded = a.cache.ExpandSystem(targetID)
 	}
 
-	limits := a.GetSettings().KillmailLimits(time.Now().UTC())
-	limits.ConfirmOverLimit = a.confirmLargeFetch
+	settings := a.GetSettings()
+	if settings.IncludeHoldings {
+		target.Holdings = a.targetHoldings(&target)
+	}
+	limits := settings.KillmailLimits(time.Now().UTC())
 	limits.ConfirmIgnoreDate = a.confirmIgnoreDate(limits.NewerThan)
 	killmails, collectErr := retrieval.CollectKillmails(target, limits)
-	// the frontend has already shown the rate limit warning, the report is built from the killmails collected before it
+	// the frontend has already shown the rate limit warning, the report is built from the killmails collected without the ESI
 	rateLimited := errors.Is(collectErr, api.ErrRateLimited)
 	if collectErr != nil {
 		comm.Logger.WithError(collectErr).Warnf("Continuing with %d collected killmails", len(*killmails))
@@ -486,7 +538,8 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 	if entityType != types.SYSTEM {
 		comm.ReportProgress("Ranking allies")
 		a.lastAllies = &alliesSource{target: target, killmails: collected.Killmails}
-		report.Allies, report.IgnoredAllies = a.rankAllies(a.lastAllies)
+		report.Allies, report.IgnoredAllies, report.KilledAllies = a.rankAllies(a.lastAllies)
+		report.Holdings = a.holdingActivity(a.lastAllies)
 		comm.ReportProgress("Ranking systems")
 		report.Systems = buildSystemSummaries(aggregate.GetMostVisitedSystems(systemLimit, collected.SystemsVisted), collected.Killmails, &target)
 	}
@@ -559,7 +612,8 @@ func buildCapitalShips(capitals []aggregate.CapitalShipPilots, target *retrieval
 	for _, capital := range capitals {
 		ship := CapitalShip{ID: capital.Ship.ItemID, Name: capital.Ship.Name, ImageURL: api.TypeImageURL(capital.Ship.ItemID), Pilots: []CapitalPilot{}}
 		for _, pilot := range capital.Pilots {
-			capitalPilot := CapitalPilot{ID: pilot.CharacterID, Name: pilot.Name, Left: aggregate.HasLeftTarget(pilot, target)}
+			capitalPilot := CapitalPilot{ID: pilot.CharacterID, Name: pilot.Name, Left: aggregate.HasLeftTarget(pilot, target),
+				ZkillURL: api.ZkillEntityURL(types.PILOT, pilot.CharacterID), EveWhoURL: api.EveWhoURL(types.PILOT, pilot.CharacterID)}
 			if corp := pilot.Corporation; corp != nil {
 				capitalPilot.Corporation, capitalPilot.Alliance = groupNames(corp, corp.Alliance)
 				capitalPilot.CorporationIcon, capitalPilot.AllianceIcon = groupIcons(corp, corp.Alliance)
@@ -585,6 +639,9 @@ func buildKillmailCards(killmails []*retrieval.Killmail, target *retrieval.Intel
 			DroppedValue:  km.DroppedValue,
 			Labels:        km.Labels,
 			AttackerCount: len(km.Attackers),
+		}
+		if km.Via != nil {
+			card.Via = km.Via.Name
 		}
 
 		if km.System != nil {
@@ -631,6 +688,8 @@ func killmailOutcome(target *retrieval.IntelTarget, km *retrieval.Killmail) stri
 	switch {
 	case target.TypeOfEntity == types.SYSTEM:
 		return ""
+	case aggregate.IsInternal(target, km):
+		return "internal"
 	case aggregate.IsTargetLoss(target, km):
 		return "loss"
 	default:

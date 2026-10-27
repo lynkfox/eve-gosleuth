@@ -114,15 +114,17 @@ func GetTopPilots(limit int, pilots map[int]PilotSeen) []PilotSeen {
 	return rankPilots(limit, players)
 }
 
-// FlewFor returns true if the pilot was in the target corporation or alliance on any collected killmail
+// FlewFor returns true if the pilot was in the target corporation or alliance, or one of its holdings, on any collected killmail
 func (p PilotSeen) FlewFor(target *retrieval.IntelTarget) bool {
-	switch target.TypeOfEntity {
-	case types.CORPORATION:
-		_, found := p.CorporationsAtKill[target.IDNumber]
-		return found
-	case types.ALLIANCE:
-		_, found := p.AlliancesAtKill[target.IDNumber]
-		return found
+	for corporationID := range p.CorporationsAtKill {
+		if target.IsGroup(corporationID, 0) {
+			return true
+		}
+	}
+	for allianceID := range p.AlliancesAtKill {
+		if target.IsGroup(0, allianceID) {
+			return true
+		}
 	}
 	return false
 }

@@ -477,19 +477,21 @@ function holdingChip(entity, isHolding) {
 }
 
 // openHoldingDialog opens the add holding popup for the shown target, or with editing set, the popup for that holding's note
-function openHoldingDialog(editing = null) {
+function openHoldingDialog(editing = null, prefill = null) {
   if (!shownTarget) return;
   el("holding-title").textContent = editing ? "Edit holding note" : "Add holding";
   el("holding-main").textContent = `For ${searchTypeLabel(shownTarget.type)}: ${shownTarget.name}`;
-  el("holding-type").value = editing ? editing.type : "ALLIANCE";
-  el("holding-name").value = editing ? editing.name : "";
+  // an ally added from its menu comes with its type and name, leaving the note to write
+  const given = editing || prefill;
+  el("holding-type").value = given ? given.type : "ALLIANCE";
+  el("holding-name").value = given ? given.name : "";
   el("holding-note").value = editing ? editing.note : "";
   el("holding-type").disabled = Boolean(editing);
   el("holding-name").disabled = Boolean(editing);
   el("holding-error").hidden = true;
   el("holding-save").disabled = false;
   el("holding-dialog").showModal();
-  (editing ? el("holding-note") : el("holding-name")).focus();
+  (given ? el("holding-note") : el("holding-name")).focus();
 }
 
 // saveHolding saves the popup's holding for the shown target, keeping the popup open with the reason if it can not
@@ -633,7 +635,7 @@ function renderMemberRow(member) {
     row.className = "member-left";
     row.title = "Has left the corp";
   }
-  return row;
+  return withEntityMenu(row, { type: "PILOT", name: member.name, zkillUrl: member.zkillUrl, evewhoUrl: member.evewhoUrl });
 }
 
 // renderMemberCorpRow is one of an alliance's corporations: logo, name to search for, member count, and time in the alliance
@@ -650,7 +652,7 @@ function renderMemberCorpRow(corp) {
   nameCell.append(name);
 
   row.append(avatarCell(corp.name, corp, corp.iconUrl, true), nameCell, textCell(corp.memberCount.toLocaleString("en-US")), textCell(corp.timeInAlliance));
-  return row;
+  return withEntityMenu(row, { type: "CORPORATION", name: corp.name, zkillUrl: corp.zkillUrl, evewhoUrl: corp.evewhoUrl });
 }
 
 // rosterDivider is the line on a corp's Members tab between the members seen on killmails and the rest
@@ -754,7 +756,9 @@ function renderIntelSections(report) {
 
   el("tab-allies").hidden = !report.allies;
   if (report.allies) {
-    renderAllies(report.allies, report.ignoredAllies || []);
+    // a new search hides the allies the target killed again, as the preference says
+    showingKilledAllies = false;
+    renderAllies(report.allies, report.ignoredAllies || [], report.killedAllies || 0, report.holdings || []);
   }
 
   el("tab-corps").hidden = !report.corporations;
@@ -881,7 +885,8 @@ function renderCapitals(capitals) {
 
       const group = groupLine([pilot.corporationIcon, pilot.corporation], [pilot.allianceIcon, pilot.alliance]);
       if (group) item.append(group);
-      return item;
+      // only the pilots under each ship have the menu, not the ship
+      return withEntityMenu(item, { type: "PILOT", name: pilot.name, zkillUrl: pilot.zkillUrl, evewhoUrl: pilot.evewhoUrl });
     }));
 
     ship.append(summary, pilots);
@@ -963,6 +968,7 @@ function lossPilotBlock(pilot, lossRow) {
   count.textContent = `${pilot.losses.length} ${pilot.losses.length === 1 ? "loss" : "losses"}`;
   header.append(portrait, who);
   header.append(hourStrip(pilot.losses.map((loss) => loss.time), "loss", "losses"), count);
+  withEntityMenu(header, { type: "PILOT", name: pilot.name, zkillUrl: pilot.zkillUrl, evewhoUrl: pilot.evewhoUrl });
 
   const losses = document.createElement("ol");
   losses.className = "pi-losses";
@@ -1285,7 +1291,8 @@ const TAB_HELP = {
     "Pilots is how many of their pilots were seen on those kills. NPCs, structures, and pilots in NPC corporations are left out.",
     "Also a victim of the target, in red, counts the target's kills where one of their pilots was the victim: a third party, or a friend shot anyway.",
     "Hide allies the target also killed, in Preferences, leaves out every ally it shot a pilot of.",
-    "Check Ignore and Save ignored to leave an ally out of this target's Allies in every search, the next ally taking its place. Ignored allies are listed under the table, uncheck one and save to bring it back.",
+    "A corp or alliance's holdings are listed above the table, each with the kills its pilots and the target's were on together.",
+    "Right-click an ally and choose Add to Holding to link it as one of the target's holdings, or Ignore to leave it out of this target's Allies in every search, the next ally taking its place. Ignored allies are listed under the table with the kills each shared, the × on one brings it back.",
     UNIQUE_DAYS_HELP,
   ],
   "tab-corps": [
@@ -1687,13 +1694,21 @@ function renderKillmailCard(km) {
     outcome = document.createElement("span");
     outcome.className = "outcome";
     outcome.textContent = km.outcome.toUpperCase();
+    if (km.outcome === "internal") outcome.title = "Every attacker and the victim are this target or its holdings";
   }
 
   // the date goes in the value column directly, not wrapped like its other lines, so it can be its own small label
   const time = document.createElement("span");
   time.className = "killmail-time";
   time.textContent = formatKillmailTime(km.time);
-  const value = column([`Dropped ${formatIsk(km.droppedValue || 0)}`, outcome], "killmail-value");
+  // a killmail collected from one of the target's holdings says which
+  let via = null;
+  if (km.via) {
+    via = document.createElement("span");
+    via.className = "killmail-via";
+    via.textContent = `via ${km.via}`;
+  }
+  const value = column([`Dropped ${formatIsk(km.droppedValue || 0)}`, outcome, via], "killmail-value");
   value.append(time);
 
   // the headings share the top line, with the ship image and each heading's details on the line below
@@ -1823,7 +1838,7 @@ function renderPilotRows(section, pilots) {
     killmailsCell.textContent = mate.killmailsShared;
 
     row.append(avatarCell(mate.name, mate, mate.imageUrl), nameCell, killmailsCell, uniqueDaysCell(mate.uniqueDays, mate.firstTogether, mate.lastTogether));
-    body.append(row);
+    body.append(withEntityMenu(row, { type: "PILOT", name: mate.name, zkillUrl: mate.zkillUrl, evewhoUrl: mate.evewhoUrl }));
   }
 
   el(`${section}-empty`).hidden = pilots.length > 0;
@@ -1843,7 +1858,7 @@ function renderCorporations(corporations) {
     nameCell.append(name, detail);
 
     row.append(avatarCell(corporation.name, corporation, corporation.imageUrl), nameCell, numberCell(corporation.killmails), numberCell(corporation.kills), numberCell(corporation.losses), numberCell(corporation.pilots), uniqueDaysCell(corporation.uniqueDays, corporation.firstSeen, corporation.lastSeen));
-    return row;
+    return withEntityMenu(row, { type: "CORPORATION", name: corporation.name, zkillUrl: corporation.zkillUrl, evewhoUrl: corporation.evewhoUrl });
   });
 
   el("corps-body").replaceChildren(...rows);
@@ -1853,29 +1868,33 @@ function renderCorporations(corporations) {
 // intelTarget is the target whose report is shown, as { id, type }, for actions that save something for it, ie its ignored allies
 let intelTarget = null;
 
-// allyKey names an ally for the ignore checkboxes, ie ALLIANCE:99000001
+// allyKey names an ally, ie ALLIANCE:99000001
 const allyKey = (ally) => `${ally.type}:${ally.id}`;
-// savedIgnoredAllies are the target's ignored allies as last saved, and ignoredAllySelection those checked now, both by allyKey
-let savedIgnoredAllies = new Map();
-let ignoredAllySelection = new Map();
+// ignoredAllies are the target's ignored allies as last saved
+let ignoredAllies = [];
+// showingKilledAllies is true once the user chose to show, for the shown search only, the allies the Hide killed allies preference left out
+let showingKilledAllies = false;
 
 /*
   renderAllies lists the alliances, and corps in no alliance, most often on the target's kills outside its own alliance. Clicking a name offers a search for it.
-  Each row has an Ignore checkbox, and the allies already ignored for the target are listed under the table, checked. Save ignored keeps the checked ones.
+  Right-clicking a row opens its menu, to ignore it for the target or open it. The allies already ignored are listed under the table, with the kills each shared,
+  most first, each with an x to bring it back. First among them, while the Hide killed allies preference is on and the target killed any, a toggle hides or shows those for this search.
 */
-function renderAllies(allies, ignored) {
-  savedIgnoredAllies = new Map(ignored.map((ally) => [allyKey(ally), { type: ally.type, id: ally.id, name: ally.name }]));
-  ignoredAllySelection = new Map(savedIgnoredAllies);
+function renderAllies(allies, ignored, killedAllies, holdings) {
+  ignoredAllies = ignored.map((ally) => ({ type: ally.type, id: ally.id, name: ally.name }));
+  renderAllyHoldings(holdings);
 
   const rows = allies.map((ally) => {
     const row = document.createElement("tr");
+    row.className = "ally-row";
+    row.addEventListener("contextmenu", (event) => openEntityMenu(event, ally, allyMenuExtras(ally)));
 
     const nameCell = document.createElement("td");
     const name = document.createElement("button");
     name.type = "button";
     name.className = "link-button";
     name.textContent = ally.name;
-    name.title = "Search for this";
+    name.title = "Search for this, or right-click for more";
     name.addEventListener("click", () => offerSearch({ type: ally.type, name: ally.name }));
     const detail = document.createElement("div");
     detail.className = "row-detail";
@@ -1889,74 +1908,202 @@ function renderAllies(allies, ignored) {
       nameCell.append(killed);
     }
 
-    const ignoreCell = document.createElement("td");
-    ignoreCell.className = "ally-ignore";
-    ignoreCell.append(allyIgnoreBox(ally));
-
-    row.append(avatarCell(ally.name, ally, ally.imageUrl), nameCell, numberCell(ally.killmails), numberCell(ally.pilots), uniqueDaysCell(ally.uniqueDays, ally.firstSeen, ally.lastSeen), ignoreCell);
+    row.append(avatarCell(ally.name, ally, ally.imageUrl), nameCell, numberCell(ally.killmails), numberCell(ally.pilots), uniqueDaysCell(ally.uniqueDays, ally.firstSeen, ally.lastSeen));
     return row;
   });
 
   el("allies-body").replaceChildren(...rows);
   el("allies-empty").hidden = allies.length > 0;
+  el("allies-hint").hidden = allies.length === 0;
 
-  el("allies-ignored-list").replaceChildren(...ignored.map((ally) => {
-    const label = document.createElement("label");
-    label.className = "allies-ignored-item";
-    label.append(allyIgnoreBox(ally), ally.name);
-    return label;
-  }));
-  el("allies-ignored").hidden = ignored.length === 0;
-  updateAlliesSave();
+  const tags = ignored.map((ally) => leftOutTag(`${ally.name} (${ally.killmails || 0})`, "Stop ignoring", `Stop ignoring ${ally.name} for this target`,
+    () => saveIgnoredAllies(ignoredAllies.filter((other) => allyKey(other) !== allyKey(ally)), `No longer ignoring ${ally.name} for this target`)));
+  if (preferences.hideKilledAllies && killedAllies > 0) tags.unshift(killedAlliesToggle(killedAllies));
+  el("allies-ignored-list").replaceChildren(...tags);
+  el("allies-ignored").hidden = tags.length === 0;
 }
 
-// allyIgnoreBox is an ally's Ignore checkbox, checked while it is in ignoredAllySelection
-function allyIgnoreBox(ally) {
-  const box = document.createElement("input");
-  box.type = "checkbox";
-  box.checked = ignoredAllySelection.has(allyKey(ally));
-  box.setAttribute("aria-label", `Ignore ${ally.name} for this target`);
-  box.addEventListener("change", () => {
-    if (box.checked) ignoredAllySelection.set(allyKey(ally), { type: ally.type, id: ally.id, name: ally.name });
-    else ignoredAllySelection.delete(allyKey(ally));
-    updateAlliesSave();
+// renderAllyHoldings fills the line at the top of a corp or alliance's Allies: its holdings, with the kills each shared with it, most first. Each has the right click menu.
+function renderAllyHoldings(holdings) {
+  const parts = [];
+  holdings.forEach((holding, index) => {
+    if (index > 0) parts.push(" · ");
+    const item = document.createElement("span");
+    item.className = "allies-holding";
+    const name = document.createElement("button");
+    name.type = "button";
+    name.className = "link-button";
+    name.textContent = holding.name;
+    name.title = "Search for this, or right-click for more";
+    name.addEventListener("click", () => offerSearch({ type: holding.type, name: holding.name }));
+    const count = document.createElement("span");
+    count.className = "row-detail";
+    count.textContent = ` (${holding.killmails})`;
+    count.title = "Kills with pilots of both the target and this holding on them";
+    item.append(name, count);
+    parts.push(withEntityMenu(item, holding));
   });
-  return box;
+  el("allies-holdings-list").replaceChildren(...parts);
+  el("allies-holdings").hidden = holdings.length === 0;
 }
 
-// updateAlliesSave enables Save ignored only while the checked allies differ from those saved
-function updateAlliesSave() {
-  const changed = ignoredAllySelection.size !== savedIgnoredAllies.size || [...ignoredAllySelection.keys()].some((key) => !savedIgnoredAllies.has(key));
-  el("allies-save").disabled = !changed || !intelTarget;
+// killedAlliesToggle is the tag that hides, as the preference says, or for this search shows, the allies the target also killed
+function killedAlliesToggle(count) {
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "allies-ignored-item allies-killed-tag";
+  toggle.setAttribute("aria-pressed", String(!showingKilledAllies));
+  const state = document.createElement("span");
+  state.className = "allies-killed-state";
+  state.textContent = showingKilledAllies ? "shown" : "hidden";
+  // groups that flew with the target but also lost a pilot to it
+  toggle.append(`“Fair-Weather Friends” (${count})`, state);
+  toggle.title = showingKilledAllies
+    ? "Groups that flew with the target but also had a pilot killed by it, shown for this search. Click to hide them again, as the Hide allies the target also killed preference does."
+    : "Groups that flew with the target but also had a pilot killed by it, hidden by the Hide allies the target also killed preference. Click to show them for this search.";
+  toggle.addEventListener("click", () => rankAlliesAgain(!showingKilledAllies));
+  return toggle;
 }
 
-// rankAlliesAgain shows the target's allies ranked again by the backend, ie after the hide killed allies preference changed
-async function rankAlliesAgain() {
+// leftOutTag is a tag under the Allies table for something left out of them, with an x that brings it back
+function leftOutTag(text, removeTitle, removeLabel, remove) {
+  const item = document.createElement("span");
+  item.className = "allies-ignored-item";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "allies-ignored-remove";
+  button.textContent = "×";
+  button.title = removeTitle;
+  button.setAttribute("aria-label", removeLabel);
+  button.addEventListener("click", remove);
+  item.append(text, button);
+  return item;
+}
+
+// entityMenu is the open right click menu: the target shown when it opened, and its items. null while it is closed.
+let entityMenu = null;
+
+// ENTITY_LINKS are the site links a right click menu offers, for those the entity has
+const ENTITY_LINKS = [["zkillUrl", "Open on zKillboard"], ["evewhoUrl", "Open on EveWho"], ["dotlanUrl", "Open on Dotlan"]];
+
+/*
+  openEntityMenu opens the right click menu for a pilot, corp, alliance, or system where it was right-clicked, kept on screen. Opened from the keyboard, it opens under the element.
+  entity is { type, name, zkillUrl, evewhoUrl, dotlanUrl }, links without a url are left out. extras are items above Search and the links,
+  { label, action, disabled, forTarget }: one forTarget does nothing once another target's report is shown.
+*/
+function openEntityMenu(event, entity, extras = []) {
+  event.preventDefault();
+  event.stopPropagation();
+  const items = [...extras];
+  if (extras.length > 0) items.push(null); // a line between the target's actions and the rest
+  items.push({ label: `Search for ${entity.name}`, action: () => offerSearch({ type: entity.type, name: entity.name }) });
+  for (const [key, label] of ENTITY_LINKS) {
+    if (entity[key]) items.push({ label, action: () => window.runtime.BrowserOpenURL(entity[key]) });
+  }
+
+  const menu = el("entity-menu");
+  menu.replaceChildren(...items.map((item) => {
+    if (!item) {
+      const line = document.createElement("div");
+      line.className = "context-menu-separator";
+      line.setAttribute("role", "separator");
+      return line;
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "context-menu-item";
+    button.setAttribute("role", "menuitem");
+    button.textContent = item.label;
+    button.disabled = Boolean(item.disabled);
+    button.addEventListener("click", () => runEntityMenuItem(item));
+    return button;
+  }));
+  entityMenu = { target: intelTarget };
+
+  menu.hidden = false;
+  let x = event.clientX;
+  let y = event.clientY;
+  if (!x && !y) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    x = rect.left + 24;
+    y = rect.bottom;
+  }
+  menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - menu.offsetWidth - 4))}px`;
+  menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - menu.offsetHeight - 4))}px`;
+  const first = menu.querySelector(".context-menu-item:not(:disabled)");
+  if (first) first.focus();
+}
+
+function closeEntityMenu() {
+  el("entity-menu").hidden = true;
+  entityMenu = null;
+}
+
+// runEntityMenuItem closes the menu and runs the item, unless it is for a target no longer shown
+function runEntityMenuItem(item) {
+  const shown = entityMenu && entityMenu.target === intelTarget;
+  closeEntityMenu();
+  if (shown || !item.forTarget) item.action();
+}
+
+// withEntityMenu gives an element, ie a tab's row, the right click menu for the entity it shows
+function withEntityMenu(element, entity) {
+  element.addEventListener("contextmenu", (event) => openEntityMenu(event, entity));
+  return element;
+}
+
+// allyMenuExtras are an Allies row's own menu items: adding it as a holding of a corp or alliance target, and ignoring it for the target
+function allyMenuExtras(ally) {
+  const extras = [];
+  const holdingTarget = intelTarget && shownTarget && intelTarget.id === shownTarget.id && intelTarget.type === shownTarget.type
+    && (intelTarget.type === "CORPORATION" || intelTarget.type === "ALLIANCE");
+  if (holdingTarget) {
+    extras.push({ label: "Add to Holding", forTarget: true, action: () => openHoldingDialog(null, { type: ally.type, name: ally.name }) });
+  }
+  extras.push({
+    label: `Ignore ${ally.name} for this target`,
+    forTarget: true,
+    disabled: !intelTarget,
+    action: () => {
+      if (ignoredAllies.some((other) => allyKey(other) === allyKey(ally))) return;
+      saveIgnoredAllies([...ignoredAllies, { type: ally.type, id: ally.id, name: ally.name }], `Ignoring ${ally.name} for this target`);
+    },
+  });
+  return extras;
+}
+
+// rankAlliesAgain shows the target's allies ranked again by the backend, ie after the hide killed allies preference changed. showKilled shows, for this search only, those it left out.
+async function rankAlliesAgain(showKilled = showingKilledAllies) {
   if (!intelTarget || !intelReport || !intelReport.allies) return;
   const target = intelTarget;
-  const update = await runBackend(() => backend().RankAllies(target.id, target.type));
+  const wasShowing = showingKilledAllies;
+  const update = await runBackend(() => backend().RankAllies(target.id, target.type, showKilled));
   // a new search may have started meanwhile
   if (!update || !update.allies || intelTarget !== target) return;
+  showingKilledAllies = showKilled;
   intelReport.allies = update.allies;
   intelReport.ignoredAllies = update.ignoredAllies;
-  renderAllies(intelReport.allies, intelReport.ignoredAllies);
+  intelReport.killedAllies = update.killedAllies;
+  intelReport.holdings = update.holdings;
+  renderAllies(intelReport.allies, intelReport.ignoredAllies, intelReport.killedAllies, intelReport.holdings || []);
+  if (showKilled !== wasShowing) tickerPush(showKilled ? "Showing the “Fair-Weather Friends” for this search" : "Hiding the “Fair-Weather Friends” again");
 }
 
-// saveIgnoredAllies saves the checked allies as the target's ignored ones, then shows its allies ranked again without them
-async function saveIgnoredAllies() {
+// saveIgnoredAllies saves the target's ignored allies at once, then shows its allies ranked again with them left out
+async function saveIgnoredAllies(ignored, message) {
   if (!intelTarget || !intelReport) return;
-  el("allies-save").disabled = true;
   const target = intelTarget;
-  const update = await runBackend(() => backend().SaveIgnoredAllies(target.id, target.type, [...ignoredAllySelection.values()]));
+  const update = await runBackend(() => backend().SaveIgnoredAllies(target.id, target.type, ignored));
   // a new search may have started while saving
-  if (!update || intelTarget !== target) {
-    updateAlliesSave();
-    return;
+  if (!update || intelTarget !== target) return;
+  if (update.allies) {
+    intelReport.allies = update.allies;
+    intelReport.killedAllies = update.killedAllies;
+    intelReport.holdings = update.holdings;
   }
-  if (update.allies) intelReport.allies = update.allies;
   intelReport.ignoredAllies = update.ignoredAllies;
-  renderAllies(intelReport.allies, intelReport.ignoredAllies);
-  tickerPush(`Saved ${update.ignoredAllies.length} ignored ${update.ignoredAllies.length === 1 ? "ally" : "allies"} for this target`);
+  renderAllies(intelReport.allies, intelReport.ignoredAllies, intelReport.killedAllies || 0, intelReport.holdings || []);
+  tickerPush(message);
 }
 
 const MONTH_ABBREVIATIONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -2086,7 +2233,7 @@ function renderSystems(systems) {
     nameCell.append(name, detail);
 
     row.append(avatarCell(system.name, system, ""), nameCell, numberCell(system.killmails), numberCell(system.kills), numberCell(system.losses), uniqueDaysCell(system.uniqueDays, system.firstSeen, system.lastSeen));
-    return row;
+    return withEntityMenu(row, { type: "SYSTEM", name: system.name, zkillUrl: system.zkillUrl, dotlanUrl: system.dotlanUrl });
   });
 
   el("systems-body").replaceChildren(...rows);
@@ -2298,6 +2445,8 @@ async function search(event) {
       return;
     }
     renderTarget(target);
+    // a holding is searched as its main, with the main's holdings
+    if (target.searchedHolding) setStatus(`${target.searchedHolding} is a holding of ${target.display.Name}, so this is ${target.display.Name}'s search, with its holdings.`);
     // SearchTarget cached the found target as a recent search
     loadRecentSearches();
     if (stopRequested) return;
@@ -2332,7 +2481,7 @@ function showReportWarning(report) {
   if (report.stopped) {
     message = `This report was stopped before data collection finished. It is built from the ${count} ${killmails} collected, and some details may be missing.`;
   } else if (report.rateLimited) {
-    message = `The ESI rate limited this search, so this report is built from the ${count} ${killmails} collected before it.`;
+    message = `The ESI rate limited this search, so some killmails or details may be missing from this report of ${count} ${killmails}.`;
   }
   el("report-warning").textContent = message;
   el("report-warning").hidden = !message;
@@ -2481,17 +2630,17 @@ function closeThemesMenu() {
   setMenuOpen(el("themes-button"), el("themes-menu"), false);
 }
 
-// MAX_KILLMAILS is the most killmails zKillboard lists, 10 pages of 200 (api.ZKILL_MAX_KILLMAILS)
-const MAX_KILLMAILS = 2000;
+// MAX_KILLMAILS is the most killmails zKillboard lists, 100 pages of 200 (api.ZKILL_MAX_KILLMAILS)
+const MAX_KILLMAILS = 20000;
+// MAX_KILLMAIL_PAGES is the most zKillboard pages a search for all killmails reads (api.ZKILL_MAX_PAGES)
+const MAX_KILLMAIL_PAGES = 100;
 // ALL_KILLMAILS as the max killmail count collects every killmail zKillboard lists (retrieval.AllKillmails)
 const ALL_KILLMAILS = -1;
-// RATE_LIMIT_KILLMAILS is the most killmails a search fetches from the ESI without asking first (retrieval.MaxUncachedKillmails)
-const RATE_LIMIT_KILLMAILS = 1700;
 // MAX_RECENT_SEARCHES is the most recent searches the search bar can keep (retrieval.MaxRecentSearches)
 const MAX_RECENT_SEARCHES = 25;
 
 // preferences are the saved Preferences window choices, as the backend's Preferences
-let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5, hideKilledAllies: false };
+let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailPages: 10, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5, hideKilledAllies: false, includeHoldings: true };
 
 // applySettings sets the saved theme and preferences on the app
 function applySettings(settings) {
@@ -2500,11 +2649,13 @@ function applySettings(settings) {
   preferences = {
     includeZkillLabels: Boolean(settings.includeZkillLabels),
     maxKillmails: settings.maxKillmails || 20,
+    killmailPages: settings.killmailPages || 10,
     killmailsNewerThanDays: settings.killmailsNewerThanDays || 0,
     useCachedKillmails: Boolean(settings.useCachedKillmails),
     timeZone: settings.timeZone === "local" ? "local" : "eve",
     maxRecentSearches: settings.maxRecentSearches || 5,
     hideKilledAllies: Boolean(settings.hideKilledAllies),
+    includeHoldings: settings.includeHoldings !== false,
   };
   showKillmailLabels = preferences.includeZkillLabels;
   redrawIntel();
@@ -2519,30 +2670,33 @@ function redrawIntel() {
 function fillPreferencesForm(chosen) {
   el("pref-zkill-labels").checked = chosen.includeZkillLabels;
   el("pref-max-killmails").value = String(chosen.maxKillmails);
+  el("pref-killmail-pages").value = String(chosen.killmailPages);
+  showKillmailPagesUsed();
   el("pref-killmail-age").value = String(chosen.killmailsNewerThanDays);
   el("pref-use-cached").checked = chosen.useCachedKillmails;
   el("pref-time-zone").value = chosen.timeZone;
   el("pref-max-recent").value = String(chosen.maxRecentSearches);
   el("pref-hide-killed-allies").checked = chosen.hideKilledAllies;
-  showKillmailCountWarning();
+  el("pref-include-holdings").checked = chosen.includeHoldings;
 }
 
-// showKillmailCountWarning warns in Preferences when the max killmail count, or all of them, is more than a search fetches from the ESI without asking
-function showKillmailCountWarning() {
-  const count = Number(el("pref-max-killmails").value);
-  el("pref-killmail-warning").hidden = !(count === ALL_KILLMAILS || count > RATE_LIMIT_KILLMAILS);
+// showKillmailPagesUsed enables the pages box only while the max killmail count is -1, the only time it is used
+function showKillmailPagesUsed() {
+  el("pref-killmail-pages").disabled = Number(el("pref-max-killmails").value) !== ALL_KILLMAILS;
 }
 
-// preferencesForm reads the Preferences window, the max count as typed (NaN if it is not a number)
+// preferencesForm reads the Preferences window, the numbers as typed (NaN if not a number)
 function preferencesForm() {
   return {
     includeZkillLabels: el("pref-zkill-labels").checked,
     maxKillmails: Number(el("pref-max-killmails").value),
+    killmailPages: Number(el("pref-killmail-pages").value),
     killmailsNewerThanDays: Number(el("pref-killmail-age").value),
     useCachedKillmails: el("pref-use-cached").checked,
     timeZone: el("pref-time-zone").value,
     maxRecentSearches: Number(el("pref-max-recent").value),
     hideKilledAllies: el("pref-hide-killed-allies").checked,
+    includeHoldings: el("pref-include-holdings").checked,
   };
 }
 
@@ -2637,6 +2791,10 @@ async function savePreferences() {
     showPreferencesError(`Max killmail count must be a whole number from 1 to ${MAX_KILLMAILS.toLocaleString("en-US")}, or -1 for all`);
     return;
   }
+  if (!Number.isInteger(chosen.killmailPages) || chosen.killmailPages < 1 || chosen.killmailPages > MAX_KILLMAIL_PAGES) {
+    showPreferencesError(`zKillboard pages for all must be a whole number from 1 to ${MAX_KILLMAIL_PAGES}`);
+    return;
+  }
   if (!Number.isInteger(chosen.maxRecentSearches) || chosen.maxRecentSearches < 1 || chosen.maxRecentSearches > MAX_RECENT_SEARCHES) {
     showPreferencesError(`Recent searches kept must be a whole number from 1 to ${MAX_RECENT_SEARCHES}`);
     return;
@@ -2658,7 +2816,8 @@ async function savePreferences() {
   preferences = chosen;
   showKillmailLabels = chosen.includeZkillLabels;
   redrawIntel();
-  if (alliesChanged) rankAlliesAgain();
+  // a changed preference applies again, hiding the allies the target killed if it is on
+  if (alliesChanged) rankAlliesAgain(false);
   el("preferences").close();
   tickerPush("Preferences saved, killmail limits apply from the next search");
 }
@@ -2735,18 +2894,6 @@ for (const tab of document.querySelectorAll(".tab")) {
 // progress events come from comm.ReportProgress in the Go backend
 window.runtime.EventsOn("progress", (message) => tickerPush(message, true));
 
-// a search that has fetched as many killmails not cached as the ESI's rate limit comfortably allows waits on this: fetch the rest, or stop there
-window.runtime.EventsOn("large-fetch", ({ fetched, remaining }) => {
-  const count = (n) => n.toLocaleString("en-US");
-  el("large-fetch-title").textContent = `This search needs ${count(remaining)} more killmails from the ESI`;
-  el("large-fetch-detail").textContent = `It has fetched ${count(fetched)} killmails that were not cached. Following through on this search may use up the ESI's killmail rate limit, `
-    + `and leave the app unable to pull ESI data for 15 minutes. Stopping here builds the report from the killmails it has.`;
-  el("large-fetch-hold").textContent = `Stop at ${count(fetched)}`;
-  el("large-fetch-all").textContent = `Fetch ${count(remaining)} more`;
-  el("large-fetch-confirm").returnValue = "";
-  el("large-fetch-confirm").showModal();
-});
-el("pref-max-killmails").addEventListener("input", showKillmailCountWarning);
 // the newest killmail is older than the date limit in Preferences, so the search would collect none: ignore the limit for this search, or keep it
 window.runtime.EventsOn("date-limit", ({ newest, newerThan }) => {
   el("date-limit-detail").textContent = `The newest killmail for this target is from ${spokenDate(newest)}, older than the date limit of ${spokenDate(newerThan)} set in Preferences, `
@@ -2756,8 +2903,8 @@ window.runtime.EventsOn("date-limit", ({ newest, newerThan }) => {
 });
 
 // SEARCH_PROMPTS are the questions a running search waits on, each answering the backend with the value of its go ahead button
-const SEARCH_PROMPTS = ["large-fetch-confirm", "date-limit-confirm"];
-const PROMPT_YES = { "large-fetch-confirm": "all", "date-limit-confirm": "ignore" };
+const SEARCH_PROMPTS = ["date-limit-confirm"];
+const PROMPT_YES = { "date-limit-confirm": "ignore" };
 for (const id of SEARCH_PROMPTS) {
   el(id).addEventListener("close", () => {
     // Stop has already answered it
@@ -2766,7 +2913,30 @@ for (const id of SEARCH_PROMPTS) {
   });
 }
 el("ticker-stop").addEventListener("click", stopSearch);
-el("allies-save").addEventListener("click", saveIgnoredAllies);
+el("pref-max-killmails").addEventListener("input", showKillmailPagesUsed);
+// the right click menu closes on a click or right click anywhere else, Escape, scrolling, or the window losing focus
+for (const type of ["mousedown", "contextmenu"]) {
+  document.addEventListener(type, (event) => {
+    if (entityMenu && !el("entity-menu").contains(event.target)) closeEntityMenu();
+  }, true);
+}
+document.addEventListener("scroll", () => { if (entityMenu) closeEntityMenu(); }, true);
+window.addEventListener("blur", () => { if (entityMenu) closeEntityMenu(); });
+window.addEventListener("resize", () => { if (entityMenu) closeEntityMenu(); });
+el("entity-menu").addEventListener("keydown", (event) => {
+  const items = [...el("entity-menu").querySelectorAll(".context-menu-item:not(:disabled)")];
+  const at = items.indexOf(document.activeElement);
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeEntityMenu();
+  } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    items[(at + step + items.length) % items.length].focus();
+  } else if (event.key === "Tab") {
+    closeEntityMenu();
+  }
+});
 el("holding-form").addEventListener("submit", (event) => {
   // Save looks the holding up before closing, Cancel and Escape just close
   if (event.submitter && event.submitter.value === "save") {
@@ -2782,10 +2952,10 @@ el("holding-form").addEventListener("keydown", (event) => {
   }
 });
 
-// the ESI answered a 429: the search stops, and its requests are held until the time sent
+// the ESI answered a 429: its requests are held until the time sent, and the search goes on without them
 window.runtime.EventsOn("rate-limited", (until) => {
   const zone = preferences.timeZone === "local" ? "local" : "EVE";
-  el("rate-limited-detail").textContent = `You will need to wait 15 minutes before continuing, until ${clockTime(timeParts(until))} ${zone}. This search's report is built from the killmails collected before it.`;
+  el("rate-limited-detail").textContent = `You will need to wait 15 minutes before continuing, until ${clockTime(timeParts(until))} ${zone}. Killmails this search needed from the ESI are skipped, and names it could not look up are shown as unknown.`;
   if (!el("rate-limited").open) el("rate-limited").showModal();
 });
 

@@ -745,6 +745,9 @@ body.help-popped .tab-help .tab-help-popup { display: none; }
 
 .killmail.loss { border-left-color: var(--error); }
 
+/* the target's own killed it, so it is neither a kill nor quite a loss to an enemy */
+.killmail.internal { border-left-color: var(--muted); }
+
 .killmail:hover { outline: 1px solid var(--border); }
 
 .killmail:focus-visible { outline: 1px solid var(--accent); }
@@ -829,6 +832,13 @@ body.help-popped .tab-help .tab-help-popup { display: none; }
 }
 
 .loss .outcome { color: var(--error); }
+.internal .outcome { color: var(--muted); }
+
+/* the holding a killmail was collected from, under its outcome */
+.killmail-via {
+  font-size: 11px;
+  font-style: italic;
+}
 
 /* zKillboard tags on a killmail card, on their own row under the columns */
 .killmail-tags {
@@ -1054,7 +1064,6 @@ button.danger {
 
 .preference-help { display: block; color: var(--muted); font-size: 12px; }
 
-.preference-warning { margin: 0 0 -6px; color: var(--error); font-size: 12px; }
 
 .window-body { display: grid; gap: 14px; }
 
@@ -1669,9 +1678,7 @@ tr.roster-divider td {
 /* Allies tab: an ally the target also killed */
 .ally-killed { color: var(--error); }
 
-.ally-ignore { width: 1%; text-align: center; }
-.ally-ignore input,
-.allies-ignored-item input { margin: 0; accent-color: var(--accent); }
+.allies-hint { margin: 8px 0 0; }
 
 /* the allies already ignored for the target, under the table */
 .allies-ignored {
@@ -1687,18 +1694,79 @@ tr.roster-divider td {
 .allies-ignored-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  padding: 1px 2px 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   font-size: 13px;
+}
+
+.allies-ignored-remove {
+  padding: 0 5px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* the toggle for the allies the target killed, in the theme's accent while they are hidden, dashed and faded while shown for this search */
+.allies-killed-tag {
+  gap: 6px;
+  padding: 1px 8px;
+  background: none;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 400;
   cursor: pointer;
 }
 
-.allies-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 12px;
+.allies-killed-tag[aria-pressed="false"] {
+  border-style: dashed;
+  opacity: 0.7;
 }
+
+.allies-killed-tag:hover,
+.allies-killed-tag:focus-visible { opacity: 1; background: var(--panel); }
+
+.allies-killed-state {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.allies-ignored-remove:hover,
+.allies-ignored-remove:focus-visible { color: var(--text); }
+
+/* a right click menu, placed by the page where it was opened */
+.context-menu {
+  position: fixed;
+  min-width: 200px;
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 5px 10px;
+  background: none;
+  border-radius: 4px;
+  color: var(--text);
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.context-menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+/* Allies tab: the target's holdings above the table */
+.allies-holdings { margin: 0 0 10px; }
+
+.context-menu-item:hover:not(:disabled),
+.context-menu-item:focus-visible { background: var(--panel); }
 
 /* Ratters tab: the PI rows, with a wider tag for how sure a ratting loss is */
 .rat-loss { grid-template-columns: 210px minmax(0, 1fr) minmax(0, 1fr) auto 3em; }

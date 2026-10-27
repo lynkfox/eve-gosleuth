@@ -10,10 +10,12 @@ import (
 type RawKillmail struct {
 	ESIKillmail *api.ESIKillmail
 	Zkillmail   *api.ZkbResponse
+	Via         *TargetGroup // the holding whose list it came from, nil when it is on the target's own list
 }
 
 type Killmail struct {
 	KillmailID     int
+	Via            *TargetGroup // the holding whose list it came from, nil when it is on the target's own list
 	Hash           string
 	KillmailTime   time.Time
 	System         *System

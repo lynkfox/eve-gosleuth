@@ -1,7 +1,10 @@
 package gui
 
 import (
+	"cmp"
 	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/aggregate"
@@ -31,25 +34,94 @@ const allyLimit = 10
 
 // alliesSource is what a search's Allies are ranked from
 type alliesSource struct {
-	target    retrieval.IntelTarget
-	killmails []*retrieval.Killmail
+	target     retrieval.IntelTarget
+	killmails  []*retrieval.Killmail
+	showKilled bool // the user chose to show, for this search only, the allies the Hide killed allies preference leaves out
 }
 
 // AlliesUpdate is the Allies tab after SaveIgnoredAllies: the allies ranked again, and the ones left out
 type AlliesUpdate struct {
-	Allies        []AllySummary           `json:"allies"` // nil when the saved target is not the last one searched, so there is nothing to rank again
-	IgnoredAllies []retrieval.IgnoredAlly `json:"ignoredAllies"`
+	Allies        []AllySummary        `json:"allies"` // nil when the saved target is not the last one searched, so there is nothing to rank again
+	IgnoredAllies []IgnoredAllySummary `json:"ignoredAllies"`
+	KilledAllies  int                  `json:"killedAllies"` // how many allies the target also killed, which the Hide killed allies preference leaves out
+	Holdings      []HoldingActivity    `json:"holdings"`     // a corp or alliance target's holdings, with the kills each shared with it
 }
 
-// rankAllies ranks a search's allies without those the user ignored for its target, returning them and the ignored. The caller must hold a.mu.
-func (a *App) rankAllies(source *alliesSource) ([]AllySummary, []retrieval.IgnoredAlly) {
+// HoldingActivity is one of a corp or alliance target's holdings, for the line at the top of its Allies, with the kills its pilots and the target's were on together
+type HoldingActivity struct {
+	Type      string `json:"type"` // ALLIANCE or CORPORATION
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	ImageURL  string `json:"imageUrl"`
+	ZkillURL  string `json:"zkillUrl"`
+	EveWhoURL string `json:"evewhoUrl"`
+	Killmails int    `json:"killmails"`
+}
+
+// holdingActivity lists a corp or alliance target's holdings with the kills each shared with it in a search, most first, then by name. Pilots have none.
+func (a *App) holdingActivity(source *alliesSource) []HoldingActivity {
+	holdings := a.targetHoldings(&source.target)
+	together := aggregate.HoldingKillsTogether(source.killmails, &source.target, holdings)
+	activity := []HoldingActivity{}
+	for _, holding := range holdings {
+		activity = append(activity, HoldingActivity{
+			Type:      holding.Type.String(),
+			ID:        holding.ID,
+			Name:      holding.Name,
+			ImageURL:  api.EntityImageURL(holding.Type, holding.ID),
+			ZkillURL:  api.ZkillEntityURL(holding.Type, holding.ID),
+			EveWhoURL: api.EveWhoURL(holding.Type, holding.ID),
+			Killmails: together[aggregate.AllyKey{Type: holding.Type, ID: holding.ID}],
+		})
+	}
+	slices.SortFunc(activity, func(a, b HoldingActivity) int {
+		if byKillmails := cmp.Compare(b.Killmails, a.Killmails); byKillmails != 0 {
+			return byKillmails
+		}
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
+	return activity
+}
+
+// IgnoredAllySummary is an ally ignored for the target, with the target's kills it was on in the shown search
+type IgnoredAllySummary struct {
+	retrieval.IgnoredAlly
+	Killmails int `json:"killmails"`
+}
+
+// ignoredAllySummaries pairs the ignored allies with the kills each was on, most first, then by name
+func ignoredAllySummaries(ignored []retrieval.IgnoredAlly, killmails map[aggregate.AllyKey]int) []IgnoredAllySummary {
+	summaries := []IgnoredAllySummary{}
+	for _, ally := range ignored {
+		summaries = append(summaries, IgnoredAllySummary{IgnoredAlly: ally, Killmails: killmails[aggregate.AllyKey{Type: searchTypes[ally.Type], ID: ally.ID}]})
+	}
+	slices.SortFunc(summaries, func(a, b IgnoredAllySummary) int {
+		if byKillmails := cmp.Compare(b.Killmails, a.Killmails); byKillmails != 0 {
+			return byKillmails
+		}
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
+	return summaries
+}
+
+/*
+	rankAllies ranks a search's allies without those the user ignored for its target, nor with the Hide killed allies preference those it killed,
+	unless the user chose to show them for this search. The caller must hold a.mu.
+
+Returns:
+  - []AllySummary: the top allies
+  - []IgnoredAllySummary: the allies ignored for the target, with the kills each was on, most first
+  - int: how many allies the target also killed, whether or not they were left out
+*/
+func (a *App) rankAllies(source *alliesSource) ([]AllySummary, []IgnoredAllySummary, int) {
 	ignored := a.cache.IgnoredAlliesFor(source.target.TypeOfEntity.String(), source.target.IDNumber)
 	// a holding is the same group as the target, so it is left out like the target's own alliance
 	skip := a.holdingAllies(&source.target)
 	for _, ally := range ignored {
 		skip[aggregate.AllyKey{Type: searchTypes[ally.Type], ID: ally.ID}] = true
 	}
-	return buildAllySummaries(aggregate.GetTopAllies(allyLimit, source.killmails, &source.target, skip, a.GetSettings().HideKilledAllies)), ignored
+	ranking := aggregate.GetTopAllies(allyLimit, source.killmails, &source.target, skip, a.GetSettings().HideKilledAllies && !source.showKilled)
+	return buildAllySummaries(ranking.Top), ignoredAllySummaries(ignored, ranking.IgnoredKillmails), ranking.KilledAllies
 }
 
 /*
@@ -58,20 +130,23 @@ func (a *App) rankAllies(source *alliesSource) ([]AllySummary, []retrieval.Ignor
 Parameters:
   - targetID: the target's eve id
   - targetType: PILOT, CORPORATION, or ALLIANCE, as in TargetResult.Type
+  - showKilled: show the allies the Hide killed allies preference leaves out, for this search only. Later rankings of it, ie after SaveIgnoredAllies, keep the choice.
 
 Returns:
   - AlliesUpdate: the target's allies and ignored allies. Allies is nil when the target is not the last one searched.
 */
-func (a *App) RankAllies(targetID int, targetType string) (update AlliesUpdate, err error) {
+func (a *App) RankAllies(targetID int, targetType string, showKilled bool) (update AlliesUpdate, err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	defer recoverAsError(&err)
 
 	if source := a.lastAllies; source != nil && source.target.IDNumber == targetID && source.target.TypeOfEntity.String() == targetType {
-		update.Allies, update.IgnoredAllies = a.rankAllies(source)
+		source.showKilled = showKilled
+		update.Allies, update.IgnoredAllies, update.KilledAllies = a.rankAllies(source)
+		update.Holdings = a.holdingActivity(source)
 		return update, nil
 	}
-	update.IgnoredAllies = a.cache.IgnoredAlliesFor(targetType, targetID)
+	update.IgnoredAllies = ignoredAllySummaries(a.cache.IgnoredAlliesFor(targetType, targetID), nil)
 	return update, nil
 }
 
@@ -104,9 +179,10 @@ func (a *App) SaveIgnoredAllies(targetID int, targetType string, ignored []retri
 	a.cache.SetIgnoredAllies(targetType, targetID, kept)
 	a.saveCache()
 
-	update.IgnoredAllies = kept
+	update.IgnoredAllies = ignoredAllySummaries(kept, nil)
 	if source := a.lastAllies; source != nil && source.target.IDNumber == targetID && source.target.TypeOfEntity.String() == targetType {
-		update.Allies, update.IgnoredAllies = a.rankAllies(source)
+		update.Allies, update.IgnoredAllies, update.KilledAllies = a.rankAllies(source)
+		update.Holdings = a.holdingActivity(source)
 	}
 	return update, nil
 }

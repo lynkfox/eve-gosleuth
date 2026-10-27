@@ -14,6 +14,7 @@ import (
 
 	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm"
+	"github.com/lynkfox/go_eve_sleuth/comm/types"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -83,7 +84,7 @@ func TestZkbResponse(t *testing.T) {
 func TestGetZillPage(t *testing.T) {
 	comm.InitLogger(logrus.DebugLevel)
 
-	t.Run("less than 200 killmails returned on a page", func(t *testing.T) {
+	t.Run("a page short of 200 ends the list", func(t *testing.T) {
 
 		// Create a mocked ZkillConnection
 		mock := CreateMockZkillResponse(1)
@@ -100,6 +101,26 @@ func TestGetZillPage(t *testing.T) {
 		assert.NotNil(t, result)
 		assert.Equal(t, 1, len(*allZkillmails))
 		assert.Equal(t, 122312802, (*allZkillmails)[0].KillmailID)
+		assert.Equal(t, 9999, result)
+	})
+
+	t.Run("a nearly full page 1 goes on, as zKillboard holds back the newest killmails, but a nearly full page 2 does not", func(t *testing.T) {
+		result, err := api.ZkillConnection{Client: CreateMockZkillResponse(198)}.GetZkillPage("characterID/12345", 1, &[]api.ZkbResponse{})
+		assert.NoError(t, err)
+		assert.Equal(t, 2, result)
+
+		result, err = api.ZkillConnection{Client: CreateMockZkillResponse(198)}.GetZkillPage("characterID/12345", 2, &[]api.ZkbResponse{})
+		assert.NoError(t, err)
+		assert.Equal(t, 9999, result)
+	})
+
+	t.Run("an empty page ends the list", func(t *testing.T) {
+		allZkillmails := &[]api.ZkbResponse{}
+
+		result, err := api.ZkillConnection{Client: CreateMockZkillResponse(0)}.GetZkillPage("characterID/12345", 3, allZkillmails)
+
+		assert.NoError(t, err)
+		assert.Empty(t, *allZkillmails)
 		assert.Equal(t, 9999, result)
 	})
 
@@ -139,20 +160,29 @@ func TestGetZillPage(t *testing.T) {
 func CreateMockZkillResponse(numberOfKillmails int) *MockApiClient {
 	singleKillmail := `{ "killmail_id": 122312802, "zkb": { "locationID": 40251268, "hash": "3d9d091bbd20eb655bf2c57c3f6524237d86a3b2", "fittedValue": 21919076.03, "droppedValue": 5919.74, "destroyedValue": 32100856.29, "totalValue": 32106776.03, "points": 1, "npc": false, "solo": false, "awox": false, "labels": [ "cat:6", "#:5+", "pvp", "loc:nullsec" ] } }`
 	var zkillMockResponse string
+	if numberOfKillmails == 0 {
+		return mockZkillPage("[]")
+	}
 	manyKillmails := strings.Repeat(strings.Join([]string{singleKillmail, ", "}, ""), numberOfKillmails-1)
 	if numberOfKillmails > 1 {
 		zkillMockResponse = strings.Join([]string{"[", manyKillmails, singleKillmail, "]"}, " ")
 	} else {
 		zkillMockResponse = strings.Join([]string{"[", singleKillmail, "]"}, " ")
 	}
-	// zkill responses are gzip encoded
-	var gzipped bytes.Buffer
-	gzipWriter := gzip.NewWriter(&gzipped)
-	gzipWriter.Write([]byte(zkillMockResponse))
-	gzipWriter.Close()
+	return mockZkillPage(zkillMockResponse)
+}
 
-	r := io.NopCloser(&gzipped)
-	// Create a mocked ZkillConnection
+// gzipped encodes a body the way zkill responses are
+func gzipped(body string) io.ReadCloser {
+	var buffer bytes.Buffer
+	gzipWriter := gzip.NewWriter(&buffer)
+	gzipWriter.Write([]byte(body))
+	gzipWriter.Close()
+	return io.NopCloser(&buffer)
+}
+
+// mockZkillPage answers one request with the page as zKillboard would send it
+func mockZkillPage(page string) *MockApiClient {
 	return &MockApiClient{
 		Method:   "GET",
 		Endpoint: "zkill.com/api",
@@ -160,11 +190,170 @@ func CreateMockZkillResponse(numberOfKillmails int) *MockApiClient {
 		Called:   0,
 		response: &http.Response{
 			StatusCode: 200,
-			Body:       r,
+			Body:       gzipped(page),
 		},
 		err: nil,
 	}
+}
 
+// pagesClient answers each request with the next of its pages, then with empty pages. failAt is a request, from 1, answered with an error.
+type pagesClient struct {
+	api.APIClient
+	pages  []string
+	calls  int
+	failAt int
+}
+
+func (p *pagesClient) Request(method, endpoint string, body interface{}) (*http.Response, error) {
+	if p.calls+1 == p.failAt {
+		p.calls++
+		return nil, fmt.Errorf("%w: %w", api.ErrRequestFailedToComplete, &api.StatusError{Host: "zkillboard.com", Status: http.StatusBadGateway})
+	}
+	page := "[]"
+	if p.calls < len(p.pages) {
+		page = p.pages[p.calls]
+	}
+	p.calls++
+	return &http.Response{StatusCode: 200, Body: gzipped(page)}, nil
+}
+
+func TestGetZkillResults(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+
+	// idPage is a page of zKillboard entries with the ids from first, counting down
+	idPage := func(first, count int) string {
+		entries := []string{}
+		for id := first; id > first-count; id-- {
+			entries = append(entries, fmt.Sprintf(`{"killmail_id": %d}`, id))
+		}
+		return "[" + strings.Join(entries, ",") + "]"
+	}
+
+	t.Run("a nearly full page 1 goes on to page 2, which ends it short, keeping the first of a killmail listed twice", func(t *testing.T) {
+		client := &pagesClient{pages: []string{idPage(1000, 190), idPage(811, 30)}}
+
+		killmails, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{MaxPages: 10})
+
+		assert.NoError(t, err)
+		assert.Equal(t, 2, client.calls, "the short page 2 ends it, without asking for page 3")
+		assert.Len(t, *killmails, 219, "killmail 811 is on both pages")
+	})
+
+	t.Run("a short list is one request", func(t *testing.T) {
+		client := &pagesClient{pages: []string{idPage(1000, 30)}}
+
+		killmails, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{MaxPages: 10})
+
+		assert.NoError(t, err)
+		assert.Equal(t, 1, client.calls)
+		assert.Len(t, *killmails, 30)
+	})
+
+	t.Run("the page after a short page 1 failing is the end of the list, not a partial pull", func(t *testing.T) {
+		client := &pagesClient{pages: []string{idPage(1000, 190)}, failAt: 2}
+
+		killmails, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{MaxPages: 10})
+
+		assert.NoError(t, err)
+		assert.Len(t, *killmails, 190)
+	})
+
+	t.Run("a page after a full one failing is a partial pull", func(t *testing.T) {
+		client := &pagesClient{pages: []string{idPage(1000, 200)}, failAt: 2}
+
+		killmails, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{MaxPages: 10})
+
+		assert.ErrorIs(t, err, api.ErrOnlyPartialZkillPull)
+		assert.Len(t, *killmails, 200)
+	})
+
+	fullPages := func() *pagesClient {
+		page := func(first int) string {
+			entries := []string{}
+			for id := first; id < first+api.ZKILL_PAGE_SIZE; id++ {
+				entries = append(entries, fmt.Sprintf(`{"killmail_id": %d}`, id))
+			}
+			return "[" + strings.Join(entries, ",") + "]"
+		}
+		return &pagesClient{pages: []string{page(1), page(201), page(401), page(601)}}
+	}
+
+	t.Run("stops once the killmails asked for are listed", func(t *testing.T) {
+		client := fullPages()
+		killmails, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{Killmails: 250, MaxPages: 100})
+
+		assert.NoError(t, err)
+		assert.Equal(t, 2, client.calls)
+		assert.Len(t, *killmails, 400)
+	})
+
+	t.Run("pages at least MinPages, even past the killmails asked for", func(t *testing.T) {
+		client := fullPages()
+		_, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{Killmails: 20, MinPages: 3, MaxPages: 100})
+
+		assert.NoError(t, err)
+		assert.Equal(t, 3, client.calls)
+	})
+
+	t.Run("progress says whose list a page is, when told", func(t *testing.T) {
+		messages := []string{}
+		comm.SetProgressReporter(func(message string) { messages = append(messages, message) })
+		defer comm.SetProgressReporter(nil)
+
+		_, err := api.ZkillConnection{Client: fullPages()}.GetZkillResults(98000002, types.CORPORATION, api.ZkillPaging{MaxPages: 1, For: "holding Holding Corp"})
+
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"Fetching zKillboard page 1 for holding Holding Corp (live, 0 killmails so far)"}, messages)
+	})
+
+	t.Run("never pages past MaxPages", func(t *testing.T) {
+		client := fullPages()
+		killmails, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{MaxPages: 2})
+
+		assert.NoError(t, err)
+		assert.Equal(t, 2, client.calls)
+		assert.Len(t, *killmails, 400)
+	})
+}
+
+func TestZkbResponseKillmail(t *testing.T) {
+	entry := `{"killmail_id": 139460150, "killmail_time": "2026-10-26T21:50:01Z", "solar_system_id": 30000142,
+		"victim": {"character_id": 90000001, "corporation_id": 98000001, "damage_taken": 4200, "ship_type_id": 587,
+			"items": [{"flag": 27, "item_type_id": 2873, "quantity_dropped": 1, "singleton": 0}], "position": {"x": 1, "y": 2, "z": 3}},
+		"attackers": [{"character_id": 90000002, "damage_done": 4200, "final_blow": true, "security_status": -2.5, "ship_type_id": 11202, "weapon_type_id": 2873}],
+		"zkb": {"hash": "b592e632f080697e9e3718a3ddd62348fb6ac5e8"}}`
+
+	t.Run("an entry with the whole killmail gives the ESI killmail", func(t *testing.T) {
+		var zkillmail api.ZkbResponse
+		assert.NoError(t, json.Unmarshal([]byte(entry), &zkillmail))
+
+		killmail := zkillmail.Killmail()
+
+		assert.NotNil(t, killmail)
+		assert.Equal(t, 139460150, killmail.KillmailID)
+		assert.Equal(t, time.Date(2026, 10, 26, 21, 50, 1, 0, time.UTC), killmail.KillmailTime)
+		assert.Equal(t, 30000142, killmail.SolarSystemID)
+		assert.Equal(t, 587, killmail.Victim.ShipTypeID)
+		assert.Equal(t, 90000001, *killmail.Victim.CharacterID)
+		assert.Len(t, killmail.Victim.Items, 1)
+		assert.Equal(t, 3.0, killmail.Victim.Position.Z)
+		assert.Len(t, killmail.Attackers, 1)
+		assert.Equal(t, 2873, *killmail.Attackers[0].WeaponTypeID)
+	})
+
+	t.Run("an entry missing part of the killmail gives none, so the ESI's is fetched", func(t *testing.T) {
+		missing := map[string]string{
+			"no body":      `{"killmail_id": 1, "zkb": {"hash": "abc"}}`,
+			"no attackers": `{"killmail_id": 1, "killmail_time": "2026-10-26T21:50:01Z", "solar_system_id": 30000142, "victim": {"ship_type_id": 587}, "attackers": []}`,
+			"no ship":      `{"killmail_id": 1, "killmail_time": "2026-10-26T21:50:01Z", "solar_system_id": 30000142, "victim": {}, "attackers": [{"ship_type_id": 11202}]}`,
+			"no system":    `{"killmail_id": 1, "killmail_time": "2026-10-26T21:50:01Z", "victim": {"ship_type_id": 587}, "attackers": [{"ship_type_id": 11202}]}`,
+		}
+		for name, body := range missing {
+			var zkillmail api.ZkbResponse
+			assert.NoError(t, json.Unmarshal([]byte(body), &zkillmail))
+			assert.Nil(t, zkillmail.Killmail(), name)
+		}
+	})
 }
 
 // failingFirstClient answers its first request with err, and every later one with the wrapped client

@@ -97,9 +97,9 @@ func TestBuildCapitalShips(t *testing.T) {
 
 		assert.Equal(t, []CapitalShip{{ID: 19722, Name: "Naglfar", ImageURL: "https://images.evetech.net/types/19722/icon?size=64",
 			Pilots: []CapitalPilot{
-				{ID: 2, Name: "Amy", Corporation: "URSA PRIMUS", Alliance: "URSA.", CorporationIcon: "https://images.evetech.net/corporations/98744491/logo?size=32", AllianceIcon: "https://images.evetech.net/alliances/99013330/logo?size=32"},
-				{ID: 1, Name: "zed", Corporation: "Elsewhere Inc.", CorporationIcon: "https://images.evetech.net/corporations/98000009/logo?size=32", Left: true},
-				{ID: 3, Name: api.DELETED_CHARACTER_NAME},
+				{ID: 2, Name: "Amy", Corporation: "URSA PRIMUS", Alliance: "URSA.", CorporationIcon: "https://images.evetech.net/corporations/98744491/logo?size=32", AllianceIcon: "https://images.evetech.net/alliances/99013330/logo?size=32", ZkillURL: "https://zkillboard.com/character/2/", EveWhoURL: "https://evewho.com/character/2"},
+				{ID: 1, Name: "zed", Corporation: "Elsewhere Inc.", CorporationIcon: "https://images.evetech.net/corporations/98000009/logo?size=32", Left: true, ZkillURL: "https://zkillboard.com/character/1/", EveWhoURL: "https://evewho.com/character/1"},
+				{ID: 3, Name: api.DELETED_CHARACTER_NAME, ZkillURL: "https://zkillboard.com/character/3/", EveWhoURL: "https://evewho.com/character/3"},
 			}}}, ships)
 		assert.Equal(t, []CapitalShip{}, buildCapitalShips(nil, target))
 	})

@@ -23,7 +23,7 @@ var USER_AGENT = fmt.Sprintf("eve-gosleuth/%s (+%s)", comm.VERSION, PROJECT_URL)
 
 // ZKILL_PAGE_SIZE is how many killmails a full zKillboard api page holds, and ZKILL_MAX_PAGES how many pages zKillboard serves
 const ZKILL_PAGE_SIZE = 200
-const ZKILL_MAX_PAGES = 10
+const ZKILL_MAX_PAGES = 100
 
 // ZKILL_MAX_KILLMAILS is the most killmails zKillboard lists for one entity
 const ZKILL_MAX_KILLMAILS = ZKILL_PAGE_SIZE * ZKILL_MAX_PAGES

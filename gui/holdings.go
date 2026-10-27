@@ -156,6 +156,21 @@ func (a *App) saveCacheQuietly() {
 	}
 }
 
+// targetHoldings returns a corp or alliance target's holdings, to collect their killmails as its own. Pilots and systems have none.
+func (a *App) targetHoldings(target *retrieval.IntelTarget) []retrieval.TargetGroup {
+	if target.TypeOfEntity != types.CORPORATION && target.TypeOfEntity != types.ALLIANCE {
+		return nil
+	}
+	holdings, _ := a.cache.HoldingLinks(target.TypeOfEntity.String(), target.IDNumber)
+	groups := []retrieval.TargetGroup{}
+	for _, link := range holdings {
+		if holdingType, ok := searchTypes[link.HoldingType]; ok {
+			groups = append(groups, retrieval.TargetGroup{Type: holdingType, ID: link.HoldingID, Name: link.HoldingName})
+		}
+	}
+	return groups
+}
+
 /*
 holdingAllies returns the holdings linked to a target's own groups, either way, which its Allies leave out as the same group.
 Its own groups are, for a pilot their current corp and alliance, for a corp itself and its alliance, and for an alliance itself.

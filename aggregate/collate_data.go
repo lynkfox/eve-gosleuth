@@ -48,20 +48,48 @@ func IsSameGroupAsTarget(target *retrieval.IntelTarget, other_entity any) bool {
 	return false
 }
 
-// IsTargetLoss returns true if the killmail's victim is the target: the pilot itself, or a pilot or structure of the target corp or alliance
+// IsTargetLoss returns true if the killmail's victim is the target: the pilot itself, or a pilot or structure of the target corp or alliance or one of its holdings
 func IsTargetLoss(target *retrieval.IntelTarget, killmail *retrieval.Killmail) bool {
 	victim := killmail.Victim
 
 	switch target.TypeOfEntity {
 	case types.PILOT:
 		return victim.Pilot != nil && victim.Pilot.CharacterID == target.IDNumber
-	case types.CORPORATION:
-		return victim.CorpAtKill != nil && victim.CorpAtKill.CorporationID == target.IDNumber
-	case types.ALLIANCE:
-		return victim.AllianceAtKill != nil && victim.AllianceAtKill.AllianceID == target.IDNumber
+	case types.CORPORATION, types.ALLIANCE:
+		return target.IsGroup(groupIDs(victim.CorpAtKill, victim.AllianceAtKill))
 	}
 
 	return false
+}
+
+/*
+IsInternal returns true if a corp or alliance target, counting its holdings, is the victim and every attacker, ie an awox or the main and a holding fighting.
+Any attacker from outside, an NPC too, leaves it a loss as usual. An internal killmail is still one of the target's losses, but never one of its kills.
+*/
+func IsInternal(target *retrieval.IntelTarget, killmail *retrieval.Killmail) bool {
+	if target.TypeOfEntity != types.CORPORATION && target.TypeOfEntity != types.ALLIANCE {
+		return false
+	}
+	if len(killmail.Attackers) == 0 || !IsTargetLoss(target, killmail) {
+		return false
+	}
+	for _, attacker := range killmail.Attackers {
+		if !target.IsGroup(groupIDs(attacker.CorpAtKill, attacker.AllianceAtKill)) {
+			return false
+		}
+	}
+	return true
+}
+
+// groupIDs returns a corp's and alliance's ids, 0 for one that is nil
+func groupIDs(corp *retrieval.Corporation, alliance *retrieval.Alliance) (corporationID int, allianceID int) {
+	if corp != nil {
+		corporationID = corp.CorporationID
+	}
+	if alliance != nil {
+		allianceID = alliance.AllianceID
+	}
+	return corporationID, allianceID
 }
 
 func IsTarget(target *retrieval.IntelTarget, idNumber int) bool {
@@ -77,8 +105,9 @@ func IsSameCorp(target *retrieval.IntelTarget, other_id_number int) bool {
 			return corp.CorporationID == other_id_number
 		}
 
-	case types.CORPORATION:
-		return target.IDNumber == other_id_number
+	case types.CORPORATION, types.ALLIANCE:
+		// the target corp, or a holding corp of a corp or alliance target
+		return target.IsGroup(other_id_number, 0)
 	}
 
 	return false
@@ -94,12 +123,13 @@ func isSameAlliance(target *retrieval.IntelTarget, other_id_number int) bool {
 
 	case types.CORPORATION:
 		alliance := target.Expanded.(*retrieval.Corporation).Alliance
-		if alliance != nil {
-			return alliance.AllianceID == other_id_number
+		if alliance != nil && alliance.AllianceID == other_id_number {
+			return true
 		}
+		return target.IsGroup(0, other_id_number) // a holding alliance
 
 	case types.ALLIANCE:
-		return target.IDNumber == other_id_number
+		return target.IsGroup(0, other_id_number)
 	}
 
 	return false

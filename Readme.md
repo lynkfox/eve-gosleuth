@@ -38,8 +38,8 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
  * Fits
 
 * Corporation/Alliances
- * History of alliances/corps
  * Fits
 
 * Systems
- * Epithal / Squall killmails and their common times
+ * most recent structure loss
+ * structures found on Killmails that were not subsequently lost (indicating potentially owner)

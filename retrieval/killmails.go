@@ -3,6 +3,7 @@ package retrieval
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/api"
@@ -16,59 +17,86 @@ const DefaultKillmailLimit = 20
 // ErrIncompleteKillmails is returned alongside the killmails that were collected when some could not be retrieved
 var ErrIncompleteKillmails = errors.New("not all killmails could be collected")
 
+// ErrTooManyESIKillmails is wrapped when more killmails than MaxESIKillmails needed the ESI, and the rest were skipped
+var ErrTooManyESIKillmails = errors.New("too many killmails to fetch from the ESI")
+
+/*
+MaxESIKillmails is the most killmails a search fetches from the ESI, those zKillboard sent only in part. zKillboard sends nearly all of them whole,
+so this is only reached if it stops doing so. The ESI's killmail rate limit group has 3600 tokens a 15 minute window and a killmail costs 2,
+so this leaves some for the rest of the search.
+*/
+const MaxESIKillmails = 1700
+
 // KillmailLimits are the Preferences that decide which of a target's killmails are collected
 type KillmailLimits struct {
 	Max           int       // the most killmails to collect from zKillboard's list, newest first, or AllKillmails for every one it lists
 	NewerThan     time.Time // only killmails after this, the zero time for no date limit
 	IncludeCached bool      // also use killmails already in the cache that are beyond Max or NewerThan
-	// ConfirmOverLimit is asked, once MaxUncachedKillmails killmails not cached have been fetched within the other limits, whether to fetch the rest.
-	// It is given how many more not cached are left, and returns false to stop there. nil always stops.
-	ConfirmOverLimit func(remaining int) bool
+	Pages         int       // how many zKillboard pages to list when Max is AllKillmails, and with IncludeCached the fewest to list, 1 to api.ZKILL_MAX_PAGES. 0 is DefaultKillmailPages.
 	// ConfirmIgnoreDate is asked, when the newest killmail is already older than NewerThan, whether to collect without the date limit for this search.
 	// It is given the newest killmail's time, and returns false to keep the limit and collect none. nil always keeps it.
 	ConfirmIgnoreDate func(newest time.Time) bool
 }
 
-/*
-MaxUncachedKillmails is the most killmails a search fetches from the ESI before asking ConfirmOverLimit whether to go on.
-The ESI's killmail rate limit group has 3600 tokens a 15 minute window and a killmail costs 2, so this leaves some for the rest of the search.
-*/
-const MaxUncachedKillmails = 1700
-
-// AllKillmails as KillmailLimits.Max collects every killmail zKillboard lists, up to api.ZKILL_MAX_KILLMAILS, still stopping at NewerThan
+// AllKillmails as KillmailLimits.Max collects every killmail on the first KillmailLimits.Pages pages zKillboard lists, still stopping at NewerThan
 const AllKillmails = -1
+
+// DefaultKillmailPages is how many zKillboard pages of 200 are listed for AllKillmails unless the user sets another number in Preferences
+const DefaultKillmailPages = 10
+
+/*
+paging is how far to page through zKillboard's list for these limits. A max count pages until that many are listed, up to every page zKillboard serves.
+AllKillmails pages to Pages. With IncludeCached, paging goes on to Pages even past the count, so cached killmails beyond it can be found.
+*/
+func (limits KillmailLimits) paging() api.ZkillPaging {
+	pages := limits.Pages
+	if pages <= 0 {
+		pages = DefaultKillmailPages
+	}
+	if limits.Max == AllKillmails {
+		return api.ZkillPaging{MaxPages: pages}
+	}
+	paging := api.ZkillPaging{Killmails: limits.Max, MaxPages: api.ZKILL_MAX_PAGES}
+	if limits.IncludeCached {
+		paging.MinPages = pages
+	}
+	return paging
+}
 
 // DefaultKillmailLimits collects the newest DefaultKillmailLimit killmails of any age
 func DefaultKillmailLimits() KillmailLimits {
 	return KillmailLimits{Max: DefaultKillmailLimit}
 }
 
-// killmailCache is a client that can say whether it already holds a killmail without fetching it, ie CachedEveIDs
+// killmailCache is a client that can say whether it already holds a killmail without fetching it, and keep one it did not fetch, ie CachedEveIDs
 type killmailCache interface {
 	CachedKillmail(killmailID int) *api.ESIKillmail
+	StoreKillmail(killmail *api.ESIKillmail)
 }
 
-// killmailWorkers is how many killmails are fetched from the ESI at once. The api.RateGuard keeps them within the ESI's limits.
+// killmailWorkers is how many killmails zKillboard sent only in part are fetched from the ESI at once. The api.RateGuard keeps them within the ESI's limits.
 const killmailWorkers = 10
 
 /*
-	CollectKillmails pulls the zkill killmail list for the target, then the full ESI killmail for each, newest first, until the limits are reached.
-	Killmails are fetched killmailWorkers at a time and used in list order, so up to killmailWorkers-1 past the NewerThan limit may be fetched, and cached, before it is seen.
+	CollectKillmails pulls the zkill killmail list for the target and reads each killmail from it, newest first, until the limits are reached.
+	zKillboard sends the whole ESI killmail with each entry, which is cached like a fetched one. Only an entry missing part of it, that the cache does not hold,
+	is fetched from the ESI, at most MaxESIKillmails of them. Those are fetched killmailWorkers at a time before the date limit is known,
+	so up to killmailWorkers past NewerThan may be fetched, and cached, before it is seen.
+	Names, pilots, corps, and the rest the killmails refer to are looked up from the ESI afterwards, see PrefetchKillmailEntities.
 
 Parameters:
   - target: the IntelTarget to collect killmails for
-  - limits: how many killmails, and how far back, to collect. With IncludeCached, killmails beyond the limits are still used if they are in the cache, without calling the ESI.
-    After MaxUncachedKillmails not cached, ConfirmOverLimit decides whether to fetch the rest. It is only asked if they are reached before NewerThan.
+  - limits: how many killmails, and how far back, to collect. With IncludeCached, killmails beyond the limits are still used if they are in the cache.
     When even the newest killmail is older than NewerThan, ConfirmIgnoreDate decides whether to drop the date limit for this search.
 
 Returns:
-  - *[]RawKillmail: every killmail that was successfully retrieved from both zkill and the ESI
-  - error: nil, or ErrIncompleteKillmails wrapping the underlying errors if the zkill pull was partial or any ESI killmails were skipped - the collected killmails are still returned.
-    A 429 from the ESI, or a halted api.RateGuard, stops the collection there, wrapping api.ErrRateLimited or api.ErrStopped.
+  - *[]RawKillmail: every killmail that was read from zkill, the cache, or the ESI
+  - error: nil, or ErrIncompleteKillmails wrapping the underlying errors if the zkill pull was partial or any killmail fetched from the ESI was skipped - the collected killmails are still returned.
+    A 429 from the ESI skips the rest of the killmails it was needed for, wrapping api.ErrRateLimited. A halted api.RateGuard stops the collection there, wrapping api.ErrStopped.
+    Those past MaxESIKillmails are skipped too, wrapping ErrTooManyESIKillmails.
 */
 func CollectKillmails(target IntelTarget, limits KillmailLimits) (*[]RawKillmail, error) {
 
-	zkillClient := target.Clients.ZkillClient
 	esiClient := target.Clients.ESIClient
 	cache, _ := esiClient.(killmailCache)
 
@@ -77,7 +105,7 @@ func CollectKillmails(target IntelTarget, limits KillmailLimits) (*[]RawKillmail
 
 	comm.ReportProgress("Fetching killmail list from zKillboard (live, zKillboard is not cached)")
 
-	killmails, err := zkillClient.GetZkillResults(target.IDNumber, target.TypeOfEntity)
+	killmails, via, err := listKillmails(target, limits.paging())
 
 	if err != nil {
 		comm.Logger.WithError(err).Warnf("[Zkill] Only retrieved %d killmails, continuing with partial results", len(*killmails))
@@ -85,90 +113,127 @@ func CollectKillmails(target IntelTarget, limits KillmailLimits) (*[]RawKillmail
 		errs = append(errs, err)
 	}
 
-	// what the cache held before any fetching, so a killmail fetched ahead of the NewerThan limit is not then used as if it had been cached
-	cached := make([]*api.ESIKillmail, len(*killmails))
-	if cache != nil {
-		for index, km := range *killmails {
-			cached[index] = cache.CachedKillmail(km.KillmailID)
-		}
-	}
-
 	total := len(*killmails)
 	if limits.Max != AllKillmails {
 		total = min(total, limits.Max)
 	}
-	// up to the MaxUncachedKillmails-th killmail not cached is fetched first, the rest only once ConfirmOverLimit agrees
-	held := uncachedLimitIndex(cached[:total])
+
+	// what the cache held before any fetching, so a killmail fetched ahead of the NewerThan limit is not then used as if it had been cached.
+	// Only those within Max are looked up, and the rest only to use them from cache.
+	cached := make([]*api.ESIKillmail, len(*killmails))
+	lookedUp := total
+	if limits.IncludeCached {
+		lookedUp = len(*killmails)
+	}
+	if cache != nil {
+		for index := range lookedUp {
+			cached[index] = cache.CachedKillmail((*killmails)[index].KillmailID)
+		}
+	}
+
+	// each killmail is the cache's copy, else zKillboard's, else fetched from the ESI
+	bodies := make([]*api.ESIKillmail, total)
+	fromZkill := make([]bool, total)
+	missing := []api.ZkbResponse{}
+	missingAt := map[int]int{} // a killmail's index in the list, to its index in missing
+	overLimit := 0             // killmails that would need the ESI past MaxESIKillmails, skipped
+	for index := range total {
+		if cached[index] != nil {
+			bodies[index] = cached[index]
+		} else if body := (*killmails)[index].Killmail(); body != nil {
+			bodies[index], fromZkill[index] = body, true
+		} else if len(missing) < MaxESIKillmails {
+			missingAt[index] = len(missing)
+			missing = append(missing, (*killmails)[index])
+		} else {
+			overLimit++
+		}
+	}
+	if overLimit > 0 {
+		comm.ReportProgress("Skipping %d killmails zKillboard sent only in part, past the %d a search fetches from the ESI", overLimit, MaxESIKillmails)
+		errs = append(errs, fmt.Errorf("%w: %d skipped", ErrTooManyESIKillmails, overLimit))
+	}
 	stop := make(chan struct{})
 	defer close(stop)
-	results := fetchKillmails(esiClient, (*killmails)[:held], stop)
+	results := fetchKillmails(esiClient, missing, stop)
 
+	var readCached, readZkill, fetched, rateLimited int
 	beyondLimits := total // where the killmails only used from cache begin
-	for index := 0; index < total; index++ {
+	for index := range total {
 		km := (*killmails)[index]
-		if index == held {
-			remaining := 0
-			for _, found := range cached[held:total] {
-				if found == nil {
-					remaining++
+		killmail := bodies[index]
+
+		if position, found := missingAt[index]; found {
+			result := <-results[position]
+
+			progress := fmt.Sprintf("Killmail details from the ESI %d/%d #%d", position+1, len(missing), km.KillmailID)
+			source := CacheCounts{Fetched: 1}
+			if result.err != nil {
+				progress = fmt.Sprintf("Skipped killmail %d/%d #%d", position+1, len(missing), km.KillmailID)
+				source = CacheCounts{Failed: 1, Reason: api.FailureReason(result.err)}
+			}
+			comm.ReportProgress("%s", source.Annotate(progress))
+
+			// a stopped search sends nothing more, so it ends here
+			if errors.Is(result.err, api.ErrStopped) {
+				comm.ReportProgress("Stopped collecting killmails, continuing with the %d collected", len(allRawKillmails))
+				return &allRawKillmails, fmt.Errorf("%w: %w", ErrIncompleteKillmails, result.err)
+			}
+			// the ESI holds the killmail group for a while after a 429, so every killmail still to fetch fails too. Those zKillboard sent whole are still used.
+			if errors.Is(result.err, api.ErrRateLimited) {
+				if rateLimited == 0 {
+					errs = append(errs, result.err)
 				}
+				rateLimited++
+				continue
 			}
-			if limits.ConfirmOverLimit == nil || !limits.ConfirmOverLimit(remaining) {
-				comm.ReportProgress("Stopped after %d killmails not cached, leaving %d more to stay within the ESI's rate limit", MaxUncachedKillmails, remaining)
-				beyondLimits = held
-				break
+			if result.err != nil {
+				comm.Logger.WithError(result.err).Warnf("[ESI] Skipping killmail %d", km.KillmailID)
+				errs = append(errs, fmt.Errorf("killmail %d: %w", km.KillmailID, result.err))
+				continue
 			}
-			comm.ReportProgress("Fetching %d more killmails not cached, past the ESI's rate limit", remaining)
-			results = append(results, fetchKillmails(esiClient, (*killmails)[held:total], stop)...)
-		}
-		result := <-results[index]
-
-		progress := fmt.Sprintf("Killmail details %d/%d #%d", index+1, total, km.KillmailID)
-		source := CacheCounts{Fetched: 1}
-		if result.err != nil {
-			progress = fmt.Sprintf("Skipped killmail %d/%d #%d", index+1, total, km.KillmailID)
-			source = CacheCounts{Failed: 1, Reason: api.FailureReason(result.err)}
-		} else if cached[index] != nil {
-			source = CacheCounts{Cached: 1}
-		}
-		comm.ReportProgress("%s", source.Annotate(progress))
-
-		// the ESI holds the killmail group for a while after a 429, and a stopped search sends nothing more, so every killmail left would fail too
-		if errors.Is(result.err, api.ErrRateLimited) {
-			comm.ReportProgress("The ESI has rate limited killmail requests, continuing with the %d killmails collected", len(allRawKillmails))
-			return &allRawKillmails, fmt.Errorf("%w: %w", ErrIncompleteKillmails, result.err)
-		}
-		if errors.Is(result.err, api.ErrStopped) {
-			comm.ReportProgress("Stopped collecting killmails, continuing with the %d collected", len(allRawKillmails))
-			return &allRawKillmails, fmt.Errorf("%w: %w", ErrIncompleteKillmails, result.err)
-		}
-		if result.err != nil {
-			comm.Logger.WithError(result.err).Warnf("[ESI] Skipping killmail %d", km.KillmailID)
-			errs = append(errs, fmt.Errorf("killmail %d: %w", km.KillmailID, result.err))
-			continue
+			killmail = result.killmail
+		} else if killmail == nil {
+			continue // past MaxESIKillmails
 		}
 
 		// zKillboard lists newest first, so once one killmail is too old the rest are too. When even the newest is, the date limit may be dropped instead.
-		if !limits.NewerThan.IsZero() && !result.killmail.KillmailTime.After(limits.NewerThan) && len(allRawKillmails) == 0 &&
-			limits.ConfirmIgnoreDate != nil && limits.ConfirmIgnoreDate(result.killmail.KillmailTime) {
+		if !limits.NewerThan.IsZero() && !killmail.KillmailTime.After(limits.NewerThan) && len(allRawKillmails) == 0 &&
+			limits.ConfirmIgnoreDate != nil && limits.ConfirmIgnoreDate(killmail.KillmailTime) {
 			comm.ReportProgress("The newest killmail is older than %s, collecting without the date limit for this search", api.FormatShortDate(limits.NewerThan))
 			limits.NewerThan = time.Time{}
 		}
-		if !limits.NewerThan.IsZero() && !result.killmail.KillmailTime.After(limits.NewerThan) {
+		if !limits.NewerThan.IsZero() && !killmail.KillmailTime.After(limits.NewerThan) {
 			comm.ReportProgress("Reached killmails older than %s", api.FormatShortDate(limits.NewerThan))
 			beyondLimits = index
 			break
 		}
 
-		allRawKillmails = append(allRawKillmails, RawKillmail{Zkillmail: &km, ESIKillmail: result.killmail})
+		switch {
+		case fromZkill[index]:
+			readZkill++
+			if cache != nil {
+				cache.StoreKillmail(killmail)
+			}
+		case cached[index] != nil:
+			readCached++
+		default:
+			fetched++
+		}
+		allRawKillmails = append(allRawKillmails, RawKillmail{Zkillmail: &km, ESIKillmail: killmail, Via: via[index]})
 	}
+
+	if rateLimited > 0 {
+		comm.ReportProgress("The ESI rate limited killmail requests, skipped %d killmails zKillboard sent only in part", rateLimited)
+	}
+	comm.ReportProgress("Killmails read: %d from zKillboard, %d from cache, %d from the ESI", readZkill, readCached, fetched)
 
 	// beyond the limits, only killmails the cache already held are used
 	extraFromCache := 0
 	if limits.IncludeCached {
 		for index := beyondLimits; index < len(*killmails); index++ {
 			if cached[index] != nil {
-				allRawKillmails = append(allRawKillmails, RawKillmail{Zkillmail: &(*killmails)[index], ESIKillmail: cached[index]})
+				allRawKillmails = append(allRawKillmails, RawKillmail{Zkillmail: &(*killmails)[index], ESIKillmail: cached[index], Via: via[index]})
 				extraFromCache++
 			}
 		}
@@ -185,18 +250,87 @@ func CollectKillmails(target IntelTarget, limits KillmailLimits) (*[]RawKillmail
 	return &allRawKillmails, nil
 }
 
-// uncachedLimitIndex is how many of the killmails, from the start of the list, reach the MaxUncachedKillmails-th not cached, or all of them if fewer are not cached
-func uncachedLimitIndex(cached []*api.ESIKillmail) int {
-	uncached := 0
-	for index, km := range cached {
-		if km == nil {
-			uncached++
-			if uncached == MaxUncachedKillmails {
-				return index + 1
+/*
+	listKillmails pulls zKillboard's killmail list for the target, and for each of its Holdings, merged newest first with each killmail once.
+	Each list is newest first, so the newest of the merged list are among the newest of each, and every list is paged alike.
+	A killmail zKillboard sent without its time is sorted by the cache's copy. Should any have no time at all, the list is sorted by killmail id instead,
+	as ids are given out in nearly the order killmails happen.
+
+Parameters:
+  - target: the IntelTarget, with any Holdings
+  - paging: how far to page through each list
+
+Returns:
+  - *[]api.ZkbResponse: the merged list. A killmail on the target's own list and a holding's is the target's.
+  - []*TargetGroup: for each killmail on the list, the holding it was listed for, nil when it is on the target's own list
+  - error: nil, or the zkill pull errors, the lists that were pulled are still merged
+*/
+func listKillmails(target IntelTarget, paging api.ZkillPaging) (*[]api.ZkbResponse, []*TargetGroup, error) {
+	zkillClient := target.Clients.ZkillClient
+	// with holdings the ticker says whose list each page is, as each list starts again from page 1
+	mainPaging := paging
+	if len(target.Holdings) > 0 {
+		mainPaging.For = target.displayName() + " (main)"
+	}
+	killmails, err := zkillClient.GetZkillResults(target.IDNumber, target.TypeOfEntity, mainPaging)
+	if len(target.Holdings) == 0 {
+		return killmails, make([]*TargetGroup, len(*killmails)), err
+	}
+
+	type listed struct {
+		killmail api.ZkbResponse
+		via      *TargetGroup
+		at       time.Time
+	}
+	cache, _ := target.Clients.ESIClient.(killmailCache)
+	merged := []listed{}
+	seen := map[int]bool{}
+	untimed := false
+	add := func(list *[]api.ZkbResponse, via *TargetGroup) {
+		for _, km := range *list {
+			if seen[km.KillmailID] {
+				continue
 			}
+			seen[km.KillmailID] = true
+			at := km.KillmailTime
+			if at.IsZero() && cache != nil {
+				if cachedCopy := cache.CachedKillmail(km.KillmailID); cachedCopy != nil {
+					at = cachedCopy.KillmailTime
+				}
+			}
+			untimed = untimed || at.IsZero()
+			merged = append(merged, listed{killmail: km, via: via, at: at})
 		}
 	}
-	return len(cached)
+
+	errs := []error{}
+	if err != nil {
+		errs = append(errs, err)
+	}
+	add(killmails, nil)
+	for index := range target.Holdings {
+		holding := &target.Holdings[index]
+		comm.ReportProgress("Fetching killmail list for holding %s from zKillboard (live)", holding.Name)
+		holdingPaging := paging
+		holdingPaging.For = "holding " + holding.Name
+		list, err := zkillClient.GetZkillResults(holding.ID, holding.Type, holdingPaging)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("holding %s: %w", holding.Name, err))
+		}
+		add(list, holding)
+	}
+
+	if untimed {
+		slices.SortStableFunc(merged, func(a, b listed) int { return b.killmail.KillmailID - a.killmail.KillmailID })
+	} else {
+		slices.SortStableFunc(merged, func(a, b listed) int { return b.at.Compare(a.at) })
+	}
+	all := make([]api.ZkbResponse, len(merged))
+	via := make([]*TargetGroup, len(merged))
+	for index, entry := range merged {
+		all[index], via[index] = entry.killmail, entry.via
+	}
+	return &all, via, errors.Join(errs...)
 }
 
 // fetchedKillmail is the ESI's answer for one killmail
@@ -263,6 +397,7 @@ func (rkm *RawKillmail) Expand(esiClient *api.ESIClient, cached *CachedEveIDs) *
 		Awox:           rkm.Zkillmail.Zkb.Awox,
 		Position:       &rkm.ESIKillmail.Victim.Position,
 		LocationID:     rkm.Zkillmail.Zkb.LocationID,
+		Via:            rkm.Via,
 	}
 
 	killmail.System = cached.ExpandSystem(rkm.ESIKillmail.SolarSystemID)

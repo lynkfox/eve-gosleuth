@@ -128,21 +128,23 @@
         </div>
 
         <div id="panel-allies" class="tab-panel" role="tabpanel" aria-labelledby="tab-allies" hidden>
+          <!-- a corp or alliance target's holdings, with the kills each shared with it -->
+          <p id="allies-holdings" class="allies-holdings" hidden>
+            <span class="row-detail">Holdings:</span>
+            <span id="allies-holdings-list"></span>
+          </p>
           <table>
             <thead>
-              <tr><th></th><th>Alliance or Corporation</th><th class="num" title="The target's kills they were on">Kills Together</th><th class="num">Pilots</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th><th class="ally-ignore" title="Leave out of this target's Allies in every search, once saved">Ignore</th></tr>
+              <tr><th></th><th>Alliance or Corporation</th><th class="num" title="The target's kills they were on">Kills Together</th><th class="num">Pilots</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
             </thead>
             <tbody id="allies-body"></tbody>
           </table>
           <p id="allies-empty" class="muted" hidden>No alliances or corporations outside the target's alliance were on its kills in the collected killmails.</p>
-          <!-- allies already ignored for this target, checked: unchecking and saving brings them back -->
+          <p id="allies-hint" class="row-detail allies-hint">Right-click an ally to add it to the target's holdings, ignore it for this target, or open it.</p>
+          <!-- what is left out of the allies: those the Hide killed allies preference hid, then those ignored for this target. The x on one brings it back. -->
           <div id="allies-ignored" class="allies-ignored" hidden>
-            <span class="row-detail">Ignored for this target:</span>
+            <span class="row-detail">Left out:</span>
             <span id="allies-ignored-list" class="allies-ignored-list"></span>
-          </div>
-          <div class="allies-actions">
-            <span id="allies-save-note" class="row-detail">Checked allies are left out of this target's Allies in every search, once saved.</span>
-            <button id="allies-save" type="button" disabled>Save ignored</button>
           </div>
         </div>
 
@@ -229,6 +231,9 @@
     <div id="help-window-body" class="window-body help-window-body help-content"></div>
   </dialog>
 
+  <!-- the right click menu of a tab's pilot, corp, alliance, or system, its items built each time it opens -->
+  <div id="entity-menu" class="menu-dropdown context-menu" role="menu" aria-label="Actions" hidden></div>
+
   <dialog id="preferences" class="window" aria-labelledby="preferences-title">
     <div class="window-titlebar">
       <h2 id="preferences-title">Preferences</h2>
@@ -237,12 +242,15 @@
     <div class="window-body">
       <!-- each setting's description is the hover text of its name and the i before it -->
       <h3 class="preference-group">Data Collection</h3>
-      <!-- 1700 is retrieval.MaxUncachedKillmails -->
-      <p id="pref-killmail-warning" class="preference-warning" hidden>Over 1,700 killmails may hit the ESI's rate limit, depending on how many are already cached. A search that fetches 1,700 not cached will ask before fetching more.</p>
       <label class="preference-field">
-        <span class="preference-label" title="1 to 2,000, the most zKillboard lists (10 pages of 200), or -1 for all of them, still only those newer than below"><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Max killmail count</span></span>
-        <!-- 2000 is api.ZKILL_MAX_KILLMAILS and -1 retrieval.AllKillmails, which the backend checks again on save -->
-        <input id="pref-max-killmails" type="number" min="-1" max="2000" step="1">
+        <span class="preference-label" title="1 to 20,000, the most zKillboard lists (100 pages of 200), or -1 for all of them on the pages below, still only those newer than below"><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Max killmail count</span></span>
+        <!-- 20000 is api.ZKILL_MAX_KILLMAILS and -1 retrieval.AllKillmails, which the backend checks again on save -->
+        <input id="pref-max-killmails" type="number" min="-1" max="20000" step="1">
+      </label>
+      <label class="preference-field">
+        <span class="preference-label" title="With a max killmail count of -1, how many zKillboard pages of 200 killmails to read, 1 to 100. Each page is one call to zKillboard, about a second."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">zKillboard pages for all</span></span>
+        <!-- 100 is api.ZKILL_MAX_PAGES, which the backend checks again on save -->
+        <input id="pref-killmail-pages" type="number" min="1" max="100" step="1">
       </label>
       <label class="preference-field">
         <span class="preference-label" title="Only collect killmails from this far back. A search whose newest killmail is older asks whether to ignore it."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Killmails newer than</span></span>
@@ -256,6 +264,10 @@
       <label class="preference">
         <span class="preference-label" title="Also use the target's killmails already in the cache, even if beyond the limits above. They need no ESI calls."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Use Killmails in Cache</span></span>
         <span class="preference-check"><input id="pref-use-cached" type="checkbox"></span>
+      </label>
+      <label class="preference">
+        <span class="preference-label" title="A corp or alliance search also collects the killmails of the holdings linked to it on the target panel, and counts them as its own. Each holding's list is read from zKillboard too."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Include holdings in searches</span></span>
+        <span class="preference-check"><input id="pref-include-holdings" type="checkbox"></span>
       </label>
       <p class="preference-help">Killmail limits apply from the next search.</p>
 
@@ -334,18 +346,6 @@
       <div class="confirm-actions">
         <button class="secondary" value="cancel" autofocus>Cancel</button>
         <button class="danger" value="clear">Clear cache</button>
-      </div>
-    </form>
-  </dialog>
-
-  <!-- raised by a search that has fetched as many killmails as the ESI's rate limit comfortably allows: closing it any other way stops there -->
-  <dialog id="large-fetch-confirm" class="confirm" aria-labelledby="large-fetch-title">
-    <form method="dialog">
-      <p id="large-fetch-title" class="confirm-warning"></p>
-      <p id="large-fetch-detail" class="confirm-detail"></p>
-      <div class="confirm-actions">
-        <button id="large-fetch-hold" class="secondary" value="hold" autofocus></button>
-        <button id="large-fetch-all" class="danger" value="all"></button>
       </div>
     </form>
   </dialog>
