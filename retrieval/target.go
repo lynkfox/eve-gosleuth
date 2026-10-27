@@ -37,15 +37,24 @@ type TargetGroup struct {
 	Name string
 }
 
-// displayName is the target's name as EVE spells it, from its expanded model when it has one
-func (t *IntelTarget) displayName() string {
+/*
+	DisplayName is the target's name as EVE spells it
+
+Returns:
+  - string: the name from its expanded model, else the name searched for, else "the target"
+*/
+func (t *IntelTarget) DisplayName() string {
 	switch expanded := t.Expanded.(type) {
+	case *Pilot:
+		if expanded != nil && expanded.Name != "" {
+			return expanded.Name
+		}
 	case *Corporation:
-		if expanded != nil {
+		if expanded != nil && expanded.Name != "" {
 			return expanded.Name
 		}
 	case *Alliance:
-		if expanded != nil {
+		if expanded != nil && expanded.Name != "" {
 			return expanded.Name
 		}
 	}

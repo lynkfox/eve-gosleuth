@@ -37,17 +37,19 @@ func TestBuildKillmailCardGroups(t *testing.T) {
 
 	card := buildKillmailCards([]*retrieval.Killmail{killmail}, target)[0]
 
-	t.Run("the victim corp has its logo, and no alliance logo when it had no alliance", func(t *testing.T) {
-		assert.Equal(t, "Wormhole Campus", card.VictimCorp)
-		assert.Equal(t, "https://images.evetech.net/corporations/98828090/logo?size=32", card.VictimCorpIcon)
-		assert.Empty(t, card.VictimAlliance)
-		assert.Empty(t, card.VictimAllianceIcon)
+	t.Run("a structure victim has no pilot, its corp has its logo and links, and it has no alliance when it had none", func(t *testing.T) {
+		assert.Equal(t, "Mobile Depot", card.VictimName)
+		assert.Nil(t, card.Victim)
+		assert.Equal(t, &EntityRef{ID: 98828090, Type: "CORPORATION", Name: "Wormhole Campus", IconURL: "https://images.evetech.net/corporations/98828090/logo?size=32",
+			ZkillURL: "https://zkillboard.com/corporation/98828090/", EveWhoURL: "https://evewho.com/corporation/98828090"}, card.VictimCorp)
+		assert.Nil(t, card.VictimAlliance)
 	})
 
-	t.Run("the final blow has its corp and alliance, each with a logo", func(t *testing.T) {
-		assert.Equal(t, []string{"URSA PRIMUS", "URSA."}, []string{card.FinalBlowCorp, card.FinalBlowAlliance})
-		assert.Equal(t, "https://images.evetech.net/corporations/98744491/logo?size=32", card.FinalBlowCorpIcon)
-		assert.Equal(t, "https://images.evetech.net/alliances/99013330/logo?size=32", card.FinalBlowAllianceIcon)
+	t.Run("the final blow has its pilot, corp, and alliance, each with links for the menu", func(t *testing.T) {
+		assert.Equal(t, "https://zkillboard.com/character/2121909368/", card.FinalBlow.ZkillURL)
+		assert.Equal(t, []string{"URSA PRIMUS", "URSA."}, []string{card.FinalBlowCorp.Name, card.FinalBlowAlliance.Name})
+		assert.Equal(t, "https://images.evetech.net/corporations/98744491/logo?size=32", card.FinalBlowCorp.IconURL)
+		assert.Equal(t, "https://images.evetech.net/alliances/99013330/logo?size=32", card.FinalBlowAlliance.IconURL)
 	})
 
 	t.Run("the card shows what actually dropped, not what could have", func(t *testing.T) {
@@ -66,8 +68,8 @@ func TestRowGroupIcons(t *testing.T) {
 	t.Run("fleetmate rows carry their corp and alliance logos from EVE's image server", func(t *testing.T) {
 		fleetmate := buildFleetmates([]aggregate.PilotSeen{{Pilot: &retrieval.Pilot{CharacterID: 2121909368, Name: "Astrid", Corporation: primus}}})[0]
 
-		assert.Equal(t, "https://images.evetech.net/corporations/98744491/logo?size=32", fleetmate.CorporationIcon)
-		assert.Equal(t, "https://images.evetech.net/alliances/99013330/logo?size=32", fleetmate.AllianceIcon)
+		assert.Equal(t, "https://images.evetech.net/corporations/98744491/logo?size=32", fleetmate.Corporation.IconURL)
+		assert.Equal(t, "https://images.evetech.net/alliances/99013330/logo?size=32", fleetmate.Alliance.IconURL)
 	})
 
 	t.Run("corp rows carry their alliance logo, and none when the corp has no alliance", func(t *testing.T) {
@@ -77,8 +79,8 @@ func TestRowGroupIcons(t *testing.T) {
 			{Corporation: &retrieval.Corporation{CorporationID: 98828090, Name: "Wormhole Campus"}, Activity: killmailTime},
 		})
 
-		assert.Equal(t, "https://images.evetech.net/alliances/99013330/logo?size=32", corporations[0].AllianceIcon)
-		assert.Empty(t, corporations[1].AllianceIcon)
+		assert.Equal(t, "https://images.evetech.net/alliances/99013330/logo?size=32", corporations[0].Alliance.IconURL)
+		assert.Nil(t, corporations[1].Alliance)
 	})
 }
 
@@ -97,8 +99,8 @@ func TestBuildCapitalShips(t *testing.T) {
 
 		assert.Equal(t, []CapitalShip{{ID: 19722, Name: "Naglfar", ImageURL: "https://images.evetech.net/types/19722/icon?size=64",
 			Pilots: []CapitalPilot{
-				{ID: 2, Name: "Amy", Corporation: "URSA PRIMUS", Alliance: "URSA.", CorporationIcon: "https://images.evetech.net/corporations/98744491/logo?size=32", AllianceIcon: "https://images.evetech.net/alliances/99013330/logo?size=32", ZkillURL: "https://zkillboard.com/character/2/", EveWhoURL: "https://evewho.com/character/2"},
-				{ID: 1, Name: "zed", Corporation: "Elsewhere Inc.", CorporationIcon: "https://images.evetech.net/corporations/98000009/logo?size=32", Left: true, ZkillURL: "https://zkillboard.com/character/1/", EveWhoURL: "https://evewho.com/character/1"},
+				{ID: 2, Name: "Amy", Corporation: entityRef(types.CORPORATION, 98744491, "URSA PRIMUS"), Alliance: entityRef(types.ALLIANCE, 99013330, "URSA."), ZkillURL: "https://zkillboard.com/character/2/", EveWhoURL: "https://evewho.com/character/2"},
+				{ID: 1, Name: "zed", Corporation: entityRef(types.CORPORATION, 98000009, "Elsewhere Inc."), Left: true, ZkillURL: "https://zkillboard.com/character/1/", EveWhoURL: "https://evewho.com/character/1"},
 				{ID: 3, Name: api.DELETED_CHARACTER_NAME, ZkillURL: "https://zkillboard.com/character/3/", EveWhoURL: "https://evewho.com/character/3"},
 			}}}, ships)
 		assert.Equal(t, []CapitalShip{}, buildCapitalShips(nil, target))
@@ -132,4 +134,23 @@ func TestLabelNames(t *testing.T) {
 
 	assert.Equal(t, map[string]string{"cat:6": "Ship", "cat:65": "Structure"}, names, "a category that can not be looked up is left for the frontend to show by id")
 	assert.Equal(t, 3, lookups, "each category is looked up once")
+}
+
+func TestBuildKillmailCardUnresolvedNames(t *testing.T) {
+	t.Run("a victim, corp, or alliance not looked up yet gets no ref, so the card's menu has no empty sections", func(t *testing.T) {
+		killmail := &retrieval.Killmail{
+			KillmailID: 1,
+			Victim: &retrieval.KillmailVictim{
+				Pilot:          &retrieval.Pilot{CharacterID: 2121909368},
+				CorpAtKill:     &retrieval.Corporation{},
+				AllianceAtKill: &retrieval.Alliance{AllianceID: 99013330},
+			},
+		}
+
+		card := buildKillmailCards([]*retrieval.Killmail{killmail}, &retrieval.IntelTarget{TypeOfEntity: types.SYSTEM})[0]
+
+		assert.Nil(t, card.Victim)
+		assert.Nil(t, card.VictimCorp)
+		assert.Nil(t, card.VictimAlliance)
+	})
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm"
+	"github.com/lynkfox/go_eve_sleuth/comm/types"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -157,6 +158,21 @@ func TestUserAgent(t *testing.T) {
 	} {
 		assert.Equal(t, "eve-gosleuth/"+comm.VERSION+" (+https://github.com/lynkfox/eve-gosleuth)", headers["User-Agent"], name)
 	}
+}
+
+func TestZkillTogetherURL(t *testing.T) {
+	t.Run("the target and its holdings are attackers, any of them, and the ally is in Either, as zKillboard writes the url", func(t *testing.T) {
+		// URSA. and its holding High Bear Nation with 10mn, for all time, as built on zKillboard
+		want := "https://zkillboard.com/asearch/#%7B%22buttons%22%3A%5B%22togglefilters%22%2C%22alltime%22%2C%22attackers-or%22%2C%22either-and%22%2C%22victims-and%22%2C%22items-and%22%2C%22sort-date%22%2C%22sort-desc%22%2C%22page1%22%2C%22allinvolved%22%5D%2C%22attackers%22%3A%5B%7B%22type%22%3A%22allianceID%22%2C%22id%22%3A99013330%7D%2C%7B%22type%22%3A%22allianceID%22%2C%22id%22%3A99013580%7D%5D%2C%22neutrals%22%3A%5B%7B%22type%22%3A%22allianceID%22%2C%22id%22%3A99014851%7D%5D%2C%22includeAssociates%22%3Atrue%7D"
+		groups := []api.ZkillEntity{{Type: types.ALLIANCE, ID: 99013330}, {Type: types.ALLIANCE, ID: 99013580}}
+		assert.Equal(t, want, api.ZkillTogetherURL(groups, api.ZkillEntity{Type: types.ALLIANCE, ID: 99014851}))
+	})
+
+	t.Run("corporations and pilots use their own search fields", func(t *testing.T) {
+		url := api.ZkillTogetherURL([]api.ZkillEntity{{Type: types.PILOT, ID: 1}}, api.ZkillEntity{Type: types.CORPORATION, ID: 2})
+		assert.Contains(t, url, "%22attackers%22%3A%5B%7B%22type%22%3A%22characterID%22%2C%22id%22%3A1%7D%5D")
+		assert.Contains(t, url, "%22neutrals%22%3A%5B%7B%22type%22%3A%22corporationID%22%2C%22id%22%3A2%7D%5D")
+	})
 }
 
 func TestDotlanSystemURL(t *testing.T) {

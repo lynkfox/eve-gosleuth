@@ -214,16 +214,24 @@ func structureSystem(system *retrieval.System) SystemSummary {
 	}
 }
 
-// groupRefs are a corp's and alliance's EntityRefs, nil for either that is nil
+// groupRefs are a corp's and alliance's EntityRefs, nil for either that is nil or has no id or name, as one not looked up yet
 func groupRefs(corp *retrieval.Corporation, alliance *retrieval.Alliance) (*EntityRef, *EntityRef) {
 	var corpRef, allianceRef *EntityRef
-	if corp != nil {
+	if corp != nil && corp.CorporationID != 0 && corp.Name != "" {
 		corpRef = entityRef(types.CORPORATION, corp.CorporationID, corp.Name)
 	}
-	if alliance != nil {
+	if alliance != nil && alliance.AllianceID != 0 && alliance.Name != "" {
 		allianceRef = entityRef(types.ALLIANCE, alliance.AllianceID, alliance.Name)
 	}
 	return corpRef, allianceRef
+}
+
+// pilotRef is a pilot's EntityRef, nil for a pilot with no id, ie an NPC, or no name, as one not looked up yet
+func pilotRef(pilot *retrieval.Pilot) *EntityRef {
+	if pilot == nil || pilot.CharacterID == 0 || pilot.Name == "" {
+		return nil
+	}
+	return entityRef(types.PILOT, pilot.CharacterID, pilot.Name)
 }
 
 func entityRef(entityType types.EntityType, id int, name string) *EntityRef {

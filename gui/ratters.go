@@ -17,11 +17,9 @@ type Ratter struct {
 	ZkillURL  string `json:"zkillUrl"`
 	EveWhoURL string `json:"evewhoUrl"`
 	// the corp and alliance at their latest loss, empty when in none
-	Corporation     string    `json:"corporation"`
-	Alliance        string    `json:"alliance"`
-	CorporationIcon string    `json:"corporationIcon"`
-	AllianceIcon    string    `json:"allianceIcon"`
-	Losses          []RatLoss `json:"losses"` // newest first
+	Corporation *EntityRef `json:"corporation"`
+	Alliance    *EntityRef `json:"alliance"`
+	Losses      []RatLoss  `json:"losses"` // newest first
 }
 
 // RatLoss is one of a ratter's losses
@@ -73,8 +71,7 @@ func (a *App) buildRatters(killmails []*retrieval.Killmail) []Ratter {
 			Losses:    []RatLoss{},
 		}
 		latest := ratter.Losses[0].Killmail.Victim
-		row.Corporation, row.Alliance = groupNames(latest.CorpAtKill, latest.AllianceAtKill)
-		row.CorporationIcon, row.AllianceIcon = groupIcons(latest.CorpAtKill, latest.AllianceAtKill)
+		row.Corporation, row.Alliance = groupRefs(latest.CorpAtKill, latest.AllianceAtKill)
 
 		for _, loss := range ratter.Losses {
 			km := loss.Killmail

@@ -15,18 +15,19 @@ import (
 
 // AllySummary is the frontend representation of an alliance, or a corporation in none, that attacked alongside the target outside its alliance
 type AllySummary struct {
-	ID         int       `json:"id"`
-	Name       string    `json:"name"`
-	Type       string    `json:"type"` // ALLIANCE or CORPORATION, for a search
-	ImageURL   string    `json:"imageUrl"`
-	ZkillURL   string    `json:"zkillUrl"`
-	EveWhoURL  string    `json:"evewhoUrl"`
-	Killmails  int       `json:"killmails"` // the target's kills it was on
-	Killed     int       `json:"killed"`    // the target's kills where the victim was in it
-	Pilots     int       `json:"pilots"`
-	UniqueDays int       `json:"uniqueDays"`
-	FirstSeen  time.Time `json:"firstSeen"`
-	LastSeen   time.Time `json:"lastSeen"`
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	Type        string    `json:"type"` // ALLIANCE or CORPORATION, for a search
+	ImageURL    string    `json:"imageUrl"`
+	ZkillURL    string    `json:"zkillUrl"`
+	EveWhoURL   string    `json:"evewhoUrl"`
+	Killmails   int       `json:"killmails"` // the target's kills it was on
+	Killed      int       `json:"killed"`    // the target's kills where the victim was in it
+	Pilots      int       `json:"pilots"`
+	UniqueDays  int       `json:"uniqueDays"`
+	FirstSeen   time.Time `json:"firstSeen"`
+	LastSeen    time.Time `json:"lastSeen"`
+	TogetherURL string    `json:"togetherUrl"` // zKillboard's search for its killmails with the target or a holding searched with it, see api.ZkillTogetherURL
 }
 
 // allyLimit is how many allies the intel report ranks
@@ -121,7 +122,7 @@ func (a *App) rankAllies(source *alliesSource) ([]AllySummary, []IgnoredAllySumm
 		skip[aggregate.AllyKey{Type: searchTypes[ally.Type], ID: ally.ID}] = true
 	}
 	ranking := aggregate.GetTopAllies(allyLimit, source.killmails, &source.target, skip, a.GetSettings().HideKilledAllies && !source.showKilled)
-	return buildAllySummaries(ranking.Top), ignoredAllySummaries(ignored, ranking.IgnoredKillmails), ranking.KilledAllies
+	return buildAllySummaries(ranking.Top, &source.target), ignoredAllySummaries(ignored, ranking.IgnoredKillmails), ranking.KilledAllies
 }
 
 /*
@@ -187,24 +188,34 @@ func (a *App) SaveIgnoredAllies(targetID int, targetType string, ignored []retri
 	return update, nil
 }
 
-// buildAllySummaries converts ranked allies into their frontend representation
-func buildAllySummaries(top []aggregate.AllyActivity) []AllySummary {
+// buildAllySummaries converts ranked allies into their frontend representation, with links to their killmails with the target and each of its holdings
+func buildAllySummaries(top []aggregate.AllyActivity, target *retrieval.IntelTarget) []AllySummary {
 	allies := []AllySummary{}
 	for _, ally := range top {
 		allies = append(allies, AllySummary{
-			ID:         ally.ID(),
-			Name:       ally.Name(),
-			Type:       ally.Type().String(),
-			ImageURL:   api.EntityImageURL(ally.Type(), ally.ID()),
-			ZkillURL:   api.ZkillEntityURL(ally.Type(), ally.ID()),
-			EveWhoURL:  api.EveWhoURL(ally.Type(), ally.ID()),
-			Killmails:  ally.Killmails,
-			Killed:     ally.Killed,
-			Pilots:     len(ally.PilotIDs),
-			UniqueDays: ally.UniqueDays(),
-			FirstSeen:  ally.FirstSeen(),
-			LastSeen:   ally.LastSeen(),
+			ID:          ally.ID(),
+			Name:        ally.Name(),
+			Type:        ally.Type().String(),
+			ImageURL:    api.EntityImageURL(ally.Type(), ally.ID()),
+			ZkillURL:    api.ZkillEntityURL(ally.Type(), ally.ID()),
+			EveWhoURL:   api.EveWhoURL(ally.Type(), ally.ID()),
+			Killmails:   ally.Killmails,
+			Killed:      ally.Killed,
+			Pilots:      len(ally.PilotIDs),
+			UniqueDays:  ally.UniqueDays(),
+			FirstSeen:   ally.FirstSeen(),
+			LastSeen:    ally.LastSeen(),
+			TogetherURL: togetherURL(ally.Type(), ally.ID(), target),
 		})
 	}
 	return allies
+}
+
+// togetherURL is an ally's zKillboard search with the target and every holding searched with it
+func togetherURL(allyType types.EntityType, allyID int, target *retrieval.IntelTarget) string {
+	groups := []api.ZkillEntity{{Type: target.TypeOfEntity, ID: target.IDNumber}}
+	for _, holding := range target.Holdings {
+		groups = append(groups, api.ZkillEntity{Type: holding.Type, ID: holding.ID})
+	}
+	return api.ZkillTogetherURL(groups, api.ZkillEntity{Type: allyType, ID: allyID})
 }

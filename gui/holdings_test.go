@@ -47,3 +47,13 @@ func TestHoldingMain(t *testing.T) {
 		assert.False(t, found)
 	})
 }
+
+func TestTogetherURL(t *testing.T) {
+	t.Run("an ally's one search has the target and every holding searched with it", func(t *testing.T) {
+		target := &retrieval.IntelTarget{IDNumber: 99013330, TypeOfEntity: types.ALLIANCE,
+			Holdings: []retrieval.TargetGroup{{Type: types.CORPORATION, ID: 98000009, Name: "Holding Inc."}, {Type: types.ALLIANCE, ID: 99013580, Name: "High Bear Nation"}}}
+
+		groups := []api.ZkillEntity{{Type: types.ALLIANCE, ID: 99013330}, {Type: types.CORPORATION, ID: 98000009}, {Type: types.ALLIANCE, ID: 99013580}}
+		assert.Equal(t, api.ZkillTogetherURL(groups, api.ZkillEntity{Type: types.ALLIANCE, ID: 99014851}), togetherURL(types.ALLIANCE, 99014851, target))
+	})
+}

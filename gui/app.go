@@ -106,15 +106,13 @@ type CapitalShip struct {
 
 // CapitalPilot is a pilot who flew a capital for the target, with their current corp and alliance
 type CapitalPilot struct {
-	ID              int    `json:"id"`
-	Name            string `json:"name"`
-	Corporation     string `json:"corporation"` // current, empty when not known
-	Alliance        string `json:"alliance"`    // current, empty when in none
-	CorporationIcon string `json:"corporationIcon"`
-	AllianceIcon    string `json:"allianceIcon"`
-	Left            bool   `json:"left"` // no longer in the target's alliance, see aggregate.HasLeftTarget
-	ZkillURL        string `json:"zkillUrl"`
-	EveWhoURL       string `json:"evewhoUrl"`
+	ID          int        `json:"id"`
+	Name        string     `json:"name"`
+	Corporation *EntityRef `json:"corporation"` // current, null when not known
+	Alliance    *EntityRef `json:"alliance"`    // current, null when in none
+	Left        bool       `json:"left"`        // no longer in the target's alliance, see aggregate.HasLeftTarget
+	ZkillURL    string     `json:"zkillUrl"`
+	EveWhoURL   string     `json:"evewhoUrl"`
 }
 
 // SystemSummary is the frontend representation of a system the target's killmails happened in
@@ -138,67 +136,63 @@ type SystemSummary struct {
 
 // KillmailCard is the frontend summary of one killmail, from the target's point of view
 type KillmailCard struct {
-	ID                int       `json:"id"`
-	URL               string    `json:"url"`
-	Time              time.Time `json:"time"`
-	Outcome           string    `json:"outcome"` // kill, loss, or internal (the target's own killed it, see aggregate.IsInternal) from the target's side, empty for a system target
-	Solo              bool      `json:"solo"`
-	TotalValue        float64   `json:"totalValue"`
-	DroppedValue      float64   `json:"droppedValue"` // value of what actually dropped from the victim
-	Labels            []string  `json:"labels"`       // zKillboard's tags, ie tz:eu, loc:w-space, shown as chips
-	SystemName        string    `json:"systemName"`
-	SecurityStatus    float64   `json:"securityStatus"`
-	SecurityBand      string    `json:"securityBand"` // high, low, or null, see api.SecurityBand
-	Region            string    `json:"region"`
-	Class             string    `json:"class"` // wormhole class for j-space systems, empty elsewhere
-	ShipName          string    `json:"shipName"`
-	ShipImageURL      string    `json:"shipImageUrl"`
-	VictimName        string    `json:"victimName"`
-	VictimCorp        string    `json:"victimCorp"`
-	VictimAlliance    string    `json:"victimAlliance"`
-	FinalBlowName     string    `json:"finalBlowName"`
-	FinalBlowCorp     string    `json:"finalBlowCorp"`
-	FinalBlowAlliance string    `json:"finalBlowAlliance"`
-	// small logos for the corp and alliance names, empty when there is no corp or alliance
-	VictimCorpIcon        string `json:"victimCorpIcon"`
-	VictimAllianceIcon    string `json:"victimAllianceIcon"`
-	FinalBlowCorpIcon     string `json:"finalBlowCorpIcon"`
-	FinalBlowAllianceIcon string `json:"finalBlowAllianceIcon"`
-	AttackerCount         int    `json:"attackerCount"`
-	Via                   string `json:"via,omitempty"` // the holding whose killmail list it came from, empty when it is on the target's own
+	ID                int        `json:"id"`
+	URL               string     `json:"url"`
+	Time              time.Time  `json:"time"`
+	Outcome           string     `json:"outcome"` // kill, loss, or internal (the target's own killed it, see aggregate.IsInternal) from the target's side, empty for a system target
+	Solo              bool       `json:"solo"`
+	TotalValue        float64    `json:"totalValue"`
+	DroppedValue      float64    `json:"droppedValue"` // value of what actually dropped from the victim
+	Labels            []string   `json:"labels"`       // zKillboard's tags, ie tz:eu, loc:w-space, shown as chips
+	SystemName        string     `json:"systemName"`
+	SecurityStatus    float64    `json:"securityStatus"`
+	SecurityBand      string     `json:"securityBand"` // high, low, or null, see api.SecurityBand
+	Region            string     `json:"region"`
+	Class             string     `json:"class"` // wormhole class for j-space systems, empty elsewhere
+	SystemZkillURL    string     `json:"systemZkillUrl"`
+	SystemDotlanURL   string     `json:"systemDotlanUrl"`
+	ShipName          string     `json:"shipName"`
+	ShipImageURL      string     `json:"shipImageUrl"`
+	VictimName        string     `json:"victimName"` // the pilot, or the ship for a structure or deployable
+	Victim            *EntityRef `json:"victim"`     // the victim pilot, null for a structure or deployable
+	VictimCorp        *EntityRef `json:"victimCorp"`
+	VictimAlliance    *EntityRef `json:"victimAlliance"`
+	FinalBlowName     string     `json:"finalBlowName"` // the pilot, or the ship for an NPC or structure
+	FinalBlow         *EntityRef `json:"finalBlow"`     // the final blow pilot, null for an NPC or structure
+	FinalBlowCorp     *EntityRef `json:"finalBlowCorp"`
+	FinalBlowAlliance *EntityRef `json:"finalBlowAlliance"`
+	AttackerCount     int        `json:"attackerCount"`
+	Via               string     `json:"via,omitempty"` // the holding whose killmail list it came from, empty when it is on the target's own
 }
 
 // CorporationSummary is the frontend representation of a corporation active on the target's killmails
 type CorporationSummary struct {
-	ID           int       `json:"id"`
-	Name         string    `json:"name"`
-	ImageURL     string    `json:"imageUrl"`
-	Alliance     string    `json:"alliance"`     // the corp's alliance on its most recent killmail
-	AllianceIcon string    `json:"allianceIcon"` // a small logo for the alliance, empty when there is none
-	ZkillURL     string    `json:"zkillUrl"`
-	EveWhoURL    string    `json:"evewhoUrl"`
-	Killmails    int       `json:"killmails"`
-	Kills        int       `json:"kills"`
-	Losses       int       `json:"losses"`
-	Pilots       int       `json:"pilots"`
-	UniqueDays   int       `json:"uniqueDays"`
-	FirstSeen    time.Time `json:"firstSeen"`
-	LastSeen     time.Time `json:"lastSeen"`
+	ID         int        `json:"id"`
+	Name       string     `json:"name"`
+	ImageURL   string     `json:"imageUrl"`
+	Alliance   *EntityRef `json:"alliance"` // the corp's alliance on its most recent killmail, null when in none
+	ZkillURL   string     `json:"zkillUrl"`
+	EveWhoURL  string     `json:"evewhoUrl"`
+	Killmails  int        `json:"killmails"`
+	Kills      int        `json:"kills"`
+	Losses     int        `json:"losses"`
+	Pilots     int        `json:"pilots"`
+	UniqueDays int        `json:"uniqueDays"`
+	FirstSeen  time.Time  `json:"firstSeen"`
+	LastSeen   time.Time  `json:"lastSeen"`
 }
 
 // Fleetmate is the frontend representation of a pilot frequently seen on killmails with the target
 type Fleetmate struct {
-	ID              int    `json:"id"`
-	Name            string `json:"name"`
-	ImageURL        string `json:"imageUrl"`
-	KillmailsShared int    `json:"killmailsShared"`
-	UniqueDays      int    `json:"uniqueDays"`
-	Corporation     string `json:"corporation"`
-	Alliance        string `json:"alliance"`
-	CorporationIcon string `json:"corporationIcon"` // small logos for the corp and alliance names, empty when there is none
-	AllianceIcon    string `json:"allianceIcon"`
-	ZkillURL        string `json:"zkillUrl"`
-	EveWhoURL       string `json:"evewhoUrl"`
+	ID              int        `json:"id"`
+	Name            string     `json:"name"`
+	ImageURL        string     `json:"imageUrl"`
+	KillmailsShared int        `json:"killmailsShared"`
+	UniqueDays      int        `json:"uniqueDays"`
+	Corporation     *EntityRef `json:"corporation"` // null when not known
+	Alliance        *EntityRef `json:"alliance"`    // null when in none
+	ZkillURL        string     `json:"zkillUrl"`
+	EveWhoURL       string     `json:"evewhoUrl"`
 	// every collected killmail involves the target, so the pilot's oldest and latest killmails are the oldest and latest shared ones
 	FirstTogether time.Time `json:"firstTogether"`
 	LastTogether  time.Time `json:"lastTogether"`
@@ -640,8 +634,7 @@ func buildCapitalShips(capitals []aggregate.CapitalShipPilots, target *retrieval
 			capitalPilot := CapitalPilot{ID: pilot.CharacterID, Name: pilot.Name, Left: aggregate.HasLeftTarget(pilot, target),
 				ZkillURL: api.ZkillEntityURL(types.PILOT, pilot.CharacterID), EveWhoURL: api.EveWhoURL(types.PILOT, pilot.CharacterID)}
 			if corp := pilot.Corporation; corp != nil {
-				capitalPilot.Corporation, capitalPilot.Alliance = groupNames(corp, corp.Alliance)
-				capitalPilot.CorporationIcon, capitalPilot.AllianceIcon = groupIcons(corp, corp.Alliance)
+				capitalPilot.Corporation, capitalPilot.Alliance = groupRefs(corp, corp.Alliance)
 			}
 			ship.Pilots = append(ship.Pilots, capitalPilot)
 		}
@@ -675,6 +668,8 @@ func buildKillmailCards(killmails []*retrieval.Killmail, target *retrieval.Intel
 			card.SecurityBand = api.SecurityBand(km.System.SecurityStatus)
 			card.Region = km.System.Region
 			card.Class = comm.WormholeClass(km.System.Name, km.System.Region)
+			card.SystemZkillURL = api.ZkillEntityURL(types.SYSTEM, km.System.SystemID)
+			card.SystemDotlanURL = api.DotlanSystemURL(km.System.Name)
 		}
 
 		victim := km.Victim
@@ -685,9 +680,9 @@ func buildKillmailCards(killmails []*retrieval.Killmail, target *retrieval.Intel
 		card.VictimName = card.ShipName // structure and deployable losses have no pilot
 		if victim.Pilot != nil {
 			card.VictimName = victim.Pilot.Name
+			card.Victim = pilotRef(victim.Pilot)
 		}
-		card.VictimCorp, card.VictimAlliance = groupNames(victim.CorpAtKill, victim.AllianceAtKill)
-		card.VictimCorpIcon, card.VictimAllianceIcon = groupIcons(victim.CorpAtKill, victim.AllianceAtKill)
+		card.VictimCorp, card.VictimAlliance = groupRefs(victim.CorpAtKill, victim.AllianceAtKill)
 
 		for _, attacker := range km.Attackers {
 			if !attacker.FinalBlow {
@@ -696,11 +691,11 @@ func buildKillmailCards(killmails []*retrieval.Killmail, target *retrieval.Intel
 			// npc and structure attackers have no pilot name, only their ship type
 			if attacker.Pilot != nil && attacker.Pilot.Name != "" {
 				card.FinalBlowName = attacker.Pilot.Name
+				card.FinalBlow = pilotRef(attacker.Pilot)
 			} else if attacker.Ship != nil {
 				card.FinalBlowName = attacker.Ship.Name
 			}
-			card.FinalBlowCorp, card.FinalBlowAlliance = groupNames(attacker.CorpAtKill, attacker.AllianceAtKill)
-			card.FinalBlowCorpIcon, card.FinalBlowAllianceIcon = groupIcons(attacker.CorpAtKill, attacker.AllianceAtKill)
+			card.FinalBlowCorp, card.FinalBlowAlliance = groupRefs(attacker.CorpAtKill, attacker.AllianceAtKill)
 		}
 
 		cards = append(cards, card)
@@ -740,10 +735,7 @@ func buildCorporationSummaries(top []aggregate.CorporationActivity) []Corporatio
 			FirstSeen:  activity.FirstSeen(),
 			LastSeen:   activity.LastSeen(),
 		}
-		if activity.Alliance != nil {
-			summary.Alliance = activity.Alliance.Name
-			_, summary.AllianceIcon = groupIcons(nil, activity.Alliance)
-		}
+		_, summary.Alliance = groupRefs(nil, activity.Alliance)
 		corporations = append(corporations, summary)
 	}
 	return corporations
@@ -789,28 +781,6 @@ func buildSystemSummaries(top []aggregate.SystemVisted, killmails []*retrieval.K
 	return systems
 }
 
-// groupNames returns the corp and alliance names, empty for either that is nil
-func groupNames(corp *retrieval.Corporation, alliance *retrieval.Alliance) (corpName string, allianceName string) {
-	if corp != nil {
-		corpName = corp.Name
-	}
-	if alliance != nil {
-		allianceName = alliance.Name
-	}
-	return corpName, allianceName
-}
-
-// groupIcons returns small logo urls for a corp and alliance, empty for either that is nil
-func groupIcons(corp *retrieval.Corporation, alliance *retrieval.Alliance) (corpIcon string, allianceIcon string) {
-	if corp != nil {
-		corpIcon = api.EntityIconURL(types.CORPORATION, corp.CorporationID)
-	}
-	if alliance != nil {
-		allianceIcon = api.EntityIconURL(types.ALLIANCE, alliance.AllianceID)
-	}
-	return corpIcon, allianceIcon
-}
-
 // buildFleetmates converts ranked PilotSeen values into their frontend representation
 func buildFleetmates(top []aggregate.PilotSeen) []Fleetmate {
 	fleetmates := []Fleetmate{}
@@ -827,8 +797,7 @@ func buildFleetmates(top []aggregate.PilotSeen) []Fleetmate {
 			LastTogether:    pilotSeen.LastSeen,
 		}
 		if corp := pilotSeen.Pilot.Corporation; corp != nil {
-			fleetmate.Corporation, fleetmate.Alliance = groupNames(corp, corp.Alliance)
-			fleetmate.CorporationIcon, fleetmate.AllianceIcon = groupIcons(corp, corp.Alliance)
+			fleetmate.Corporation, fleetmate.Alliance = groupRefs(corp, corp.Alliance)
 		}
 		fleetmates = append(fleetmates, fleetmate)
 	}

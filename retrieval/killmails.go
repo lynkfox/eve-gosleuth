@@ -322,7 +322,7 @@ func listKillmails(target IntelTarget, paging api.ZkillPaging, need int) (*[]api
 	// with holdings the ticker says whose list each page is, as each list starts again from page 1
 	mainPaging := paging
 	if len(target.Holdings) > 0 {
-		mainPaging.For = target.displayName() + " (main)"
+		mainPaging.For = target.DisplayName() + " (main)"
 	}
 	own, err := listEntity(target, target.TypeOfEntity, target.IDNumber, mainPaging, need)
 	if err != nil {

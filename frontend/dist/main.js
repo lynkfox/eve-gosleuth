@@ -715,7 +715,7 @@ function renderMemberRow(member) {
     row.className = "member-left";
     row.title = "Has left the corp";
   }
-  return withEntityMenu(row, { type: "PILOT", name: member.name, zkillUrl: member.zkillUrl, evewhoUrl: member.evewhoUrl });
+  return withMenu(row, pilotSections(member));
 }
 
 // renderMemberCorpRow is one of an alliance's corporations: logo, name to search for, member count, and time in the alliance
@@ -732,7 +732,7 @@ function renderMemberCorpRow(corp) {
   nameCell.append(name);
 
   row.append(avatarCell(corp.name, corp, corp.iconUrl, true), nameCell, textCell(corp.memberCount.toLocaleString("en-US")), textCell(corp.timeInAlliance));
-  return withEntityMenu(row, { type: "CORPORATION", name: corp.name, zkillUrl: corp.zkillUrl, evewhoUrl: corp.evewhoUrl });
+  return withMenu(row, [entitySection({ type: "CORPORATION", name: corp.name, zkillUrl: corp.zkillUrl, evewhoUrl: corp.evewhoUrl })]);
 }
 
 // rosterDivider is the line on a corp's Members tab between the members seen on killmails and the rest
@@ -969,10 +969,10 @@ function renderCapitals(capitals) {
       button.addEventListener("click", () => offerSearch({ type: "PILOT", name: pilot.name }));
       item.append(button);
 
-      const group = groupLine([pilot.corporationIcon, pilot.corporation], [pilot.allianceIcon, pilot.alliance]);
+      const group = groupLine(pilot.corporation, pilot.alliance);
       if (group) item.append(group);
       // only the pilots under each ship have the menu, not the ship
-      return withEntityMenu(item, { type: "PILOT", name: pilot.name, zkillUrl: pilot.zkillUrl, evewhoUrl: pilot.evewhoUrl });
+      return withMenu(item, pilotSections(pilot));
     }));
 
     ship.append(summary, pilots);
@@ -1046,7 +1046,7 @@ function lossPilotBlock(pilot, lossRow) {
   name.title = "Search for this";
   name.addEventListener("click", () => offerSearch({ type: "PILOT", name: pilot.name }));
   who.append(name);
-  const group = groupLine([pilot.corporationIcon, pilot.corporation], [pilot.allianceIcon, pilot.alliance]);
+  const group = groupLine(pilot.corporation, pilot.alliance);
   if (group) who.append(group);
 
   const count = document.createElement("span");
@@ -1054,11 +1054,12 @@ function lossPilotBlock(pilot, lossRow) {
   count.textContent = `${pilot.losses.length} ${pilot.losses.length === 1 ? "loss" : "losses"}`;
   header.append(portrait, who);
   header.append(hourStrip(pilot.losses.map((loss) => loss.time), "loss", "losses"), count);
-  withEntityMenu(header, { type: "PILOT", name: pilot.name, zkillUrl: pilot.zkillUrl, evewhoUrl: pilot.evewhoUrl });
+  withMenu(header, pilotSections(pilot));
 
   const losses = document.createElement("ol");
   losses.className = "pi-losses";
-  losses.append(...pilot.losses.map(lossRow));
+  // a loss's menu leads with the killmail, then the pilot's
+  losses.append(...pilot.losses.map((loss) => withMenu(lossRow(loss), [killmailSection(loss.url), ...pilotSections(pilot)])));
 
   block.append(header, losses);
   return block;
@@ -1342,7 +1343,7 @@ function wireTabMoving(tab) {
 const UNIQUE_DAYS_HELP = "Unique Days: total days with killmails (days spanned across)";
 
 // ROW_MENU_HELP ends every tab's help, see selectTab
-const ROW_MENU_HELP = "Right click any row for additional context commands";
+const ROW_MENU_HELP = "Many things have a right-click menu with more options.";
 
 /*
   TAB_HELP explains each tab as bullet points, shown with its color key, if any, on hover over the tab's ? button.
@@ -1741,24 +1742,44 @@ function labelChip(label) {
 // showKillmailLabels is the Preferences choice to show zKillboard's label chips on killmail cards. The labels are always collected.
 let showKillmailLabels = false;
 
-// groupLine shows a corp and alliance as 16px logos beside their names, ie [logo] URSA PRIMUS · [logo] URSA., or null if there is neither
+// groupLine shows a corp and alliance, backend EntityRefs, as 16px logos beside their names, ie [logo] URSA PRIMUS · [logo] URSA., or null if there is neither
 function groupLine(...groups) {
-  const named = groups.filter(([, name]) => name);
+  const named = groups.filter((group) => group && group.name);
   if (named.length === 0) return null;
 
   const line = document.createElement("span");
   line.className = "group-line";
-  named.forEach(([icon, name], index) => {
+  named.forEach((group, index) => {
     if (index > 0) line.append(" · ");
-    if (icon) {
+    if (group.iconUrl) {
       const logo = document.createElement("img");
-      logo.src = icon;
+      logo.src = group.iconUrl;
       logo.alt = "";
       line.append(logo);
     }
-    line.append(name);
+    line.append(group.name);
   });
   return line;
+}
+
+/*
+  killmailCardSections are a killmail card's right click menu for the part of it right-clicked, clicked: always the killmail, then on the victim's column
+  their pilot, corp, and alliance, on the attackers' column the final blow's the same, and anywhere else the system.
+  A structure victim or NPC final blow has no pilot section, only the corp and alliance it was in.
+*/
+function killmailCardSections(km, clicked) {
+  const on = (part) => Boolean(clicked && clicked.closest && clicked.closest(`.${part}`));
+  const sections = [killmailSection(km.url)];
+  if (on("killmail-victim")) {
+    if (km.victim) sections.push(refSection(km.victim, `Victim: ${km.victim.name}`));
+    sections.push(...groupSections(km.victimCorp, km.victimAlliance, "Victim"));
+  } else if (on("killmail-attackers")) {
+    if (km.finalBlow) sections.push(refSection(km.finalBlow, `Final blow: ${km.finalBlow.name}`));
+    sections.push(...groupSections(km.finalBlowCorp, km.finalBlowAlliance, "Final blow"));
+  } else if (km.systemName) {
+    sections.push(systemSection({ name: km.systemName, zkillUrl: km.systemZkillUrl, dotlanUrl: km.systemDotlanUrl }));
+  }
+  return sections;
 }
 
 function renderKillmailCard(km) {
@@ -1771,8 +1792,8 @@ function renderKillmailCard(km) {
   ship.src = km.shipImageUrl;
   ship.alt = "";
 
-  const victimGroup = groupLine([km.victimCorpIcon, km.victimCorp], [km.victimAllianceIcon, km.victimAlliance]);
-  const finalBlowGroup = groupLine([km.finalBlowCorpIcon, km.finalBlowCorp], [km.finalBlowAllianceIcon, km.finalBlowAlliance]);
+  const victimGroup = groupLine(km.victimCorp, km.victimAlliance);
+  const finalBlowGroup = groupLine(km.finalBlowCorp, km.finalBlowAlliance);
 
   const location = document.createElement("span");
   const security = document.createElement("span");
@@ -1826,6 +1847,7 @@ function renderKillmailCard(km) {
     card.append(tags);
   }
 
+  withMenu(card, (event) => killmailCardSections(km, event.target));
   const open = () => window.runtime.BrowserOpenURL(km.url);
   card.addEventListener("click", open);
   card.addEventListener("keydown", (event) => {
@@ -1924,7 +1946,7 @@ function renderPilotRows(section, pilots) {
     name.textContent = mate.name;
     const detail = document.createElement("div");
     detail.className = "row-detail";
-    const group = groupLine([mate.corporationIcon, mate.corporation], [mate.allianceIcon, mate.alliance]);
+    const group = groupLine(mate.corporation, mate.alliance);
     detail.append(...(group ? [group, " · "] : []), killmailSpan(mate.firstTogether, mate.lastTogether));
     nameCell.append(name, detail);
 
@@ -1933,7 +1955,7 @@ function renderPilotRows(section, pilots) {
     killmailsCell.textContent = mate.killmailsShared;
 
     row.append(avatarCell(mate.name, mate, mate.imageUrl), nameCell, killmailsCell, uniqueDaysCell(mate.uniqueDays, mate.firstTogether, mate.lastTogether));
-    body.append(withEntityMenu(row, { type: "PILOT", name: mate.name, zkillUrl: mate.zkillUrl, evewhoUrl: mate.evewhoUrl }));
+    body.append(withMenu(row, pilotSections(mate)));
   }
 
   el(`${section}-empty`).hidden = pilots.length > 0;
@@ -1948,12 +1970,13 @@ function renderCorporations(corporations) {
     name.textContent = corporation.name;
     const detail = document.createElement("div");
     detail.className = "row-detail";
-    const alliance = groupLine([corporation.allianceIcon, corporation.alliance]);
+    const alliance = groupLine(corporation.alliance);
     detail.append(...(alliance ? [alliance, " · "] : []), killmailSpan(corporation.firstSeen, corporation.lastSeen));
     nameCell.append(name, detail);
 
     row.append(avatarCell(corporation.name, corporation, corporation.imageUrl), nameCell, numberCell(corporation.killmails), numberCell(corporation.kills), numberCell(corporation.losses), numberCell(corporation.pilots), uniqueDaysCell(corporation.uniqueDays, corporation.firstSeen, corporation.lastSeen));
-    return withEntityMenu(row, { type: "CORPORATION", name: corporation.name, zkillUrl: corporation.zkillUrl, evewhoUrl: corporation.evewhoUrl });
+    const corp = { type: "CORPORATION", name: corporation.name, zkillUrl: corporation.zkillUrl, evewhoUrl: corporation.evewhoUrl };
+    return withMenu(row, [entitySection(corp), ...groupSections(null, corporation.alliance)]);
   });
 
   el("corps-body").replaceChildren(...rows);
@@ -2066,7 +2089,25 @@ function structureLossSections(loss, withSystem) {
 }
 
 function systemSection(system) {
-  return { heading: `System: ${system.name}`, entity: { type: "SYSTEM", name: system.name, zkillUrl: system.zkillUrl, dotlanUrl: system.dotlanUrl } };
+  return entitySection({ type: "SYSTEM", name: system.name, zkillUrl: system.zkillUrl, dotlanUrl: system.dotlanUrl });
+}
+
+// entitySection is an entity's menu section, under a heading naming its kind, ie "Corporation: URSA PRIMUS"
+function entitySection(entity) {
+  return { heading: `${searchTypeLabel(entity.type)}: ${entity.name}`, entity };
+}
+
+// killmailSection is the menu section that opens a killmail, or a PI or ratting loss, on zKillboard
+function killmailSection(url) {
+  return { heading: "Killmail", items: [{ label: "Open on zKillboard", action: () => window.runtime.BrowserOpenURL(url) }] };
+}
+
+// pilotSections are a pilot row's menu sections: the pilot, then their corp and alliance for those they have
+function pilotSections(pilot) {
+  return [
+    entitySection({ type: "PILOT", name: pilot.name, zkillUrl: pilot.zkillUrl, evewhoUrl: pilot.evewhoUrl }),
+    ...groupSections(pilot.corporation, pilot.alliance),
+  ];
 }
 
 // refSection is a menu section for a backend EntityRef, under the heading given
@@ -2074,11 +2115,11 @@ function refSection(ref, heading) {
   return { heading, entity: { type: ref.type, name: ref.name, zkillUrl: ref.zkillUrl, evewhoUrl: ref.evewhoUrl } };
 }
 
-// groupSections are a corp's and alliance's menu sections, ie "Owner: Some Corp" and "Owner alliance: Some Alliance", for those there are
-function groupSections(corp, alliance, role) {
+// groupSections are a corp's and alliance's menu sections, ie "Owner corp: Some Corp" and "Owner alliance: Some Alliance", or without a role "Corporation: Some Corp", for those there are
+function groupSections(corp, alliance, role = "") {
   return [
-    ...(corp ? [refSection(corp, `${role}: ${corp.name}`)] : []),
-    ...(alliance ? [refSection(alliance, `${role} alliance: ${alliance.name}`)] : []),
+    ...(corp ? [refSection(corp, `${role ? `${role} corp` : "Corporation"}: ${corp.name}`)] : []),
+    ...(alliance ? [refSection(alliance, `${role ? `${role} alliance` : "Alliance"}: ${alliance.name}`)] : []),
   ];
 }
 
@@ -2086,12 +2127,6 @@ function groupSections(corp, alliance, role) {
 function killerSections(death) {
   const killer = death.killerAlliance || death.killerCorp;
   return killer ? [refSection(killer, `Killed by: ${killer.name}`)] : [];
-}
-
-// withStructureMenu gives a structure's row the one right click menu for everything on it, see openSectionsMenu
-function withStructureMenu(element, sections) {
-  element.addEventListener("contextmenu", (event) => openSectionsMenu(event, sections));
-  return element;
 }
 
 // previousStructureLosses is the collapsed list of other structures lost in the system, a small row each, or null for none
@@ -2123,7 +2158,7 @@ function previousStructureLosses(previous) {
     death.append(deathLine(loss.death));
     who.append(owner, death);
     row.append(siteLinks(loss.type, { zkillUrl: loss.death.zkillUrl }), icon, type, who);
-    rows.append(withStructureMenu(row, structureLossSections(loss, false)));
+    rows.append(withMenu(row, structureLossSections(loss, false)));
   }
   return list;
 }
@@ -2207,7 +2242,7 @@ function renderStructures(structures) {
     // a row is every kill of one structure, so with several it opens the latest
     const structureItems = [{ label: structure.kills > 1 ? "Open latest killmail" : "Open this killmail", action: () => window.runtime.BrowserOpenURL(structure.zkillUrl) }];
     if (structure.destroyed) structureItems.push({ label: "Open its loss on zKillboard", action: () => window.runtime.BrowserOpenURL(structure.destroyed.zkillUrl) });
-    return withStructureMenu(row, [
+    return withMenu(row, [
       { heading: `Structure: ${structure.type}`, items: structureItems },
       systemSection(structure.system),
       ...groupSections(structure.owner, structure.ownerAlliance, "Owner"),
@@ -2226,7 +2261,7 @@ function renderStructures(structures) {
     deathCell.append(deathLine(loss.death));
     row.append(avatarCell(loss.type, { zkillUrl: loss.death.zkillUrl, dotlanUrl: loss.system.dotlanUrl }, loss.imageUrl),
       structureNameCell(loss.type, loss.system, []), ownerCell, deathCell, numberCell(loss.pilots));
-    return withStructureMenu(row, structureLossSections(loss, true));
+    return withMenu(row, structureLossSections(loss, true));
   });
   el("structures-destroyed-body").replaceChildren(...destroyed);
   el("structures-destroyed-empty").hidden = destroyed.length > 0;
@@ -2256,7 +2291,8 @@ function renderAllies(allies, ignored, killedAllies, holdings) {
   const rows = allies.map((ally) => {
     const row = document.createElement("tr");
     row.className = "ally-row";
-    row.addEventListener("contextmenu", (event) => openEntityMenu(event, ally, allyMenuExtras(ally)));
+    // built as it opens, since adding a holding depends on the report shown then
+    withMenu(row, () => allySections(ally));
 
     const nameCell = document.createElement("td");
     const name = document.createElement("button");
@@ -2310,7 +2346,7 @@ function renderAllyHoldings(holdings) {
     count.textContent = ` (${holding.killmails})`;
     count.title = "Kills with pilots of both the target and this holding on them";
     item.append(name, count);
-    parts.push(withEntityMenu(item, holding));
+    parts.push(withMenu(item, [entitySection(holding)]));
   });
   el("allies-holdings-list").replaceChildren(...parts);
   el("allies-holdings").hidden = holdings.length === 0;
@@ -2355,19 +2391,7 @@ let entityMenu = null;
 // ENTITY_LINKS are the site links a right click menu offers, for those the entity has
 const ENTITY_LINKS = [["zkillUrl", "Open on zKillboard"], ["evewhoUrl", "Open on EveWho"], ["dotlanUrl", "Open on Dotlan"]];
 
-/*
-  openEntityMenu opens the right click menu for a pilot, corp, alliance, or system where it was right-clicked, kept on screen. Opened from the keyboard, it opens under the element.
-  entity is { type, name, zkillUrl, evewhoUrl, dotlanUrl }, links without a url are left out, and Search too without a type, ie for a destroyed structure. extras are items above Search and the links,
-  { label, action, disabled, forTarget }: one forTarget does nothing once another target's report is shown.
-*/
-function openEntityMenu(event, entity, extras = []) {
-  const items = [...extras];
-  if (extras.length > 0) items.push(null); // a line between the target's actions and the rest
-  items.push(...entityMenuItems(entity));
-  showContextMenu(event, items);
-}
-
-// entityMenuItems are an entity's Search, when it has a type, and its site links
+// entityMenuItems are an entity's Search, when it has a type, and its site links. entity is { type, name, zkillUrl, evewhoUrl, dotlanUrl }, links without a url left out.
 function entityMenuItems(entity) {
   const items = [];
   if (entity.type) items.push({ label: `Search for ${entity.name}`, action: () => offerSearch({ type: entity.type, name: entity.name }) });
@@ -2378,8 +2402,10 @@ function entityMenuItems(entity) {
 }
 
 /*
-  openSectionsMenu opens one right click menu for several entities on a row, ie a structure, its system, owner, and killer.
-  Each section is { heading, entity } or { heading, items }: a grayed heading naming it, then the entity's Search and site links, or the items given.
+  openSectionsMenu opens a row's right click menu where it was right-clicked, kept on screen, or under the row when opened from the keyboard.
+  It has a section for everything on the row, ie a pilot, their corp, and alliance, or a structure, its system, owner, and killer.
+  Each section is { heading, entity } or { heading, items }: a grayed heading naming it, then the entity's Search and site links, or the items given,
+  { label, action, disabled, forTarget }: one forTarget does nothing once another target's report is shown.
 */
 function openSectionsMenu(event, sections) {
   const items = [];
@@ -2446,10 +2472,20 @@ function runEntityMenuItem(item) {
   if (shown || !item.forTarget) item.action();
 }
 
-// withEntityMenu gives an element, ie a tab's row, the right click menu for the entity it shows
-function withEntityMenu(element, entity) {
-  element.addEventListener("contextmenu", (event) => openEntityMenu(event, entity));
+// withMenu gives an element, ie a tab's row, its right click menu, see openSectionsMenu. sections can be a function of the event, to build them as the menu opens.
+function withMenu(element, sections) {
+  element.addEventListener("contextmenu", (event) => openSectionsMenu(event, typeof sections === "function" ? sections(event) : sections));
   return element;
+}
+
+/*
+  allySections are an Allies row's menu: the ally, with its own items, adding it as a holding and ignoring it, above its Search and links,
+  then its killmails with the target and its holdings on zKillboard, the kills against it too
+*/
+function allySections(ally) {
+  const items = [...allyMenuExtras(ally), null, ...entityMenuItems(ally)]; // a line between its own items and the rest
+  if (ally.togetherUrl) items.push({ label: "Open shared killmails on zKillboard", action: () => window.runtime.BrowserOpenURL(ally.togetherUrl) });
+  return [{ ...entitySection(ally), items }];
 }
 
 // allyMenuExtras are an Allies row's own menu items: adding it as a holding of a corp or alliance target, and ignoring it for the target
@@ -2633,7 +2669,7 @@ function renderSystems(systems) {
     nameCell.append(name, detail);
 
     row.append(avatarCell(system.name, system, ""), nameCell, numberCell(system.killmails), numberCell(system.kills), numberCell(system.losses), uniqueDaysCell(system.uniqueDays, system.firstSeen, system.lastSeen));
-    return withEntityMenu(row, { type: "SYSTEM", name: system.name, zkillUrl: system.zkillUrl, dotlanUrl: system.dotlanUrl });
+    return withMenu(row, [systemSection(system)]);
   });
 
   el("systems-body").replaceChildren(...rows);

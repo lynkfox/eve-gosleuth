@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -61,6 +62,57 @@ func TypeRenderURL(typeID int) string {
 // ZkillKillmailURL returns the zKillboard page for a killmail
 func ZkillKillmailURL(killmailID int) string {
 	return fmt.Sprintf("%s/kill/%d/", ZKILL_URL, killmailID)
+}
+
+// zkillTogetherButtons are zKillboard's advanced search defaults, as its blank search has them, but for all time rather than the last week, and with Attackers as or
+var zkillTogetherButtons = []string{"togglefilters", "alltime", "attackers-or", "either-and", "victims-and", "items-and", "sort-date", "sort-desc", "page1", "allinvolved"}
+
+// zkillSearchFields are the advanced search's names for each kind of entity
+var zkillSearchFields = map[types.EntityType]string{types.PILOT: "characterID", types.CORPORATION: "corporationID", types.ALLIANCE: "allianceID", types.SYSTEM: "solarSystemID"}
+
+// ZkillEntity is a pilot, corporation, alliance, or system for a zKillboard advanced search
+type ZkillEntity struct {
+	Type types.EntityType
+	ID   int
+}
+
+// zkillSearchEntity is an entity in an advanced search's list, ie {"type": "allianceID", "id": 99013330}
+type zkillSearchEntity struct {
+	Type string `json:"type"`
+	ID   int    `json:"id"`
+}
+
+// zkillSearch is a zKillboard advanced search, the JSON in its url after #. Its boxes must all match, each box all or any of its entities as its button says.
+type zkillSearch struct {
+	Buttons           []string            `json:"buttons"`
+	Attackers         []zkillSearchEntity `json:"attackers"`
+	Neutrals          []zkillSearchEntity `json:"neutrals"` // the Either box: on the killmail as attacker or victim
+	IncludeAssociates bool                `json:"includeAssociates"`
+}
+
+/*
+	ZkillTogetherURL returns a zKillboard advanced search for an ally's killmails with a target: any of the target's groups among the attackers,
+	and the ally anywhere on the killmail, so both the kills it made with them and the kills of it they made
+
+Parameters:
+  - groups: the target and its holdings, any of which may be attacking
+  - ally: the ally, as attacker or victim
+
+Returns:
+  - string: the search's url, ie https://zkillboard.com/asearch/#{"buttons":[...],"attackers":[...],"neutrals":[{"type":"allianceID","id":1}],"includeAssociates":true} escaped
+*/
+func ZkillTogetherURL(groups []ZkillEntity, ally ZkillEntity) string {
+	search := zkillSearch{
+		Buttons:           zkillTogetherButtons,
+		Attackers:         []zkillSearchEntity{},
+		Neutrals:          []zkillSearchEntity{{Type: zkillSearchFields[ally.Type], ID: ally.ID}},
+		IncludeAssociates: true,
+	}
+	for _, group := range groups {
+		search.Attackers = append(search.Attackers, zkillSearchEntity{Type: zkillSearchFields[group.Type], ID: group.ID})
+	}
+	query, _ := json.Marshal(search) // plain strings and ints always marshal
+	return fmt.Sprintf("%s/asearch/#%s", ZKILL_URL, url.QueryEscape(string(query)))
 }
 
 // EveWhoURL returns the EveWho page for a pilot, corporation, or alliance, or the EveWho home page for other entity types

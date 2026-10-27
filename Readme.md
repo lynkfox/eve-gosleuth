@@ -39,12 +39,10 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
 
 * Corporation/Alliances
  * Fits
- * Add to the allies list a url generation for a search on zkill that includes the main or holding and the target allies
 
 * Systems
 
 * Other
- * Update all the right click menus to follow the same way as the Structure ones do, with sectioned linsk for each possible target in a row
  * Update the main search to no longer require the dropdown for time, instead use the ESI endpoint to determine type - if more than one returned open a selection box.
   * potenitally move the search parameter preferences to a pop out button next to the search bar that can be quickly adjusted per search?
  * Add a window that can be popped out on its own that can contain running live kill trackers - Per system, Per Entity, Per Types (such as all citadels).

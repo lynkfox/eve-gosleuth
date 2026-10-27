@@ -20,11 +20,9 @@ type PIPilot struct {
 	ZkillURL  string `json:"zkillUrl"`
 	EveWhoURL string `json:"evewhoUrl"`
 	// the corp and alliance at their latest loss, empty when in none
-	Corporation     string   `json:"corporation"`
-	Alliance        string   `json:"alliance"`
-	CorporationIcon string   `json:"corporationIcon"`
-	AllianceIcon    string   `json:"allianceIcon"`
-	Losses          []PILoss `json:"losses"` // newest first
+	Corporation *EntityRef `json:"corporation"`
+	Alliance    *EntityRef `json:"alliance"`
+	Losses      []PILoss   `json:"losses"` // newest first
 }
 
 // PILoss is one of a PI pilot's losses: a hauler near a planet, or any ship with PI aboard
@@ -99,8 +97,7 @@ func (a *App) buildPIPilots(systemID int, killmails []*retrieval.Killmail) []PIP
 			Losses:    []PILoss{},
 		}
 		latest := found.Losses[0].Killmail.Victim
-		pilot.Corporation, pilot.Alliance = groupNames(latest.CorpAtKill, latest.AllianceAtKill)
-		pilot.CorporationIcon, pilot.AllianceIcon = groupIcons(latest.CorpAtKill, latest.AllianceAtKill)
+		pilot.Corporation, pilot.Alliance = groupRefs(latest.CorpAtKill, latest.AllianceAtKill)
 
 		for _, loss := range found.Losses {
 			km := loss.Killmail

@@ -23,18 +23,17 @@ const memberDetailLookups = 10
 
 // MemberRow is one member of a corp or alliance target on the Members tab
 type MemberRow struct {
-	ID              int        `json:"id"`
-	Name            string     `json:"name"`
-	ImageURL        string     `json:"imageUrl"`
-	LastSeen        *time.Time `json:"lastSeen"` // their most recent killmail among the collected ones, null if they are on none
-	Corporation     string     `json:"corporation"`
-	CorporationIcon string     `json:"corporationIcon"`
-	Born            string     `json:"born"`       // ie Apr 18th, 2023 (3y 6m), or Unavailable
-	TimeInCorp      string     `json:"timeInCorp"` // how long since they joined their current corp, ie 3m 2d
-	NPCTime         string     `json:"npcTime"`    // their longest stay in an NPC corp, ie 1y 2m, or None
-	Left            bool       `json:"left"`       // EveWho still lists them, but the ESI has them out of the corp, or out of the alliance for an alliance target
-	ZkillURL        string     `json:"zkillUrl"`
-	EveWhoURL       string     `json:"evewhoUrl"`
+	ID          int        `json:"id"`
+	Name        string     `json:"name"`
+	ImageURL    string     `json:"imageUrl"`
+	LastSeen    *time.Time `json:"lastSeen"`    // their most recent killmail among the collected ones, null if they are on none
+	Corporation *EntityRef `json:"corporation"` // their corp now, null when it could not be looked up
+	Born        string     `json:"born"`        // ie Apr 18th, 2023 (3y 6m), or Unavailable
+	TimeInCorp  string     `json:"timeInCorp"`  // how long since they joined their current corp, ie 3m 2d
+	NPCTime     string     `json:"npcTime"`     // their longest stay in an NPC corp, ie 1y 2m, or None
+	Left        bool       `json:"left"`        // EveWho still lists them, but the ESI has them out of the corp, or out of the alliance for an alliance target
+	ZkillURL    string     `json:"zkillUrl"`
+	EveWhoURL   string     `json:"evewhoUrl"`
 }
 
 // MemberCorpRow is one member corporation of an alliance target on the Members tab
@@ -328,8 +327,7 @@ func memberDetails(row MemberRow, targetID int, targetType types.EntityType, cli
 	row.Born = api.FormatDateWithAge(character.Birthday, now)
 
 	if corp, err := client.GetCorporationInfo(character.CorporationID); err == nil && corp != nil {
-		row.Corporation = corp.Name
-		row.CorporationIcon = api.EntityIconURL(types.CORPORATION, character.CorporationID)
+		row.Corporation = entityRef(types.CORPORATION, character.CorporationID, corp.Name)
 		// EveWho's list lags behind, the ESI knows where they are now
 		switch targetType {
 		case types.CORPORATION:
