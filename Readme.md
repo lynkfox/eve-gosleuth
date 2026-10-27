@@ -45,6 +45,7 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
 
 * Other
  * Update the main search to no longer require the dropdown for time, instead use the ESI endpoint to determine type - if more than one returned open a selection box.
+  * potenitally move the search parameter preferences to a pop out button next to the search bar that can be quickly adjusted per search?
  * Add a window that can be popped out on its own that can contain running live kill trackers - Per system, Per Entity, Per Types (such as all citadels).
   * have an option to pull the kills since the tracker was last open
  * User data explorer - see all Main-Holding connections, all ignored allies of a main, and edit or add new ones.
