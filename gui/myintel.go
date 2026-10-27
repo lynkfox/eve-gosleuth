@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
+	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
 )
@@ -92,6 +94,16 @@ func (a *App) GetMyIntel() (groups []IntelGroup, err error) {
 
 	groups = []IntelGroup{}
 	for _, group := range byKey {
+		group.Entity.Ticker = a.cachedTicker(group.Entity)
+		for index := range group.Holdings {
+			group.Holdings[index].Ticker = a.cachedTicker(group.Holdings[index].EntityRef)
+		}
+		for index := range group.HeldFor {
+			group.HeldFor[index].Ticker = a.cachedTicker(group.HeldFor[index].EntityRef)
+		}
+		for index := range group.IgnoredAllies {
+			group.IgnoredAllies[index].Ticker = a.cachedTicker(group.IgnoredAllies[index])
+		}
 		groups = append(groups, *group)
 	}
 	slices.SortFunc(groups, func(a, b IntelGroup) int {
@@ -100,32 +112,47 @@ func (a *App) GetMyIntel() (groups []IntelGroup, err error) {
 	return groups, nil
 }
 
+// cachedTicker is a corp's or alliance's ticker if the cache has it, without asking the ESI, so My Intel opens at once. Empty for a pilot, or one not looked up yet.
+func (a *App) cachedTicker(entity EntityRef) string {
+	return a.cache.CachedTicker(searchTypes[entity.Type], entity.ID)
+}
+
 /*
-	lookupEntity finds a pilot, corporation, or alliance by its exact name, spelled as EVE spells it
+	lookupEntity finds a pilot, corporation, or alliance by its exact name, or by a zKillboard or EveWho link to it, spelled as EVE spells it
 
 Parameters:
-  - name: the name, ignoring case
-  - typeName: PILOT, CORPORATION, or ALLIANCE
+  - text: the name, ignoring case, or a link, which is looked up by the id in it, as the ESI can not find every name
+  - typeName: PILOT, CORPORATION, or ALLIANCE, what a name is looked up as. A link's own type is used instead.
+  - allowed: the kinds that can be looked up here, ie only corporations and alliances for a holding
 
 Returns:
   - EntityRef: what was found
-  - error: a user readable message if nothing of that type has the name
+  - error: a user readable message if nothing of that type has the name, or a link is to a kind not allowed
 */
-func (a *App) lookupEntity(name string, typeName string) (EntityRef, error) {
-	entityType, ok := searchTypes[typeName]
-	if !ok || entityType == types.SYSTEM {
-		return EntityRef{}, errors.New("Only pilots, corporations, and alliances can be looked up here")
-	}
-	name = strings.TrimSpace(name)
-	if name == "" {
+func (a *App) lookupEntity(text string, typeName string, allowed ...types.EntityType) (EntityRef, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
 		return EntityRef{}, errors.New("Enter a name")
 	}
 
-	found := retrieval.IntelTarget{Name: name, Clients: a.clients}
-	found.GetTargetInfoOfType(entityType)
+	found := retrieval.IntelTarget{Name: text, Clients: a.clients}
+	if linkType, linkID, isLink := api.ParseEntityLink(text); isLink {
+		if !slices.Contains(allowed, linkType) {
+			return EntityRef{}, fmt.Errorf("That link is to a %s, which can not be used here", strings.ToLower(linkType.String()))
+		}
+		found.GetTargetInfoByID(linkType, linkID)
+	} else {
+		entityType, ok := searchTypes[typeName]
+		if !ok || !slices.Contains(allowed, entityType) {
+			return EntityRef{}, fmt.Errorf("A %s can not be used here", strings.ToLower(typeName))
+		}
+		found.GetTargetInfoOfType(entityType)
+	}
 	if found.Error != nil {
 		return EntityRef{}, errors.New(found.DisplayMessage)
 	}
+	entityType := found.TypeOfEntity
+	name := found.Name
 	switch entityType {
 	case types.ALLIANCE:
 		if alliance, err := a.clients.ESIClient.GetAllianceInfo(found.IDNumber); err == nil && alliance != nil {
@@ -147,8 +174,8 @@ func (a *App) lookupEntity(name string, typeName string) (EntityRef, error) {
 	LookupEntity finds a pilot, corporation, or alliance by its exact name, for My Intel to start a card for. It does not wait for a running search.
 
 Parameters:
-  - name: the name, ignoring case
-  - entityType: PILOT, CORPORATION, or ALLIANCE
+  - name: the name, ignoring case, or a zKillboard or EveWho link
+  - entityType: PILOT, CORPORATION, or ALLIANCE, for a name
 
 Returns:
   - EntityRef: what was found, spelled as EVE spells it
@@ -156,7 +183,7 @@ Returns:
 */
 func (a *App) LookupEntity(name string, entityType string) (entity EntityRef, err error) {
 	defer recoverAsError(&err)
-	return a.lookupEntity(name, entityType)
+	return a.lookupEntity(name, entityType, types.PILOT, types.CORPORATION, types.ALLIANCE)
 }
 
 /*
@@ -164,8 +191,8 @@ func (a *App) LookupEntity(name string, entityType string) (entity EntityRef, er
 
 Parameters:
   - targetType, targetID: the pilot, corporation, or alliance whose Allies it is left out of
-  - allyName: the ally's exact name, ignoring case
-  - allyType: CORPORATION or ALLIANCE
+  - allyName: the ally's exact name, ignoring case, or a zKillboard or EveWho link
+  - allyType: CORPORATION or ALLIANCE, for a name
 
 Returns:
   - error: a user readable message if the ally is not found, or is the target itself
@@ -178,7 +205,7 @@ func (a *App) AddIgnoredAlly(targetType string, targetID int, allyName string, a
 	if !canHold(allyType) {
 		return errors.New("Only corporations and alliances can be allies")
 	}
-	ally, err := a.lookupEntity(allyName, allyType)
+	ally, err := a.lookupEntity(allyName, allyType, types.CORPORATION, types.ALLIANCE)
 	if err != nil {
 		return err
 	}
@@ -213,6 +240,24 @@ func (a *App) RemoveIgnoredAlly(targetType string, targetID int, allyType string
 }
 
 /*
+	RemoveMyIntelGroups removes several My Intel cards at once, as RemoveMyIntelGroup does each. It does not wait for a running search.
+
+Parameters:
+  - cards: the cards' keys, ie ALLIANCE:99013330. Ones that are not cards are skipped.
+*/
+func (a *App) RemoveMyIntelGroups(cards []string) (err error) {
+	defer recoverAsError(&err)
+	for _, card := range cards {
+		entityType, idText, _ := strings.Cut(card, ":")
+		if id, convErr := strconv.Atoi(idText); convErr == nil {
+			a.removeMyIntelGroup(entityType, id)
+		}
+	}
+	a.saveCacheQuietly()
+	return nil
+}
+
+/*
 	RemoveMyIntelGroup removes a My Intel card: the holdings it keeps and its ignored allies. Links where it is a holding of another main
 	belong to that main's card, so they are kept. It does not wait for a running search.
 
@@ -224,6 +269,16 @@ func (a *App) RemoveMyIntelGroup(entityType string, entityID int) (err error) {
 	if entityTypeOf, ok := searchTypes[entityType]; !ok || entityTypeOf == types.SYSTEM {
 		return errors.New("Only pilots, corporations, and alliances have cards")
 	}
+	a.removeMyIntelGroup(entityType, entityID)
+	a.saveCacheQuietly()
+	return nil
+}
+
+// removeMyIntelGroup removes a card's holdings and ignored allies, leaving saving to the caller
+func (a *App) removeMyIntelGroup(entityType string, entityID int) {
+	if entityTypeOf, ok := searchTypes[entityType]; !ok || entityTypeOf == types.SYSTEM {
+		return
+	}
 	if canHold(entityType) {
 		holdings, _ := a.cache.HoldingLinks(entityType, entityID)
 		for _, link := range holdings {
@@ -231,6 +286,4 @@ func (a *App) RemoveMyIntelGroup(entityType string, entityID int) (err error) {
 		}
 	}
 	a.cache.SetIgnoredAllies(entityType, entityID, nil)
-	a.saveCacheQuietly()
-	return nil
 }

@@ -13,7 +13,7 @@
     <div class="brand">EVE <span>GoSleuth</span></div>
     <form id="search-form" class="search" autocomplete="off">
       <div class="search-field">
-        <input id="search-input" type="text" placeholder="Exact pilot, corp, alliance, or system name" spellcheck="false" autofocus
+        <input id="search-input" type="text" placeholder="Exact name, or a zKillboard or EveWho link" spellcheck="false" autofocus
           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="recent-list">
         <button id="recent-toggle" class="recent-toggle" type="button" title="Recent searches" aria-label="Recent searches" aria-expanded="false" aria-controls="recent-list" tabindex="-1">▾</button>
         <ul id="recent-list" class="menu-dropdown recent-list" role="listbox" aria-label="Recent searches" hidden></ul>
@@ -358,6 +358,7 @@
       <p class="preference-help">The holdings and ignored allies you have set, for every target. Changes are saved straight away, and holdings change what the next search collects.</p>
       <div class="myintel-tools">
         <input id="myintel-filter" type="search" placeholder="Filter by name" autocomplete="off" spellcheck="false" aria-label="Filter by name">
+        <button id="myintel-import-button" class="secondary" type="button" title="Add holdings and ignored allies from a file another user exported">Import…</button>
       </div>
       <form id="myintel-add" class="myintel-add">
         <select id="myintel-add-type" aria-label="Type">
@@ -365,12 +366,18 @@
           <option value="CORPORATION">Corporation</option>
           <option value="PILOT">Pilot</option>
         </select>
-        <input id="myintel-add-name" type="text" placeholder="Exact name, to add a card for it" autocomplete="off" spellcheck="false" aria-label="Name">
+        <input id="myintel-add-name" type="text" placeholder="Exact name or a zKillboard link, to add a card for it" autocomplete="off" spellcheck="false" aria-label="Name">
         <button type="submit">Add</button>
       </form>
       <p id="myintel-error" class="preferences-error" role="alert" hidden></p>
       <!-- the card last removed with its x, to bring back until the next is removed or the window closes -->
       <p id="myintel-undo" class="myintel-undo" role="status" hidden><span id="myintel-undo-text"></span><button id="myintel-undo-button" class="secondary" type="button">Undo</button></p>
+      <!-- what the ticked cards can have done to them all at once -->
+      <div id="myintel-bulk" class="myintel-bulk" hidden>
+        <button id="myintel-pick-all" class="secondary" type="button" title="Tick, or untick, every card the filter shows">Check all</button>
+        <button id="myintel-export-button" class="secondary" type="button" title="Save the ticked cards to a file to give to other users" disabled>Export…</button>
+        <button id="myintel-delete-button" class="secondary" type="button" title="Remove the ticked cards" disabled>Delete…</button>
+      </div>
       <div id="myintel-list" class="myintel-list"></div>
       <p id="myintel-empty" class="preference-help" hidden>Nothing set yet. Add holdings and ignored allies here, or from a search's target panel and Allies tab.</p>
     </div>
@@ -384,6 +391,28 @@
       <div class="confirm-actions">
         <button class="secondary" value="cancel" autofocus>Cancel</button>
         <button class="danger" value="remove">Remove</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- what a My Intel import would add, before it does -->
+  <dialog id="myintel-import" class="confirm myintel-import" aria-labelledby="myintel-import-title">
+    <form method="dialog">
+      <p id="myintel-import-title" class="holding-title"></p>
+      <ul id="myintel-import-summary" class="myintel-import-summary"></ul>
+      <div id="myintel-import-notes" class="myintel-import-notes" hidden>
+        <p class="confirm-detail">These holdings have another note in the file:</p>
+        <ul id="myintel-import-note-list"></ul>
+        <label class="clear-user-data">
+          <input id="myintel-import-theirs" type="checkbox">
+          <span><span class="preference-name">Use the file's notes</span><span class="preference-help">Otherwise yours are kept</span></span>
+        </label>
+      </div>
+      <p id="myintel-import-skipped" class="confirm-detail" hidden></p>
+      <p class="confirm-detail">An import only adds. Nothing you have is removed.</p>
+      <div class="confirm-actions">
+        <button class="secondary" value="cancel" autofocus>Cancel</button>
+        <button id="myintel-import-apply" value="import">Import</button>
       </div>
     </form>
   </dialog>

@@ -175,6 +175,32 @@ func TestZkillTogetherURL(t *testing.T) {
 	})
 }
 
+func TestParseEntityLink(t *testing.T) {
+	for _, link := range []struct {
+		text       string
+		entityType types.EntityType
+		id         int
+	}{
+		{"https://zkillboard.com/alliance/99007237/", types.ALLIANCE, 99007237},
+		{"zkillboard.com/character/2121139046", types.PILOT, 2121139046},
+		{"  https://www.zkillboard.com/corporation/98744491/losses/  ", types.CORPORATION, 98744491},
+		{"https://zkillboard.com/system/30000142/", types.SYSTEM, 30000142},
+		{"https://evewho.com/character/2121139046", types.PILOT, 2121139046},
+		{"evewho.com/alliance/99013330", types.ALLIANCE, 99013330},
+	} {
+		entityType, id, ok := api.ParseEntityLink(link.text)
+		assert.True(t, ok, link.text)
+		assert.Equal(t, link.entityType, entityType, link.text)
+		assert.Equal(t, link.id, id, link.text)
+	}
+
+	for _, text := range []string{"L A Z E R H A W K S", "Jita", "https://zkillboard.com/kill/123/", "https://evewho.com/system/30000142",
+		"https://example.com/alliance/99007237/", "https://zkillboard.com/alliance/notanumber/", "https://zkillboard.com/alliance/"} {
+		_, _, ok := api.ParseEntityLink(text)
+		assert.False(t, ok, text)
+	}
+}
+
 func TestDotlanSystemURL(t *testing.T) {
 	assert.Equal(t, "https://evemaps.dotlan.net/system/Jita", api.DotlanSystemURL("Jita"))
 	assert.Equal(t, "https://evemaps.dotlan.net/system/Old_Man_Star", api.DotlanSystemURL("Old Man Star"), "spaces are underscores")

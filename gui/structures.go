@@ -18,6 +18,7 @@ type EntityRef struct {
 	IconURL   string `json:"iconUrl"`
 	ZkillURL  string `json:"zkillUrl"`
 	EveWhoURL string `json:"evewhoUrl"`
+	Ticker    string `json:"ticker,omitempty"` // a corp's or alliance's ticker, where it is set, ie on My Intel's cards
 }
 
 // StructureDeath is a structure's loss: when, and who destroyed it

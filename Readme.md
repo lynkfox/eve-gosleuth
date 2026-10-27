@@ -45,8 +45,6 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
 * Other
  * Add a window that can be popped out on its own that can contain running live kill trackers - Per system, Per Entity, Per Types (such as all citadels).
   * have an option to pull the kills since the tracker was last open
- * User data explorer - see all Main-Holding connections, all ignored allies of a main, and edit or add new ones.
-  * have it be exportable to give to other users
  * Report data to be saved as a PDF for distribution.
  * About tab, with isk donation instructions, maybe kofi?
 

@@ -21,6 +21,7 @@ type RecentSearch struct {
 	Name   string `json:"name"`             // the target's name as EVE spells it
 	Type   string `json:"type"`             // PILOT, CORPORATION, ALLIANCE, or SYSTEM
 	Ticker string `json:"ticker,omitempty"` // a corp's or alliance's ticker, ie URSA., empty for others and searches saved before tickers were
+	ID     int    `json:"id,omitempty"`     // its eve id, so it is searched again by id, 0 for searches saved before ids were, which are searched by name
 }
 
 // recentSearchKey is a search's key in Searched: its type and lower case name, so a name typed in another case is the same search

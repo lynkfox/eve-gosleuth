@@ -262,3 +262,50 @@ func (c *CachedEveIDs) GetNamesFromEveIDs(idsNumbers []int) (map[int]string, err
 
 	return names, nil
 }
+
+/*
+	CachedTicker returns a corporation's or alliance's ticker if the cache has its details, even ones due a refresh, without asking the ESI
+
+Parameters:
+  - entityType: CORPORATION or ALLIANCE
+  - idNumber: its eve id
+
+Returns:
+  - string: the ticker, empty if it has not been looked up or is of another type
+*/
+func (c *CachedEveIDs) CachedTicker(entityType types.EntityType, idNumber int) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	switch entityType {
+	case types.CORPORATION:
+		if corp := peekKnown[api.ESICorporation](c, idNumber); corp != nil {
+			return corp.Ticker
+		}
+	case types.ALLIANCE:
+		if alliance := peekKnown[api.ESIAlliance](c, idNumber); alliance != nil {
+			return alliance.Ticker
+		}
+	}
+	return ""
+}
+
+// peekKnown returns an id's cached raw ESI response as a *T, however old, or nil if it is not cached or not a T. The caller must hold c.mu.
+func peekKnown[T any](c *CachedEveIDs, idNumber int) *T {
+	entry, found := c.Known[idNumber]
+	if !found {
+		if entry = loadRow[T](c, sectionKnown, keyText(idNumber)); entry == nil {
+			return nil
+		}
+		c.Known[idNumber] = entry
+	}
+	if entry.Value == nil {
+		return nil
+	}
+	casted, err := CastExpanded[T](entry.Value)
+	if err != nil {
+		return nil
+	}
+	entry.Value = casted
+	return casted
+}

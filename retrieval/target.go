@@ -215,12 +215,6 @@ func (t *IntelTarget) GetTargetInfoOfType(entityType types.EntityType) {
 }
 
 func (t *IntelTarget) lookupTarget(onlyType *types.EntityType) {
-
-	var (
-		data interface{}
-		err  error
-	)
-
 	names, err := t.Clients.ESIClient.GetEveIDsFromNames([]string{t.Name})
 
 	if err != nil {
@@ -270,6 +264,15 @@ func (t *IntelTarget) lookupTarget(onlyType *types.EntityType) {
 		}
 	}
 
+	t.fetchData()
+}
+
+// fetchData looks up the details of the target's IDNumber, as its TypeOfEntity, into Data, setting Error and DisplayMessage if it can not
+func (t *IntelTarget) fetchData() {
+	var (
+		data interface{}
+		err  error
+	)
 	switch t.TypeOfEntity {
 	case types.ALLIANCE:
 		data, err = t.Clients.ESIClient.GetAllianceInfo(t.IDNumber)
@@ -279,7 +282,8 @@ func (t *IntelTarget) lookupTarget(onlyType *types.EntityType) {
 		data, err = t.Clients.ESIClient.GetSystemInfo(t.IDNumber)
 	case types.PILOT:
 		data, err = t.Clients.ESIClient.GetCharacterInfo(t.IDNumber)
-
+	default:
+		err = fmt.Errorf("%s can not be looked up", t.TypeOfEntity)
 	}
 	if err != nil {
 		t.Error = fmt.Errorf("Unable to retrieve Target info: %w", err)
@@ -288,5 +292,31 @@ func (t *IntelTarget) lookupTarget(onlyType *types.EntityType) {
 	}
 
 	t.Data = data
+}
 
+/*
+	GetTargetInfoByID looks up the target by its eve id rather than its name, which the ESI can not find for every entity, ie L A Z E R H A W K S,
+	setting its Data, and Name as EVE spells it
+
+Parameters:
+  - entityType: what it is
+  - id: its eve id
+*/
+func (t *IntelTarget) GetTargetInfoByID(entityType types.EntityType, id int) {
+	t.TypeOfEntity, t.IDNumber = entityType, id
+	t.fetchData()
+	if t.Error != nil {
+		t.DisplayMessage = fmt.Sprintf("No %s found with id %d: %s", strings.ToLower(entityType.String()), id, api.FailureReason(t.Error))
+		return
+	}
+	switch data := t.Data.(type) {
+	case *api.ESIAlliance:
+		t.Name = data.Name
+	case *api.ESICorporation:
+		t.Name = data.Name
+	case *api.ESISystem:
+		t.Name = data.Name
+	case *api.ESICharacter:
+		t.Name = data.Name
+	}
 }

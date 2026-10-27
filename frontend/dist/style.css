@@ -1338,8 +1338,18 @@ button.danger {
 /* My Intel: a filter, a row to add a card, then a collapsible card per target with its holdings, the mains it holds for, and its ignored allies */
 #myintel { width: min(680px, calc(100vw - 32px)); height: calc(100vh - 32px); }
 .myintel-body { align-content: start; }
+.myintel-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.myintel-bulk { display: flex; gap: 8px; }
+.myintel-bulk[hidden] { display: none; }
+.myintel-bulk button { font-size: 12px; }
+#myintel-delete-button:not(:disabled) { border-color: var(--error); color: var(--error); }
 .myintel-tools input,
 .myintel-add input { width: 100%; }
+.myintel-card-pick { flex: none; margin: 0; accent-color: var(--accent); }
+.myintel-import { width: min(480px, calc(100vw - 32px)); }
+.myintel-import-summary,
+.myintel-import-notes ul { margin: 8px 0; padding-left: 20px; font-size: 13px; }
+.myintel-import-notes li { overflow-wrap: anywhere; }
 .myintel-add { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; gap: 8px; }
 .myintel-list { display: grid; gap: 8px; }
 .myintel-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
@@ -1350,13 +1360,39 @@ button.danger {
 .myintel-card-counts { color: var(--muted); font-size: 12px; }
 .myintel-card-counts { margin-left: auto; }
 .myintel-card-body { display: grid; gap: 6px; padding: 4px 12px 12px; }
-.myintel-section-title { margin: 6px 0 0; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
-.myintel-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.myintel-section-line { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+/* a faint hairline between a card's sections, at about half strength and fading out before the card's edges */
+.myintel-section-line:not(:first-child) { position: relative; margin-top: 8px; padding-top: 8px; }
+.myintel-section-line:not(:first-child)::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--border) 25%, var(--border) 75%, transparent);
+  opacity: 0.55;
+}
+.myintel-section-title { margin: 0; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.myintel-plus { width: 22px; height: 22px; padding: 0; background: none; border: 1px solid var(--border); color: var(--muted); font-size: 15px; line-height: 1; }
+.myintel-plus:hover,
+.myintel-plus[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.myintel-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.myintel-who .entity-ticker { font-size: 12px; }
+.myintel-card > summary .entity-ticker { font-size: 12px; }
+.myintel-note-cell { display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; }
+.myintel-row > .myintel-note-text { text-align: right; }
+.myintel-note-none { font-style: italic; }
+.myintel-pencil { flex: none; padding: 0 4px; background: none; border: none; color: var(--muted); font-size: 13px; line-height: 1; }
+.myintel-pencil:hover { color: var(--accent); }
+.myintel-row-add[hidden] { display: none; }
+.myintel-row { display: grid; grid-template-columns: auto 22px minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px; }
 .myintel-row img { width: 22px; height: 22px; border-radius: 3px; }
-.myintel-row .link-button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.myintel-row .link-button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .myintel-note { width: 100%; font-size: 12px; }
 .myintel-note-text { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.myintel-none { color: var(--muted); font-size: 12px; }
+/* an empty section's line, the height of an entity row and without a paragraph's margins, so it sits under its title as a row would */
+.myintel-none { display: flex; align-items: center; min-height: 22px; margin: 0; color: var(--muted); font-size: 12px; }
 .myintel-row-add { display: grid; grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; margin-top: 2px; }
 .myintel-row-add.no-note { grid-template-columns: 120px minmax(0, 1fr) auto; }
 .myintel-row-add input,

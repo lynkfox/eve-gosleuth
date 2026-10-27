@@ -53,6 +53,10 @@ type App struct {
 
 	// writes each search's log to a file in debug mode, then zips it to send with a problem report. It has its own lock.
 	debug *debugRecorder
+
+	// the My Intel import last previewed, waiting for the user to agree to it, see PreviewMyIntelImport
+	importMu      sync.Mutex
+	pendingImport *importPlan
 }
 
 // sdeCheckInterval is the least time between checks for a new SDE release, which is what expires cached ESI data
@@ -165,6 +169,7 @@ type KillmailCard struct {
 	SecurityBand      string     `json:"securityBand"` // high, low, or null, see api.SecurityBand
 	Region            string     `json:"region"`
 	Class             string     `json:"class"` // wormhole class for j-space systems, empty elsewhere
+	SystemID          int        `json:"systemId"`
 	SystemZkillURL    string     `json:"systemZkillUrl"`
 	SystemDotlanURL   string     `json:"systemDotlanUrl"`
 	ShipName          string     `json:"shipName"`
@@ -350,6 +355,24 @@ func (a *App) lookupTarget(name string, entityType types.EntityType) (retrieval.
 	return target, entity, nil
 }
 
+// lookupTargetByID finds a target by its eve id, which needs no name lookup, as the ESI can not find every name, ie L A Z E R H A W K S
+func (a *App) lookupTargetByID(id int, entityType types.EntityType) (retrieval.IntelTarget, api.TargetEntity, error) {
+	comm.ReportProgress("Looking up %s %d", strings.ToLower(entityType.String()), id)
+
+	target := retrieval.IntelTarget{Clients: a.clients}
+	target.GetTargetInfoByID(entityType, id)
+	if target.Error != nil {
+		comm.Logger.WithError(target.Error).Warnf("Search for %s %d failed", entityType, id)
+		return target, nil, errors.New(target.DisplayMessage)
+	}
+
+	entity, ok := target.Data.(api.TargetEntity)
+	if !ok {
+		return target, nil, fmt.Errorf("No details available for %s %d", strings.ToLower(entityType.String()), id)
+	}
+	return target, entity, nil
+}
+
 // matchTargets finds the pilots, corporations, alliances, and systems with a name, see retrieval.MatchTargets, at least one, or a user readable error for none
 func (a *App) matchTargets(name string) (retrieval.TargetMatches, error) {
 	comm.ReportProgress("Looking up %s", name)
@@ -397,18 +420,19 @@ func (a *App) holdingMain(target *retrieval.IntelTarget) (retrieval.HoldingLink,
 }
 
 /*
-	SearchTarget looks up a pilot, corporation, alliance, or system by name and builds its display values
+	SearchTarget looks up a pilot, corporation, alliance, or system, by id when it is known, else by name, and builds its display values
 
 Parameters:
-  - name: the exact in game name of the target, ignoring case
+  - name: the exact in game name of the target, ignoring case, or a zKillboard or EveWho link to it, which is searched by the id in it
   - searchType: PILOT, CORPORATION, ALLIANCE, or SYSTEM, only accepting a match of this type, or empty to accept any: a lone match is searched,
     and with more than one, or any by ticker, the result has only Choices, for the search to be asked again for the one chosen
+  - id: the target's eve id with its searchType, when the frontend knows it, ie from a menu or recent search, so no name lookup is needed. 0 to search by name.
 
 Returns:
   - TargetResult: the target's id, type, and display values, or the Choices
   - error: a user readable message if the target could not be found or loaded
 */
-func (a *App) SearchTarget(name string, searchType string) (result TargetResult, err error) {
+func (a *App) SearchTarget(name string, searchType string, id int) (result TargetResult, err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	defer a.finishDebugOnError(&err)
@@ -420,15 +444,20 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 	defer a.esiGuard.Resume()
 
 	name = strings.TrimSpace(name)
-	if name == "" {
+	if name == "" && id == 0 {
 		return result, errors.New("Enter a name to search for")
 	}
 	a.startDebug(name)
-	comm.Logger.Infof("Searching for %q as %q", name, searchType)
+	comm.Logger.Infof("Searching for %q as %q, id %d", name, searchType, id)
 
 	a.checkSDERelease()
 
-	if searchType == "" {
+	// a pasted zKillboard or EveWho link is searched by the id in it
+	if linkType, linkID, isLink := api.ParseEntityLink(name); isLink {
+		searchType, id = linkType.String(), linkID
+	}
+
+	if id == 0 && searchType == "" {
 		found, err := a.matchTargets(name)
 		if err != nil {
 			return result, err
@@ -445,7 +474,13 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 	}
 
 	lookupsBefore := a.cache.Counts()
-	target, entity, err := a.lookupTarget(name, entityType)
+	var target retrieval.IntelTarget
+	var entity api.TargetEntity
+	if id != 0 {
+		target, entity, err = a.lookupTargetByID(id, entityType)
+	} else {
+		target, entity, err = a.lookupTarget(name, entityType)
+	}
 	if err != nil {
 		return result, err
 	}
@@ -454,7 +489,7 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 	searchedHolding := ""
 	if main, found := a.holdingMain(&target); found {
 		comm.ReportProgress("%s is a holding of %s, searching %s with its holdings", main.HoldingName, main.MainName, main.MainName)
-		if mainTarget, mainEntity, mainErr := a.lookupTarget(main.MainName, searchTypes[main.MainType]); mainErr == nil {
+		if mainTarget, mainEntity, mainErr := a.lookupTargetByID(main.MainID, searchTypes[main.MainType]); mainErr == nil {
 			target, entity, searchedHolding = mainTarget, mainEntity, main.HoldingName
 			searchType = main.MainType
 		} else {
@@ -487,7 +522,7 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 	if foundName == "" {
 		foundName = name
 	}
-	a.cache.AddRecentSearch(retrieval.RecentSearch{Name: foundName, Type: searchType, Ticker: display.Ticker}, a.GetSettings().MaxRecentSearches)
+	a.cache.AddRecentSearch(retrieval.RecentSearch{Name: foundName, Type: searchType, ID: target.IDNumber, Ticker: display.Ticker}, a.GetSettings().MaxRecentSearches)
 
 	result = TargetResult{
 		ID:              target.IDNumber,
@@ -752,6 +787,7 @@ func buildKillmailCards(killmails []*retrieval.Killmail, target *retrieval.Intel
 			card.SecurityBand = api.SecurityBand(km.System.SecurityStatus)
 			card.Region = km.System.Region
 			card.Class = comm.WormholeClass(km.System.Name, km.System.Region)
+			card.SystemID = km.System.SystemID
 			card.SystemZkillURL = api.ZkillEntityURL(types.SYSTEM, km.System.SystemID)
 			card.SystemDotlanURL = api.DotlanSystemURL(km.System.Name)
 		}

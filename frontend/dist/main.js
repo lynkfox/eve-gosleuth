@@ -144,8 +144,10 @@ function searchTypeLabel(type) {
   return SEARCH_TYPES[type] || type;
 }
 
-// searchTypeHint is the type of the entity filled into the search bar from the app, ie a recent search, so a name shared by several needs no choosing. Typing clears it.
+// searchTypeHint and searchIdHint are the type and eve id of the entity filled into the search bar from the app, ie a recent search, so it is searched by id,
+// needing no choosing between names and no name lookup, which the ESI can not do for every name. Typing clears them.
 let searchTypeHint = "";
+let searchIdHint = 0;
 
 // offerSearch fills the search bar with an entity from the target panel, then asks before searching for it
 function offerSearch(entity) {
@@ -154,6 +156,7 @@ function offerSearch(entity) {
   }
 
   searchTypeHint = entity.type;
+  searchIdHint = entity.id || 0;
   el("search-input").value = entity.name;
 
   el("search-confirm-target").textContent = `${searchTypeLabel(entity.type)}: ${entity.name}`;
@@ -324,7 +327,7 @@ function stargateGrid(stargates) {
     name.className = "link-button";
     name.textContent = gate.Name;
     name.title = "Search for this";
-    name.addEventListener("click", () => offerSearch({ type: "SYSTEM", name: gate.Name }));
+    name.addEventListener("click", () => offerSearch({ type: "SYSTEM", name: gate.Name, id: gate.SystemID }));
 
     const security = document.createElement("span");
     security.className = securityClass(gate.SecurityBand);
@@ -352,7 +355,7 @@ function memberCorpGrid(corps) {
     name.className = "link-button";
     name.textContent = corp.Name;
     name.title = "Search for this";
-    name.addEventListener("click", () => offerSearch({ type: "CORPORATION", name: corp.Name }));
+    name.addEventListener("click", () => offerSearch({ type: "CORPORATION", name: corp.Name, id: corp.CorporationID }));
 
     const members = document.createElement("span");
     members.className = "member-count";
@@ -386,9 +389,9 @@ function detailGrid(rows) {
 function renderTarget(result) {
   const display = result.display;
 
-  const target = { label: result.type, name: display.Name, type: result.type, imageUrl: display.TargetImageUrl, zkillUrl: display.ZkillUrl, evewhoUrl: display.EveWhoUrl, dotlanUrl: display.DotlanUrl, spaceLabel: display.SpaceLabel, ticker: display.Ticker };
+  const target = { label: result.type, id: result.id, name: display.Name, type: result.type, imageUrl: display.TargetImageUrl, zkillUrl: display.ZkillUrl, evewhoUrl: display.EveWhoUrl, dotlanUrl: display.DotlanUrl, spaceLabel: display.SpaceLabel, ticker: display.Ticker };
   const related = (display.Related || []).map((entity) => ({
-    label: entity.Title, name: entity.Name, type: entity.TypeName, imageUrl: entity.ImageUrl, zkillUrl: entity.ZkillUrl, evewhoUrl: entity.EveWhoUrl, ticker: entity.Ticker,
+    label: entity.Title, id: entity.ID, name: entity.Name, type: entity.TypeName, imageUrl: entity.ImageUrl, zkillUrl: entity.ZkillUrl, evewhoUrl: entity.EveWhoUrl, ticker: entity.Ticker,
   }));
   const relatedGroup = document.createElement("div");
   relatedGroup.className = "related-entities";
@@ -552,7 +555,7 @@ function holdingChip(entity, isHolding) {
   name.className = "link-button";
   name.textContent = entity.name;
   name.title = "Search for this";
-  name.addEventListener("click", () => offerSearch({ type: entity.type, name: entity.name }));
+  name.addEventListener("click", () => offerSearch({ type: entity.type, name: entity.name, id: entity.id }));
   const kind = document.createElement("span");
   kind.className = "holding-type";
   kind.textContent = searchTypeLabel(entity.type);
@@ -652,6 +655,8 @@ const HOLDING_TYPES = ["ALLIANCE", "CORPORATION"];
 let myIntel = [];
 const myIntelOpen = new Set();
 let myIntelAdded = [];
+// myIntelPicked are the keys of the cards ticked, for Export and Delete
+const myIntelPicked = new Set();
 
 const intelKey = (entity) => `${entity.type}:${entity.id}`;
 
@@ -660,7 +665,7 @@ function openMyIntel() {
   closeLimitsMenu();
   showMyIntelError("");
   // an undo lasts only while the window it was offered in is open
-  myIntelRemoved = null;
+  myIntelRemoved = [];
   el("myintel-undo").hidden = true;
   el("myintel").showModal();
   loadMyIntel();
@@ -686,8 +691,108 @@ function renderMyIntel() {
   const groups = [...myIntelAdded, ...myIntel];
   const matches = (group) => !filter || [group.entity, ...group.holdings, ...group.heldFor, ...group.ignoredAllies].some((entity) => entity.name.toLowerCase().includes(filter));
   const shown = groups.filter(matches);
+  myIntelShown = shown;
   el("myintel-list").replaceChildren(...shown.map(myIntelCard));
   el("myintel-empty").hidden = groups.length > 0;
+  el("myintel-bulk").hidden = groups.length === 0;
+  showPickedCount();
+}
+
+// myIntelShown are the cards the filter shows, which Check all ticks
+let myIntelShown = [];
+
+// pickedCards are the ticked cards, those added here first
+function pickedCards() {
+  return [...myIntelAdded, ...myIntel].filter((group) => myIntelPicked.has(intelKey(group.entity)));
+}
+
+// showPickedCount names how many cards Export and Delete act on, and whether Check all ticks or unticks the cards shown
+function showPickedCount() {
+  const picked = pickedCards();
+  const savedPicked = picked.filter((group) => myIntel.includes(group)).length;
+  el("myintel-export-button").textContent = savedPicked ? `Export ${savedPicked}…` : "Export…";
+  el("myintel-export-button").disabled = savedPicked === 0;
+  el("myintel-delete-button").textContent = picked.length ? `Delete ${picked.length}…` : "Delete…";
+  el("myintel-delete-button").disabled = picked.length === 0;
+  const allShownPicked = myIntelShown.length > 0 && myIntelShown.every((group) => myIntelPicked.has(intelKey(group.entity)));
+  el("myintel-pick-all").textContent = allShownPicked ? "Uncheck all" : "Check all";
+}
+
+// pickAllShown ticks every card the filter shows, or unticks them if they all are
+function pickAllShown() {
+  const keys = myIntelShown.map((group) => intelKey(group.entity));
+  const allPicked = keys.length > 0 && keys.every((key) => myIntelPicked.has(key));
+  for (const key of keys) {
+    if (allPicked) myIntelPicked.delete(key);
+    else myIntelPicked.add(key);
+  }
+  renderMyIntel();
+}
+
+// exportMyIntel saves the ticked cards to a file the user picks
+async function exportMyIntel() {
+  showMyIntelError("");
+  const cards = pickedCards().filter((group) => myIntel.includes(group)).map((group) => intelKey(group.entity));
+  try {
+    const file = await backend().ExportMyIntel(cards);
+    if (file) tickerPush(`Exported ${cards.length} My Intel ${cards.length === 1 ? "card" : "cards"} to ${file}`);
+  } catch (err) {
+    showMyIntelError(String(err));
+  }
+}
+
+// importMyIntel asks for a file, shows what it would add, and adds it once the user agrees
+async function importMyIntel() {
+  showMyIntelError("");
+  let preview;
+  try {
+    preview = await backend().PreviewMyIntelImport();
+  } catch (err) {
+    showMyIntelError(String(err));
+    return;
+  }
+  if (preview.cancelled) return;
+
+  const changes = preview.newHoldings + preview.newIgnored + preview.noteChanges.length;
+  el("myintel-import-title").textContent = changes ? `Import ${preview.file}?` : `Nothing new in ${preview.file}`;
+  const lines = [];
+  if (preview.newHoldings) lines.push(`${plural(preview.newHoldings, "new holding", "new holdings")}`);
+  if (preview.newIgnored) lines.push(`${plural(preview.newIgnored, "new ignored ally", "new ignored allies")}`);
+  if (preview.knownHoldings || preview.knownIgnored) lines.push(`${preview.knownHoldings + preview.knownIgnored} already saved`);
+  el("myintel-import-summary").replaceChildren(...lines.map((line) => {
+    const item = document.createElement("li");
+    item.textContent = line;
+    return item;
+  }));
+
+  el("myintel-import-notes").hidden = preview.noteChanges.length === 0;
+  el("myintel-import-theirs").checked = false;
+  el("myintel-import-note-list").replaceChildren(...preview.noteChanges.map((change) => {
+    const item = document.createElement("li");
+    item.textContent = `${change.holding} of ${change.main}: yours “${change.mine}”, theirs “${change.theirs}”`;
+    return item;
+  }));
+
+  const skipped = el("myintel-import-skipped");
+  skipped.hidden = preview.skipped === 0;
+  skipped.textContent = preview.skipped ? `${plural(preview.skipped, "entry was", "entries were")} left out, as they did not check out with the ESI: ${preview.skippedExamples.join("; ")}${preview.skipped > preview.skippedExamples.length ? "; …" : ""}` : "";
+  el("myintel-import-apply").hidden = changes === 0;
+
+  const dialog = el("myintel-import");
+  dialog.returnValue = "";
+  dialog.showModal();
+  await new Promise((resolve) => dialog.addEventListener("close", resolve, { once: true }));
+  if (dialog.returnValue !== "import") return;
+
+  try {
+    await backend().ApplyMyIntelImport(el("myintel-import-theirs").checked);
+  } catch (err) {
+    showMyIntelError(String(err));
+    return;
+  }
+  tickerPush(`Imported ${preview.file} into My Intel`);
+  await loadMyIntel();
+  syncShownTarget();
 }
 
 // myIntelCard is a target's card: its holdings with their notes, the mains it holds for, and its ignored allies, each with an x, and rows to add more
@@ -700,6 +805,18 @@ function myIntelCard(group) {
   card.addEventListener("toggle", () => (card.open ? myIntelOpen.add(key) : myIntelOpen.delete(key)));
 
   const summary = document.createElement("summary");
+  // ticked to be exported
+  const pick = document.createElement("input");
+  pick.type = "checkbox";
+  pick.className = "myintel-card-pick";
+  pick.checked = myIntelPicked.has(key);
+  pick.title = "Tick to export or delete";
+  pick.setAttribute("aria-label", `Pick ${entity.name}`);
+  pick.addEventListener("change", () => {
+    if (pick.checked) myIntelPicked.add(key);
+    else myIntelPicked.delete(key);
+    showPickedCount();
+  });
   const icon = document.createElement("img");
   icon.src = entity.iconUrl;
   icon.alt = "";
@@ -724,9 +841,11 @@ function myIntelCard(group) {
   remove.setAttribute("aria-label", `Remove ${entity.name} from My Intel`);
   remove.addEventListener("click", (event) => {
     event.preventDefault(); // not a toggle of the card
-    removeMyIntelCard(group);
+    removeMyIntelCards([group]);
   });
-  summary.append(icon, name, kind, counts, remove);
+  summary.append(pick, icon, name);
+  if (entity.ticker) summary.append(tickerTag(entity.type, entity.ticker));
+  summary.append(kind, counts, remove);
   withMenu(summary, [entitySection(entity)]);
 
   const body = document.createElement("div");
@@ -740,15 +859,16 @@ function myIntelCard(group) {
   };
 
   if (HOLDING_TYPES.includes(entity.type)) {
-    body.append(myIntelTitle("Holdings"));
+    const add = myIntelAddRow(`${key}:holdings`, "Holding name", true, (name, type, note) =>
+      myIntelChange(() => backend().SaveHolding(entity.id, entity.type, entity.name, name, type, note), showError, `Saved a holding for ${entity.name}`));
+    body.append(myIntelTitle("Holdings", add, "Add a holding"));
     if (group.holdings.length === 0) body.append(myIntelNone("No holdings"));
     body.append(...group.holdings.map((holding) => myIntelRow(holding, {
       note: holding.note,
       onNote: (note) => myIntelChange(() => backend().SaveHolding(entity.id, entity.type, entity.name, holding.name, holding.type, note), showError, `Saved the note on ${holding.name}`),
       onRemove: () => myIntelChange(() => backend().RemoveHolding(entity.type, entity.id, holding.type, holding.id), showError, `Removed ${holding.name} as a holding of ${entity.name}`),
     })));
-    body.append(myIntelAddRow("Holding name", true, (name, type, note) =>
-      myIntelChange(() => backend().SaveHolding(entity.id, entity.type, entity.name, name, type, note), showError, `Saved a holding for ${entity.name}`)));
+    body.append(add);
   }
 
   if (group.heldFor.length > 0) {
@@ -759,64 +879,82 @@ function myIntelCard(group) {
     })));
   }
 
-  body.append(myIntelTitle("Ignored allies"));
+  const addAlly = myIntelAddRow(`${key}:allies`, "Ally name", false, (name, type) =>
+    myIntelChange(() => backend().AddIgnoredAlly(entity.type, entity.id, name, type), showError, `Ignoring ${name} for ${entity.name}`));
+  body.append(myIntelTitle("Ignored allies", addAlly, "Ignore an ally"));
   if (group.ignoredAllies.length === 0) body.append(myIntelNone("None ignored"));
   body.append(...group.ignoredAllies.map((ally) => myIntelRow(ally, {
     onRemove: () => myIntelChange(() => backend().RemoveIgnoredAlly(entity.type, entity.id, ally.type, ally.id), showError, `No longer ignoring ${ally.name} for ${entity.name}`),
   })));
-  body.append(myIntelAddRow("Ally name", false, (name, type) =>
-    myIntelChange(() => backend().AddIgnoredAlly(entity.type, entity.id, name, type), showError, `Ignoring ${name} for ${entity.name}`)));
+  body.append(addAlly);
 
   body.append(error);
   card.append(summary, body);
   return card;
 }
 
-// myIntelRemoved is the card last removed with its x, kept to undo, or null
-let myIntelRemoved = null;
+// myIntelRemoved are the cards last removed, kept to undo, empty when there is nothing to undo
+let myIntelRemoved = [];
+
+const plural = (count, one, many) => `${count.toLocaleString("en-US")} ${count === 1 ? one : many}`;
 
 /*
-  removeMyIntelCard asks, then removes a card's holdings and ignored allies at once, offering to undo it. Links where it is another main's holding belong to
-  that main's card, so they stay. One added here with nothing saved just goes.
+  removeMyIntelCards asks, then removes cards' holdings and ignored allies at once, offering to undo it. Links where a card is another main's holding belong to
+  that main's card, so they stay. Cards added here with nothing saved just go.
 */
-async function removeMyIntelCard(group) {
-  const entity = group.entity;
-  const key = intelKey(entity);
-  if (myIntelAdded.some((added) => intelKey(added.entity) === key)) {
-    myIntelAdded = myIntelAdded.filter((added) => intelKey(added.entity) !== key);
-    myIntelOpen.delete(key);
+async function removeMyIntelCards(groups) {
+  const addedKeys = new Set(myIntelAdded.map((added) => intelKey(added.entity)));
+  const saved = groups.filter((group) => !addedKeys.has(intelKey(group.entity)));
+  const dropAdded = () => {
+    const removing = new Set(groups.map((group) => intelKey(group.entity)));
+    myIntelAdded = myIntelAdded.filter((added) => !removing.has(intelKey(added.entity)));
+    for (const key of removing) {
+      myIntelOpen.delete(key);
+      myIntelPicked.delete(key);
+    }
+  };
+  if (saved.length === 0) {
+    dropAdded();
     renderMyIntel();
     return;
   }
 
-  if (!(await confirmMyIntelRemove(group))) return;
-  myIntelOpen.delete(key);
+  if (!(await confirmMyIntelRemove(saved))) return;
+  dropAdded();
 
   showMyIntelError("");
   try {
-    await backend().RemoveMyIntelGroup(entity.type, entity.id);
+    await backend().RemoveMyIntelGroups(saved.map((group) => intelKey(group.entity)));
   } catch (err) {
     showMyIntelError(String(err));
     return;
   }
-  myIntelRemoved = group;
-  el("myintel-undo-text").textContent = `Removed ${entity.name}`;
+  myIntelRemoved = saved;
+  const what = saved.length === 1 ? saved[0].entity.name : plural(saved.length, "card", "cards");
+  el("myintel-undo-text").textContent = `Removed ${what}`;
   el("myintel-undo").hidden = false;
-  tickerPush(`Removed ${entity.name} from My Intel`);
+  tickerPush(`Removed ${what} from My Intel`);
   await loadMyIntel();
   syncShownTarget();
 }
 
-// confirmMyIntelRemove asks before a card is removed, saying what goes with it and what stays, resolving true to remove it
-async function confirmMyIntelRemove(group) {
-  const entity = group.entity;
-  const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+// confirmMyIntelRemove asks before cards are removed, saying what goes with them and what stays, resolving true to remove them
+async function confirmMyIntelRemove(groups) {
+  const holdings = groups.reduce((total, group) => total + group.holdings.length, 0);
+  const allies = groups.reduce((total, group) => total + group.ignoredAllies.length, 0);
   const owned = [];
-  if (group.holdings.length) owned.push(plural(group.holdings.length, "holding", "holdings"));
-  if (group.ignoredAllies.length) owned.push(plural(group.ignoredAllies.length, "ignored ally", "ignored allies"));
-  el("myintel-remove-title").textContent = `Remove ${entity.name} from My Intel?`;
-  let detail = `${owned.length ? `Its ${owned.join(" and ")}` : "Everything saved on it"} will be removed.`;
-  if (group.heldFor.length) detail += ` It stays a holding of ${group.heldFor.map((main) => main.name).join(", ")}, as those links belong to ${group.heldFor.length === 1 ? "that main" : "those mains"}.`;
+  if (holdings) owned.push(plural(holdings, "holding", "holdings"));
+  if (allies) owned.push(plural(allies, "ignored ally", "ignored allies"));
+  const one = groups.length === 1;
+  el("myintel-remove-title").textContent = one ? `Remove ${groups[0].entity.name} from My Intel?` : `Remove ${plural(groups.length, "card", "cards")} from My Intel?`;
+  let detail = `${owned.length ? `${one ? "Its" : "Their"} ${owned.join(" and ")}` : "Everything saved on them"} will be removed.`;
+  const heldFor = groups.filter((group) => group.heldFor.length);
+  if (one && heldFor.length) {
+    const mains = groups[0].heldFor.map((main) => main.name);
+    detail += ` It stays a holding of ${mains.join(", ")}, as those links belong to ${mains.length === 1 ? "that main" : "those mains"}.`;
+  } else if (heldFor.length) {
+    detail += ` Links where one is another main's holding stay, as they belong to that main.`;
+  }
   el("myintel-remove-detail").textContent = detail;
 
   const dialog = el("myintel-remove-confirm");
@@ -826,30 +964,59 @@ async function confirmMyIntelRemove(group) {
   return dialog.returnValue === "remove";
 }
 
-// undoMyIntelRemove saves the removed card's holdings, with their notes, and ignored allies again
+// undoMyIntelRemove saves the removed cards' holdings, with their notes, and ignored allies again
 async function undoMyIntelRemove() {
-  const group = myIntelRemoved;
-  if (!group) return;
-  myIntelRemoved = null;
+  const groups = myIntelRemoved;
+  if (groups.length === 0) return;
+  myIntelRemoved = [];
   el("myintel-undo").hidden = true;
-  const entity = group.entity;
-  try {
-    for (const holding of group.holdings) await backend().SaveHolding(entity.id, entity.type, entity.name, holding.name, holding.type, holding.note);
-    for (const ally of group.ignoredAllies) await backend().AddIgnoredAlly(entity.type, entity.id, ally.name, ally.type);
-  } catch (err) {
-    showMyIntelError(`Could not bring all of ${entity.name} back: ${err}`);
+  const failed = [];
+  for (const group of groups) {
+    const entity = group.entity;
+    try {
+      for (const holding of group.holdings) await backend().SaveHolding(entity.id, entity.type, entity.name, holding.name, holding.type, holding.note);
+      for (const ally of group.ignoredAllies) await backend().AddIgnoredAlly(entity.type, entity.id, ally.name, ally.type);
+    } catch (err) {
+      failed.push(`${entity.name}: ${err}`);
+    }
   }
-  myIntelOpen.add(intelKey(entity));
-  tickerPush(`Brought ${entity.name} back to My Intel`);
+  if (failed.length) showMyIntelError(`Could not bring all of them back. ${failed.join("; ")}`);
+  tickerPush(`Brought ${groups.length === 1 ? groups[0].entity.name : plural(groups.length, "card", "cards")} back to My Intel`);
   await loadMyIntel();
   syncShownTarget();
 }
 
-function myIntelTitle(text) {
+// myIntelAdding are the add rows opened with their section's +, by card and section, ie ALLIANCE:99013330:holdings, kept open while the window redraws
+const myIntelAdding = new Set();
+
+// myIntelTitle is a card section's title, with a + at its right that shows or hides the section's add row, when it has one
+function myIntelTitle(text, addRow = null, addLabel = "") {
+  const line = document.createElement("div");
+  line.className = "myintel-section-line";
   const title = document.createElement("p");
   title.className = "myintel-section-title";
   title.textContent = text;
-  return title;
+  line.append(title);
+  if (addRow) {
+    const plus = document.createElement("button");
+    plus.type = "button";
+    plus.className = "myintel-plus";
+    plus.textContent = "+";
+    plus.title = addLabel;
+    plus.setAttribute("aria-label", addLabel);
+    plus.setAttribute("aria-expanded", String(!addRow.hidden));
+    plus.addEventListener("click", () => {
+      addRow.hidden = !addRow.hidden;
+      plus.setAttribute("aria-expanded", String(!addRow.hidden));
+      if (addRow.hidden) myIntelAdding.delete(addRow.dataset.key);
+      else {
+        myIntelAdding.add(addRow.dataset.key);
+        addRow.querySelector("input").focus();
+      }
+    });
+    line.append(plus);
+  }
+  return line;
 }
 
 function myIntelNone(text) {
@@ -860,8 +1027,8 @@ function myIntelNone(text) {
 }
 
 /*
-  myIntelRow is one entity on a card: its logo, its name, which offers a search for it, a note, and an x.
-  options: { note, onNote } for a note that can be changed, { noteText } for one that can not, and onRemove for the x.
+  myIntelRow is one entity on a card: an x, its logo, its name, which offers a search for it, and its ticker, then at the right a note.
+  options: { note, onNote } for a note shown with a pencil to edit it, { noteText } for one only shown, and onRemove for the x.
 */
 function myIntelRow(entity, options) {
   const row = document.createElement("div");
@@ -869,6 +1036,8 @@ function myIntelRow(entity, options) {
   const icon = document.createElement("img");
   icon.src = entity.iconUrl;
   icon.alt = "";
+  const who = document.createElement("span");
+  who.className = "myintel-who";
   const name = document.createElement("button");
   name.type = "button";
   name.className = "link-button";
@@ -876,19 +1045,14 @@ function myIntelRow(entity, options) {
   name.title = `Search for ${entity.name}`;
   name.addEventListener("click", () => {
     el("myintel").close();
-    offerSearch({ type: entity.type, name: entity.name });
+    offerSearch({ type: entity.type, name: entity.name, id: entity.id });
   });
+  who.append(name);
+  if (entity.ticker) who.append(tickerTag(entity.type, entity.ticker));
 
   let note;
   if (options.onNote) {
-    note = document.createElement("input");
-    note.type = "text";
-    note.className = "myintel-note";
-    note.maxLength = 200; // maxHoldingNote, which the backend checks again
-    note.placeholder = "Note";
-    note.value = options.note || "";
-    note.setAttribute("aria-label", `Note on ${entity.name}`);
-    note.addEventListener("change", () => options.onNote(note.value));
+    note = myIntelNote(entity, options.note, options.onNote);
   } else {
     note = document.createElement("span");
     note.className = "myintel-note-text";
@@ -903,14 +1067,62 @@ function myIntelRow(entity, options) {
   remove.setAttribute("aria-label", `Remove ${entity.name}`);
   remove.addEventListener("click", options.onRemove);
 
-  row.append(icon, name, note, remove);
+  row.append(remove, icon, who, note);
   return withMenu(row, [entitySection(entity)]);
 }
 
-// myIntelAddRow is a card's row to add a holding, withNote, or an ignored ally: a type, a name, and Add, which calls add(name, type, note)
-function myIntelAddRow(placeholder, withNote, add) {
+// myIntelNote is a holding's note, None in italics if it has none, with a pencil that turns it into a box: Enter or leaving it saves, Escape keeps the note as it was
+function myIntelNote(entity, text, save) {
+  const cell = document.createElement("span");
+  cell.className = "myintel-note-cell";
+  const shown = document.createElement("span");
+  shown.className = text ? "myintel-note-text" : "myintel-note-text myintel-note-none";
+  shown.textContent = text || "None";
+  const pencil = document.createElement("button");
+  pencil.type = "button";
+  pencil.className = "myintel-pencil";
+  pencil.textContent = "✎";
+  pencil.title = "Edit the note";
+  pencil.setAttribute("aria-label", `Edit the note on ${entity.name}`);
+  pencil.addEventListener("click", () => {
+    const box = document.createElement("input");
+    box.type = "text";
+    box.className = "myintel-note";
+    box.maxLength = 200; // maxHoldingNote, which the backend checks again
+    box.value = text || "";
+    box.setAttribute("aria-label", `Note on ${entity.name}`);
+    let done = false;
+    const finish = (keep) => {
+      if (done) return;
+      done = true;
+      if (keep && box.value.trim() !== (text || "")) save(box.value.trim());
+      else cell.replaceChildren(shown, pencil);
+    };
+    box.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        finish(true);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation(); // not a close of the window
+        finish(false);
+      }
+    });
+    box.addEventListener("blur", () => finish(true));
+    cell.replaceChildren(box);
+    box.focus();
+    box.select();
+  });
+  cell.append(shown, pencil);
+  return cell;
+}
+
+// myIntelAddRow is a card section's row to add a holding, withNote, or an ignored ally: a type, a name, and Add, which calls add(name, type, note). Hidden until its +.
+function myIntelAddRow(key, placeholder, withNote, add) {
   const form = document.createElement("form");
   form.className = withNote ? "myintel-row-add" : "myintel-row-add no-note";
+  form.dataset.key = key;
+  form.hidden = !myIntelAdding.has(key);
   const type = document.createElement("select");
   type.setAttribute("aria-label", "Type");
   for (const value of HOLDING_TYPES) type.append(new Option(searchTypeLabel(value), value));
@@ -937,23 +1149,29 @@ function myIntelAddRow(placeholder, withNote, add) {
   form.append(submit);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (name.value.trim()) add(name.value.trim(), type.value, note ? note.value : "");
+    if (!name.value.trim()) return;
+    // closed before the redraw that follows a save, and open again, with the name to try again, if it could not be saved
+    myIntelAdding.delete(key);
+    add(name.value.trim(), type.value, note ? note.value : "").then((added) => {
+      if (!added) myIntelAdding.add(key);
+    });
   });
   return form;
 }
 
-// myIntelChange saves a change from a card, showing why on the card if it can not, then draws My Intel again and brings the shown target up to date
+// myIntelChange saves a change from a card, showing why on the card if it can not, then draws My Intel again and brings the shown target up to date. It resolves whether it saved.
 async function myIntelChange(save, showError, message) {
   showError("");
   try {
     await save();
   } catch (err) {
     showError(String(err));
-    return;
+    return false;
   }
   tickerPush(message);
   await loadMyIntel();
   syncShownTarget();
+  return true;
 }
 
 // syncShownTarget shows the target panel's holdings and the Allies tab again after My Intel changed them
@@ -1080,7 +1298,7 @@ function renderMemberRow(member) {
   name.className = "link-button";
   name.textContent = member.name;
   name.title = "Search for this";
-  name.addEventListener("click", () => offerSearch({ type: "PILOT", name: member.name }));
+  name.addEventListener("click", () => offerSearch({ type: "PILOT", name: member.name, id: member.id }));
   nameCell.append(name);
 
   const lastSeen = member.lastSeen ? `${spokenDate(member.lastSeen)} (${daysAgo(member.lastSeen)})` : "Not seen";
@@ -1103,11 +1321,11 @@ function renderMemberCorpRow(corp) {
   name.className = "link-button";
   name.textContent = corp.name;
   name.title = "Search for this";
-  name.addEventListener("click", () => offerSearch({ type: "CORPORATION", name: corp.name }));
+  name.addEventListener("click", () => offerSearch({ type: "CORPORATION", name: corp.name, id: corp.id }));
   nameCell.append(name);
 
   row.append(avatarCell(corp.name, corp, corp.iconUrl, true), nameCell, textCell(corp.memberCount.toLocaleString("en-US")), textCell(corp.timeInAlliance));
-  return withMenu(row, [entitySection({ type: "CORPORATION", name: corp.name, zkillUrl: corp.zkillUrl, evewhoUrl: corp.evewhoUrl })]);
+  return withMenu(row, [entitySection({ type: "CORPORATION", id: corp.id, name: corp.name, zkillUrl: corp.zkillUrl, evewhoUrl: corp.evewhoUrl })]);
 }
 
 // rosterDivider is the line on a corp's Members tab between the members seen on killmails and the rest
@@ -1341,7 +1559,7 @@ function renderCapitals(capitals) {
       button.className = pilot.left ? "link-button capital-left" : "link-button";
       button.textContent = pilot.name;
       button.title = pilot.left ? "No longer in this alliance. Search for this" : "Search for this";
-      button.addEventListener("click", () => offerSearch({ type: "PILOT", name: pilot.name }));
+      button.addEventListener("click", () => offerSearch({ type: "PILOT", name: pilot.name, id: pilot.id }));
       item.append(button);
 
       const group = groupLine(pilot.corporation, pilot.alliance);
@@ -1419,7 +1637,7 @@ function lossPilotBlock(pilot, lossRow) {
   name.className = "link-button pi-name";
   name.textContent = pilot.name;
   name.title = "Search for this";
-  name.addEventListener("click", () => offerSearch({ type: "PILOT", name: pilot.name }));
+  name.addEventListener("click", () => offerSearch({ type: "PILOT", name: pilot.name, id: pilot.id }));
   who.append(name);
   const group = groupLine(pilot.corporation, pilot.alliance);
   if (group) who.append(group);
@@ -2152,7 +2370,7 @@ function killmailCardSections(km, clicked) {
     if (km.finalBlow) sections.push(refSection(km.finalBlow, `Final blow: ${km.finalBlow.name}`));
     sections.push(...groupSections(km.finalBlowCorp, km.finalBlowAlliance, "Final blow"));
   } else if (km.systemName) {
-    sections.push(systemSection({ name: km.systemName, zkillUrl: km.systemZkillUrl, dotlanUrl: km.systemDotlanUrl }));
+    sections.push(systemSection({ id: km.systemId, name: km.systemName, zkillUrl: km.systemZkillUrl, dotlanUrl: km.systemDotlanUrl }));
   }
   return sections;
 }
@@ -2350,7 +2568,7 @@ function renderCorporations(corporations) {
     nameCell.append(name, detail);
 
     row.append(avatarCell(corporation.name, corporation, corporation.imageUrl), nameCell, numberCell(corporation.killmails), numberCell(corporation.kills), numberCell(corporation.losses), numberCell(corporation.pilots), uniqueDaysCell(corporation.uniqueDays, corporation.firstSeen, corporation.lastSeen));
-    const corp = { type: "CORPORATION", name: corporation.name, zkillUrl: corporation.zkillUrl, evewhoUrl: corporation.evewhoUrl };
+    const corp = { type: "CORPORATION", id: corporation.id, name: corporation.name, zkillUrl: corporation.zkillUrl, evewhoUrl: corporation.evewhoUrl };
     return withMenu(row, [entitySection(corp), ...groupSections(null, corporation.alliance)]);
   });
 
@@ -2464,7 +2682,7 @@ function structureLossSections(loss, withSystem) {
 }
 
 function systemSection(system) {
-  return entitySection({ type: "SYSTEM", name: system.name, zkillUrl: system.zkillUrl, dotlanUrl: system.dotlanUrl });
+  return entitySection({ type: "SYSTEM", id: system.id, name: system.name, zkillUrl: system.zkillUrl, dotlanUrl: system.dotlanUrl });
 }
 
 // entitySection is an entity's menu section, under a heading naming its kind, ie "Corporation: URSA PRIMUS"
@@ -2480,14 +2698,14 @@ function killmailSection(url) {
 // pilotSections are a pilot row's menu sections: the pilot, then their corp and alliance for those they have
 function pilotSections(pilot) {
   return [
-    entitySection({ type: "PILOT", name: pilot.name, zkillUrl: pilot.zkillUrl, evewhoUrl: pilot.evewhoUrl }),
+    entitySection({ type: "PILOT", id: pilot.id, name: pilot.name, zkillUrl: pilot.zkillUrl, evewhoUrl: pilot.evewhoUrl }),
     ...groupSections(pilot.corporation, pilot.alliance),
   ];
 }
 
 // refSection is a menu section for a backend EntityRef, under the heading given
 function refSection(ref, heading) {
-  return { heading, entity: { type: ref.type, name: ref.name, zkillUrl: ref.zkillUrl, evewhoUrl: ref.evewhoUrl } };
+  return { heading, entity: { type: ref.type, id: ref.id, name: ref.name, zkillUrl: ref.zkillUrl, evewhoUrl: ref.evewhoUrl } };
 }
 
 // groupSections are a corp's and alliance's menu sections, ie "Owner corp: Some Corp" and "Owner alliance: Some Alliance", or without a role "Corporation: Some Corp", for those there are
@@ -2675,7 +2893,7 @@ function renderAllies(allies, ignored, killedAllies, holdings) {
     name.className = "link-button";
     name.textContent = ally.name;
     name.title = "Search for this, or right-click for more";
-    name.addEventListener("click", () => offerSearch({ type: ally.type, name: ally.name }));
+    name.addEventListener("click", () => offerSearch({ type: ally.type, name: ally.name, id: ally.id }));
     const detail = document.createElement("div");
     detail.className = "row-detail";
     detail.append(`${searchTypeLabel(ally.type)} · `, killmailSpan(ally.firstSeen, ally.lastSeen));
@@ -2715,7 +2933,7 @@ function renderAllyHoldings(holdings) {
     name.className = "link-button";
     name.textContent = holding.name;
     name.title = "Search for this, or right-click for more";
-    name.addEventListener("click", () => offerSearch({ type: holding.type, name: holding.name }));
+    name.addEventListener("click", () => offerSearch({ type: holding.type, name: holding.name, id: holding.id }));
     const count = document.createElement("span");
     count.className = "row-detail";
     count.textContent = ` (${holding.killmails})`;
@@ -2769,7 +2987,7 @@ const ENTITY_LINKS = [["zkillUrl", "Open on zKillboard"], ["evewhoUrl", "Open on
 // entityMenuItems are an entity's Search, when it has a type, and its site links. entity is { type, name, zkillUrl, evewhoUrl, dotlanUrl }, links without a url left out.
 function entityMenuItems(entity) {
   const items = [];
-  if (entity.type) items.push({ label: `Search for ${entity.name}`, action: () => offerSearch({ type: entity.type, name: entity.name }) });
+  if (entity.type) items.push({ label: `Search for ${entity.name}`, action: () => offerSearch({ type: entity.type, name: entity.name, id: entity.id }) });
   for (const [key, label] of ENTITY_LINKS) {
     if (entity[key]) items.push({ label, action: () => window.runtime.BrowserOpenURL(entity[key]) });
   }
@@ -3218,6 +3436,7 @@ function moveRecent(step) {
 function pickRecent(entry) {
   setRecentOpen(false);
   searchTypeHint = entry.type;
+  searchIdHint = entry.id || 0;
   el("search-input").value = entry.name;
   el("search-form").requestSubmit();
 }
@@ -3261,6 +3480,7 @@ async function search(event) {
     return;
   }
   const searchType = searchTypeHint;
+  const searchId = searchIdHint;
   // a change in the search limits applies to this search
   closeLimitsMenu();
   await limitsPending;
@@ -3276,7 +3496,7 @@ async function search(event) {
   let cancelled = false; // the user closed the choice between the name's matches
 
   try {
-    target = await runBackend(() => backend().SearchTarget(name, searchType));
+    target = await runBackend(() => backend().SearchTarget(name, searchType, searchId));
     // a name more than one thing has, or some ticker: the search is asked again for the one chosen, as EVE spells it
     if (target && target.choices) {
       const chosen = await chooseTarget(name, target.choices);
@@ -3284,7 +3504,8 @@ async function search(event) {
       if (chosen) {
         el("search-input").value = chosen.name;
         searchTypeHint = chosen.type;
-        target = await runBackend(() => backend().SearchTarget(chosen.name, chosen.type));
+        searchIdHint = chosen.id;
+        target = await runBackend(() => backend().SearchTarget(chosen.name, chosen.type, chosen.id));
       } else {
         target = null;
       }
@@ -3871,6 +4092,10 @@ el("myintel-close").addEventListener("click", () => el("myintel").close());
 el("myintel-filter").addEventListener("input", renderMyIntel);
 el("myintel-add").addEventListener("submit", addMyIntelCard);
 el("myintel-undo-button").addEventListener("click", undoMyIntelRemove);
+el("myintel-export-button").addEventListener("click", exportMyIntel);
+el("myintel-pick-all").addEventListener("click", pickAllShown);
+el("myintel-delete-button").addEventListener("click", () => removeMyIntelCards(pickedCards()));
+el("myintel-import-button").addEventListener("click", importMyIntel);
 el("debug-open").addEventListener("click", () => backend().OpenDebugFolder().catch((err) => tickerPush(`Error: ${err}`)));
 el("limits-menu").addEventListener("input", changeSearchLimits);
 el("limits-menu").addEventListener("change", changeSearchLimits);
@@ -3934,7 +4159,9 @@ window.addEventListener("resize", () => {
 });
 el("search-form").addEventListener("submit", search);
 el("search-input").addEventListener("input", () => {
-  searchTypeHint = ""; // a typed name could be anything
+  // a typed name could be anything
+  searchTypeHint = "";
+  searchIdHint = 0;
   showRecent(false);
 });
 el("search-input").addEventListener("keydown", recentKeydown);

@@ -88,7 +88,7 @@ func (a *App) GetHoldings(targetID int, targetType string) (holdings Holdings, e
 
 Parameters:
   - mainID, mainType, mainName: the corp or alliance target the holding belongs to
-  - holdingName: the holding's exact in game name
+  - holdingName: the holding's exact in game name, or a zKillboard or EveWho link to it
   - holdingType: CORPORATION or ALLIANCE
   - note: a few words about it, ie supers parked here. Trimmed to maxHoldingNote characters.
 
@@ -105,11 +105,11 @@ func (a *App) SaveHolding(mainID int, mainType string, mainName string, holdingN
 		return holdings, errors.New("Enter the holding's name")
 	}
 
-	holding, err := a.lookupEntity(holdingName, holdingType)
+	holding, err := a.lookupEntity(holdingName, holdingType, types.CORPORATION, types.ALLIANCE)
 	if err != nil {
 		return holdings, err
 	}
-	if holding.ID == mainID && holdingType == mainType {
+	if holding.ID == mainID && holding.Type == mainType {
 		return holdings, fmt.Errorf("%s can not be its own holding", mainName)
 	}
 
@@ -119,7 +119,7 @@ func (a *App) SaveHolding(mainID int, mainType string, mainName string, holdingN
 	}
 	a.cache.SaveHoldingLink(retrieval.HoldingLink{
 		MainType: mainType, MainID: mainID, MainName: mainName,
-		HoldingType: holdingType, HoldingID: holding.ID, HoldingName: holding.Name,
+		HoldingType: holding.Type, HoldingID: holding.ID, HoldingName: holding.Name,
 		Note: note,
 	})
 	a.saveCacheQuietly()

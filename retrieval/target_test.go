@@ -247,3 +247,27 @@ func TestGetTargetInfoOfTypePrefersExactName(t *testing.T) {
 		}
 	})
 }
+
+func TestGetTargetInfoByID(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+
+	t.Run("a target found by id has its details and its name as EVE spells it, with no name lookup", func(t *testing.T) {
+		// the name lookup fails, as the ESI's does for L A Z E R H A W K S
+		target := retrieval.IntelTarget{Clients: retrieval.CollectionClientPool{ESIClient: MockTargetESIClient{idsError: api.ErrRequestFailedToComplete}}}
+
+		target.GetTargetInfoByID(types.CORPORATION, 98000001)
+
+		assert.NoError(t, target.Error)
+		assert.Equal(t, "Umbrian Dawn", target.Name)
+		assert.Equal(t, 98000001, target.IDNumber)
+		assert.Equal(t, types.CORPORATION, target.TypeOfEntity)
+		assert.NotNil(t, target.Data)
+	})
+
+	t.Run("a kind that can not be looked up says so", func(t *testing.T) {
+		target := retrieval.IntelTarget{Clients: retrieval.CollectionClientPool{ESIClient: MockTargetESIClient{}}}
+		target.GetTargetInfoByID(types.ITEM, 33468)
+		assert.Error(t, target.Error)
+		assert.NotEmpty(t, target.DisplayMessage)
+	})
+}

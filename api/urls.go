@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
@@ -142,4 +143,49 @@ func ZkillEntityURL(typeOfEntity types.EntityType, idNumber int) string {
 		return ZKILL_URL
 	}
 	return fmt.Sprintf("%s/%s/%d/", ZKILL_URL, page, idNumber)
+}
+
+// notALink is ParseEntityLink's type for text that is not a link, outside every real type
+const notALink = types.EntityType(-1)
+
+// linkPages are the page names zKillboard and EveWho use for each kind of entity, ie zkillboard.com/alliance/99007237/
+var linkPages = map[string]map[string]types.EntityType{
+	"zkillboard.com": {"character": types.PILOT, "corporation": types.CORPORATION, "alliance": types.ALLIANCE, "system": types.SYSTEM},
+	"evewho.com":     {"character": types.PILOT, "corporation": types.CORPORATION, "alliance": types.ALLIANCE},
+}
+
+/*
+	ParseEntityLink reads a pilot, corporation, alliance, or system from a zKillboard or EveWho link, so it can be found by id, as the ESI can not find every name
+
+Parameters:
+  - text: what was typed, ie https://zkillboard.com/alliance/99007237/ or evewho.com/character/2121139046, with or without https:// and www.
+
+Returns:
+  - types.EntityType: what the link is to
+  - int: its eve id
+  - bool: the text is such a link
+*/
+func ParseEntityLink(text string) (types.EntityType, int, bool) {
+	text = strings.TrimSpace(text)
+	if !strings.Contains(text, "://") {
+		text = "https://" + text
+	}
+	link, err := url.Parse(text)
+	if err != nil {
+		return notALink, 0, false
+	}
+	pages, known := linkPages[strings.TrimPrefix(strings.ToLower(link.Hostname()), "www.")]
+	if !known {
+		return notALink, 0, false
+	}
+	parts := strings.Split(strings.Trim(link.Path, "/"), "/")
+	if len(parts) < 2 {
+		return notALink, 0, false
+	}
+	entityType, found := pages[strings.ToLower(parts[0])]
+	id, idErr := strconv.Atoi(parts[1])
+	if !found || idErr != nil || id <= 0 {
+		return notALink, 0, false
+	}
+	return entityType, id, true
 }

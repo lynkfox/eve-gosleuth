@@ -43,35 +43,52 @@ func (m intelESIClient) GetNamesFromEveIDs(ids []int) (map[int]string, error) {
 	return names, nil
 }
 
-func (m intelESIClient) name(id int) string {
+// name is an entity's name if it is of the category, as the ESI only answers an alliance lookup for an alliance's id
+func (m intelESIClient) name(id int, category string) (string, error) {
 	for _, entity := range intelEntities {
-		if entity.ID == id {
-			return entity.Name
+		if entity.ID == id && entity.Category == category {
+			return entity.Name, nil
 		}
 	}
-	return ""
+	return "", api.ErrRequestFailedToComplete
 }
 
 func (m intelESIClient) GetAllianceInfo(id int) (*api.ESIAlliance, error) {
-	return &api.ESIAlliance{AllianceID: id, Name: m.name(id)}, nil
+	name, err := m.name(id, "alliances")
+	if err != nil {
+		return nil, err
+	}
+	return &api.ESIAlliance{AllianceID: id, Name: name, Ticker: strings.ToUpper(strings.Fields(name)[0])}, nil
 }
 
 func (m intelESIClient) GetCorporationInfo(id int) (*api.ESICorporation, error) {
-	return &api.ESICorporation{CorporationID: id, Name: m.name(id)}, nil
+	name, err := m.name(id, "corporations")
+	if err != nil {
+		return nil, err
+	}
+	return &api.ESICorporation{CorporationID: id, Name: name}, nil
 }
 
 func (m intelESIClient) GetCharacterInfo(id int) (*api.ESICharacter, error) {
-	return &api.ESICharacter{CharacterID: id, Name: m.name(id)}, nil
+	name, err := m.name(id, "characters")
+	if err != nil {
+		return nil, err
+	}
+	return &api.ESICharacter{CharacterID: id, Name: name}, nil
+}
+
+// newIntelApp is an app with an empty cache, whose ESI is intelESIClient
+func newIntelApp(t *testing.T) *App {
+	client := intelESIClient{}
+	cache := retrieval.NewCache(client, filepath.Join(t.TempDir(), "cache.db"))
+	t.Cleanup(func() { cache.Close() })
+	// as in the app, every ESI call goes through the cache
+	return &App{cache: cache, clients: retrieval.CollectionClientPool{ESIClient: cache}, settingsPath: filepath.Join(t.TempDir(), "settings.json"), settings: defaultSettings()}
 }
 
 func TestMyIntel(t *testing.T) {
 	comm.InitLogger(logrus.InfoLevel)
-	intelApp := func(t *testing.T) *App {
-		client := intelESIClient{}
-		cache := retrieval.NewCache(client, filepath.Join(t.TempDir(), "cache.db"))
-		t.Cleanup(func() { cache.Close() })
-		return &App{cache: cache, clients: retrieval.CollectionClientPool{ESIClient: client}, settingsPath: filepath.Join(t.TempDir(), "settings.json"), settings: defaultSettings()}
-	}
+	intelApp := newIntelApp
 
 	t.Run("nothing saved is no cards", func(t *testing.T) {
 		groups, err := intelApp(t).GetMyIntel()
@@ -96,7 +113,16 @@ func TestMyIntel(t *testing.T) {
 		assert.Equal(t, []string{"High Bear Nation", "Luxxianna Seraph", "URSA."}, names)
 
 		ursa := groups[2]
-		assert.Equal(t, []IntelLink{{EntityRef: *entityRef(searchTypes["ALLIANCE"], 99013580, "High Bear Nation"), Note: "supers parked here"}}, ursa.Holdings)
+		highBear := *entityRef(searchTypes["ALLIANCE"], 99013580, "High Bear Nation")
+		highBear.Ticker = "HIGH"
+		assert.Equal(t, []IntelLink{{EntityRef: highBear, Note: "supers parked here"}}, ursa.Holdings)
+		assert.Empty(t, ursa.Entity.Ticker, "URSA. was never looked up, only named by id, so its ticker is left blank rather than fetched")
+		assert.Empty(t, groups[1].Entity.Ticker, "a pilot has none")
+
+		_, err = app.LookupEntity("URSA.", "ALLIANCE")
+		assert.NoError(t, err)
+		groups, _ = app.GetMyIntel()
+		assert.Equal(t, "URSA.", groups[2].Entity.Ticker, "once looked up it is cached")
 		assert.Equal(t, "URSA.", groups[0].HeldFor[0].Name, "High Bear Nation has a card for its ignored ally, so it lists its main")
 		assert.Equal(t, "Fraternity.", groups[1].IgnoredAllies[0].Name, "the ally as EVE spells it")
 		assert.Equal(t, "PILOT", groups[1].Entity.Type)
@@ -141,6 +167,20 @@ func TestMyIntel(t *testing.T) {
 		assert.Error(t, app.RemoveMyIntelGroup("SYSTEM", 30000142))
 	})
 
+	t.Run("several cards are removed at once, and keys that are not cards skipped", func(t *testing.T) {
+		app := intelApp(t)
+		assert.NoError(t, app.AddIgnoredAlly("ALLIANCE", 99013330, "Fraternity.", "ALLIANCE"))
+		assert.NoError(t, app.AddIgnoredAlly("PILOT", 2121139046, "Fraternity.", "ALLIANCE"))
+		_, err := app.SaveHolding(99013580, "ALLIANCE", "High Bear Nation", "URSA PRIMUS", "CORPORATION", "")
+		assert.NoError(t, err)
+
+		assert.NoError(t, app.RemoveMyIntelGroups([]string{"ALLIANCE:99013330", "PILOT:2121139046", "nonsense", "SYSTEM:30000142"}))
+
+		groups, _ := app.GetMyIntel()
+		assert.Len(t, groups, 1)
+		assert.Equal(t, "High Bear Nation", groups[0].Entity.Name)
+	})
+
 	t.Run("ignored allies saved in an earlier session are all read", func(t *testing.T) {
 		app := intelApp(t)
 		assert.NoError(t, app.AddIgnoredAlly("CORPORATION", 98744491, "Fraternity.", "ALLIANCE"))
@@ -154,6 +194,25 @@ func TestMyIntel(t *testing.T) {
 
 		assert.Len(t, groups, 1)
 		assert.Equal(t, "URSA PRIMUS", groups[0].Entity.Name, "the target's name, which is not saved, is looked up")
+	})
+
+	t.Run("a link is looked up by the id in it, its own type winning, but only a kind allowed there", func(t *testing.T) {
+		app := intelApp(t)
+		found, err := app.LookupEntity("https://zkillboard.com/alliance/99013330/", "PILOT")
+		assert.NoError(t, err)
+		assert.Equal(t, "URSA.", found.Name)
+		assert.Equal(t, "ALLIANCE", found.Type, "the link's type, not the dropdown's")
+
+		// a holding added by link is saved as the link's type, here an alliance though the dropdown said corporation
+		_, err = app.SaveHolding(98744491, "CORPORATION", "URSA PRIMUS", "evewho.com/alliance/99013580", "CORPORATION", "")
+		assert.NoError(t, err)
+		holdings, _ := app.cache.HoldingLinks("CORPORATION", 98744491)
+		assert.Equal(t, "ALLIANCE", holdings[0].HoldingType)
+		assert.Equal(t, "High Bear Nation", holdings[0].HoldingName)
+
+		assert.EqualError(t, app.AddIgnoredAlly("ALLIANCE", 99013330, "https://zkillboard.com/character/2121139046/", "ALLIANCE"), "That link is to a pilot, which can not be used here")
+		_, err = app.LookupEntity("https://zkillboard.com/alliance/12345/", "ALLIANCE")
+		assert.Error(t, err, "an id the ESI does not know")
 	})
 
 	t.Run("a name is looked up as EVE spells it, and only of its type", func(t *testing.T) {
