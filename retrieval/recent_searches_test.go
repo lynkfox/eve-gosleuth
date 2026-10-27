@@ -59,6 +59,14 @@ func TestRecentSearches(t *testing.T) {
 		assert.Equal(t, []retrieval.RecentSearch{pilot, jita}, reloaded(t, cache).RecentSearches(keep))
 	})
 
+	t.Run("a corp's or alliance's ticker is saved with it", func(t *testing.T) {
+		cache := retrieval.NewCache(&RawESIClient{}, filepath.Join(t.TempDir(), "cache.db"))
+		ursa := retrieval.RecentSearch{Name: "URSA.", Type: "ALLIANCE", Ticker: "URSA."}
+		searched(cache, ursa)
+
+		assert.Equal(t, []retrieval.RecentSearch{ursa}, reloaded(t, cache).RecentSearches(keep))
+	})
+
 	t.Run("past the limit the oldest are dropped, on disk too", func(t *testing.T) {
 		cache := retrieval.NewCache(&RawESIClient{}, filepath.Join(t.TempDir(), "cache.db"))
 		for i := range keep + 3 {

@@ -1,7 +1,9 @@
 package retrieval
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/lynkfox/go_eve_sleuth/api"
@@ -132,6 +134,68 @@ var targetCategories = map[string]types.EntityType{
 	"inventory_types": types.ITEM,
 }
 
+// TargetMatch is a pilot, corporation, alliance, or system whose name matched a search
+type TargetMatch struct {
+	Type     types.EntityType
+	ID       int
+	Name     string // as EVE spells it
+	ByTicker bool   // a corporation or alliance with the name searched as its ticker, not its name
+}
+
+// matchOrder is the order matches are listed in, the most searched kinds first
+var matchOrder = []types.EntityType{types.PILOT, types.CORPORATION, types.ALLIANCE, types.SYSTEM}
+
+// TargetMatches are what a searched name matched
+type TargetMatches struct {
+	Matches []TargetMatch // those with the name first, then those with it as their ticker, each pilots, corporations, alliances, then systems, by name. Empty for none.
+	Item    bool          // an item, ie a ship type, has the name exactly, for saying why nothing was found
+}
+
+/*
+	MatchTargets looks up the pilots, corporations, alliances, and systems with a name, so a search needs no type chosen.
+	The ESI also returns corporations and alliances whose ticker is the name, ie Jita Holding Inc. (JITA) for Jita, kept as ByTicker,
+	as a player may only have seen a ticker.
+
+Parameters:
+  - client: the ESI client, the cache in the app, so the target's own lookup after it is not asked again
+  - name: the name searched for, ignoring case
+
+Returns:
+  - TargetMatches: the matches
+  - error: the ESI could not be asked
+*/
+func MatchTargets(client api.ESIClient, name string) (TargetMatches, error) {
+	found, err := client.GetEveIDsFromNames([]string{name})
+	if err != nil {
+		return TargetMatches{}, err
+	}
+
+	result := TargetMatches{Matches: []TargetMatch{}}
+	for _, entity := range found {
+		entityType := targetCategories[entity.Category]
+		exact := strings.EqualFold(entity.Name, name)
+		if entityType == types.ITEM && exact {
+			result.Item = true
+		}
+		if slices.Contains(matchOrder, entityType) {
+			result.Matches = append(result.Matches, TargetMatch{Type: entityType, ID: entity.ID, Name: entity.Name, ByTicker: !exact})
+		}
+	}
+	slices.SortFunc(result.Matches, func(a, b TargetMatch) int {
+		if a.ByTicker != b.ByTicker {
+			if a.ByTicker {
+				return 1
+			}
+			return -1
+		}
+		if byType := cmp.Compare(slices.Index(matchOrder, a.Type), slices.Index(matchOrder, b.Type)); byType != 0 {
+			return byType
+		}
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
+	return result, nil
+}
+
 /*
 GetTargetInfo looks up the target by Name on the ESI, setting its ID, type, and Data. If the name matches more than one kind of entity, Error is set to ErrTooManyTargets.
 */
@@ -172,15 +236,16 @@ func (t *IntelTarget) lookupTarget(onlyType *types.EntityType) {
 	}
 
 	if onlyType != nil {
+		// the ESI also returns corporations and alliances by ticker, so one of the type with the exact name wins
 		for _, value := range names {
-			if targetCategories[value.Category] == *onlyType {
+			if targetCategories[value.Category] == *onlyType && (t.IDNumber == 0 || strings.EqualFold(value.Name, t.Name)) {
 				t.IDNumber = value.ID
 			}
 		}
 
 		if t.IDNumber == 0 {
 			t.Error = fmt.Errorf("No %s match for %s", onlyType.String(), t.Name)
-			t.DisplayMessage = fmt.Sprintf("No %s found by that name. Check spelling or search type?", strings.ToLower(onlyType.String()))
+			t.DisplayMessage = fmt.Sprintf("No %s found by that name. Check spelling?", strings.ToLower(onlyType.String()))
 			return
 		}
 	} else if len(names) > 1 {

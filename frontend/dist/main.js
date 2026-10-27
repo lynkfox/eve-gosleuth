@@ -25,7 +25,6 @@ function setBusy(busy) {
   else stopSearchTimer();
   el("search-button").disabled = busy;
   el("search-input").disabled = busy;
-  el("search-type").disabled = busy;
   el("recent-toggle").disabled = busy;
   if (busy) setRecentOpen(false);
   el("ticker").classList.toggle("busy", busy);
@@ -120,16 +119,21 @@ function toggleTickerHistory() {
   history.hidden = !history.hidden || history.children.length === 0;
 }
 
-// isSearchable returns true if the search type dropdown has an option for the entity type, ie PILOT
+// SEARCH_TYPES are the kinds of entity a search finds, with their names, ie Pilot for PILOT
+const SEARCH_TYPES = { PILOT: "Pilot", CORPORATION: "Corporation", ALLIANCE: "Alliance", SYSTEM: "System" };
+
+// isSearchable returns true if a search can find the entity type, ie PILOT
 function isSearchable(type) {
-  return [...el("search-type").options].some((option) => option.value === type);
+  return Object.hasOwn(SEARCH_TYPES, type);
 }
 
-// searchTypeLabel is the search type dropdown's name for an entity type, ie Pilot for PILOT
+// searchTypeLabel is the name for an entity type, ie Pilot for PILOT
 function searchTypeLabel(type) {
-  const option = [...el("search-type").options].find((choice) => choice.value === type);
-  return option ? option.textContent : type;
+  return SEARCH_TYPES[type] || type;
 }
+
+// searchTypeHint is the type of the entity filled into the search bar from the app, ie a recent search, so a name shared by several needs no choosing. Typing clears it.
+let searchTypeHint = "";
 
 // offerSearch fills the search bar with an entity from the target panel, then asks before searching for it
 function offerSearch(entity) {
@@ -137,7 +141,7 @@ function offerSearch(entity) {
     return; // a search is already running
   }
 
-  el("search-type").value = entity.type;
+  searchTypeHint = entity.type;
   el("search-input").value = entity.name;
 
   el("search-confirm-target").textContent = `${searchTypeLabel(entity.type)}: ${entity.name}`;
@@ -208,6 +212,19 @@ function avatarCell(name, urls, imageUrl, lazy = false) {
   entity: { label, name, type, imageUrl, zkillUrl, evewhoUrl, dotlanUrl }, links without a url are left out, and a searchable type makes the label pill start a search
   isTarget: the target is shown larger than its related entities
 */
+// formatTicker writes a ticker as EVE does, [URSA] for a corporation and <URSA.> for an alliance
+function formatTicker(type, ticker) {
+  return type === "ALLIANCE" ? `<${ticker}>` : `[${ticker}]`;
+}
+
+// tickerTag is a corp's or alliance's ticker beside its name
+function tickerTag(type, ticker) {
+  const tag = document.createElement("span");
+  tag.className = "entity-ticker";
+  tag.textContent = formatTicker(type, ticker);
+  return tag;
+}
+
 function entityBlock(entity, isTarget) {
   const block = document.createElement("div");
   block.className = isTarget ? "entity entity-target" : "entity";
@@ -241,10 +258,12 @@ function entityBlock(entity, isTarget) {
   const name = document.createElement(isTarget ? "h1" : "p");
   name.className = "entity-name";
   name.textContent = entity.name;
-  if (entity.spaceLabel) {
+  if (entity.spaceLabel || entity.ticker) {
     const nameLine = document.createElement("div");
     nameLine.className = "entity-name-line";
-    nameLine.append(name, spaceTag(entity.spaceLabel));
+    nameLine.append(name);
+    if (entity.spaceLabel) nameLine.append(spaceTag(entity.spaceLabel));
+    if (entity.ticker) nameLine.append(tickerTag(entity.type, entity.ticker));
     text.append(label, nameLine);
   } else {
     text.append(label, name);
@@ -355,9 +374,9 @@ function detailGrid(rows) {
 function renderTarget(result) {
   const display = result.display;
 
-  const target = { label: result.type, name: display.Name, type: result.type, imageUrl: display.TargetImageUrl, zkillUrl: display.ZkillUrl, evewhoUrl: display.EveWhoUrl, dotlanUrl: display.DotlanUrl, spaceLabel: display.SpaceLabel };
+  const target = { label: result.type, name: display.Name, type: result.type, imageUrl: display.TargetImageUrl, zkillUrl: display.ZkillUrl, evewhoUrl: display.EveWhoUrl, dotlanUrl: display.DotlanUrl, spaceLabel: display.SpaceLabel, ticker: display.Ticker };
   const related = (display.Related || []).map((entity) => ({
-    label: entity.Title, name: entity.Name, type: entity.TypeName, imageUrl: entity.ImageUrl, zkillUrl: entity.ZkillUrl, evewhoUrl: entity.EveWhoUrl,
+    label: entity.Title, name: entity.Name, type: entity.TypeName, imageUrl: entity.ImageUrl, zkillUrl: entity.ZkillUrl, evewhoUrl: entity.EveWhoUrl, ticker: entity.Ticker,
   }));
   const relatedGroup = document.createElement("div");
   relatedGroup.className = "related-entities";
@@ -2716,7 +2735,8 @@ function matchingRecent(typed) {
   const containing = [];
   for (const entry of recentSearches) {
     const at = entry.name.toLowerCase().indexOf(typed);
-    if (at === 0) starting.push(entry);
+    // a ticker typed finds its corp or alliance too
+    if (at === 0 || (entry.ticker && entry.ticker.toLowerCase().startsWith(typed))) starting.push(entry);
     else if (at > 0) containing.push(entry);
   }
   return [...starting, ...containing];
@@ -2729,7 +2749,7 @@ function setRecentOpen(open) {
   if (!open) setRecentActive(-1);
 }
 
-// recentOption is one row of the list: the name with the typed part highlighted, then its type
+// recentOption is one row of the list: the name with the typed part highlighted and a corp's or alliance's ticker, then its type
 function recentOption(entry, index, typed) {
   const option = document.createElement("li");
   option.id = `recent-${index}`;
@@ -2747,6 +2767,13 @@ function recentOption(entry, index, typed) {
     name.append(entry.name.slice(0, at), match, entry.name.slice(at + typed.length));
   } else {
     name.textContent = entry.name;
+  }
+
+  if (entry.ticker) {
+    const ticker = document.createElement("span");
+    ticker.className = "recent-ticker";
+    ticker.textContent = ` ${formatTicker(entry.type, entry.ticker)}`;
+    name.append(ticker);
   }
 
   const type = document.createElement("span");
@@ -2834,7 +2861,7 @@ function moveRecent(step) {
 // pickRecent fills the search bar with a recent search and runs it
 function pickRecent(entry) {
   setRecentOpen(false);
-  el("search-type").value = entry.type;
+  searchTypeHint = entry.type;
   el("search-input").value = entry.name;
   el("search-form").requestSubmit();
 }
@@ -2877,7 +2904,7 @@ async function search(event) {
   if (!name) {
     return;
   }
-  const searchType = el("search-type").value;
+  const searchType = searchTypeHint;
 
   stopRequested = false;
   setBusy(true);
@@ -2887,9 +2914,22 @@ async function search(event) {
   let retrievedName = ""; // the target's name as EVE spells it, set once its intel is in
   let target = null;
   let report = null;
+  let cancelled = false; // the user closed the choice between the name's matches
 
   try {
     target = await runBackend(() => backend().SearchTarget(name, searchType));
+    // a name more than one thing has, or some ticker: the search is asked again for the one chosen, as EVE spells it
+    if (target && target.choices) {
+      const chosen = await chooseTarget(name, target.choices);
+      cancelled = !chosen;
+      if (chosen) {
+        el("search-input").value = chosen.name;
+        searchTypeHint = chosen.type;
+        target = await runBackend(() => backend().SearchTarget(chosen.name, chosen.type));
+      } else {
+        target = null;
+      }
+    }
     if (!target) {
       return;
     }
@@ -2914,12 +2954,61 @@ async function search(event) {
     }
   } finally {
     const took = formatDuration(performance.now() - started);
-    tickerPush(retrievedName ? searchSummary(retrievedName, took, report) : `Search for ${name} stopped after ${took}`);
+    if (retrievedName) tickerPush(searchSummary(retrievedName, took, report));
+    else tickerPush(cancelled ? `Search for ${name} cancelled` : `Search for ${name} stopped after ${took}`);
     setBusy(false);
   }
 
   // the Members tab looks up its first pages in the background, after the summary, so its progress only goes in the history
   if (report && report.memberList) startRoster(target.id, target.type);
+}
+
+/*
+  chooseTarget asks which of a name's matches, the backend's TargetChoice, to search for, resolving with the one chosen, or null if closed without choosing.
+  Those with the name come first, then the corps and alliances with it as their ticker, under their own heading when there are both.
+*/
+function chooseTarget(name, choices) {
+  const dialog = el("target-choice");
+  const named = choices.filter((choice) => !choice.byTicker).length;
+  el("target-choice-title").textContent = named > 0 ? "More than one thing matches this. Which did you mean?" : "Nothing has exactly this name, but these have it as their ticker. Which did you mean?";
+  el("target-choice-name").textContent = name;
+
+  const rows = [];
+  choices.forEach((choice, index) => {
+    if (choice.byTicker && index === named && named > 0) {
+      const heading = document.createElement("p");
+      heading.className = "target-choice-heading";
+      heading.textContent = "By ticker";
+      rows.push(heading);
+    }
+    const button = document.createElement("button");
+    button.className = "target-choice";
+    button.value = String(index);
+    let image;
+    if (choice.imageUrl) {
+      image = document.createElement("img");
+      image.src = choice.imageUrl;
+      image.alt = "";
+    } else {
+      image = document.createElement("span"); // a system has no portrait or logo
+      image.className = "target-choice-blank";
+    }
+    const kind = document.createElement("span");
+    kind.className = "target-choice-kind";
+    kind.textContent = searchTypeLabel(choice.type);
+    const choiceName = document.createElement("span");
+    choiceName.textContent = choice.name;
+    button.append(image, kind, choiceName);
+    rows.push(button);
+  });
+  el("target-choice-list").replaceChildren(...rows);
+
+  dialog.returnValue = "";
+  return new Promise((resolve) => {
+    // Cancel and Escape leave no index
+    dialog.addEventListener("close", () => resolve(/^\d+$/.test(dialog.returnValue) ? choices[Number(dialog.returnValue)] : null), { once: true });
+    dialog.showModal();
+  });
 }
 
 // showReportWarning explains, between the target and its report, that the report was built from part of its data
@@ -3323,7 +3412,10 @@ window.addEventListener("resize", () => {
   if (el("help-window").open) helpWindowPlace = placeHelpWindow(parseFloat(el("help-window").style.left) || 0, parseFloat(el("help-window").style.top) || 0);
 });
 el("search-form").addEventListener("submit", search);
-el("search-input").addEventListener("input", () => showRecent(false));
+el("search-input").addEventListener("input", () => {
+  searchTypeHint = ""; // a typed name could be anything
+  showRecent(false);
+});
 el("search-input").addEventListener("keydown", recentKeydown);
 el("search-input").addEventListener("blur", () => setRecentOpen(false));
 // the toggle keeps focus in the search box, so its blur does not close the list the toggle is opening

@@ -126,7 +126,7 @@ func TestGetTargetInfoOfType(t *testing.T) {
 		target.GetTargetInfoOfType(types.ALLIANCE)
 
 		assert.Error(t, target.Error)
-		assert.Equal(t, "No alliance found by that name. Check spelling or search type?", target.DisplayMessage)
+		assert.Equal(t, "No alliance found by that name. Check spelling?", target.DisplayMessage)
 		assert.Equal(t, 0, target.IDNumber)
 		assert.Nil(t, target.Data)
 	})
@@ -162,4 +162,88 @@ func TestTargetGroupIncludes(t *testing.T) {
 	assert.True(t, alliance.Includes(98000009, 99000003), "any corp in the alliance")
 	assert.False(t, alliance.Includes(99000003, 0))
 	assert.False(t, retrieval.TargetGroup{Type: types.CORPORATION}.Includes(0, 0), "0 is never a group")
+}
+
+func TestMatchTargets(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+
+	t.Run("a pilot sharing its name with a ship type is the only match, the ship noted", func(t *testing.T) {
+		client := MockTargetESIClient{matches: map[int]api.EntityIDAndName{
+			95202785: {Category: "characters", ID: 95202785, Name: "Astero"},
+			33468:    {Category: "inventory_types", ID: 33468, Name: "Astero"},
+		}}
+
+		found, err := retrieval.MatchTargets(client, "astero")
+
+		assert.NoError(t, err)
+		assert.Equal(t, retrieval.TargetMatches{Matches: []retrieval.TargetMatch{{Type: types.PILOT, ID: 95202785, Name: "Astero"}}, Item: true}, found)
+	})
+
+	t.Run("corporations and alliances with the name as their ticker come after those with the name", func(t *testing.T) {
+		// as the ESI answers Jita
+		client := MockTargetESIClient{matches: map[int]api.EntityIDAndName{
+			99005382:  {Category: "alliances", ID: 99005382, Name: "Jita Holding Inc."},
+			383768304: {Category: "corporations", ID: 383768304, Name: "jion ss Corp"},
+			30000142:  {Category: "systems", ID: 30000142, Name: "Jita"},
+		}}
+
+		found, err := retrieval.MatchTargets(client, "jita")
+
+		assert.NoError(t, err)
+		assert.Equal(t, []retrieval.TargetMatch{
+			{Type: types.SYSTEM, ID: 30000142, Name: "Jita"},
+			{Type: types.CORPORATION, ID: 383768304, Name: "jion ss Corp", ByTicker: true},
+			{Type: types.ALLIANCE, ID: 99005382, Name: "Jita Holding Inc.", ByTicker: true},
+		}, found.Matches)
+	})
+
+	t.Run("matches are listed pilots, corporations, alliances, then systems, each by name", func(t *testing.T) {
+		client := MockTargetESIClient{matches: map[int]api.EntityIDAndName{
+			30000001: {Category: "systems", ID: 30000001, Name: "Aster"},
+			99000001: {Category: "alliances", ID: 99000001, Name: "aster"},
+			95202785: {Category: "characters", ID: 95202785, Name: "Aster"},
+			98000002: {Category: "corporations", ID: 98000002, Name: "ASTER"},
+		}}
+
+		found, err := retrieval.MatchTargets(client, "Aster")
+
+		assert.NoError(t, err)
+		kinds := []types.EntityType{}
+		for _, match := range found.Matches {
+			kinds = append(kinds, match.Type)
+		}
+		assert.Equal(t, []types.EntityType{types.PILOT, types.CORPORATION, types.ALLIANCE, types.SYSTEM}, kinds)
+	})
+
+	t.Run("an item without the exact name is not noted", func(t *testing.T) {
+		found, _ := retrieval.MatchTargets(MockTargetESIClient{matches: map[int]api.EntityIDAndName{33468: {Category: "inventory_types", ID: 33468, Name: "Astero"}}}, "Aster")
+		assert.False(t, found.Item)
+	})
+
+	t.Run("no match is an empty list, and an ESI failure an error", func(t *testing.T) {
+		found, err := retrieval.MatchTargets(MockTargetESIClient{}, "Nobody")
+		assert.NoError(t, err)
+		assert.Empty(t, found.Matches)
+
+		_, err = retrieval.MatchTargets(MockTargetESIClient{idsError: api.ErrRequestFailedToComplete}, "Nobody")
+		assert.Error(t, err)
+	})
+}
+
+func TestGetTargetInfoOfTypePrefersExactName(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+
+	t.Run("of two corporations the ESI returns, the one with the exact name is the target", func(t *testing.T) {
+		client := MockTargetESIClient{matches: map[int]api.EntityIDAndName{
+			148134386: {Category: "corporations", ID: 148134386, Name: "Amarr Trading and Manufactoring"},
+			98000001:  {Category: "corporations", ID: 98000001, Name: "Amarr"},
+			30002187:  {Category: "systems", ID: 30002187, Name: "Amarr"},
+		}}
+		// map order is random, so ask enough times to see either corporation first
+		for range 20 {
+			target := retrieval.IntelTarget{Name: "amarr", Clients: retrieval.CollectionClientPool{ESIClient: client}}
+			target.GetTargetInfoOfType(types.CORPORATION)
+			assert.Equal(t, 98000001, target.IDNumber)
+		}
+	})
 }

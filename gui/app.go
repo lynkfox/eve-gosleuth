@@ -62,6 +62,18 @@ type TargetResult struct {
 	Holdings *Holdings         `json:"holdings"` // a corp or alliance target's holding links, nil for pilots and systems
 	// the holding that was searched for, when the search went to its main instead, empty otherwise
 	SearchedHolding string `json:"searchedHolding,omitempty"`
+	// the pilots, corporations, alliances, and systems a search with no type matched, when more than one did or any by ticker.
+	// Nothing else is set, the search is asked again for the one chosen, by its name and type.
+	Choices []TargetChoice `json:"choices,omitempty"`
+}
+
+// TargetChoice is one of the matches of a name searched with no type, for the user to choose between
+type TargetChoice struct {
+	Type     string `json:"type"` // PILOT, CORPORATION, ALLIANCE, or SYSTEM
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	ImageURL string `json:"imageUrl"` // a portrait or logo, empty for a system
+	ByTicker bool   `json:"byTicker"` // a corporation or alliance with the name searched as its ticker
 }
 
 // IntelReport holds everything built from a target's killmails. New killmail based sections are added here so a single pull feeds them all.
@@ -326,6 +338,34 @@ func (a *App) lookupTarget(name string, entityType types.EntityType) (retrieval.
 	return target, entity, nil
 }
 
+// matchTargets finds the pilots, corporations, alliances, and systems with a name, see retrieval.MatchTargets, at least one, or a user readable error for none
+func (a *App) matchTargets(name string) (retrieval.TargetMatches, error) {
+	comm.ReportProgress("Looking up %s", name)
+	found, err := retrieval.MatchTargets(a.clients.ESIClient, name)
+	switch {
+	case err != nil:
+		return found, errors.New("Could not search the ESI: " + api.FailureReason(err))
+	case len(found.Matches) == 0 && found.Item:
+		return found, fmt.Errorf("%s is an item, not a pilot, corporation, alliance, or system", name)
+	case len(found.Matches) == 0:
+		return found, errors.New("Nothing found by that name. Check spelling?")
+	}
+	return found, nil
+}
+
+// targetChoices are the matches of a name, for the user to choose between
+func targetChoices(matches []retrieval.TargetMatch) []TargetChoice {
+	choices := []TargetChoice{}
+	for _, match := range matches {
+		choice := TargetChoice{Type: match.Type.String(), ID: match.ID, Name: match.Name, ByTicker: match.ByTicker}
+		if match.Type != types.SYSTEM {
+			choice.ImageURL = api.EntityImageURL(match.Type, match.ID)
+		}
+		choices = append(choices, choice)
+	}
+	return choices
+}
+
 /*
 holdingMain finds the main a corp or alliance target is a holding of, while the Include holdings preference is on.
 With more than one, the first by name is used. A main that is itself a holding is not followed further.
@@ -348,11 +388,12 @@ func (a *App) holdingMain(target *retrieval.IntelTarget) (retrieval.HoldingLink,
 	SearchTarget looks up a pilot, corporation, alliance, or system by name and builds its display values
 
 Parameters:
-  - name: the exact in game name of the target
-  - searchType: PILOT, CORPORATION, ALLIANCE, or SYSTEM. Only a match of this type is accepted.
+  - name: the exact in game name of the target, ignoring case
+  - searchType: PILOT, CORPORATION, ALLIANCE, or SYSTEM, only accepting a match of this type, or empty to accept any: a lone match is searched,
+    and with more than one, or any by ticker, the result has only Choices, for the search to be asked again for the one chosen
 
 Returns:
-  - TargetResult: the target's id, type, and display values
+  - TargetResult: the target's id, type, and display values, or the Choices
   - error: a user readable message if the target could not be found or loaded
 */
 func (a *App) SearchTarget(name string, searchType string) (result TargetResult, err error) {
@@ -371,6 +412,17 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 	}
 
 	a.checkSDERelease()
+
+	if searchType == "" {
+		found, err := a.matchTargets(name)
+		if err != nil {
+			return result, err
+		}
+		if len(found.Matches) > 1 || found.Matches[0].ByTicker {
+			return TargetResult{Choices: targetChoices(found.Matches)}, nil
+		}
+		searchType = found.Matches[0].Type.String()
+	}
 
 	entityType, ok := searchTypes[searchType]
 	if !ok {
@@ -420,7 +472,7 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 	if foundName == "" {
 		foundName = name
 	}
-	a.cache.AddRecentSearch(retrieval.RecentSearch{Name: foundName, Type: searchType}, a.GetSettings().MaxRecentSearches)
+	a.cache.AddRecentSearch(retrieval.RecentSearch{Name: foundName, Type: searchType, Ticker: display.Ticker}, a.GetSettings().MaxRecentSearches)
 
 	result = TargetResult{
 		ID:              target.IDNumber,

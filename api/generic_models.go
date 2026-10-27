@@ -20,6 +20,7 @@ type TargetDisplay struct {
 	MemberCorps       []MemberCorp       // an alliance's member corporations, largest first, empty for other targets
 	DetailRows        []DetailRow        // the left details as label and value columns, used instead of LeftDetailsValue when set
 	SpaceLabel        string             // a system's kind of space shown beside its name: a wormhole class such as C5, or High Sec, Low Sec, Null Sec, or Triglavian
+	Ticker            string             // a corp's or alliance's ticker, ie URSA., empty for other targets
 	LeftDetailsTitle  string
 	LeftDetailsValue  string
 	RightDetailsTitle string
@@ -36,6 +37,7 @@ type RelatedEntity struct {
 	ImageUrl  string
 	ZkillUrl  string
 	EveWhoUrl string
+	Ticker    string // a corp's or alliance's ticker, empty for a pilot or when it could not be looked up
 }
 
 // NewRelatedEntity builds a RelatedEntity with its portrait or logo, zKillboard, and EveWho urls

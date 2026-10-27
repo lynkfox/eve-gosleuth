@@ -18,8 +18,9 @@ const (
 
 // RecentSearch is a target a search found, offered again by the search bar
 type RecentSearch struct {
-	Name string `json:"name"` // the target's name as EVE spells it
-	Type string `json:"type"` // PILOT, CORPORATION, ALLIANCE, or SYSTEM, as the search type dropdown has it
+	Name   string `json:"name"`             // the target's name as EVE spells it
+	Type   string `json:"type"`             // PILOT, CORPORATION, ALLIANCE, or SYSTEM
+	Ticker string `json:"ticker,omitempty"` // a corp's or alliance's ticker, ie URSA., empty for others and searches saved before tickers were
 }
 
 // recentSearchKey is a search's key in Searched: its type and lower case name, so a name typed in another case is the same search

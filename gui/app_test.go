@@ -154,3 +154,40 @@ func TestBuildKillmailCardUnresolvedNames(t *testing.T) {
 		assert.Nil(t, card.VictimAlliance)
 	})
 }
+
+// namesESIClient answers name lookups with its matches, or its error
+type namesESIClient struct {
+	api.ESIClient
+	matches map[int]api.EntityIDAndName
+	err     error
+}
+
+func (m namesESIClient) GetEveIDsFromNames(names []string) (map[int]api.EntityIDAndName, error) {
+	return m.matches, m.err
+}
+
+func TestMatchTargets(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+	appWith := func(client api.ESIClient) *App {
+		return &App{clients: retrieval.CollectionClientPool{ESIClient: client}}
+	}
+
+	t.Run("a name only an item has says so, rather than that nothing was found", func(t *testing.T) {
+		app := appWith(namesESIClient{matches: map[int]api.EntityIDAndName{33468: {Category: "inventory_types", ID: 33468, Name: "Astero"}}})
+		_, err := app.matchTargets("Astero")
+		assert.EqualError(t, err, "Astero is an item, not a pilot, corporation, alliance, or system")
+	})
+
+	t.Run("no match at all asks to check the spelling", func(t *testing.T) {
+		_, err := appWith(namesESIClient{}).matchTargets("Nobody")
+		assert.EqualError(t, err, "Nothing found by that name. Check spelling?")
+	})
+
+	t.Run("choices have portraits and logos, but a system none", func(t *testing.T) {
+		choices := targetChoices([]retrieval.TargetMatch{{Type: types.PILOT, ID: 90000001, Name: "Jita"}, {Type: types.SYSTEM, ID: 30000142, Name: "Jita"}})
+		assert.Equal(t, []TargetChoice{
+			{Type: "PILOT", ID: 90000001, Name: "Jita", ImageURL: api.EntityImageURL(types.PILOT, 90000001)},
+			{Type: "SYSTEM", ID: 30000142, Name: "Jita"},
+		}, choices)
+	})
+}

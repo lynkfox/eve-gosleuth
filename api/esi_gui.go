@@ -71,24 +71,24 @@ func (e ESICharacter) BuildDisplay(client ESIClient, eveWho EveWhoClient) Target
 			return "Get Img Url"
 		},
 		func() []RelatedEntity {
-			corpName := "(Unknown)"
+			corp := NewRelatedEntity("Corporation", "(Unknown)", e.CorporationID, types.CORPORATION)
 			corpData, err := client.GetCorporationInfo(e.CorporationID)
 			if err != nil {
 				comm.Logger.WithError(err).Warnf("Unable to pull Corp ID %d for pilot %s", e.CorporationID, e.Name)
 			} else {
-				corpName = corpData.Name
+				corp.Name, corp.Ticker = corpData.Name, corpData.Ticker
 			}
-			related := []RelatedEntity{NewRelatedEntity("Corporation", corpName, e.CorporationID, types.CORPORATION)}
+			related := []RelatedEntity{corp}
 
 			if e.AllianceID != 0 {
-				allianceName := "(Unknown)"
+				alliance := NewRelatedEntity("Alliance", "(Unknown)", e.AllianceID, types.ALLIANCE)
 				alliData, err := client.GetAllianceInfo(e.AllianceID)
 				if err != nil {
 					comm.Logger.WithError(err).Warnf("Unable to pull Alliance ID %d for pilot %s", e.AllianceID, e.Name)
 				} else {
-					allianceName = alliData.Name
+					alliance.Name, alliance.Ticker = alliData.Name, alliData.Ticker
 				}
-				related = append(related, NewRelatedEntity("Alliance", allianceName, e.AllianceID, types.ALLIANCE))
+				related = append(related, alliance)
 			}
 			return related
 		},
@@ -155,15 +155,14 @@ func (e ESICorporation) BuildDisplay(client ESIClient, eveWho EveWhoClient) Targ
 			related := []RelatedEntity{NewRelatedEntity("CEO", ceoName, e.CeoID, types.PILOT)}
 
 			if e.AllianceID != 0 {
-				allianceName := "(Unknown)"
+				alliance := NewRelatedEntity("Alliance", "(Unknown)", e.AllianceID, types.ALLIANCE)
 				alliData, err := client.GetAllianceInfo(e.AllianceID)
 				if err != nil {
 					comm.Logger.WithError(err).Warnf("Unable to pull Alliance ID %d for corp %s", e.AllianceID, e.Name)
-
 				} else {
-					allianceName = alliData.Name
+					alliance.Name, alliance.Ticker = alliData.Name, alliData.Ticker
 				}
-				related = append(related, NewRelatedEntity("Alliance", allianceName, e.AllianceID, types.ALLIANCE))
+				related = append(related, alliance)
 			}
 			return related
 		},
@@ -181,6 +180,7 @@ func (e ESICorporation) BuildDisplay(client ESIClient, eveWho EveWhoClient) Targ
 		},
 	)
 	display.AllianceHistory = allianceHistory
+	display.Ticker = e.Ticker
 	return display
 }
 
@@ -262,13 +262,14 @@ func (e ESIAlliance) BuildDisplay(client ESIClient, eveWho EveWhoClient) TargetD
 	}
 
 	executorCorpName := "(Unknown)"
+	executorCorpTicker := ""
 	executorCEOName := "(Unknown)"
 	executorCEOID := 0
 	executor, err := client.GetCorporationInfo(e.ExecutorCorporationID)
 	if err != nil {
 		comm.Logger.WithError(err).Errorf("Unable to pull Executor Corp ID %d for Alliance %s", e.ExecutorCorporationID, e.Name)
 	} else {
-		executorCorpName = executor.Name
+		executorCorpName, executorCorpTicker = executor.Name, executor.Ticker
 		executorCEOID = executor.CeoID
 
 		ceo, err := client.GetCharacterInfo(executor.CeoID)
@@ -288,7 +289,9 @@ func (e ESIAlliance) BuildDisplay(client ESIClient, eveWho EveWhoClient) TargetD
 			return "Get Img Url"
 		},
 		func() []RelatedEntity {
-			related := []RelatedEntity{NewRelatedEntity("Executor Corp", executorCorpName, e.ExecutorCorporationID, types.CORPORATION)}
+			executorCorp := NewRelatedEntity("Executor Corp", executorCorpName, e.ExecutorCorporationID, types.CORPORATION)
+			executorCorp.Ticker = executorCorpTicker
+			related := []RelatedEntity{executorCorp}
 			if executorCEOID != 0 {
 				related = append(related, NewRelatedEntity("Executor CEO", executorCEOName, executorCEOID, types.PILOT))
 			}
@@ -305,6 +308,7 @@ func (e ESIAlliance) BuildDisplay(client ESIClient, eveWho EveWhoClient) TargetD
 		},
 	)
 	display.MemberCorps = memberCorps
+	display.Ticker = e.Ticker
 
 	return display
 }

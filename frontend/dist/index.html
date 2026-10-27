@@ -10,14 +10,8 @@
   <header class="topbar">
     <div class="brand">EVE <span>GoSleuth</span></div>
     <form id="search-form" class="search" autocomplete="off">
-      <select id="search-type" aria-label="Search type">
-        <option value="PILOT">Pilot</option>
-        <option value="CORPORATION">Corporation</option>
-        <option value="ALLIANCE">Alliance</option>
-        <option value="SYSTEM">System</option>
-      </select>
       <div class="search-field">
-        <input id="search-input" type="text" placeholder="Exact in-game name" spellcheck="false" autofocus
+        <input id="search-input" type="text" placeholder="Exact pilot, corp, alliance, or system name" spellcheck="false" autofocus
           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="recent-list">
         <button id="recent-toggle" class="recent-toggle" type="button" title="Recent searches" aria-label="Recent searches" aria-expanded="false" aria-controls="recent-list" tabindex="-1">▾</button>
         <ul id="recent-list" class="menu-dropdown recent-list" role="listbox" aria-label="Recent searches" hidden></ul>
@@ -287,6 +281,18 @@
       </label>
       <button id="caveat-understood" type="button" autofocus>Understood</button>
     </div>
+  </dialog>
+
+  <!-- when a searched name is a pilot, corp, alliance, or system more than once, or is some ticker, which one: each match is a button whose value is its place in the list -->
+  <dialog id="target-choice" class="confirm" aria-labelledby="target-choice-title">
+    <form method="dialog">
+      <p id="target-choice-title">More than one thing has this name. Which did you mean?</p>
+      <p id="target-choice-name" class="confirm-target"></p>
+      <div id="target-choice-list" class="target-choices"></div>
+      <div class="confirm-actions">
+        <button class="secondary" value="cancel">Cancel</button>
+      </div>
+    </form>
   </dialog>
 
   <!-- the selected tab's help, popped out of its ? button: it stays open, can be dragged by its title bar, and follows the tab -->

@@ -123,6 +123,8 @@ input { flex: 1; }
 
 .recent-match { color: var(--highlight); font-weight: 600; }
 
+.recent-ticker { color: var(--muted); }
+
 .recent-type {
   flex-shrink: 0;
   color: var(--muted);
@@ -344,6 +346,9 @@ main {
 }
 
 .entity-name-line .entity-name { margin: 0; }
+
+/* a corp's or alliance's ticker beside its name, ie [URSA] or <URSA.> */
+.entity-ticker { flex: none; color: var(--muted); font-size: 13px; white-space: nowrap; }
 
 .portrait {
   width: 48px;
@@ -1227,6 +1232,27 @@ button.danger {
 .caveat-dismiss { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
 .caveat-dismiss input { flex: none; margin-top: 4px; padding: 0; accent-color: var(--accent); }
 .caveat-dismiss > span { display: flex; flex-direction: column; gap: 2px; }
+
+/* The choice of target when a searched name matches more than one: a row per match, its portrait or logo, kind, and name */
+.target-choices { display: grid; gap: 6px; margin-top: 12px; }
+.target-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 400;
+  text-align: left;
+}
+.target-choice:hover,
+.target-choice:focus-visible { border-color: var(--accent); }
+.target-choice img,
+.target-choice-blank { width: 32px; height: 32px; flex: none; border-radius: 4px; }
+.target-choice-blank { background: var(--panel-raised); }
+.target-choice-kind { width: 90px; flex: none; color: var(--muted); font-size: 12px; }
+.target-choice-heading { margin: 4px 0 0; color: var(--muted); font-size: 11px; font-weight: 600; }
 
 /* Holding links: the add or edit popup */
 .holding-dialog { width: min(400px, calc(100vw - 32px)); }

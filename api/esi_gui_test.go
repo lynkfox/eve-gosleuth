@@ -18,11 +18,11 @@ type DisplayESIClient struct {
 }
 
 func (m DisplayESIClient) GetCorporationInfo(idNumber int) (*api.ESICorporation, error) {
-	return &api.ESICorporation{CorporationID: idNumber, Name: "URSA PRIMUS", CeoID: 2117000001}, nil
+	return &api.ESICorporation{CorporationID: idNumber, Name: "URSA PRIMUS", Ticker: "URSAP", CeoID: 2117000001}, nil
 }
 
 func (m DisplayESIClient) GetAllianceInfo(idNumber int) (*api.ESIAlliance, error) {
-	return &api.ESIAlliance{AllianceID: idNumber, Name: "URSA."}, nil
+	return &api.ESIAlliance{AllianceID: idNumber, Name: "URSA.", Ticker: "URSA."}, nil
 }
 
 func (m DisplayESIClient) GetCharacterInfo(idNumber int) (*api.ESICharacter, error) {
@@ -71,6 +71,19 @@ func relatedSummary(related []api.RelatedEntity) []string {
 func TestBuildDisplayRelated(t *testing.T) {
 	comm.InitLogger(logrus.DebugLevel)
 	esi := DisplayESIClient{}
+
+	t.Run("corps and alliances carry their tickers, as target and beside a target", func(t *testing.T) {
+		pilot := api.ESICharacter{CharacterID: 2121139046, Name: "Luxxianna Seraph", CorporationID: 98744491, AllianceID: 99013330}.BuildDisplay(esi, OfflineEveWhoClient{})
+		assert.Equal(t, []string{"URSAP", "URSA."}, []string{pilot.Related[0].Ticker, pilot.Related[1].Ticker})
+		assert.Empty(t, pilot.Ticker)
+
+		corp := api.ESICorporation{CorporationID: 98744491, Name: "URSA PRIMUS", Ticker: "URSAP", CeoID: 2117000001, AllianceID: 99013330}.BuildDisplay(esi, OfflineEveWhoClient{})
+		assert.Equal(t, "URSAP", corp.Ticker)
+
+		alliance := api.ESIAlliance{AllianceID: 99013330, Name: "URSA.", Ticker: "URSA.", ExecutorCorporationID: 98744491}.BuildDisplay(esi, OfflineEveWhoClient{})
+		assert.Equal(t, "URSA.", alliance.Ticker)
+		assert.Equal(t, "URSAP", alliance.Related[0].Ticker)
+	})
 
 	t.Run("a pilot shows their corp and alliance", func(t *testing.T) {
 		display := api.ESICharacter{CharacterID: 2121139046, Name: "Luxxianna Seraph", CorporationID: 98744491, AllianceID: 99013330}.BuildDisplay(esi, OfflineEveWhoClient{})
