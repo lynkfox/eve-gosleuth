@@ -376,11 +376,79 @@ function renderTarget(result) {
     el("right-details-value").textContent = display.RightDetailsValue;
   }
 
-  shownTarget = { id: result.id, type: result.type, name: display.Name };
+  shownTarget = { id: result.id, type: result.type, name: display.Name, imageUrl: display.TargetImageUrl };
   renderHoldings(result.holdings);
 
   el("empty").hidden = true;
-  el("target").hidden = false;
+  el("target-wrap").hidden = false;
+  el("target-pull").hidden = false;
+  // a panel pulled shut stays so for the next search, its bar naming the new target
+  setTargetCollapsed(targetCollapsed);
+}
+
+// targetCollapsed is true while the pull bar has the target panel pulled shut
+let targetCollapsed = false;
+
+// PULL_DISTANCE is how far, in pixels, the pull bar is dragged up or down to shut or open the target panel
+const PULL_DISTANCE = 24;
+// TARGET_SLIDE_MS is how long the target panel takes to slide shut or open, as in style.css
+const TARGET_SLIDE_MS = 200;
+
+// setTargetCollapsed slides the target panel shut or open, the pull bar showing the target's icon and name while it is shut
+function setTargetCollapsed(collapsed) {
+  targetCollapsed = collapsed;
+  const wrap = el("target-wrap");
+  // clipped while it slides, so the panel does not spill over the report
+  wrap.classList.add("sliding");
+  wrap.classList.toggle("collapsed", collapsed);
+  clearTimeout(setTargetCollapsed.timer);
+  setTargetCollapsed.timer = setTimeout(() => wrap.classList.remove("sliding"), TARGET_SLIDE_MS + 50);
+
+  const bar = el("target-pull");
+  bar.setAttribute("aria-expanded", String(!collapsed));
+  bar.title = collapsed ? "Click or drag down to show the target panel" : "Click or drag up to hide the target panel";
+  bar.setAttribute("aria-label", collapsed ? "Show the target panel" : "Hide the target panel");
+  const label = el("target-pull-label");
+  label.replaceChildren();
+  if (collapsed && shownTarget) {
+    if (shownTarget.imageUrl) {
+      const icon = document.createElement("img");
+      icon.src = shownTarget.imageUrl;
+      icon.alt = "";
+      label.append(icon);
+    }
+    label.append(shownTarget.name);
+  }
+  label.hidden = !collapsed || !shownTarget;
+}
+
+/*
+  wireTargetPull lets the pull bar be clicked, or dragged up or down past PULL_DISTANCE, to shut or open the target panel.
+  A drag is not also taken as a click when it ends.
+*/
+function wireTargetPull() {
+  const bar = el("target-pull");
+  let pull = null; // the drag under way: where the pointer last turned the panel, and whether it moved
+  bar.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    pull = { y: event.clientY, moved: false };
+    bar.setPointerCapture(event.pointerId);
+  });
+  bar.addEventListener("pointermove", (event) => {
+    if (!pull) return;
+    const moved = event.clientY - pull.y;
+    if (Math.abs(moved) > 4) pull.moved = true;
+    if ((moved < -PULL_DISTANCE && !targetCollapsed) || (moved > PULL_DISTANCE && targetCollapsed)) {
+      setTargetCollapsed(!targetCollapsed);
+      pull.y = event.clientY;
+    }
+  });
+  bar.addEventListener("pointercancel", () => { pull = null; });
+  bar.addEventListener("click", () => {
+    const dragged = pull && pull.moved;
+    pull = null;
+    if (!dragged) setTargetCollapsed(!targetCollapsed);
+  });
 }
 
 // shownTarget is the target in the target panel, as { id, type, name }, for its holding links
@@ -2913,6 +2981,7 @@ for (const id of SEARCH_PROMPTS) {
   });
 }
 el("ticker-stop").addEventListener("click", stopSearch);
+wireTargetPull();
 el("pref-max-killmails").addEventListener("input", showKillmailPagesUsed);
 // the right click menu closes on a click or right click anywhere else, Escape, scrolling, or the window losing focus
 for (const type of ["mousedown", "contextmenu"]) {

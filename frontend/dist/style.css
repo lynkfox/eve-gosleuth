@@ -215,6 +215,81 @@ main {
 
 .card.target { padding: 14px; }
 
+/* the target panel slides shut and open on its grid row, from its full height to none */
+.target-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.2s ease, margin 0.2s ease;
+}
+
+.target-wrap > .target {
+  min-height: 0;
+  transition: padding 0.2s ease, border-width 0.2s ease;
+}
+
+/* shut, the panel's own padding and border, and the gap under it, go too, so nothing is left above the pull bar */
+.target-wrap.collapsed {
+  grid-template-rows: 0fr;
+  margin-bottom: -16px;
+}
+
+.target-wrap.collapsed > .target {
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+}
+.target-wrap.collapsed,
+.target-wrap.sliding { overflow: hidden; }
+
+/* shut, its links and buttons can not be tabbed to; it hides once it has slid shut, and shows at once to slide open */
+.target-wrap.collapsed > .target {
+  visibility: hidden;
+  transition: padding 0.2s ease, border-width 0.2s ease, visibility 0s 0.2s;
+}
+
+/* the bar between the target panel and the report that pulls the panel shut or open */
+.pull-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 14px;
+  margin: -10px 0;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.pull-grip {
+  width: 56px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.pull-bar:hover .pull-grip,
+.pull-bar:focus-visible .pull-grip { background: var(--accent); }
+
+/* the shut panel's target: its icon and name, centered, with no border or background of its own */
+.pull-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pull-label img {
+  width: 32px;
+  height: 32px;
+  border-radius: 3px;
+}
+
 .target-header {
   display: flex;
   flex-wrap: wrap;
@@ -1344,6 +1419,9 @@ body { padding-bottom: 40px; }
 
 @media (prefers-reduced-motion: reduce) {
   .ticker.busy .ticker-indicator { animation: none; }
+  .target-wrap,
+  .target-wrap > .target,
+  .target-wrap.collapsed > .target { transition: none; }
 }
 
 [hidden] { display: none !important; }

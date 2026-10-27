@@ -44,7 +44,9 @@
       <p>Search for a target by its exact in-game name to begin.</p>
     </section>
 
-    <section id="target" class="card target" hidden>
+    <!-- the target panel, which the pull bar under it slides shut and open -->
+    <div id="target-wrap" class="target-wrap" hidden>
+    <section id="target" class="card target">
       <div id="target-entities" class="target-header"></div>
 
       <!-- a corp or alliance target's holding links, which the user sets by hand -->
@@ -61,6 +63,14 @@
         </div>
       </div>
     </section>
+    </div>
+
+    <!-- pulls the target panel shut to give the report more room, or open again: click it, or drag it up or down -->
+    <button id="target-pull" class="pull-bar" type="button" aria-controls="target" aria-expanded="true" hidden>
+      <!-- while the panel is shut, the target's icon and name, centered above the grip -->
+      <span id="target-pull-label" class="pull-label" hidden></span>
+      <span class="pull-grip" aria-hidden="true"></span>
+    </button>
 
     <!-- a report built from part of its data: the search was stopped, or the ESI rate limited it -->
     <p id="report-warning" class="status warning" hidden></p>
