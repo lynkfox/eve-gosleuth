@@ -1,0 +1,84 @@
+# Features
+
+How each feature works, for when you are changing it. The rules that apply everywhere are in `CLAUDE.md`.
+
+## Search bar
+
+- The search bar has no type: `SearchTarget(name, "")` looks the name up with `retrieval.MatchTargets` (ESI universe/ids: exact names ignoring case, plus corps and alliances by ticker, ie Jita Holding Inc. (JITA) for Jita, kept as `ByTicker` since a player may only have seen a ticker; items left out) and searches a lone exact match, or with more than one or any by ticker returns `TargetResult.Choices`, ticker ones last, for `chooseTarget` (main.js, `#target-choice`) to ask which, then is called again with the chosen name and type. A typed lookup (`GetTargetInfoOfType`) prefers the exact name among its type.
+- A name filled in by the app, ie a recent search or a menu's Search, carries its type and eve id as `searchTypeHint`/`searchIdHint`, cleared by typing, and `SearchTarget(name, type, id)` then looks it up by id (`GetTargetInfoByID`, `lookupTargetByID`), with no name lookup: the ESI's universe/ids can not find every name, ie the alliance L A Z E R H A W K S. Pass the id wherever a search is offered; recent searches save it (`RecentSearch.ID`) and the holding redirect uses the main's.
+- A zKillboard or EveWho link typed into the search bar, My Intel, or the holding dialog is read by `api.ParseEntityLink` and looked up by its id, its own type winning over a dropdown's where that kind is allowed (`lookupEntity`).
+
+## Recent searches
+
+Recent searches live in the cache, not settings (retrieval/recent_searches.go): `SearchTarget` calls `AddRecentSearch` with each found target as EVE spells it, with a corp's or alliance's ticker (`TargetDisplay.Ticker`, also on `RelatedEntity`, shown EVE style, [CORP] and <ALLY>, by `formatTicker`; a typed ticker finds its recent search), one `Permanent` row per search in the `recent_search` section keyed by type and lower case name, keeping the number set in Preferences (`Preferences.MaxRecentSearches`, default `DefaultRecentSearches` 5, at most `MaxRecentSearches` 25; lowering it calls `TrimRecentSearches`); the × on a row calls `RemoveRecentSearch`. An SDE release keeps them; Clear everything and Clear older than remove them.
+
+## Search limits, caveat warning, collapse target
+
+- The search limits button beside the search bar (`#limits-button`, gui/search_limits.go) changes what searches collect (max, pages, newer than, cached, holdings) until the app closes: `SetSearchLimits` keeps them on `App.searchLimits` (under `settingsMu`, so it skips `a.mu`), `searchPreferences()` is the Preferences with them in place and is what `CollectIntel` and `holdingMain` read, and `SaveSearchLimits` makes them the defaults; the button is in the accent while it has its own.
+- The Collapse target on search preference (`Preferences.CollapseTarget`) pulls the target panel shut at each search.
+- As the app launches, `showCaveatWarning()` opens the killmail caveat warning (`#caveat-warning`) while `Preferences.ShowCaveatWarning` (on by default) is on; its Don't show this again box calls `DismissCaveatWarning`.
+
+## Stopping a search
+
+`StopSearch` (gui/search_control.go) halts the ESI `RateGuard` (`api.ErrStopped` for every request), so killmail collection ends where it is and the report is built from what is cached; `SearchTarget` and `CollectIntel` resume it when they return, and the report's `stopped`/`rateLimited` flags show a warning above it. A search asks the frontend a question with `ask` (a Wails event) and waits for `AnswerPrompt`.
+
+## Debug mode
+
+Debug mode (`Preferences.DebugMode`, gui/debug.go) lasts until the app closes (`loadSettings` and `shutdown` turn it off) and puts an orange border round the window (`body.debug-mode`, `showDebugMode`): the log goes to Debug level, and `debugRecorder`, a logrus hook, writes each search's entries to `debug/search-<time>.log` beside the settings, from `SearchTarget` (`startDebug`) to the end of `CollectIntel` or a failed `SearchTarget` (`finishDebug`, deferred before `recoverAsError` so panics are in it). It is then zipped with `session.json` (build, OS, WebView user agent, preferences, effective search limits, the search, cache counts, static data overrides with hashes, memory), the newest 256 KB of `crash.log`, and `goroutines.txt` into `gosleuth-debug-<time>.zip`, the newest 10 kept; a log left by a search the app closed during is zipped at the next start. `crash.log` is trimmed to its newest 512 KB past 1 MB. The frontend's JS errors reach the log through `LogFrontendError`.
+
+## Killmail collection (`CollectKillmails`)
+
+- Fetches the zKill list newest first, pages of 200 up to zKill's 100; a page short of 200 ends it, except a nearly full page 1 (`zkillNearlyFullPage`), since zKill holds back the newest killmails, under five minutes old, and the page after it failing is then the end of the list; a killmail listed twice is kept once.
+- zKill sends the whole ESI killmail with each entry (`ZkbResponse.Killmail()`), so each killmail is the cache's copy, else zKill's (then cached with `StoreKillmail`), else fetched from the ESI; the ESI is only asked for an entry missing its time, system, victim's ship, or attackers, at most `MaxESIKillmails` (1700) a search, the rest skipped with `ErrTooManyESIKillmails`. Only the entries within Max are looked up in the cache, all of them with `IncludeCached`.
+- Paging also stops at the page reaching `NewerThan`; when even the newest killmail is older, `ConfirmIgnoreDate` is asked up front and a yes lists again further back.
+- Each entity's list is cached (retrieval/zkill_lists.go, section `zkill_list`, gzipped, `Permanent`): `KnownZkillList` keeps zKill's data for each killmail and how many from the top are `Unbroken` (no gap), and every killmail zKill sends, past the limits too, is cached with `StoreKillmail` as it is listed. `listEntity` stops paging at the first page reaching the cached list's unbroken part (`ZkillPaging.Known`) and splices the rest in; when the search needs more than is unbroken it carries on from there (`ZkillPaging.StartPage`). Entries past the limits that only the cached list has are used only with `IncludeCached`. Late-posted old killmails deep in a list are not picked up by a search that stops early.
+- A zKill list can be narrowed with `ZkillPaging.Filter` (modifiers put before the entity, ie `losses/groupID/1657`; an entity with a `groupID` means that entity's own ship or structure is in the group), cached apart by `zkillListKey` with the filter.
+- This produces `[]RawKillmail{Zkillmail, ESIKillmail}`, and the names, pilots, corps, and the rest the killmails refer to are looked up in bulk afterwards (`PrefetchKillmailEntities`).
+- `KillmailLimits` decides how many: a max count (default `DefaultKillmailLimit`, 20, up to 20,000; zKill is paged only until that many are listed), or `AllKillmails` (-1) for every killmail on the first `Pages` pages (default `DefaultKillmailPages`, 10), an optional cutoff date, and whether to also use cached killmails beyond those limits. The GUI takes these from the Preferences window (`gui/settings.go`); the CLI uses `DefaultKillmailLimits()`.
+
+## Allies
+
+- `GetTopAllies` (aggregate/allies.go) feeds the Allies tab (labelled "Allies?", with a note that they are potential allies, not confirmed) of pilot, corp, and alliance targets: the alliances, then corps in no alliance, on the target's kills (not its losses) outside the alliance it was in at each kill, each noting how many of the target's kills its own pilots were the victim of.
+- The user can ignore allies per target from a row's right click menu, saved at once by gui/allies.go `SaveIgnoredAllies` in the cache's `ignored_ally` section (retrieval/ignored_allies.go); the × on an ignored one under the table brings it back. `GetTopAllies` skips them so the next ones take their places. The ignored tags show the kills each shared (`AllyRanking.IgnoredKillmails`), most first.
+- With the Hide killed allies preference (`Preferences.HideKilledAllies`) every ally the target also killed is skipped too; `RankAllies` re-ranks the shown search after that preference changes. While it is on and the target killed any (`AllyRanking.KilledAllies`), a toggle tag in the theme's accent leads the left-out tags under the table and re-ranks with `showKilled` to show or hide them for that search only (kept on `alliesSource` until the next search).
+- Allies leaves out holdings linked to the target's own groups, and skips `internal` killmails.
+
+## Right click menus
+
+Every row's menu is built by `withMenu` in main.js from sections (`openSectionsMenu`): a heading per entity on the row, ie the pilot, their corp, and alliance, each with Search and site links, so rows send corps and alliances as `EntityRef`s. An Allies row's section has its own items above them: Add to Holding, Ignore, and Open shared killmails on zKillboard (`AllySummary.TogetherURL`, `api.ZkillTogetherURL`: one zKill advanced search, the target and every holding searched in Attackers as or, the ally in Either, so its kills with them and their kills of it). A killmail card's menu has only the part right-clicked (`killmailCardSections`): the victim, the final blow, or else the system.
+
+## Holdings
+
+- Holding links (retrieval/holdings.go, section `holding`, gui/holdings.go) tie a corp or alliance to holding corps or alliances by hand; the target panel shows them from both ends (`TargetResult.Holdings`).
+- With the Include holdings preference (`Preferences.IncludeHoldings`, on by default) a corp or alliance search sets `IntelTarget.Holdings` to its own holdings (one level, not the mains it holds for): `CollectKillmails` (`listKillmails`) pulls each holding's zKill list with the same paging and merges them newest first, a killmail on two lists kept once as the main's, before Max and the date limit apply. `RawKillmail.Via`/`Killmail.Via` name the holding a killmail came from, shown as a "via" tag on its card.
+- Searching a holding, while that preference is on, searches its main instead (`holdingMain` in gui/app.go, the first main by name; `TargetResult.SearchedHolding` names the holding for the status line).
+- The Allies tab of a corp or alliance opens with a line of its holdings and the kills each shared with it (`aggregate.HoldingKillsTogether`: kills with pilots of both the main itself and the holding).
+- Holdings count as the target everywhere through `IntelTarget.IsGroup(corpID, allianceID)`: losses, members, capital pilots, and allies; the Members tab's roster stays the main corp's.
+- A killmail whose victim and every attacker are the target or its holdings (`aggregate.IsInternal`, any outside attacker or NPC makes it a normal loss) has the outcome `internal`: still a loss, never a kill.
+
+## My Intel
+
+- My Intel (app menu, `#myintel`, gui/myintel.go) shows and edits every holding and ignored ally: `GetMyIntel` builds a card (`IntelGroup`) per main and per target with ignored allies (`AllHoldingLinks`, `AllIgnoredAllies`, the targets' names, which ignored ally rows do not keep, looked up in bulk; corp and alliance tickers only from the cache, `CachedTicker`, blank until looked up, so the window opens at once).
+- `LookupEntity`, `AddIgnoredAlly`, `RemoveIgnoredAlly`, `SaveHolding`, `RemoveHolding`, and `RemoveMyIntelGroup`/`RemoveMyIntelGroups` (a card's holdings and ignored allies, not links where it is another main's holding; the ticked cards' Delete, or a card's ×, after a confirmation, with an undo) change them without a search and skip `a.mu`; after a change the shown target's holdings and Allies are refreshed (`syncShownTarget`).
+- Ticked cards (unticked by default; Check all ticks those the filter shows) export to a JSON file (gui/myintel_share.go, `intelFile`, format `gosleuth-intel` version 1: a `cards` list, each its entity, holdings with notes, and ignored allies, by type and id) for other users.
+- An import is read at once, without the ESI, so it is fast and can not trip its rate limits: `planImport` skips malformed entries (counted once per entry), takes the file's names cleaned of control and formatting characters (`cleanImportedName`), and previews what it would add before `ApplyMyIntelImport`, which only adds, checked again against what is saved then, keeping the user's notes unless they take the file's.
+- Every entity an import names is then saved to check (`retrieval.AddIntelChecks`, section `intel_check`, kept with the user's data) and `runIntelChecks` (gui/intel_checks.go) checks them in the background with no sign to the user: `universe/names` in batches of 1000 (`GetEntitiesFromEveIDs`, uncached), a batch the ESI 404s for one bad id split in half until it is found, correcting names to EVE's and removing holdings and ignored allies naming an entity that does not exist as the type the file said, with one ticker line only if it removed any. One runs at a time (`checkMu`); a failure keeps the checks; it runs after an import, at start, and first thing in `SearchTarget`, and shutdown stops it between calls (`closing`). Nothing claims a link is verified, as no check can prove one.
+
+## Structures
+
+- Structures (retrieval/structures.go, aggregate/structures.go, gui/structures.go) are pulled with the killmails in `CollectIntel`, before the report, and prefetched with them.
+- Structure groups are `structure_groups.json` (citadels, engineering complexes, refineries, control towers) and control tower batteries `pos_battery_groups.json`, since a tower is never a killmail attacker, only its batteries. Structures with no guns, Metenox moon drills and customs offices, are `minor_structure_groups.json` and `minor_structures.json`: never a last structure lost, never on kills, but listed among previous losses and Destroyed.
+- A j-space system target gets `IntelReport.LastStructureLoss` and `PreviousStructureLosses` (`retrieval.StructureLosses`, page 1 of each structure and minor structure group's losses in the system, no limits: the newest non-minor loss, and the `PreviousStructureLosses` (5) newest others), the box above its Activity with the others collapsed under it.
+- A corp or alliance target gets the Structures tab (`IntelReport.Structures`): Used in Kills is `CollectStructureKillmails`, each structure group's kills (not towers) and losses, and each battery group's kills, for the target and its holdings, to Max or Pages but ignoring the date limit, then `aggregate.StructuresUsed` groups them by type (towers as one kind), system, and owner corp, as killmails give no structure name or id, grayed by a loss of the same after its newest kill (which also names a tower seen only through batteries). Destroyed is `aggregate.StructuresDestroyed`, the structure and minor structure losses on the search's own killmails that the target's pilots were on.
+
+## System tabs
+
+- `GetPIPilots` (aggregate/piPilots.go) feeds a system target's PI Pilots tab: hauler losses, T1 and T2 transports but no freighters (`hauler_groups.json` minus `hauler_exclusions.json`) whose zKill `locationID` (`Killmail.LocationID`, the nearest celestial) is one of the system's planets, plus any loss with PI aboard wherever it died (the victims' item types are prefetched with `PrefetchItemTypes` first), with PI cargo found by item group (`pi_material_groups.json`) from the raw `Victim.Items`.
+- `GetRatters` (aggregate/ratters.go) feeds its Ratters tab: any pilot loss with an NPC attacker (no character, in an NPC corp or none, so structures are not rats), each tagged by who else was on it: NPCs only, players using only smartbombs (weapon group in `smartbomb_groups.json`), or other players; pilots with the surest loss rank first.
+
+## Other GUI details
+
+- The window itself never scrolls (end of style.css): the header, target panel, and tab bar stay put and each `.tab-panel` scrolls on its own. A paged tab (`.paged-panel`, Killmails and Members) scrolls only its `.panel-scroll` list, keeping its pager in reach.
+- The tab order in `index.html` is the default; a saved order (`Settings.TabOrder` via `SetTabOrder`) fills the slots of the tabs it names (`tabOrderFrom` in main.js), so a new tab keeps its default place.
+- `api/esi_gui.go` builds `TargetDisplay` values (four title/value panels) per entity type via `TargetEntity.BuildDisplay`. `api.EntityImageURL` gives EVE image server portraits/logos.
+- Themes are defined in `frontend/dist/main.js` (`THEMES`); only colors without a meaning are themed, kill/loss, security, and wormhole class colors stay fixed.

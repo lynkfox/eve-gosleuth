@@ -47,8 +47,19 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
   * have an option to pull the kills since the tracker was last open
  * Report data to be saved as a PDF for distribution.
  * About tab, with isk donation instructions, maybe kofi?
+ * Fits 
+  * Tags (Nano, Armor Fleet, Armor Kitchen Sink, Roller, ect)
+  * Get expected resist holes, ewar resistance
+  * eft export format
+  * Fitting window
+ * Update Structure searches on pos's
+  * only one pos per moon, so we can use the location of the killmail to potentially link pos kills to their destructions
+ * first time user tour
+  * overlay that darkens screen, highlights buttons with descriptions
+  * generates sample search (fake the search?) and shows off the various tabs.
 
 * Release
  * Version number in title bar
  * Version easily bumpable outside of code
  * GitActions workflows to build and release
+ * Auto Update-er and Update changelong Splash screen
