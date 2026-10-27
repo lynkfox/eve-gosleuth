@@ -16,6 +16,12 @@ var (
 	HaulerExclusions StaticData // ship types in HaulerGroups that are not haulers, ie the Noctis salvager
 	PIMaterialGroups StaticData // the ESI groups of Planetary Industry resources and commodities
 	SmartbombGroups  StaticData // the ESI groups of smartbomb modules, the weapon a player on a ratting loss may have only bombed it with
+	StructureGroups  StaticData // the ESI groups of the structures the Structures tab and a j-space system's last structure lost cover: upwell structures and control towers
+	PosBatteryGroups StaticData // the ESI groups of control tower batteries, which stand in for their tower on kills, as a tower is never on a killmail's attackers
+	// MinorStructureGroups and MinorStructures are the groups and types of structures that have no guns, ie Metenox moon drills and customs offices.
+	// They are listed with the structures destroyed, but never as a j-space system's last structure lost.
+	MinorStructureGroups StaticData
+	MinorStructures      StaticData
 )
 
 func newStaticValues() *StaticValues {
@@ -46,6 +52,10 @@ func InitStaticData(staticFiles fs.FS, overrides ...fs.FS) error {
 	HaulerExclusions = newStaticValues()
 	PIMaterialGroups = newStaticValues()
 	SmartbombGroups = newStaticValues()
+	StructureGroups = newStaticValues()
+	PosBatteryGroups = newStaticValues()
+	MinorStructureGroups = newStaticValues()
+	MinorStructures = newStaticValues()
 	Spaces = SpaceClasses{WormholeRegionClasses: map[string]string{}, RegionSpaceLabels: map[string]string{}}
 
 	var errs []error
@@ -60,6 +70,10 @@ func InitStaticData(staticFiles fs.FS, overrides ...fs.FS) error {
 		{"hauler_exclusions.json", HaulerExclusions.LoadStaticType},
 		{"pi_material_groups.json", PIMaterialGroups.LoadStaticType},
 		{"smartbomb_groups.json", SmartbombGroups.LoadStaticType},
+		{"structure_groups.json", StructureGroups.LoadStaticType},
+		{"pos_battery_groups.json", PosBatteryGroups.LoadStaticType},
+		{"minor_structure_groups.json", MinorStructureGroups.LoadStaticType},
+		{"minor_structures.json", MinorStructures.LoadStaticType},
 		{"jspace_statics.json", LoadJSpaceStatics},
 		{"space_classes.json", LoadSpaceClasses},
 	} {

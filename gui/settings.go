@@ -41,6 +41,7 @@ type Preferences struct {
 	MaxRecentSearches      int    `json:"maxRecentSearches"`      // how many recent searches the search bar keeps, 1 to retrieval.MaxRecentSearches
 	HideKilledAllies       bool   `json:"hideKilledAllies"`       // leave out of every Allies tab the allies the target also killed. Off by default.
 	IncludeHoldings        bool   `json:"includeHoldings"`        // a corp or alliance search also collects its holdings' killmails, counted as its own. On by default.
+	CollapseTarget         bool   `json:"collapseTarget"`         // pull the target panel shut at each search, leaving more room for the report. Off by default.
 }
 
 // maxTabs is the most tab ids SetTabOrder keeps, well above the number of tabs, so a bad value from the frontend stays small

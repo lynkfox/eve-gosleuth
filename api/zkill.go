@@ -27,6 +27,9 @@ type ZkillPaging struct {
 	NewerThan time.Time                 // stop after a page that reaches a killmail this old or older, the zero time for no date limit
 	Known     func(killmailID int) bool // stop after a page listing a killmail this knows, ie one on a cached list, nil to not
 	For       string                    // whose list it is in progress messages, ie "holding URSA Holdings", empty to not say
+	// Filter narrows the list with zKillboard's modifiers, put before the entity, ie "losses/groupID/1657" for the entity's citadels lost, empty for its whole list.
+	// An entity with a groupID is that entity's own ship or structure in the group, ie kills/corporationID/1/groupID/1657 are kills the corp's own citadels were on.
+	Filter string
 }
 
 // ZkillList is what GetZkillResults listed
@@ -83,6 +86,9 @@ func (z ZkillConnection) GetZkillResults(entityId int, typeOfEntity types.Entity
 	}
 
 	endpoint := fmt.Sprintf("%s/%d", DispatchMap[typeOfEntity], entityId)
+	if paging.Filter != "" {
+		endpoint = paging.Filter + "/" + endpoint
+	}
 	allZkillmails := &[]ZkbResponse{}
 
 	maxPages := min(max(paging.MaxPages, 1), ZKILL_MAX_PAGES)

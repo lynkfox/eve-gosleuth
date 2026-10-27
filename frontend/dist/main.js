@@ -394,8 +394,8 @@ function renderTarget(result) {
   el("empty").hidden = true;
   el("target-wrap").hidden = false;
   el("target-pull").hidden = false;
-  // a panel pulled shut stays so for the next search, its bar naming the new target
-  setTargetCollapsed(targetCollapsed);
+  // a panel pulled shut stays so for the next search, its bar naming the new target. The Collapse target preference shuts it at each search.
+  setTargetCollapsed(targetCollapsed || preferences.collapseTarget);
 }
 
 // targetCollapsed is true while the pull bar has the target panel pulled shut
@@ -866,6 +866,12 @@ function renderIntelSections(report) {
     renderCapitals(report.capitals);
   }
 
+  el("tab-structures").hidden = !report.structures;
+  if (report.structures) {
+    renderStructures(report.structures);
+  }
+  renderStructureLoss(report.jspace, report.lastStructureLoss, report.previousStructureLosses || []);
+
   // the Members tab's rows come from GetMembers, started by the search
   el("tab-roster").hidden = !report.memberList;
   if (report.memberList) renderRosterPage();
@@ -1183,11 +1189,6 @@ function ratLossRow(loss) {
   shipImage.loading = "lazy";
   ship.append(shipImage, loss.shipName);
 
-  const location = document.createElement("span");
-  location.className = "pi-planet";
-  location.textContent = loss.location || "—";
-  if (!loss.location) location.title = "No nearest celestial";
-
   const value = document.createElement("span");
   value.className = "pi-value";
   value.textContent = formatIsk(loss.totalValue);
@@ -1197,7 +1198,7 @@ function ratLossRow(loss) {
   tag.className = `pi-tag rat-kind-${loss.kind}`;
   tag.textContent = label;
 
-  row.append(time, ship, location, value, tag);
+  row.append(time, ship, value, tag);
 
   // the NPCs and players on it, shown while hovering over or focused on the row
   const attackers = document.createElement("div");
@@ -1338,78 +1339,76 @@ function wireTabMoving(tab) {
 }
 
 // UNIQUE_DAYS_HELP explains the Unique Days column the ranked tabs share
-const UNIQUE_DAYS_HELP = "The number in parentheses on Unique Days is the number of days from their first to last killmail reviewed.";
+const UNIQUE_DAYS_HELP = "Unique Days: total days with killmails (days spanned across)";
+
+// ROW_MENU_HELP ends every tab's help, see selectTab
+const ROW_MENU_HELP = "Right click any row for additional context commands";
 
 /*
   TAB_HELP explains each tab as bullet points, shown with its color key, if any, on hover over the tab's ? button.
   An entry is a list of points, or a function of the target type (PILOT, CORPORATION, ALLIANCE, or SYSTEM) for a tab that differs by target.
+  Each point fits in about two lines of the popup, around 90 characters, and a tab has as few as explain it.
 */
 const TAB_HELP = {
   "tab-killmails": [
-    "Every killmail collected for this search, newest first. Click one to open it on zKillboard.",
-    "How many are collected, and how far back, is set in Preferences.",
+    "This search's killmails, newest first. Click one to open it on zKillboard.",
+    "How many, and how far back, is set in Preferences.",
   ],
   "tab-activity": [
-    "A display, zKillboard style, of when killmails were recorded, for potential activity times.",
-    "Only uses the killmails that were analyzed during this search.",
+    "When the killmails happened, by weekday and hour, to show active times.",
+    "Wormhole systems also show the last structure destroyed there, however long ago.",
   ],
   "tab-fleetmates": [
-    "The 10 pilots on the most killmails with this pilot, who are in the same corporation or alliance now or attacked alongside them, ties going to the most unique days.",
+    "The 10 pilots most often on killmails with this pilot, or in its corp or alliance now.",
     UNIQUE_DAYS_HELP,
   ],
   "tab-members": [
-    "The 10 pilots on the most killmails flying for this corporation or alliance, counted by who they flew for at the time, ties going to the most unique days.",
+    "The 10 pilots on the most killmails for this corp or alliance, by who they flew for then.",
     UNIQUE_DAYS_HELP,
   ],
   "tab-pilots": [
-    "A list of the 10 pilots with the most killmails over the most unique days.",
+    "The 10 pilots on the most killmails in this system.",
     UNIQUE_DAYS_HELP,
   ],
   "tab-allies": [
-    "The 10 alliances most often on this target's kills without being in its alliance, ties going to the most unique days. Corporations in no alliance come after every alliance.",
-    "Only kills count, since on a loss no one else is on the target's side. The target's own alliance is the one it was in at the time of each kill.",
-    "Pilots is how many of their pilots were seen on those kills. NPCs, structures, and pilots in NPC corporations are left out.",
-    "Also a victim of the target, in red, counts the target's kills where one of their pilots was the victim: a third party, or a friend shot anyway.",
-    "Hide allies the target also killed, in Preferences, leaves out every ally it shot a pilot of.",
-    "A corp or alliance's holdings are listed above the table, each with the kills its pilots and the target's were on together.",
-    "Right-click an ally and choose Add to Holding to link it as one of the target's holdings, or Ignore to leave it out of this target's Allies in every search, the next ally taking its place. Ignored allies are listed under the table with the kills each shared, the × on one brings it back.",
+    "The 10 alliances most on this target's kills, then corps with no alliance.",
+    "Holdings are listed above the table. Right-click an ally to add it as a holding, or ignore it.",
+    "Left out under the table: ignored allies (× restores one) and, by Preference, allies it also killed.",
     UNIQUE_DAYS_HELP,
   ],
   "tab-corps": [
-    "A list of the 10 corporations with the most killmails over the most unique days.",
+    "The 10 corporations on the most killmails in this system.",
     UNIQUE_DAYS_HELP,
-    "Pilots is the number of different pilots seen with that corp on reviewed killmails.",
   ],
   "tab-systems": [
-    "The 10 systems with the most of this target's killmails, ties going to the most unique days. Kills and Losses are from the target's side.",
+    "The 10 systems with the most of this target's killmails. Kills and Losses are the target's.",
     UNIQUE_DAYS_HELP,
   ],
   "tab-pi": [
-    "Any hauler lost near a planet, or any ship carrying PI materials lost anywhere in this system.",
-    "Losses marked PI had PI materials aboard: hover over one to see them.",
-    "A — for the planet means the loss was not near one.",
-    "With 3 or more losses, the Overall row at the top shows the hours of them all.",
+    "Haulers lost near a planet, and any ship lost with PI aboard. Hover a PI tag to see the cargo.",
   ],
   "tab-ratters": [
-    "Any ship lost in this system with NPCs on the killmail.",
-    "Pilots with a loss tagged NPC, only NPCs on it, come first, then SB, NPCs and players who only used smartbombs, then PVP, NPCs and players with other weapons.",
-    "Hover over a loss to see the NPCs and players on it. A — for the location means it had no nearest celestial.",
-    "With 3 or more losses, the Overall row at the top shows the hours of them all.",
+    "Ships lost here with NPCs on the killmail. Hover a loss to see who was on it.",
+  ],
+  "tab-structures": [
+    "Used in Kills: this corp's and its holdings' citadels and POSes seen on its kills, at any age.",
+    "Destroyed: structures it helped kill on this search's killmails.",
   ],
   "tab-capitals": [
-    "Every capital ship flown by this corporation's or alliance's pilots on the reviewed killmails, and who flew it. Click a pilot to search for them.",
-    "A struck through pilot has since left the alliance.",
+    "Capital ships its pilots flew on these killmails, and who flew them. Click a pilot to search.",
+    "A struck-through pilot has since left the alliance.",
   ],
   "tab-roster": (type) => type === "ALLIANCE"
-    ? ["This alliance's current member corporations, with their member counts and how long they have been in the alliance."]
+    ? ["Current member corporations, their member counts, and how long they've been in."]
     : [
-      "This corporation's current members: first those on the reviewed killmails, most recently seen first, then the rest from EveWho's records.",
-      "A red underline means EveWho still lists them, but the ESI has them out of the corporation.",
+      "Current members: those on these killmails first, latest first, then the rest from EveWho.",
+      "Red underline: EveWho still lists them, but the ESI says they've left.",
     ],
 };
 
 function selectTab(tabId) {
-  const help = typeof TAB_HELP[tabId] === "function" ? TAB_HELP[tabId](roster ? roster.type : "") : TAB_HELP[tabId];
+  const points = typeof TAB_HELP[tabId] === "function" ? TAB_HELP[tabId](roster ? roster.type : "") : TAB_HELP[tabId];
+  const help = points ? [...points, ROW_MENU_HELP] : null;
   const key = TAB_COLOR_KEYS[tabId];
   shownHelp = help || key ? { title: el(tabId).firstChild.textContent.trim(), points: help || [], sections: key || [] } : null;
   el("tab-key").replaceChildren(...(shownHelp ? [tabHelp(shownHelp.points, shownHelp.sections)] : []));
@@ -1634,8 +1633,24 @@ const WORMHOLE_KEY = {
   ],
 };
 
+const STRUCTURE_STATE_KEY = {
+  title: "Status",
+  items: [
+    { sample: "✕", className: "structure-state structure-state-destroyed", meaning: "Destroyed since its last kill, grayed out with who destroyed it" },
+    { sample: "✓", className: "structure-state structure-state-standing", meaning: "Still standing, as far as zKillboard shows" },
+  ],
+};
+
+// RATTER_KEY is the Ratters tab's loss tags, from RAT_KINDS. Pilots rank by their surest ratting loss, NPC first.
+const RATTER_KEY = {
+  title: "Loss tag, surest ratting first",
+  items: Object.entries(RAT_KINDS).map(([kind, [label, meaning]]) => ({ sample: label, className: `pi-tag rat-kind-${kind}`, meaning })),
+};
+
 // TAB_COLOR_KEYS is the color key shown for each tab, tabs without colored data have none
 const TAB_COLOR_KEYS = {
+  "tab-ratters": [RATTER_KEY],
+  "tab-structures": [STRUCTURE_STATE_KEY],
   "tab-killmails": [OUTCOME_KEY, SECURITY_KEY, WORMHOLE_CLASS_KEY],
   "tab-systems": [SECURITY_KEY, WORMHOLE_KEY],
 };
@@ -1945,6 +1960,280 @@ function renderCorporations(corporations) {
   el("corps-empty").hidden = corporations.length > 0;
 }
 
+// entityChip is a pilot, corp, or alliance's logo and name. ref is a backend EntityRef, null gives null. Its row's structureMenu covers it.
+function entityChip(ref) {
+  if (!ref) return null;
+  return groupLine([ref.iconUrl, ref.name]);
+}
+
+// ownerLine is a structure's owning corp and alliance
+function ownerLine(owner, alliance) {
+  const line = document.createElement("span");
+  line.className = "structure-owner";
+  [entityChip(owner), entityChip(alliance)].filter(Boolean).forEach((chip, index) => {
+    if (index > 0) line.append(" · ");
+    line.append(chip);
+  });
+  return line;
+}
+
+// structureSystemLine is a structure's system, with its security, class, and statics
+function structureSystemLine(system) {
+  const line = document.createElement("span");
+  const name = document.createElement("span");
+  const security = document.createElement("span");
+  security.className = securityClass(system.securityBand);
+  security.textContent = (system.securityStatus || 0).toFixed(1);
+  name.append(`${system.name} `, security);
+  line.append(name);
+  for (const part of systemLocation(system)) line.append(" · ", part);
+  return line;
+}
+
+// deathLine says who destroyed a structure, with how many attackers, and how long ago, ie "Killed by Hard Knocks Citizens (12) · 3 days ago, Oct 23rd, 2026"
+function deathLine(death) {
+  const line = document.createElement("span");
+  line.className = "structure-death";
+  const killer = entityChip(death.killerAlliance) || entityChip(death.killerCorp);
+  line.append("Killed by ");
+  if (killer) line.append(killer, " ");
+  line.append(`(${death.attackers})`);
+  const when = document.createElement("span");
+  when.textContent = ` · ${daysAgo(death.time)}, ${spokenDate(death.time)}`;
+  line.append(when);
+  return line;
+}
+
+/*
+  renderStructureLoss draws the box above a j-space system's Activity: its newest upwell structure or control tower lost, however long ago,
+  with its render, owner, killers, and when. jspace false hides it, a j-space system with none says so.
+  previous are the structures lost besides it, minor ones such as customs offices too, newest first, in small rows under it, collapsed until opened.
+*/
+function renderStructureLoss(jspace, loss, previous) {
+  const box = el("structure-loss");
+  box.hidden = !jspace;
+  box.oncontextmenu = null;
+  if (!jspace) return;
+
+  const heading = document.createElement("h3");
+  heading.textContent = "Last structure destroyed";
+  const earlier = previousStructureLosses(previous);
+  if (!loss) {
+    const none = document.createElement("p");
+    none.className = "muted";
+    none.textContent = "zKillboard lists no upwell structure or control tower lost in this system.";
+    const details = document.createElement("div");
+    details.className = "structure-loss-details";
+    details.append(heading, none, ...(earlier ? [earlier] : []));
+    box.replaceChildren(details);
+    return;
+  }
+
+  const image = document.createElement("img");
+  image.className = "structure-loss-render";
+  image.src = loss.renderUrl;
+  image.alt = "";
+  const details = document.createElement("div");
+  details.className = "structure-loss-details";
+  const type = document.createElement("div");
+  type.className = "structure-loss-type";
+  type.textContent = loss.type;
+  const owner = document.createElement("div");
+  owner.append("Owner: ", ownerLine(loss.owner, loss.ownerAlliance));
+  const death = document.createElement("div");
+  death.append(deathLine(loss.death));
+  details.append(heading, type, owner, death, ...(earlier ? [earlier] : []));
+  const structure = document.createElement("div");
+  structure.className = "structure-loss-structure";
+  structure.append(siteLinks(loss.type, { zkillUrl: loss.death.zkillUrl }, true), image);
+  box.replaceChildren(structure, details);
+  // set rather than added, as the box is kept from search to search. The previous rows have their own menus.
+  const sections = structureLossSections(loss, false);
+  box.oncontextmenu = (event) => openSectionsMenu(event, sections);
+}
+
+/*
+  structureLossSections are the right click menu sections of a destroyed structure: the structure, with only the zKillboard link to its loss,
+  then its system when withSystem, its owner, and its killer, each searchable and with its site links
+*/
+function structureLossSections(loss, withSystem) {
+  return [
+    { heading: `Structure: ${loss.type}`, items: [{ label: "Open its loss on zKillboard", action: () => window.runtime.BrowserOpenURL(loss.death.zkillUrl) }] },
+    ...(withSystem ? [systemSection(loss.system)] : []),
+    ...groupSections(loss.owner, loss.ownerAlliance, "Owner"),
+    ...killerSections(loss.death),
+  ];
+}
+
+function systemSection(system) {
+  return { heading: `System: ${system.name}`, entity: { type: "SYSTEM", name: system.name, zkillUrl: system.zkillUrl, dotlanUrl: system.dotlanUrl } };
+}
+
+// refSection is a menu section for a backend EntityRef, under the heading given
+function refSection(ref, heading) {
+  return { heading, entity: { type: ref.type, name: ref.name, zkillUrl: ref.zkillUrl, evewhoUrl: ref.evewhoUrl } };
+}
+
+// groupSections are a corp's and alliance's menu sections, ie "Owner: Some Corp" and "Owner alliance: Some Alliance", for those there are
+function groupSections(corp, alliance, role) {
+  return [
+    ...(corp ? [refSection(corp, `${role}: ${corp.name}`)] : []),
+    ...(alliance ? [refSection(alliance, `${role} alliance: ${alliance.name}`)] : []),
+  ];
+}
+
+// killerSections is the menu section of the group that destroyed a structure, the one deathLine names
+function killerSections(death) {
+  const killer = death.killerAlliance || death.killerCorp;
+  return killer ? [refSection(killer, `Killed by: ${killer.name}`)] : [];
+}
+
+// withStructureMenu gives a structure's row the one right click menu for everything on it, see openSectionsMenu
+function withStructureMenu(element, sections) {
+  element.addEventListener("contextmenu", (event) => openSectionsMenu(event, sections));
+  return element;
+}
+
+// previousStructureLosses is the collapsed list of other structures lost in the system, a small row each, or null for none
+function previousStructureLosses(previous) {
+  if (previous.length === 0) return null;
+  const list = document.createElement("details");
+  list.className = "structure-previous";
+  const summary = document.createElement("summary");
+  summary.textContent = `${previous.length} previous ${previous.length === 1 ? "structure" : "structures"} destroyed`;
+  // the rows share one grid, so the types line up whatever their length
+  const rows = document.createElement("div");
+  rows.className = "structure-previous-rows";
+  list.append(summary, rows);
+  for (const loss of previous) {
+    const row = document.createElement("div");
+    row.className = "structure-previous-row";
+    const icon = document.createElement("img");
+    icon.className = "structure-previous-icon";
+    icon.src = loss.imageUrl;
+    icon.alt = "";
+    const type = document.createElement("span");
+    type.className = "structure-previous-type";
+    type.textContent = loss.type;
+    const who = document.createElement("span");
+    who.className = "structure-previous-who";
+    const owner = document.createElement("div");
+    owner.append(ownerLine(loss.owner, loss.ownerAlliance));
+    const death = document.createElement("div");
+    death.append(deathLine(loss.death));
+    who.append(owner, death);
+    row.append(siteLinks(loss.type, { zkillUrl: loss.death.zkillUrl }), icon, type, who);
+    rows.append(withStructureMenu(row, structureLossSections(loss, false)));
+  }
+  return list;
+}
+
+// structuresSubtab is the Structures tab's shown list, kept across searches like the tab itself
+let structuresSubtab = "subtab-structures-used";
+
+function selectStructuresSubtab(id) {
+  structuresSubtab = id;
+  for (const subtab of document.querySelectorAll("#panel-structures .subtab")) {
+    const selected = subtab.id === id;
+    subtab.setAttribute("aria-selected", String(selected));
+    el(subtab.getAttribute("aria-controls")).hidden = !selected;
+  }
+}
+
+// structureState is the Status column's mark: red ✕ for a structure lost since its last kill, green ✓ for one standing as far as zKillboard shows
+function structureState(destroyed) {
+  const mark = document.createElement("span");
+  mark.className = destroyed ? "structure-state structure-state-destroyed" : "structure-state structure-state-standing";
+  mark.textContent = destroyed ? "✕" : "✓";
+  mark.title = destroyed ? "Destroyed since its last kill" : "Standing, as far as zKillboard shows";
+  return mark;
+}
+
+// structureNameCell is a structure row's type, system, and any battery or holding it was seen through
+function structureNameCell(type, system, extras) {
+  const cell = document.createElement("td");
+  const name = document.createElement("div");
+  name.textContent = type;
+  const detail = document.createElement("div");
+  detail.className = "row-detail";
+  detail.append(structureSystemLine(system));
+  for (const extra of extras.filter(Boolean)) detail.append(" · ", extra);
+  cell.append(name, detail);
+  return cell;
+}
+
+/*
+  renderStructures draws the Structures tab of a corp or alliance: Used in Kills, its structures seen on its kills, grayed once destroyed since,
+  and Destroyed, the structures it took part in destroying. A row's right click menu is its owner's, its system and killers have their own.
+*/
+function renderStructures(structures) {
+  const used = structures.used.map((structure) => {
+    const row = document.createElement("tr");
+    if (structure.destroyed) row.className = "structure-destroyed";
+    const via = structure.via ? `via ${structure.via}` : null;
+    const battery = structure.battery ? `seen through its ${structure.battery}` : null;
+    const ownerCell = document.createElement("td");
+    ownerCell.append(ownerLine(structure.owner, structure.ownerAlliance));
+    const seen = document.createElement("div");
+    seen.className = "row-detail";
+    seen.textContent = killmailSpan(structure.firstSeen, structure.lastSeen);
+    ownerCell.append(seen);
+    const deathCell = document.createElement("td");
+    deathCell.className = "structure-state-cell";
+    // a table cell can not be a flex box itself, so the mark and details share a wrapper
+    const stateLine = document.createElement("div");
+    stateLine.className = "structure-state-line";
+    stateLine.append(structureState(Boolean(structure.destroyed)));
+    if (structure.destroyed) {
+      const death = structure.destroyed;
+      const killer = death.killerAlliance || death.killerCorp;
+      const details = document.createElement("div");
+      details.className = "structure-state-death";
+      details.textContent = `Killed${killer ? ` by ${killer.name}` : ""} (${death.attackers}) · ${daysAgo(death.time)}, ${spokenDate(death.time)}`;
+      stateLine.append(details);
+    }
+    deathCell.append(stateLine);
+    const avatar = avatarCell(structure.type, { zkillUrl: structure.zkillUrl, dotlanUrl: structure.system.dotlanUrl }, structure.imageUrl);
+    // the ship it killed on its newest kill, to the right of the structure
+    if (structure.killedShipImageUrl) {
+      const killed = document.createElement("img");
+      killed.src = structure.killedShipImageUrl;
+      killed.alt = "";
+      killed.title = `Killed a ${structure.killedShip}`;
+      avatar.firstChild.append(killed);
+    }
+    row.append(avatar,
+      structureNameCell(structure.type, structure.system, [battery, via]), ownerCell, numberCell(structure.kills), deathCell);
+    // a row is every kill of one structure, so with several it opens the latest
+    const structureItems = [{ label: structure.kills > 1 ? "Open latest killmail" : "Open this killmail", action: () => window.runtime.BrowserOpenURL(structure.zkillUrl) }];
+    if (structure.destroyed) structureItems.push({ label: "Open its loss on zKillboard", action: () => window.runtime.BrowserOpenURL(structure.destroyed.zkillUrl) });
+    return withStructureMenu(row, [
+      { heading: `Structure: ${structure.type}`, items: structureItems },
+      systemSection(structure.system),
+      ...groupSections(structure.owner, structure.ownerAlliance, "Owner"),
+      ...(structure.destroyed ? killerSections(structure.destroyed) : []),
+    ]);
+  });
+  el("structures-used-body").replaceChildren(...used);
+  el("structures-used-empty").hidden = used.length > 0;
+  el("structures-used-count").textContent = `(${used.length})`;
+
+  const destroyed = structures.destroyed.map((loss) => {
+    const row = document.createElement("tr");
+    const ownerCell = document.createElement("td");
+    ownerCell.append(ownerLine(loss.owner, loss.ownerAlliance));
+    const deathCell = document.createElement("td");
+    deathCell.append(deathLine(loss.death));
+    row.append(avatarCell(loss.type, { zkillUrl: loss.death.zkillUrl, dotlanUrl: loss.system.dotlanUrl }, loss.imageUrl),
+      structureNameCell(loss.type, loss.system, []), ownerCell, deathCell, numberCell(loss.pilots));
+    return withStructureMenu(row, structureLossSections(loss, true));
+  });
+  el("structures-destroyed-body").replaceChildren(...destroyed);
+  el("structures-destroyed-empty").hidden = destroyed.length > 0;
+  el("structures-destroyed-count").textContent = `(${destroyed.length})`;
+  selectStructuresSubtab(structuresSubtab);
+}
+
 // intelTarget is the target whose report is shown, as { id, type }, for actions that save something for it, ie its ignored allies
 let intelTarget = null;
 
@@ -2068,18 +2357,43 @@ const ENTITY_LINKS = [["zkillUrl", "Open on zKillboard"], ["evewhoUrl", "Open on
 
 /*
   openEntityMenu opens the right click menu for a pilot, corp, alliance, or system where it was right-clicked, kept on screen. Opened from the keyboard, it opens under the element.
-  entity is { type, name, zkillUrl, evewhoUrl, dotlanUrl }, links without a url are left out. extras are items above Search and the links,
+  entity is { type, name, zkillUrl, evewhoUrl, dotlanUrl }, links without a url are left out, and Search too without a type, ie for a destroyed structure. extras are items above Search and the links,
   { label, action, disabled, forTarget }: one forTarget does nothing once another target's report is shown.
 */
 function openEntityMenu(event, entity, extras = []) {
-  event.preventDefault();
-  event.stopPropagation();
   const items = [...extras];
   if (extras.length > 0) items.push(null); // a line between the target's actions and the rest
-  items.push({ label: `Search for ${entity.name}`, action: () => offerSearch({ type: entity.type, name: entity.name }) });
+  items.push(...entityMenuItems(entity));
+  showContextMenu(event, items);
+}
+
+// entityMenuItems are an entity's Search, when it has a type, and its site links
+function entityMenuItems(entity) {
+  const items = [];
+  if (entity.type) items.push({ label: `Search for ${entity.name}`, action: () => offerSearch({ type: entity.type, name: entity.name }) });
   for (const [key, label] of ENTITY_LINKS) {
     if (entity[key]) items.push({ label, action: () => window.runtime.BrowserOpenURL(entity[key]) });
   }
+  return items;
+}
+
+/*
+  openSectionsMenu opens one right click menu for several entities on a row, ie a structure, its system, owner, and killer.
+  Each section is { heading, entity } or { heading, items }: a grayed heading naming it, then the entity's Search and site links, or the items given.
+*/
+function openSectionsMenu(event, sections) {
+  const items = [];
+  sections.forEach((section, index) => {
+    if (index > 0) items.push(null);
+    items.push({ heading: section.heading }, ...(section.items || entityMenuItems(section.entity)));
+  });
+  showContextMenu(event, items);
+}
+
+// showContextMenu shows the right click menu's items where it was right-clicked: null is a line, { heading } a grayed heading, the rest buttons
+function showContextMenu(event, items) {
+  event.preventDefault();
+  event.stopPropagation();
 
   const menu = el("entity-menu");
   menu.replaceChildren(...items.map((item) => {
@@ -2088,6 +2402,12 @@ function openEntityMenu(event, entity, extras = []) {
       line.className = "context-menu-separator";
       line.setAttribute("role", "separator");
       return line;
+    }
+    if (item.heading) {
+      const heading = document.createElement("div");
+      heading.className = "context-menu-heading";
+      heading.textContent = item.heading;
+      return heading;
     }
     const button = document.createElement("button");
     button.type = "button";
@@ -2720,7 +3040,7 @@ const ALL_KILLMAILS = -1;
 const MAX_RECENT_SEARCHES = 25;
 
 // preferences are the saved Preferences window choices, as the backend's Preferences
-let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailPages: 10, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5, hideKilledAllies: false, includeHoldings: true };
+let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailPages: 10, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5, hideKilledAllies: false, includeHoldings: true, collapseTarget: false };
 
 // applySettings sets the saved theme and preferences on the app
 function applySettings(settings) {
@@ -2736,6 +3056,7 @@ function applySettings(settings) {
     maxRecentSearches: settings.maxRecentSearches || 5,
     hideKilledAllies: Boolean(settings.hideKilledAllies),
     includeHoldings: settings.includeHoldings !== false,
+    collapseTarget: Boolean(settings.collapseTarget),
   };
   showKillmailLabels = preferences.includeZkillLabels;
   redrawIntel();
@@ -2758,6 +3079,7 @@ function fillPreferencesForm(chosen) {
   el("pref-max-recent").value = String(chosen.maxRecentSearches);
   el("pref-hide-killed-allies").checked = chosen.hideKilledAllies;
   el("pref-include-holdings").checked = chosen.includeHoldings;
+  el("pref-collapse-target").checked = chosen.collapseTarget;
 }
 
 // showKillmailPagesUsed enables the pages box only while the max killmail count is -1, the only time it is used
@@ -2777,6 +3099,7 @@ function preferencesForm() {
     maxRecentSearches: Number(el("pref-max-recent").value),
     hideKilledAllies: el("pref-hide-killed-allies").checked,
     includeHoldings: el("pref-include-holdings").checked,
+    collapseTarget: el("pref-collapse-target").checked,
   };
 }
 
@@ -2969,6 +3292,9 @@ el("roster-next").addEventListener("click", () => changeRosterPage(1));
 for (const tab of document.querySelectorAll(".tab")) {
   tab.addEventListener("click", () => selectTab(tab.id));
   wireTabMoving(tab);
+}
+for (const subtab of document.querySelectorAll("#panel-structures .subtab")) {
+  subtab.addEventListener("click", () => selectStructuresSubtab(subtab.id));
 }
 
 // progress events come from comm.ReportProgress in the Go backend

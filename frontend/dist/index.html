@@ -93,11 +93,13 @@
           <button id="tab-capitals" class="tab" type="button" role="tab" aria-controls="panel-capitals" aria-selected="false">Capital Pilots</button>
           <button id="tab-roster" class="tab" type="button" role="tab" aria-controls="panel-roster" aria-selected="false">Members</button>
           <button id="tab-allies" class="tab" type="button" role="tab" aria-controls="panel-allies" aria-selected="false">Allies</button>
+          <button id="tab-structures" class="tab" type="button" role="tab" aria-controls="panel-structures" aria-selected="false">Structures</button>
           <div id="tab-key" class="tab-key"></div>
         </div>
 
-        <div id="panel-killmails" class="tab-panel" role="tabpanel" aria-labelledby="tab-killmails">
-          <ol id="killmail-list" class="killmail-list"></ol>
+        <!-- a paged tab scrolls its list, its pager staying under it -->
+        <div id="panel-killmails" class="tab-panel paged-panel" role="tabpanel" aria-labelledby="tab-killmails">
+          <ol id="killmail-list" class="killmail-list panel-scroll"></ol>
           <p id="killmails-empty" class="muted" hidden>No killmails found on zKillboard for this target.</p>
           <nav id="killmail-pager" class="pager" hidden>
             <button id="page-first" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
@@ -109,6 +111,8 @@
         </div>
 
         <div id="panel-activity" class="tab-panel" role="tabpanel" aria-labelledby="tab-activity" hidden>
+          <!-- a j-space system's newest upwell structure or control tower lost, however long ago -->
+          <section id="structure-loss" class="structure-loss" hidden></section>
           <p id="activity-span" class="activity-span"></p>
           <div class="activity-scroll">
             <div id="activity-grid" class="activity" role="table" aria-label="Killmails by day of the week and hour"></div>
@@ -158,6 +162,31 @@
           </div>
         </div>
 
+        <div id="panel-structures" class="tab-panel" role="tabpanel" aria-labelledby="tab-structures" hidden>
+          <div class="subtabs" role="tablist" aria-label="Structures">
+            <button id="subtab-structures-used" class="subtab" type="button" role="tab" aria-controls="structures-used" aria-selected="true">Used in Kills <span id="structures-used-count" class="tab-count"></span></button>
+            <button id="subtab-structures-destroyed" class="subtab" type="button" role="tab" aria-controls="structures-destroyed" aria-selected="false">Destroyed <span id="structures-destroyed-count" class="tab-count"></span></button>
+          </div>
+          <div id="structures-used" role="tabpanel" aria-labelledby="subtab-structures-used">
+            <table>
+              <thead>
+                <tr><th></th><th>Structure</th><th>Owner</th><th class="num" title="Kills it was on">Kills</th><th>Status</th></tr>
+              </thead>
+              <tbody id="structures-used-body"></tbody>
+            </table>
+            <p id="structures-used-empty" class="muted" hidden>None of the target's structures were on its kills on zKillboard.</p>
+          </div>
+          <div id="structures-destroyed" role="tabpanel" aria-labelledby="subtab-structures-destroyed" hidden>
+            <table>
+              <thead>
+                <tr><th></th><th>Structure</th><th>Owner</th><th>Destroyed</th><th class="num" title="The target's pilots on the killmail">Pilots</th></tr>
+              </thead>
+              <tbody id="structures-destroyed-body"></tbody>
+            </table>
+            <p id="structures-destroyed-empty" class="muted" hidden>The target took part in destroying no structures on the collected killmails.</p>
+          </div>
+        </div>
+
         <div id="panel-pilots" class="tab-panel" role="tabpanel" aria-labelledby="tab-pilots" hidden>
           <table>
             <thead>
@@ -203,11 +232,13 @@
           <p id="capitals-empty" class="muted" hidden>No members flying capitals on the collected killmails.</p>
         </div>
 
-        <div id="panel-roster" class="tab-panel" role="tabpanel" aria-labelledby="tab-roster" hidden>
-          <table>
-            <thead id="roster-head"></thead>
-            <tbody id="roster-body"></tbody>
-          </table>
+        <div id="panel-roster" class="tab-panel paged-panel" role="tabpanel" aria-labelledby="tab-roster" hidden>
+          <div class="panel-scroll">
+            <table>
+              <thead id="roster-head"></thead>
+              <tbody id="roster-body"></tbody>
+            </table>
+          </div>
           <p id="roster-status" class="muted" hidden></p>
           <nav id="roster-pager" class="pager" hidden>
             <button id="roster-first" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
@@ -303,6 +334,10 @@
       <label class="preference">
         <span class="preference-label" title="Show zKillboard's labels, such as solo or ganked, on killmail cards"><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Include zKill labels</span></span>
         <span class="preference-check"><input id="pref-zkill-labels" type="checkbox"></span>
+      </label>
+      <label class="preference">
+        <span class="preference-label" title="Pull the target panel shut at each search, leaving more room for the report. The pull bar still opens it."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Collapse target on search</span></span>
+        <span class="preference-check"><input id="pref-collapse-target" type="checkbox"></span>
       </label>
       <div class="preference-field">
         <span class="preference-label" title="Drag a tab, or press Alt + ← / → on one, to move it. Resetting takes effect straight away, without Save."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Tab order</span></span>

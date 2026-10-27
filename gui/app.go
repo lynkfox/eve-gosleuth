@@ -86,7 +86,14 @@ type IntelReport struct {
 	PIPilots   []PIPilot         `json:"piPilots"`   // a system target's pilots who lost haulers near its planets, or ships with PI aboard
 	Ratters    []Ratter          `json:"ratters"`    // a system target's pilots who lost ships with NPCs on the killmail
 	MemberList bool              `json:"memberList"` // a corp or alliance target has a Members tab, its rows come from GetMembers
-	Sources    string            `json:"sources"`    // where the search's data came from, ie "9748 hits from cache, 1763 from the ESI; zKillboard live", for the frontend's summary line
+	// a corp or alliance target's Structures tab: the structures seen on its kills, and those it took part in destroying
+	Structures *StructuresReport `json:"structures"`
+	// a j-space system target's newest upwell structure or control tower lost, however long ago, shown above its Activity. nil for other targets, or when it has none.
+	LastStructureLoss *StructureLoss `json:"lastStructureLoss"`
+	JSpace            bool           `json:"jspace"` // a j-space system target, which has the last structure lost box, even empty
+	// the structures lost in a j-space system target besides its last, minor ones too, newest first, for the collapsed list in its box
+	PreviousStructureLosses []StructureLoss `json:"previousStructureLosses"`
+	Sources                 string          `json:"sources"` // where the search's data came from, ie "9748 hits from cache, 1763 from the ESI; zKillboard live", for the frontend's summary line
 }
 
 // CapitalShip is a capital ship type a corp or alliance target's pilots flew, and who flew it
@@ -502,6 +509,11 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 			return report, fmt.Errorf("Could not retrieve killmails for this target: %s", api.FailureReason(collectErr))
 		}
 	}
+	// the structure lists are pulled with the killmails, and everything on them looked up together
+	structureRaw, expandStructures := a.collectStructureKillmails(target, limits)
+	a.cache.PrefetchKillmailEntities(append(append([]retrieval.RawKillmail{}, *killmails...), structureRaw...))
+	structures := expandStructures()
+
 	collected := aggregate.CollateAllKillmailData(killmails, &a.clients.ESIClient, a.cache)
 	report.Killmails = buildKillmailCards(collected.Killmails, &target)
 	report.LabelNames = labelNames(report.Killmails, a.clients.ESIClient)
@@ -524,6 +536,8 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		}
 		a.setRoster(newRoster(targetID, entityType, collected.PilotsSeen, memberCount))
 		report.MemberList = true
+		comm.ReportProgress("Finding structures")
+		report.Structures = buildStructures(structures, collected.Killmails, &target, a.clients.ESIClient)
 	case types.SYSTEM:
 		comm.ReportProgress("Ranking pilots and corporations")
 		report.Pilots = buildFleetmates(aggregate.GetTopPilots(pilotLimit, collected.PilotsSeen))
@@ -532,6 +546,17 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		report.PIPilots = a.buildPIPilots(targetID, collected.Killmails)
 		comm.ReportProgress("Finding ratters")
 		report.Ratters = a.buildRatters(collected.Killmails)
+		if system, _ := target.Expanded.(*retrieval.System); system != nil {
+			report.JSpace = comm.WormholeClass(system.Name, system.Region) != ""
+		}
+		if structures.last != nil {
+			loss := structureLoss(structures.last)
+			report.LastStructureLoss = &loss
+		}
+		report.PreviousStructureLosses = []StructureLoss{}
+		for _, km := range structures.previous {
+			report.PreviousStructureLosses = append(report.PreviousStructureLosses, structureLoss(km))
+		}
 	}
 
 	// a system target is the only system on its killmails, so it has no top systems, and no side to have allies on

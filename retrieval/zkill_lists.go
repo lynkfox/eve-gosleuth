@@ -27,32 +27,35 @@ type KnownZkillList struct {
 	Ended    bool             `json:"ended"` // the unbroken entries reach the oldest killmail zKillboard lists
 }
 
-// zkillListKey is an entity's key in ZkillLists, ie ALLIANCE:99000001
-func zkillListKey(entityType string, entityID int) string {
+// zkillListKey is an entity's key in ZkillLists, ie ALLIANCE:99000001, with any api.ZkillPaging Filter after it, ie ALLIANCE:99000001:losses/groupID/1657
+func zkillListKey(entityType string, entityID int, filter string) string {
+	if filter != "" {
+		return fmt.Sprintf("%s:%d:%s", entityType, entityID, filter)
+	}
 	return fmt.Sprintf("%s:%d", entityType, entityID)
 }
 
-// KnownZkillListFor returns an entity's cached zKillboard list, or nil if none is cached
-func (c *CachedEveIDs) KnownZkillListFor(entityType string, entityID int) *KnownZkillList {
+// KnownZkillListFor returns an entity's cached zKillboard list, narrowed by filter as api.ZkillPaging's Filter is, or nil if none is cached
+func (c *CachedEveIDs) KnownZkillListFor(entityType string, entityID int, filter string) *KnownZkillList {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return cachedAs[KnownZkillList](c, sectionZkillLists, c.ZkillLists, zkillListKey(entityType, entityID))
+	return cachedAs[KnownZkillList](c, sectionZkillLists, c.ZkillLists, zkillListKey(entityType, entityID, filter))
 }
 
 /*
 SaveKnownZkillList caches an entity's zKillboard list, replacing the one before. Like killmails it never expires with the SDE,
 since the killmails on it never change, but cache clears remove it.
 */
-func (c *CachedEveIDs) SaveKnownZkillList(entityType string, entityID int, list *KnownZkillList) {
+func (c *CachedEveIDs) SaveKnownZkillList(entityType string, entityID int, filter string, list *KnownZkillList) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	put(c, sectionZkillLists, c.ZkillLists, zkillListKey(entityType, entityID), &CacheEntry{Value: list, CachedAt: time.Now().UTC(), Permanent: true})
+	put(c, sectionZkillLists, c.ZkillLists, zkillListKey(entityType, entityID, filter), &CacheEntry{Value: list, CachedAt: time.Now().UTC(), Permanent: true})
 }
 
 // zkillListCache is a client that keeps entities' zKillboard lists, ie CachedEveIDs
 type zkillListCache interface {
-	KnownZkillListFor(entityType string, entityID int) *KnownZkillList
-	SaveKnownZkillList(entityType string, entityID int, list *KnownZkillList)
+	KnownZkillListFor(entityType string, entityID int, filter string) *KnownZkillList
+	SaveKnownZkillList(entityType string, entityID int, filter string, list *KnownZkillList)
 }
 
 // entityList is one entity's killmails listed for a search, newest first. The first within are inside the search's limits, the rest only from its cached list.
@@ -70,7 +73,7 @@ type entityList struct {
 Parameters:
   - target: the IntelTarget, for its clients
   - entityType, entityID: the target itself or one of its holdings
-  - paging: how far to page, its Killmails, MaxPages, NewerThan, and For
+  - paging: how far to page, its Killmails, MaxPages, NewerThan, and For. A Filter list is cached apart from the entity's whole list.
   - need: how many killmails the search needs from the top of the list, its Max or its pages of killmails
 
 Returns:
@@ -84,7 +87,7 @@ func listEntity(target IntelTarget, entityType types.EntityType, entityID int, p
 
 	var known *KnownZkillList
 	if lists != nil {
-		known = lists.KnownZkillListFor(entityType.String(), entityID)
+		known = lists.KnownZkillListFor(entityType.String(), entityID, paging.Filter)
 	}
 	knownUnbroken := map[int]bool{}
 	if known != nil {
@@ -118,7 +121,7 @@ func listEntity(target IntelTarget, entityType types.EntityType, entityID int, p
 	}
 
 	if lists != nil {
-		lists.SaveKnownZkillList(entityType.String(), entityID, knownList(merged, unbroken, ended))
+		lists.SaveKnownZkillList(entityType.String(), entityID, paging.Filter, knownList(merged, unbroken, ended))
 	}
 	return entityList{killmails: merged, within: min(unbroken, need)}, err
 }

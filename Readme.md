@@ -39,7 +39,20 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
 
 * Corporation/Alliances
  * Fits
+ * Add to the allies list a url generation for a search on zkill that includes the main or holding and the target allies
 
 * Systems
- * most recent structure loss
- * structures found on Killmails that were not subsequently lost (indicating potentially owner)
+
+* Other
+ * Update the main search to no longer require the dropdown for time, instead use the ESI endpoint to determine type - if more than one returned open a selection box.
+ * Add a window that can be popped out on its own that can contain running live kill trackers - Per system, Per Entity, Per Types (such as all citadels).
+  * have an option to pull the kills since the tracker was last open
+ * User data explorer - see all Main-Holding connections, all ignored allies of a main, and edit or add new ones.
+  * have it be exportable to give to other users
+ * Report data to be saved as a PDF for distribution.
+ * Debug mode that outputs debugging logs to a file that can be sent to me for analysis
+
+* Release
+ * Version number in title bar
+ * Version easily bumpable outside of code
+ * GitActions workflows to build and release

@@ -5,7 +5,6 @@ import (
 
 	"github.com/lynkfox/go_eve_sleuth/aggregate"
 	"github.com/lynkfox/go_eve_sleuth/api"
-	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
 )
@@ -32,7 +31,6 @@ type RatLoss struct {
 	Time         time.Time  `json:"time"`
 	ShipName     string     `json:"shipName"`
 	ShipImageURL string     `json:"shipImageUrl"`
-	Location     string     `json:"location"` // zKillboard's nearest celestial, ie Jita IV - Asteroid Belt 1, empty when it has none
 	TotalValue   float64    `json:"totalValue"`
 	Kind         string     `json:"kind"`    // who was on it: npc (only NPCs), smartbomb (NPCs and players with only smartbombs), or players (NPCs and players with other weapons)
 	Rats         []RatCount `json:"rats"`    // the NPCs on it, the most numerous first
@@ -64,28 +62,6 @@ func (a *App) buildRatters(killmails []*retrieval.Killmail) []Ratter {
 	esi := a.clients.ESIClient
 	found := aggregate.GetRatters(killmails, esi)
 
-	// the nearest celestials are named together, ie asteroid belts, which have no ESI lookup of their own
-	locationIDs := map[int]bool{}
-	for _, ratter := range found {
-		for _, loss := range ratter.Losses {
-			if loss.Killmail.LocationID != 0 {
-				locationIDs[loss.Killmail.LocationID] = true
-			}
-		}
-	}
-	locationNames := map[int]string{}
-	if len(locationIDs) > 0 {
-		ids := make([]int, 0, len(locationIDs))
-		for id := range locationIDs {
-			ids = append(ids, id)
-		}
-		names, err := esi.GetNamesFromEveIDs(ids)
-		if err != nil {
-			comm.Logger.WithError(err).Warn("Unable to name the ratting losses' nearest celestials")
-		}
-		locationNames = names
-	}
-
 	ratters := []Ratter{}
 	for _, ratter := range found {
 		row := Ratter{
@@ -108,7 +84,6 @@ func (a *App) buildRatters(killmails []*retrieval.Killmail) []Ratter {
 				Time:         km.KillmailTime,
 				ShipName:     km.Victim.Ship.Name,
 				ShipImageURL: api.TypeImageURL(km.Victim.Ship.ItemID),
-				Location:     locationNames[km.LocationID],
 				TotalValue:   km.TotalValue,
 				Kind:         ratKindNames[loss.Kind],
 				Rats:         []RatCount{},

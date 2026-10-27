@@ -944,7 +944,8 @@ body.help-popped .tab-help .tab-help-popup { display: none; }
 .space-ns { color: var(--error); }
 .space-c1-3 { color: var(--space-c1-3); }
 .space-c4-5 { color: var(--space-c4-5); }
-.space-c6 { color: var(--space-c6); font-style: italic; } /* italic as well, as its blue is close to C4 and C5 */
+/* a badge, its blue behind the text, as the blue alone is close to C4 and C5 */
+.space-c6 { padding: 0 4px; border-radius: 3px; background: var(--space-c6); color: #fff; }
 .sec-low { color: var(--sec-low); }
 .sec-null { color: var(--error); }
 .sec-trig { color: var(--sec-trig); }
@@ -959,6 +960,8 @@ body.help-popped .tab-help .tab-help-popup { display: none; }
   font-weight: 600;
   line-height: 1.6;
 }
+/* a C6 tag is filled, its border the badge's blue rather than its white text */
+.space-tag.space-c6 { border-color: var(--space-c6); }
 
 .pager {
   display: flex;
@@ -1820,6 +1823,9 @@ tr.roster-divider td {
 .context-menu {
   position: fixed;
   min-width: 200px;
+  /* a structure's menu of several entities can be taller than the window */
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
 }
 
 .context-menu-item {
@@ -1831,6 +1837,15 @@ tr.roster-divider td {
   color: var(--text);
   font-weight: 400;
   text-align: left;
+  white-space: nowrap;
+}
+
+/* names the entity the items under it are for, in a menu of several */
+.context-menu-heading {
+  padding: 4px 10px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -1847,7 +1862,7 @@ tr.roster-divider td {
 .context-menu-item:focus-visible { background: var(--panel); }
 
 /* Ratters tab: the PI rows, with a wider tag for how sure a ratting loss is */
-.rat-loss { grid-template-columns: 210px minmax(0, 1fr) minmax(0, 1fr) auto 3em; }
+.rat-loss { grid-template-columns: 210px minmax(0, 1fr) auto 3em; }
 .rat-kind-smartbomb { color: var(--accent); }
 .rat-kind-players { color: var(--muted); }
 
@@ -1858,3 +1873,99 @@ tr.roster-divider td {
   .rat-loss { grid-template-columns: minmax(0, 1fr) auto 3em; }
   .pi-time { grid-column: 1 / -1; }
 }
+
+/* Activity tab: a j-space system's last structure destroyed, above the chart */
+.structure-loss {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin: 0 0 16px;
+  padding: 12px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.structure-loss h3 { margin: 0 0 4px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.structure-loss-structure { display: flex; flex: none; align-items: flex-start; gap: 6px; }
+.structure-loss-render { width: 128px; height: 128px; flex: none; border-radius: 4px; }
+.structure-loss-details { display: flex; flex: 1; flex-direction: column; gap: 6px; min-width: 0; }
+.structure-loss-type { font-size: 18px; font-weight: 600; }
+
+/* Structures tab: its two lists, and a structure lost since its last kill */
+.subtabs { display: flex; gap: 4px; margin: 0 0 12px; }
+.subtab {
+  padding: 4px 12px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.subtab:hover { color: var(--text); }
+.subtab[aria-selected="true"] { border-color: var(--highlight); color: var(--text); }
+.structure-owner .group-line + .group-line { margin-left: 0; }
+.structure-death { color: var(--muted); font-size: 12px; }
+.structure-destroyed td { opacity: 0.45; }
+.structure-destroyed:hover td { opacity: 0.8; }
+/* the Status column's mark, and who destroyed it, stay bright on a grayed row */
+.structure-destroyed td.structure-state-cell { opacity: 1; }
+.structure-state-line { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.structure-state-death { color: var(--error); font-size: 11px; }
+.structure-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.structure-state-destroyed { background: var(--error); }
+.structure-state-standing { background: var(--kill); }
+
+/* the other structures lost in the system, small rows collapsed under the last */
+.structure-previous { margin-top: 6px; }
+.structure-previous summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.structure-previous-rows {
+  display: grid;
+  grid-template-columns: auto 32px max-content minmax(0, 1fr);
+  column-gap: 8px;
+  margin-top: 6px;
+}
+.structure-previous-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  column-gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.structure-previous-icon { width: 32px; height: 32px; }
+.structure-previous-type { padding-left: 6px; font-weight: 600; }
+.structure-previous-who { min-width: 0; }
+
+@media (max-width: 760px) {
+  .structure-loss { flex-direction: column; }
+  .structure-previous-rows { grid-template-columns: auto 32px minmax(0, 1fr); }
+  .structure-previous-who { grid-column: 1 / -1; }
+}
+
+/* The window itself never scrolls: the header, target panel, and tab bar stay put, and each tab's panel scrolls on its own, keeping its own place.
+   With too little room for the report, main scrolls instead, so the report never shrinks below a usable height. */
+html, body { height: 100%; }
+body { display: flex; flex-direction: column; overflow: hidden; }
+.topbar { flex: none; }
+main { flex: 1; width: 100%; min-height: 0; overflow-y: auto; }
+main > * { flex: none; }
+.intel { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 260px; }
+#intel-tabs { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+#intel-tabs > .tab-panel { flex: 1; min-height: 0; padding-right: 6px; overflow-y: auto; }
+/* a paged tab, ie Killmails, scrolls only its list, so its pager is always in reach under it */
+#intel-tabs > .paged-panel { display: flex; flex-direction: column; padding-right: 0; overflow: hidden; }
+.paged-panel > .panel-scroll { flex: 1; min-height: 0; padding-right: 6px; overflow-y: auto; }
+.paged-panel > :not(.panel-scroll) { flex: none; }

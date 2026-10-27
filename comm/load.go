@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"slices"
 )
 
 type StaticData interface {
@@ -11,6 +12,8 @@ type StaticData interface {
 	ContainsIDNumber(idNumber int) bool
 	ContainsName(name string) bool
 	Contains(identifier interface{}) bool
+	IDNumbers() []int
+	NameOf(idNumber int) string
 }
 
 type StaticValues struct {
@@ -67,4 +70,19 @@ func (s *StaticValues) Contains(identifier interface{}) bool {
 	}
 	Logger.Debugf("value of %s is not a string or int, cannot check if it is part of this static data", identifier)
 	return false
+}
+
+// IDNumbers returns every id, smallest first
+func (s *StaticValues) IDNumbers() []int {
+	ids := make([]int, 0, len(s.IDToNames))
+	for id := range s.IDToNames {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+// NameOf returns an id's name, empty if it is not one of these
+func (s *StaticValues) NameOf(idNumber int) string {
+	return s.IDToNames[idNumber]
 }
