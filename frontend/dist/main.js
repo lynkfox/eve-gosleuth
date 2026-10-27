@@ -84,6 +84,10 @@ function stopSearch() {
   The bar itself has no time, since it would only change when a new update arrives.
   A background update, ie the backend's progress, only reaches the bar while a search runs, so a finished search's summary stays shown. Otherwise it only goes in the history.
 */
+// TICKER_LATEST_ONLY are the kinds of line, by how they start, that the bar shows each of but the history keeps only the latest of in a row, ie each killmail processed.
+// Each list's zKillboard pages follow a line naming the list, so one list's last page is kept before the next list's start.
+const TICKER_LATEST_ONLY = ["Processed killmail ", "Fetching zKillboard page "];
+
 function tickerPush(message, background = false) {
   const time = clockTime(timeParts(new Date().toISOString()), true);
 
@@ -96,8 +100,16 @@ function tickerPush(message, background = false) {
   text.textContent = message;
   entry.append(stamp, text);
 
+  // a line of a kind only the latest of which is kept replaces the one before it, rather than pushing the rest of the history down
   const history = el("ticker-history");
-  history.prepend(entry);
+  const kind = TICKER_LATEST_ONLY.find((start) => message.startsWith(start)) || "";
+  entry.dataset.kind = kind;
+  const newest = history.firstElementChild;
+  if (kind && newest && newest.dataset.kind === kind) {
+    newest.replaceWith(entry);
+  } else {
+    history.prepend(entry);
+  }
   while (history.children.length > TICKER_HISTORY_LIMIT) {
     history.lastElementChild.remove();
   }
