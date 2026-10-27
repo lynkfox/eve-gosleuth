@@ -60,6 +60,7 @@
     </form>
 
     <nav class="app-menu" aria-label="App menu">
+      <button id="myintel-button" class="menu-button" type="button" aria-haspopup="dialog">My Intel</button>
       <div class="menu-anchor">
         <button id="themes-button" class="menu-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="themes-menu">Theme</button>
         <div id="themes-menu" class="menu-dropdown menu-themes" role="menu" aria-label="Theme" hidden>
@@ -346,6 +347,46 @@
 
   <!-- the right click menu of a tab's pilot, corp, alliance, or system, its items built each time it opens -->
   <div id="entity-menu" class="menu-dropdown context-menu" role="menu" aria-label="Actions" hidden></div>
+
+  <!-- every holding and ignored ally the user has set, for every target, to look over and change -->
+  <dialog id="myintel" class="window" aria-labelledby="myintel-title">
+    <div class="window-titlebar">
+      <h2 id="myintel-title">My Intel</h2>
+      <button id="myintel-close" class="window-close" type="button" aria-label="Close My Intel" title="Close">×</button>
+    </div>
+    <div class="window-body myintel-body">
+      <p class="preference-help">The holdings and ignored allies you have set, for every target. Changes are saved straight away, and holdings change what the next search collects.</p>
+      <div class="myintel-tools">
+        <input id="myintel-filter" type="search" placeholder="Filter by name" autocomplete="off" spellcheck="false" aria-label="Filter by name">
+      </div>
+      <form id="myintel-add" class="myintel-add">
+        <select id="myintel-add-type" aria-label="Type">
+          <option value="ALLIANCE">Alliance</option>
+          <option value="CORPORATION">Corporation</option>
+          <option value="PILOT">Pilot</option>
+        </select>
+        <input id="myintel-add-name" type="text" placeholder="Exact name, to add a card for it" autocomplete="off" spellcheck="false" aria-label="Name">
+        <button type="submit">Add</button>
+      </form>
+      <p id="myintel-error" class="preferences-error" role="alert" hidden></p>
+      <!-- the card last removed with its x, to bring back until the next is removed or the window closes -->
+      <p id="myintel-undo" class="myintel-undo" role="status" hidden><span id="myintel-undo-text"></span><button id="myintel-undo-button" class="secondary" type="button">Undo</button></p>
+      <div id="myintel-list" class="myintel-list"></div>
+      <p id="myintel-empty" class="preference-help" hidden>Nothing set yet. Add holdings and ignored allies here, or from a search's target panel and Allies tab.</p>
+    </div>
+  </dialog>
+
+  <!-- asks before a My Intel card is removed, saying what goes with it -->
+  <dialog id="myintel-remove-confirm" class="confirm" aria-labelledby="myintel-remove-title">
+    <form method="dialog">
+      <p id="myintel-remove-title" class="confirm-warning"></p>
+      <p id="myintel-remove-detail" class="confirm-detail"></p>
+      <div class="confirm-actions">
+        <button class="secondary" value="cancel" autofocus>Cancel</button>
+        <button class="danger" value="remove">Remove</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="preferences" class="window" aria-labelledby="preferences-title">
     <div class="window-titlebar">

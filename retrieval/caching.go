@@ -89,6 +89,7 @@ type CachedEveIDs struct {
 
 	searchedLoaded bool // Searched has every saved recent search, see loadRecentSearches. Guarded by mu.
 	holdingsLoaded bool // Holdings has every saved holding link, see loadHoldings. Guarded by mu.
+	ignoredLoaded  bool // IgnoredAllies has every target's saved ignored allies, see AllIgnoredAllies. Guarded by mu.
 
 	db      *sql.DB                // nil if the database could not be opened, the cache then only lasts the session
 	dirty   map[rowKey]*CacheEntry // added since the last SaveCache, guarded by mu

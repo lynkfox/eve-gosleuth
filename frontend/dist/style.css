@@ -1335,6 +1335,38 @@ button.danger {
 .limits-menu .preferences-error { margin: 0; }
 .limits-actions { display: flex; justify-content: space-between; gap: 8px; }
 
+/* My Intel: a filter, a row to add a card, then a collapsible card per target with its holdings, the mains it holds for, and its ignored allies */
+#myintel { width: min(680px, calc(100vw - 32px)); height: calc(100vh - 32px); }
+.myintel-body { align-content: start; }
+.myintel-tools input,
+.myintel-add input { width: 100%; }
+.myintel-add { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; gap: 8px; }
+.myintel-list { display: grid; gap: 8px; }
+.myintel-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+.myintel-card > summary { display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; }
+.myintel-card > summary img { width: 28px; height: 28px; border-radius: 4px; }
+.myintel-card-name { font-weight: 600; }
+.myintel-card-kind,
+.myintel-card-counts { color: var(--muted); font-size: 12px; }
+.myintel-card-counts { margin-left: auto; }
+.myintel-card-body { display: grid; gap: 6px; padding: 4px 12px 12px; }
+.myintel-section-title { margin: 6px 0 0; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.myintel-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.myintel-row img { width: 22px; height: 22px; border-radius: 3px; }
+.myintel-row .link-button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.myintel-note { width: 100%; font-size: 12px; }
+.myintel-note-text { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.myintel-none { color: var(--muted); font-size: 12px; }
+.myintel-row-add { display: grid; grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; margin-top: 2px; }
+.myintel-row-add.no-note { grid-template-columns: 120px minmax(0, 1fr) auto; }
+.myintel-row-add input,
+.myintel-row-add select { width: 100%; font-size: 12px; }
+.myintel-card-error { margin: 0; }
+.myintel-card-remove { font-size: 17px; }
+.myintel-undo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; padding: 6px 10px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; }
+.myintel-undo[hidden] { display: none; }
+.myintel-undo button { font-size: 12px; }
+
 /* Preferences > Debugging: the newest debug log's name beside its button, wrapping rather than widening the window */
 .debug-latest { min-width: 0; overflow-wrap: anywhere; }
 

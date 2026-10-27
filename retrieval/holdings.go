@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
@@ -91,6 +92,22 @@ func (c *CachedEveIDs) HoldingLinks(entityType string, entityID int) (holdings [
 	slices.SortFunc(holdings, func(a, b HoldingLink) int { return cmp.Compare(a.HoldingName, b.HoldingName) })
 	slices.SortFunc(heldFor, func(a, b HoldingLink) int { return cmp.Compare(a.MainName, b.MainName) })
 	return holdings, heldFor
+}
+
+// AllHoldingLinks returns every saved holding link, by main name then holding name, for My Intel
+func (c *CachedEveIDs) AllHoldingLinks() []HoldingLink {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.loadHoldings()
+
+	links := []HoldingLink{}
+	for _, entry := range c.Holdings {
+		links = append(links, *entry.Value.(*HoldingLink))
+	}
+	slices.SortFunc(links, func(a, b HoldingLink) int {
+		return cmp.Or(cmp.Compare(strings.ToLower(a.MainName), strings.ToLower(b.MainName)), cmp.Compare(strings.ToLower(a.HoldingName), strings.ToLower(b.HoldingName)))
+	})
+	return links
 }
 
 /*

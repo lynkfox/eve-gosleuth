@@ -101,26 +101,16 @@ func (a *App) SaveHolding(mainID int, mainType string, mainName string, holdingN
 	if !canHold(mainType) || !canHold(holdingType) {
 		return holdings, errors.New("Only corporations and alliances can be holdings, or have them")
 	}
-	holdingName = strings.TrimSpace(holdingName)
-	if holdingName == "" {
+	if strings.TrimSpace(holdingName) == "" {
 		return holdings, errors.New("Enter the holding's name")
 	}
 
-	holding := retrieval.IntelTarget{Name: holdingName, Clients: a.clients}
-	holding.GetTargetInfoOfType(searchTypes[holdingType])
-	if holding.Error != nil {
-		return holdings, errors.New(holding.DisplayMessage)
+	holding, err := a.lookupEntity(holdingName, holdingType)
+	if err != nil {
+		return holdings, err
 	}
-	if holding.IDNumber == mainID && holdingType == mainType {
+	if holding.ID == mainID && holdingType == mainType {
 		return holdings, fmt.Errorf("%s can not be its own holding", mainName)
-	}
-	// the name as EVE spells it
-	if holdingType == types.ALLIANCE.String() {
-		if alliance, lookupErr := a.clients.ESIClient.GetAllianceInfo(holding.IDNumber); lookupErr == nil && alliance != nil {
-			holdingName = alliance.Name
-		}
-	} else if corp, lookupErr := a.clients.ESIClient.GetCorporationInfo(holding.IDNumber); lookupErr == nil && corp != nil {
-		holdingName = corp.Name
 	}
 
 	note = strings.TrimSpace(note)
@@ -129,7 +119,7 @@ func (a *App) SaveHolding(mainID int, mainType string, mainName string, holdingN
 	}
 	a.cache.SaveHoldingLink(retrieval.HoldingLink{
 		MainType: mainType, MainID: mainID, MainName: mainName,
-		HoldingType: holdingType, HoldingID: holding.IDNumber, HoldingName: holdingName,
+		HoldingType: holdingType, HoldingID: holding.ID, HoldingName: holding.Name,
 		Note: note,
 	})
 	a.saveCacheQuietly()

@@ -645,6 +645,350 @@ function holdingsChanged() {
   if (intelTarget && shownTarget && intelTarget.id === shownTarget.id && intelTarget.type === shownTarget.type) rankAlliesAgain();
 }
 
+// HOLDING_TYPES are the entity types on either end of a holding link, and the kinds of ally
+const HOLDING_TYPES = ["ALLIANCE", "CORPORATION"];
+
+// myIntel are My Intel's cards as the backend's IntelGroup, myIntelOpen the keys of the cards opened, and myIntelAdded the cards added here that have nothing saved yet
+let myIntel = [];
+const myIntelOpen = new Set();
+let myIntelAdded = [];
+
+const intelKey = (entity) => `${entity.type}:${entity.id}`;
+
+function openMyIntel() {
+  closeThemesMenu();
+  closeLimitsMenu();
+  showMyIntelError("");
+  // an undo lasts only while the window it was offered in is open
+  myIntelRemoved = null;
+  el("myintel-undo").hidden = true;
+  el("myintel").showModal();
+  loadMyIntel();
+}
+
+async function loadMyIntel() {
+  const groups = await runBackend(() => backend().GetMyIntel());
+  if (!groups) return;
+  myIntel = groups;
+  // a card added here stays until it has something saved, when it is one of the backend's
+  myIntelAdded = myIntelAdded.filter((added) => !groups.some((group) => intelKey(group.entity) === intelKey(added.entity)));
+  renderMyIntel();
+}
+
+function showMyIntelError(message) {
+  el("myintel-error").textContent = message;
+  el("myintel-error").hidden = !message;
+}
+
+// renderMyIntel draws the cards that match the filter, by any name on them, those added here first
+function renderMyIntel() {
+  const filter = el("myintel-filter").value.trim().toLowerCase();
+  const groups = [...myIntelAdded, ...myIntel];
+  const matches = (group) => !filter || [group.entity, ...group.holdings, ...group.heldFor, ...group.ignoredAllies].some((entity) => entity.name.toLowerCase().includes(filter));
+  const shown = groups.filter(matches);
+  el("myintel-list").replaceChildren(...shown.map(myIntelCard));
+  el("myintel-empty").hidden = groups.length > 0;
+}
+
+// myIntelCard is a target's card: its holdings with their notes, the mains it holds for, and its ignored allies, each with an x, and rows to add more
+function myIntelCard(group) {
+  const entity = group.entity;
+  const key = intelKey(entity);
+  const card = document.createElement("details");
+  card.className = "myintel-card";
+  card.open = myIntelOpen.has(key);
+  card.addEventListener("toggle", () => (card.open ? myIntelOpen.add(key) : myIntelOpen.delete(key)));
+
+  const summary = document.createElement("summary");
+  const icon = document.createElement("img");
+  icon.src = entity.iconUrl;
+  icon.alt = "";
+  const name = document.createElement("span");
+  name.className = "myintel-card-name";
+  name.textContent = entity.name;
+  const kind = document.createElement("span");
+  kind.className = "myintel-card-kind";
+  kind.textContent = searchTypeLabel(entity.type);
+  const counts = document.createElement("span");
+  counts.className = "myintel-card-counts";
+  const parts = [];
+  if (group.holdings.length) parts.push(`${group.holdings.length} ${group.holdings.length === 1 ? "holding" : "holdings"}`);
+  if (group.heldFor.length) parts.push(`holds for ${group.heldFor.length}`);
+  if (group.ignoredAllies.length) parts.push(`${group.ignoredAllies.length} ignored`);
+  counts.textContent = parts.join(" · ");
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "allies-ignored-remove myintel-card-remove";
+  remove.textContent = "×";
+  remove.title = `Remove ${entity.name} from My Intel`;
+  remove.setAttribute("aria-label", `Remove ${entity.name} from My Intel`);
+  remove.addEventListener("click", (event) => {
+    event.preventDefault(); // not a toggle of the card
+    removeMyIntelCard(group);
+  });
+  summary.append(icon, name, kind, counts, remove);
+  withMenu(summary, [entitySection(entity)]);
+
+  const body = document.createElement("div");
+  body.className = "myintel-card-body";
+  const error = document.createElement("p");
+  error.className = "preferences-error myintel-card-error";
+  error.hidden = true;
+  const showError = (message) => {
+    error.textContent = message;
+    error.hidden = !message;
+  };
+
+  if (HOLDING_TYPES.includes(entity.type)) {
+    body.append(myIntelTitle("Holdings"));
+    if (group.holdings.length === 0) body.append(myIntelNone("No holdings"));
+    body.append(...group.holdings.map((holding) => myIntelRow(holding, {
+      note: holding.note,
+      onNote: (note) => myIntelChange(() => backend().SaveHolding(entity.id, entity.type, entity.name, holding.name, holding.type, note), showError, `Saved the note on ${holding.name}`),
+      onRemove: () => myIntelChange(() => backend().RemoveHolding(entity.type, entity.id, holding.type, holding.id), showError, `Removed ${holding.name} as a holding of ${entity.name}`),
+    })));
+    body.append(myIntelAddRow("Holding name", true, (name, type, note) =>
+      myIntelChange(() => backend().SaveHolding(entity.id, entity.type, entity.name, name, type, note), showError, `Saved a holding for ${entity.name}`)));
+  }
+
+  if (group.heldFor.length > 0) {
+    body.append(myIntelTitle("Holds for"));
+    body.append(...group.heldFor.map((main) => myIntelRow(main, {
+      noteText: main.note,
+      onRemove: () => myIntelChange(() => backend().RemoveHolding(main.type, main.id, entity.type, entity.id), showError, `Removed ${entity.name} as a holding of ${main.name}`),
+    })));
+  }
+
+  body.append(myIntelTitle("Ignored allies"));
+  if (group.ignoredAllies.length === 0) body.append(myIntelNone("None ignored"));
+  body.append(...group.ignoredAllies.map((ally) => myIntelRow(ally, {
+    onRemove: () => myIntelChange(() => backend().RemoveIgnoredAlly(entity.type, entity.id, ally.type, ally.id), showError, `No longer ignoring ${ally.name} for ${entity.name}`),
+  })));
+  body.append(myIntelAddRow("Ally name", false, (name, type) =>
+    myIntelChange(() => backend().AddIgnoredAlly(entity.type, entity.id, name, type), showError, `Ignoring ${name} for ${entity.name}`)));
+
+  body.append(error);
+  card.append(summary, body);
+  return card;
+}
+
+// myIntelRemoved is the card last removed with its x, kept to undo, or null
+let myIntelRemoved = null;
+
+/*
+  removeMyIntelCard asks, then removes a card's holdings and ignored allies at once, offering to undo it. Links where it is another main's holding belong to
+  that main's card, so they stay. One added here with nothing saved just goes.
+*/
+async function removeMyIntelCard(group) {
+  const entity = group.entity;
+  const key = intelKey(entity);
+  if (myIntelAdded.some((added) => intelKey(added.entity) === key)) {
+    myIntelAdded = myIntelAdded.filter((added) => intelKey(added.entity) !== key);
+    myIntelOpen.delete(key);
+    renderMyIntel();
+    return;
+  }
+
+  if (!(await confirmMyIntelRemove(group))) return;
+  myIntelOpen.delete(key);
+
+  showMyIntelError("");
+  try {
+    await backend().RemoveMyIntelGroup(entity.type, entity.id);
+  } catch (err) {
+    showMyIntelError(String(err));
+    return;
+  }
+  myIntelRemoved = group;
+  el("myintel-undo-text").textContent = `Removed ${entity.name}`;
+  el("myintel-undo").hidden = false;
+  tickerPush(`Removed ${entity.name} from My Intel`);
+  await loadMyIntel();
+  syncShownTarget();
+}
+
+// confirmMyIntelRemove asks before a card is removed, saying what goes with it and what stays, resolving true to remove it
+async function confirmMyIntelRemove(group) {
+  const entity = group.entity;
+  const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+  const owned = [];
+  if (group.holdings.length) owned.push(plural(group.holdings.length, "holding", "holdings"));
+  if (group.ignoredAllies.length) owned.push(plural(group.ignoredAllies.length, "ignored ally", "ignored allies"));
+  el("myintel-remove-title").textContent = `Remove ${entity.name} from My Intel?`;
+  let detail = `${owned.length ? `Its ${owned.join(" and ")}` : "Everything saved on it"} will be removed.`;
+  if (group.heldFor.length) detail += ` It stays a holding of ${group.heldFor.map((main) => main.name).join(", ")}, as those links belong to ${group.heldFor.length === 1 ? "that main" : "those mains"}.`;
+  el("myintel-remove-detail").textContent = detail;
+
+  const dialog = el("myintel-remove-confirm");
+  dialog.returnValue = "";
+  dialog.showModal();
+  await new Promise((resolve) => dialog.addEventListener("close", resolve, { once: true }));
+  return dialog.returnValue === "remove";
+}
+
+// undoMyIntelRemove saves the removed card's holdings, with their notes, and ignored allies again
+async function undoMyIntelRemove() {
+  const group = myIntelRemoved;
+  if (!group) return;
+  myIntelRemoved = null;
+  el("myintel-undo").hidden = true;
+  const entity = group.entity;
+  try {
+    for (const holding of group.holdings) await backend().SaveHolding(entity.id, entity.type, entity.name, holding.name, holding.type, holding.note);
+    for (const ally of group.ignoredAllies) await backend().AddIgnoredAlly(entity.type, entity.id, ally.name, ally.type);
+  } catch (err) {
+    showMyIntelError(`Could not bring all of ${entity.name} back: ${err}`);
+  }
+  myIntelOpen.add(intelKey(entity));
+  tickerPush(`Brought ${entity.name} back to My Intel`);
+  await loadMyIntel();
+  syncShownTarget();
+}
+
+function myIntelTitle(text) {
+  const title = document.createElement("p");
+  title.className = "myintel-section-title";
+  title.textContent = text;
+  return title;
+}
+
+function myIntelNone(text) {
+  const none = document.createElement("p");
+  none.className = "myintel-none";
+  none.textContent = text;
+  return none;
+}
+
+/*
+  myIntelRow is one entity on a card: its logo, its name, which offers a search for it, a note, and an x.
+  options: { note, onNote } for a note that can be changed, { noteText } for one that can not, and onRemove for the x.
+*/
+function myIntelRow(entity, options) {
+  const row = document.createElement("div");
+  row.className = "myintel-row";
+  const icon = document.createElement("img");
+  icon.src = entity.iconUrl;
+  icon.alt = "";
+  const name = document.createElement("button");
+  name.type = "button";
+  name.className = "link-button";
+  name.textContent = entity.name;
+  name.title = `Search for ${entity.name}`;
+  name.addEventListener("click", () => {
+    el("myintel").close();
+    offerSearch({ type: entity.type, name: entity.name });
+  });
+
+  let note;
+  if (options.onNote) {
+    note = document.createElement("input");
+    note.type = "text";
+    note.className = "myintel-note";
+    note.maxLength = 200; // maxHoldingNote, which the backend checks again
+    note.placeholder = "Note";
+    note.value = options.note || "";
+    note.setAttribute("aria-label", `Note on ${entity.name}`);
+    note.addEventListener("change", () => options.onNote(note.value));
+  } else {
+    note = document.createElement("span");
+    note.className = "myintel-note-text";
+    note.textContent = options.noteText || "";
+  }
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "allies-ignored-remove";
+  remove.textContent = "×";
+  remove.title = "Remove";
+  remove.setAttribute("aria-label", `Remove ${entity.name}`);
+  remove.addEventListener("click", options.onRemove);
+
+  row.append(icon, name, note, remove);
+  return withMenu(row, [entitySection(entity)]);
+}
+
+// myIntelAddRow is a card's row to add a holding, withNote, or an ignored ally: a type, a name, and Add, which calls add(name, type, note)
+function myIntelAddRow(placeholder, withNote, add) {
+  const form = document.createElement("form");
+  form.className = withNote ? "myintel-row-add" : "myintel-row-add no-note";
+  const type = document.createElement("select");
+  type.setAttribute("aria-label", "Type");
+  for (const value of HOLDING_TYPES) type.append(new Option(searchTypeLabel(value), value));
+  const name = document.createElement("input");
+  name.type = "text";
+  name.placeholder = placeholder;
+  name.autocomplete = "off";
+  name.spellcheck = false;
+  name.setAttribute("aria-label", placeholder);
+  form.append(type, name);
+  let note = null;
+  if (withNote) {
+    note = document.createElement("input");
+    note.type = "text";
+    note.maxLength = 200;
+    note.placeholder = "Note (optional)";
+    note.setAttribute("aria-label", "Note");
+    form.append(note);
+  }
+  const submit = document.createElement("button");
+  submit.type = "submit";
+  submit.className = "secondary";
+  submit.textContent = "Add";
+  form.append(submit);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (name.value.trim()) add(name.value.trim(), type.value, note ? note.value : "");
+  });
+  return form;
+}
+
+// myIntelChange saves a change from a card, showing why on the card if it can not, then draws My Intel again and brings the shown target up to date
+async function myIntelChange(save, showError, message) {
+  showError("");
+  try {
+    await save();
+  } catch (err) {
+    showError(String(err));
+    return;
+  }
+  tickerPush(message);
+  await loadMyIntel();
+  syncShownTarget();
+}
+
+// syncShownTarget shows the target panel's holdings and the Allies tab again after My Intel changed them
+async function syncShownTarget() {
+  const target = shownTarget;
+  if (target && HOLDING_TYPES.includes(target.type)) {
+    const holdings = await runBackend(() => backend().GetHoldings(target.id, target.type));
+    if (holdings && shownTarget === target) renderHoldings(holdings);
+  }
+  rankAlliesAgain();
+}
+
+// addMyIntelCard looks up a pilot, corp, or alliance by name and opens a card for it, at the top, until something is saved on it
+async function addMyIntelCard(event) {
+  event.preventDefault();
+  showMyIntelError("");
+  const name = el("myintel-add-name").value.trim();
+  if (!name) return;
+  let entity;
+  try {
+    entity = await backend().LookupEntity(name, el("myintel-add-type").value);
+  } catch (err) {
+    showMyIntelError(String(err));
+    return;
+  }
+  const key = intelKey(entity);
+  if (![...myIntel, ...myIntelAdded].some((group) => intelKey(group.entity) === key)) {
+    myIntelAdded.unshift({ entity, holdings: [], heldFor: [], ignoredAllies: [] });
+  }
+  myIntelOpen.add(key);
+  el("myintel-add-name").value = "";
+  el("myintel-filter").value = "";
+  renderMyIntel();
+}
+
 const MEMBERS_PER_PAGE = 50;
 // MEMBER_PAGES_PER_LOAD pages of members are looked up at a time, the next ones only once the last of them is shown
 const MEMBER_PAGES_PER_LOAD = 3;
@@ -3522,6 +3866,11 @@ async function savePreferences() {
 
 el("themes-button").addEventListener("click", () => setMenuOpen(el("themes-button"), el("themes-menu"), el("themes-menu").hidden));
 el("limits-button").addEventListener("click", toggleLimitsMenu);
+el("myintel-button").addEventListener("click", openMyIntel);
+el("myintel-close").addEventListener("click", () => el("myintel").close());
+el("myintel-filter").addEventListener("input", renderMyIntel);
+el("myintel-add").addEventListener("submit", addMyIntelCard);
+el("myintel-undo-button").addEventListener("click", undoMyIntelRemove);
 el("debug-open").addEventListener("click", () => backend().OpenDebugFolder().catch((err) => tickerPush(`Error: ${err}`)));
 el("limits-menu").addEventListener("input", changeSearchLimits);
 el("limits-menu").addEventListener("change", changeSearchLimits);
