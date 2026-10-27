@@ -1305,6 +1305,35 @@ button.danger {
   box-shadow: 0 10px 28px rgb(0 0 0 / 0.5);
 }
 
+/* the search limits button: what the next search collects, in the accent while it is not the Preferences' defaults */
+.limits-button {
+  height: 100%;
+  padding: 0 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.limits-button:hover,
+.limits-button[aria-expanded="true"] { color: var(--text); }
+.limits-button.limits-changed { border-color: var(--accent); color: var(--accent); }
+
+.limits-menu {
+  top: calc(100% + 6px);
+  right: 0;
+  width: 320px;
+  padding: 12px;
+}
+.limits-menu:not([hidden]) { display: grid; gap: 10px; }
+.limits-menu .preference-field input,
+.limits-menu .preference-field select,
+.limits-menu .preference-check { width: 110px; }
+.limits-menu .preference-help,
+.limits-menu .preferences-error { margin: 0; }
+.limits-actions { display: flex; justify-content: space-between; gap: 8px; }
+
 .menu-themes {
   top: calc(100% + 6px);
   right: 0;

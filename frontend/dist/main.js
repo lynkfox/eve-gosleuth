@@ -2905,6 +2905,9 @@ async function search(event) {
     return;
   }
   const searchType = searchTypeHint;
+  // a change in the search limits applies to this search
+  closeLimitsMenu();
+  await limitsPending;
 
   stopRequested = false;
   setBusy(true);
@@ -3169,6 +3172,119 @@ function closeThemesMenu() {
   setMenuOpen(el("themes-button"), el("themes-menu"), false);
 }
 
+// searchLimits are the search limits button's choices for this session, as the backend's SearchLimits, or null while searches use the saved Preferences
+let searchLimits = null;
+// limitsPending is the last change of search limits on its way to the backend, which a search waits for
+let limitsPending = Promise.resolve();
+
+// AGE_LABELS name the Killmails newer than choices, in days, for the search limits button
+const AGE_LABELS = { 0: "any age", 7: "1 week", 30: "30 days", 90: "90 days" };
+
+// savedLimits are the Preferences' search limits, the defaults
+function savedLimits() {
+  return {
+    maxKillmails: preferences.maxKillmails,
+    killmailPages: preferences.killmailPages,
+    killmailsNewerThanDays: preferences.killmailsNewerThanDays,
+    useCachedKillmails: preferences.useCachedKillmails,
+    includeHoldings: preferences.includeHoldings,
+  };
+}
+
+const limitsDiffer = (first, second) => Object.keys(first).some((key) => first[key] !== second[key]);
+
+// showSearchLimits names the limits the next search uses on its button, ie 20 killmails · any age, in the accent while they are not the defaults
+function showSearchLimits() {
+  const limits = searchLimits || savedLimits();
+  const count = limits.maxKillmails === ALL_KILLMAILS ? `All on ${limits.killmailPages} ${limits.killmailPages === 1 ? "page" : "pages"}` : `${limits.maxKillmails.toLocaleString("en-US")} killmails`;
+  const button = el("limits-button");
+  button.textContent = `${count} · ${AGE_LABELS[limits.killmailsNewerThanDays] || "any age"}`;
+  const changed = searchLimits !== null;
+  button.classList.toggle("limits-changed", changed);
+  button.title = changed ? "Search limits for this session, not your defaults. Click to change them." : "Search limits, your defaults from Preferences. Click to change them for this session.";
+}
+
+function fillLimitsForm(limits) {
+  el("limit-max").value = String(limits.maxKillmails);
+  el("limit-pages").value = String(limits.killmailPages);
+  el("limit-pages").disabled = limits.maxKillmails !== ALL_KILLMAILS;
+  el("limit-age").value = String(limits.killmailsNewerThanDays);
+  el("limit-cached").checked = limits.useCachedKillmails;
+  el("limit-holdings").checked = limits.includeHoldings;
+}
+
+// limitsForm reads the search limits popup, the numbers as typed (NaN if not a number)
+function limitsForm() {
+  return {
+    maxKillmails: Number(el("limit-max").value),
+    killmailPages: Number(el("limit-pages").value),
+    killmailsNewerThanDays: Number(el("limit-age").value),
+    useCachedKillmails: el("limit-cached").checked,
+    includeHoldings: el("limit-holdings").checked,
+  };
+}
+
+function showLimitsError(message) {
+  el("limits-error").textContent = message;
+  el("limits-error").hidden = !message;
+}
+
+// changeSearchLimits applies the popup's limits to the next searches as they are changed, once they are valid. The defaults again are no limits of its own.
+function changeSearchLimits() {
+  const limits = limitsForm();
+  el("limit-pages").disabled = limits.maxKillmails !== ALL_KILLMAILS;
+  const problem = killmailLimitError(limits.maxKillmails, limits.killmailPages);
+  showLimitsError(problem);
+  if (problem) return;
+
+  searchLimits = limitsDiffer(limits, savedLimits()) ? limits : null;
+  const sent = searchLimits ? backend().SetSearchLimits(limits) : backend().ResetSearchLimits();
+  limitsPending = sent.catch((err) => showLimitsError(String(err)));
+  showSearchLimits();
+}
+
+function resetSearchLimits() {
+  searchLimits = null;
+  fillLimitsForm(savedLimits());
+  showLimitsError("");
+  limitsPending = backend().ResetSearchLimits().catch(() => {});
+  showSearchLimits();
+}
+
+// saveSearchLimits makes the popup's limits the Preferences' defaults
+async function saveSearchLimits() {
+  const limits = limitsForm();
+  const problem = killmailLimitError(limits.maxKillmails, limits.killmailPages);
+  if (problem) {
+    showLimitsError(problem);
+    return;
+  }
+  try {
+    await backend().SaveSearchLimits(limits);
+  } catch (err) {
+    showLimitsError(String(err));
+    return;
+  }
+  Object.assign(preferences, limits);
+  searchLimits = null;
+  showSearchLimits();
+  closeLimitsMenu();
+  tickerPush("Search limits saved as your defaults");
+}
+
+function closeLimitsMenu() {
+  setMenuOpen(el("limits-button"), el("limits-menu"), false);
+}
+
+function toggleLimitsMenu() {
+  const open = el("limits-menu").hidden;
+  if (open) {
+    fillLimitsForm(searchLimits || savedLimits());
+    showLimitsError("");
+  }
+  setMenuOpen(el("limits-button"), el("limits-menu"), open);
+}
+
 // MAX_KILLMAILS is the most killmails zKillboard lists, 100 pages of 200 (api.ZKILL_MAX_KILLMAILS)
 const MAX_KILLMAILS = 20000;
 // MAX_KILLMAIL_PAGES is the most zKillboard pages a search for all killmails reads (api.ZKILL_MAX_PAGES)
@@ -3199,6 +3315,7 @@ function applySettings(settings) {
     showCaveatWarning: settings.showCaveatWarning !== false,
   };
   showKillmailLabels = preferences.includeZkillLabels;
+  showSearchLimits();
   redrawIntel();
 }
 
@@ -3329,15 +3446,19 @@ function closePreferences() {
 }
 
 // savePreferences checks and saves the window, applies the labels choice straight away, and closes it
+// killmailLimitError says what is wrong with a max killmail count and pages for all as typed, NaN if not a number, or "" if nothing
+function killmailLimitError(maxKillmails, killmailPages) {
+  const killmailCountOk = maxKillmails === ALL_KILLMAILS || (Number.isInteger(maxKillmails) && maxKillmails >= 1 && maxKillmails <= MAX_KILLMAILS);
+  if (!killmailCountOk) return `Max killmail count must be a whole number from 1 to ${MAX_KILLMAILS.toLocaleString("en-US")}, or -1 for all`;
+  if (!Number.isInteger(killmailPages) || killmailPages < 1 || killmailPages > MAX_KILLMAIL_PAGES) return `zKillboard pages for all must be a whole number from 1 to ${MAX_KILLMAIL_PAGES}`;
+  return "";
+}
+
 async function savePreferences() {
   const chosen = preferencesForm();
-  const killmailCountOk = chosen.maxKillmails === ALL_KILLMAILS || (Number.isInteger(chosen.maxKillmails) && chosen.maxKillmails >= 1 && chosen.maxKillmails <= MAX_KILLMAILS);
-  if (!killmailCountOk) {
-    showPreferencesError(`Max killmail count must be a whole number from 1 to ${MAX_KILLMAILS.toLocaleString("en-US")}, or -1 for all`);
-    return;
-  }
-  if (!Number.isInteger(chosen.killmailPages) || chosen.killmailPages < 1 || chosen.killmailPages > MAX_KILLMAIL_PAGES) {
-    showPreferencesError(`zKillboard pages for all must be a whole number from 1 to ${MAX_KILLMAIL_PAGES}`);
+  const limitError = killmailLimitError(chosen.maxKillmails, chosen.killmailPages);
+  if (limitError) {
+    showPreferencesError(limitError);
     return;
   }
   if (!Number.isInteger(chosen.maxRecentSearches) || chosen.maxRecentSearches < 1 || chosen.maxRecentSearches > MAX_RECENT_SEARCHES) {
@@ -3359,6 +3480,7 @@ async function savePreferences() {
 
   const alliesChanged = chosen.hideKilledAllies !== preferences.hideKilledAllies;
   preferences = chosen;
+  showSearchLimits(); // new defaults, which the button shows unless it has limits of its own
   showKillmailLabels = chosen.includeZkillLabels;
   redrawIntel();
   // a changed preference applies again, hiding the allies the target killed if it is on
@@ -3368,13 +3490,29 @@ async function savePreferences() {
 }
 
 el("themes-button").addEventListener("click", () => setMenuOpen(el("themes-button"), el("themes-menu"), el("themes-menu").hidden));
+el("limits-button").addEventListener("click", toggleLimitsMenu);
+el("limits-menu").addEventListener("input", changeSearchLimits);
+el("limits-menu").addEventListener("change", changeSearchLimits);
+// Enter closes the popup rather than starting a search
+el("limits-menu").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    closeLimitsMenu();
+    el("limits-button").focus();
+  }
+});
+el("limits-reset").addEventListener("click", resetSearchLimits);
+el("limits-save").addEventListener("click", saveSearchLimits);
+showSearchLimits(); // the built-in defaults until the saved settings arrive
 // the theme list stays open while picking themes, so they can be compared, and closes on a click elsewhere or Escape
 document.addEventListener("click", (event) => {
   if (!event.target.closest || !event.target.closest(".menu-anchor")) closeThemesMenu();
+  if (!event.target.closest || !event.target.closest(".limits-anchor")) closeLimitsMenu();
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeThemesMenu();
+    closeLimitsMenu();
     setHelpWindowOpen(false);
   }
 });

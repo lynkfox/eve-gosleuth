@@ -16,6 +16,44 @@
         <button id="recent-toggle" class="recent-toggle" type="button" title="Recent searches" aria-label="Recent searches" aria-expanded="false" aria-controls="recent-list" tabindex="-1">▾</button>
         <ul id="recent-list" class="menu-dropdown recent-list" role="listbox" aria-label="Recent searches" hidden></ul>
       </div>
+      <!-- what the next search collects: the Preferences' defaults, or changed here until the app closes -->
+      <div class="menu-anchor limits-anchor">
+        <button id="limits-button" class="limits-button" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="limits-menu"></button>
+        <div id="limits-menu" class="menu-dropdown limits-menu" role="dialog" aria-label="Search limits" hidden>
+          <label class="preference-field">
+            <span class="preference-name">Max killmails</span>
+            <!-- 20000 is api.ZKILL_MAX_KILLMAILS, which the backend checks again -->
+            <input id="limit-max" type="number" min="-1" max="20000" step="1" title="1 to 20,000, or -1 for all on the pages below">
+          </label>
+          <label class="preference-field">
+            <span class="preference-name">zKillboard pages for all</span>
+            <input id="limit-pages" type="number" min="1" max="100" step="1">
+          </label>
+          <label class="preference-field">
+            <span class="preference-name">Killmails newer than</span>
+            <select id="limit-age">
+              <option value="7">1 week</option>
+              <option value="30">30 days</option>
+              <option value="90">90 days</option>
+              <option value="0">All</option>
+            </select>
+          </label>
+          <label class="preference">
+            <span class="preference-name">Use killmails in cache</span>
+            <span class="preference-check"><input id="limit-cached" type="checkbox"></span>
+          </label>
+          <label class="preference">
+            <span class="preference-name">Include holdings</span>
+            <span class="preference-check"><input id="limit-holdings" type="checkbox"></span>
+          </label>
+          <p id="limits-error" class="preferences-error" role="alert" hidden></p>
+          <p class="preference-help">Used until the app closes. Your defaults are in Preferences.</p>
+          <div class="limits-actions">
+            <button id="limits-reset" class="secondary" type="button">Reset</button>
+            <button id="limits-save" type="button">Save as default</button>
+          </div>
+        </div>
+      </div>
       <button id="search-button" type="submit">Search</button>
     </form>
 
@@ -342,7 +380,7 @@
         <span class="preference-label" title="A corp or alliance search also collects the killmails of the holdings linked to it on the target panel, and counts them as its own. Each holding's list is read from zKillboard too."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Include holdings in searches</span></span>
         <span class="preference-check"><input id="pref-include-holdings" type="checkbox"></span>
       </label>
-      <p class="preference-help">Killmail limits apply from the next search.</p>
+      <p class="preference-help">These are your defaults. The search limits button beside the search bar overrides them until the app closes.</p>
 
       <h3 class="preference-group">Reports</h3>
       <label class="preference-field">

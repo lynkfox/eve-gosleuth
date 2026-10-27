@@ -41,6 +41,7 @@ type App struct {
 	// settings have their own lock, so changing the theme never waits behind a running search
 	settingsMu   sync.Mutex
 	settings     Settings
+	searchLimits *SearchLimits // the search limits button's, overriding the Preferences' until the app closes, nil for none. Guarded by settingsMu.
 	settingsPath string
 
 	// the Members tab's list for the last corp or alliance searched, with its own lock so paging through it never waits behind a search
@@ -371,7 +372,7 @@ holdingMain finds the main a corp or alliance target is a holding of, while the 
 With more than one, the first by name is used. A main that is itself a holding is not followed further.
 */
 func (a *App) holdingMain(target *retrieval.IntelTarget) (retrieval.HoldingLink, bool) {
-	if !a.GetSettings().IncludeHoldings || !canHold(target.TypeOfEntity.String()) {
+	if !a.searchPreferences().IncludeHoldings || !canHold(target.TypeOfEntity.String()) {
 		return retrieval.HoldingLink{}, false
 	}
 	_, heldFor := a.cache.HoldingLinks(target.TypeOfEntity.String(), target.IDNumber)
@@ -533,7 +534,7 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		target.Expanded = a.cache.ExpandSystem(targetID)
 	}
 
-	settings := a.GetSettings()
+	settings := a.searchPreferences()
 	if settings.IncludeHoldings {
 		target.Holdings = a.targetHoldings(&target)
 	}
