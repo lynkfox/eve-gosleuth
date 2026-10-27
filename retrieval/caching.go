@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -81,6 +82,7 @@ type CachedEveIDs struct {
 	Searched             map[string]*CacheEntry // the search bar's recent searches, by recentSearchKey. Never expire, see AddRecentSearch.
 	IgnoredAllies        map[string]*CacheEntry // each target's allies left out of its Allies tab, by ignoredAlliesKey. Never expire, see SetIgnoredAllies.
 	Holdings             map[string]*CacheEntry // the user's holding links, by holdingKey. Never expire, see SaveHoldingLink.
+	PendingChecks        map[string]*CacheEntry // imported pilots, corporations, and alliances still to check with the ESI, by intelCheckKey, see AddIntelChecks
 	ZkillLists           map[string]*CacheEntry // entities' zKillboard killmail lists, by zkillListKey. Never expire, see SaveKnownZkillList.
 	Client               api.ESIClient          // the uncached client that cache misses are fetched with
 	Path                 string                 // the database file
@@ -90,6 +92,7 @@ type CachedEveIDs struct {
 	searchedLoaded bool // Searched has every saved recent search, see loadRecentSearches. Guarded by mu.
 	holdingsLoaded bool // Holdings has every saved holding link, see loadHoldings. Guarded by mu.
 	ignoredLoaded  bool // IgnoredAllies has every target's saved ignored allies, see AllIgnoredAllies. Guarded by mu.
+	checksLoaded   bool // PendingChecks has every saved check, see IntelChecks. Guarded by mu.
 
 	db      *sql.DB                // nil if the database could not be opened, the cache then only lasts the session
 	dirty   map[rowKey]*CacheEntry // added since the last SaveCache, guarded by mu
@@ -228,6 +231,9 @@ func (c *CachedEveIDs) ensureMaps() {
 	}
 	if c.Holdings == nil {
 		c.Holdings = make(map[string]*CacheEntry)
+	}
+	if c.PendingChecks == nil {
+		c.PendingChecks = make(map[string]*CacheEntry)
 	}
 	if c.ZkillLists == nil {
 		c.ZkillLists = make(map[string]*CacheEntry)
@@ -409,7 +415,7 @@ func cachedAs[T any, K comparable](c *CachedEveIDs, s section, entries map[K]*Ca
 		}
 		entries[key] = entry
 	}
-	if entry.Value == nil || entry.stale(c.SDERelease, ttlFor[T]()) {
+	if entry.Value == nil || entry.stale(c.SDERelease, ttlFor[T]()) || otherType[T](entry.Value) {
 		return nil
 	}
 
@@ -454,6 +460,17 @@ func knownAs[T any](c *CachedEveIDs, idNumber int) any {
 }
 
 /* CastExpanded for an epxandable readable version of the data that is also a specific struct*/
+/*
+otherType reports whether a cached value is already a model of another type than *T, ie a corporation asked for as a pilot, from a wrong link or a doctored import.
+Converting it would give a wrong *T and overwrite the right value, so it is treated as not cached.
+*/
+func otherType[T any](value any) bool {
+	if _, same := value.(*T); same {
+		return false
+	}
+	return reflect.ValueOf(value).Kind() == reflect.Pointer
+}
+
 func CastExpanded[T any](value any) (*T, error) {
 	if value == nil {
 		return nil, nil
@@ -636,9 +653,12 @@ func (c *CachedEveIDs) GetIfNotCached(idNumber int, typeOfEntity types.EntityTyp
 		comm.Logger.WithError(err).Infof("Character %d no longer exists, caching it as deleted", idNumber)
 		output = &api.ESICharacter{CharacterID: idNumber, Name: api.DELETED_CHARACTER_NAME, Deleted: true}
 		c.mu.Lock()
-		entry := newEntry(output)
-		entry.Permanent = true
-		put(c, sectionKnown, c.Known, idNumber, entry)
+		// an id cached as something else, ie a corporation asked for as a pilot from a wrong link, is that, not a deleted pilot
+		if existing, cached := c.Known[idNumber]; !cached || !otherType[api.ESICharacter](existing.Value) {
+			entry := newEntry(output)
+			entry.Permanent = true
+			put(c, sectionKnown, c.Known, idNumber, entry)
+		}
 		c.mu.Unlock()
 		return &output, nil
 	}

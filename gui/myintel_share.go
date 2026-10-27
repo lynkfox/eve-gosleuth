@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,8 +10,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"time"
+	"unicode"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
@@ -23,7 +24,7 @@ const (
 	intelFileVersion = 1
 	maxIntelFileSize = 5 << 20 // an import larger than this is refused, as no real one comes close
 	maxIntelEntries  = 20000   // the most holdings, or ignored allies, an import may hold
-	intelLookups     = 10      // how many of an import's entities are checked with the ESI at once
+	maxImportedName  = 100     // the longest name kept from a file, longer than any EVE name, until the check corrects it
 )
 
 // intelFileEntity is a pilot, corporation, or alliance in a My Intel file. Its name is there for people reading the file; an import looks it up again by id.
@@ -169,12 +170,13 @@ type ImportPreview struct {
 	SkippedExamples []string          `json:"skippedExamples"` // why, for the first few
 }
 
-// importPlan is a checked import, kept between its preview and the user agreeing to it
+// importPlan is a read import, kept between its preview and the user agreeing to it
 type importPlan struct {
 	newHoldings    []retrieval.HoldingLink
 	changedNotes   []retrieval.HoldingLink // with their notes
 	newIgnored     map[string][]retrieval.IgnoredAlly
 	ignoredTargets map[string]intelFileEntity
+	checks         []retrieval.IntelCheck // every entity the import names, to check with the ESI once it is saved, see runIntelChecks
 }
 
 /*
@@ -215,7 +217,8 @@ func (a *App) PreviewMyIntelImport() (preview ImportPreview, err error) {
 }
 
 /*
-	ApplyMyIntelImport saves the import last previewed. It only adds: nothing the user has is removed. It does not wait for a running search.
+	ApplyMyIntelImport saves the import last previewed. It only adds: nothing the user has is removed. Its entities are then checked with the ESI in the background,
+	see runIntelChecks. It does not wait for a running search.
 
 Parameters:
   - useTheirNotes: replace the user's notes with the file's where they differ, otherwise the user's are kept
@@ -233,12 +236,23 @@ func (a *App) ApplyMyIntelImport(useTheirNotes bool) (err error) {
 		return errors.New("Choose a file to import first")
 	}
 	a.applyImport(*plan, useTheirNotes)
+	go func() {
+		defer comm.RecoverGoroutine("checking imported entities", nil)
+		a.runIntelChecks()
+	}()
 	return nil
 }
 
+// applyImport saves a plan, checked again against what is saved now, as the user may have changed My Intel since its preview: a holding saved since is kept as it is, and an ally ignored since is not added twice
 func (a *App) applyImport(plan importPlan, useTheirNotes bool) {
+	saved := map[string]bool{}
+	for _, link := range a.cache.AllHoldingLinks() {
+		saved[intelGroupKey(link.MainType, link.MainID)+">"+intelGroupKey(link.HoldingType, link.HoldingID)] = true
+	}
 	for _, link := range plan.newHoldings {
-		a.cache.SaveHoldingLink(link)
+		if !saved[intelGroupKey(link.MainType, link.MainID)+">"+intelGroupKey(link.HoldingType, link.HoldingID)] {
+			a.cache.SaveHoldingLink(link)
+		}
 	}
 	if useTheirNotes {
 		for _, link := range plan.changedNotes {
@@ -247,8 +261,15 @@ func (a *App) applyImport(plan importPlan, useTheirNotes bool) {
 	}
 	for key, allies := range plan.newIgnored {
 		target := plan.ignoredTargets[key]
-		a.cache.SetIgnoredAllies(target.Type, target.ID, append(slices.Clone(a.cache.IgnoredAlliesFor(target.Type, target.ID)), allies...))
+		ignored := slices.Clone(a.cache.IgnoredAlliesFor(target.Type, target.ID))
+		for _, ally := range allies {
+			if !slices.ContainsFunc(ignored, func(other retrieval.IgnoredAlly) bool { return other.Type == ally.Type && other.ID == ally.ID }) {
+				ignored = append(ignored, ally)
+			}
+		}
+		a.cache.SetIgnoredAllies(target.Type, target.ID, ignored)
 	}
+	a.cache.AddIntelChecks(plan.checks)
 	a.saveCacheQuietly()
 }
 
@@ -270,9 +291,8 @@ func readLimited(path string, limit int64) ([]byte, error) {
 }
 
 /*
-	planImport checks a My Intel file and works out what importing it would change. The file is untrusted: each entry must be well formed,
-	and each pilot, corporation, and alliance in it must be found with the ESI as the type the file says, by id, its name taken from the ESI rather than the file.
-	Entries that fail are skipped and counted.
+	planImport reads a My Intel file and works out what importing it would change, at once, without the ESI: each entry must be well formed, a malformed one
+	skipped and counted, and names are taken from the file, cleaned (cleanImportedName). runIntelChecks checks them with the ESI once they are saved.
 
 Returns:
   - importPlan: what to save
@@ -301,31 +321,22 @@ func (a *App) planImport(data []byte) (importPlan, ImportPreview, error) {
 
 	skip := func(reason string) {
 		preview.Skipped++
-		if len(preview.SkippedExamples) < 5 {
+		if len(preview.SkippedExamples) < 5 && !slices.Contains(preview.SkippedExamples, reason) {
 			preview.SkippedExamples = append(preview.SkippedExamples, reason)
 		}
 	}
 
-	// every entity named in the file, checked with the ESI once each
-	entities := []intelFileEntity{}
-	for _, holding := range holdings {
-		entities = append(entities, holding.Main, holding.Holding)
-	}
-	for _, ignored := range ignoredLists {
-		entities = append(entities, ignored.Target)
-		entities = append(entities, ignored.Allies...)
-	}
-	names := a.checkIntelEntities(entities)
-	checked := func(entity intelFileEntity, kinds ...string) (string, bool) {
+	// checked is an entity's cleaned name, or why it is left out, noting it to check with the ESI once saved
+	toCheck := map[string]retrieval.IntelCheck{}
+	checked := func(entity intelFileEntity, kinds ...string) (string, string) {
 		if !slices.Contains(kinds, entity.Type) {
-			skip(fmt.Sprintf("%q is not a %s", entity.Name, strings.ToLower(strings.Join(kinds, " or "))))
-			return "", false
+			return "", fmt.Sprintf("%q is not a %s", cleanImportedName(entity), strings.ToLower(strings.Join(kinds, " or ")))
 		}
-		name, found := names[intelGroupKey(entity.Type, entity.ID)]
-		if !found {
-			skip(fmt.Sprintf("%s %d (%q) was not found with the ESI", strings.ToLower(entity.Type), entity.ID, entity.Name))
+		if entity.ID <= 0 {
+			return "", fmt.Sprintf("%q has no id", cleanImportedName(entity))
 		}
-		return name, found
+		toCheck[intelGroupKey(entity.Type, entity.ID)] = retrieval.IntelCheck{Type: entity.Type, ID: entity.ID}
+		return cleanImportedName(entity), ""
 	}
 	groupKinds := []string{types.CORPORATION.String(), types.ALLIANCE.String()}
 	targetKinds := append([]string{types.PILOT.String()}, groupKinds...)
@@ -336,9 +347,10 @@ func (a *App) planImport(data []byte) (importPlan, ImportPreview, error) {
 	}
 	planned := map[string]bool{}
 	for _, holding := range holdings {
-		mainName, mainOK := checked(holding.Main, groupKinds...)
-		holdingName, holdingOK := checked(holding.Holding, groupKinds...)
-		if !mainOK || !holdingOK {
+		mainName, mainProblem := checked(holding.Main, groupKinds...)
+		holdingName, holdingProblem := checked(holding.Holding, groupKinds...)
+		if problem := cmp.Or(mainProblem, holdingProblem); problem != "" {
+			skip(problem)
 			continue
 		}
 		if holding.Main.Type == holding.Holding.Type && holding.Main.ID == holding.Holding.ID {
@@ -370,14 +382,19 @@ func (a *App) planImport(data []byte) (importPlan, ImportPreview, error) {
 	preview.NewHoldings = len(plan.newHoldings)
 
 	for _, ignored := range ignoredLists {
-		if _, ok := checked(ignored.Target, targetKinds...); !ok {
+		if _, problem := checked(ignored.Target, targetKinds...); problem != "" {
+			// every ally in the list is an entry left out
+			for range ignored.Allies {
+				skip(problem)
+			}
 			continue
 		}
 		key := intelGroupKey(ignored.Target.Type, ignored.Target.ID)
 		have := a.cache.IgnoredAlliesFor(ignored.Target.Type, ignored.Target.ID)
 		for _, ally := range ignored.Allies {
-			allyName, ok := checked(ally, groupKinds...)
-			if !ok {
+			allyName, problem := checked(ally, groupKinds...)
+			if problem != "" {
+				skip(problem)
 				continue
 			}
 			same := func(other retrieval.IgnoredAlly) bool { return other.Type == ally.Type && other.ID == ally.ID }
@@ -395,57 +412,26 @@ func (a *App) planImport(data []byte) (importPlan, ImportPreview, error) {
 			}
 		}
 	}
+	for _, check := range toCheck {
+		plan.checks = append(plan.checks, check)
+	}
 	return plan, preview, nil
 }
 
-/*
-	checkIntelEntities looks up an import's pilots, corporations, and alliances with the ESI, through the cache, a few at a time
-
-Returns:
-  - map[string]string: the name of each found as the type the file says, by intelGroupKey. Those not found, or of another type, are left out.
-*/
-func (a *App) checkIntelEntities(entities []intelFileEntity) map[string]string {
-	unique := map[string]intelFileEntity{}
-	for _, entity := range entities {
-		if entity.ID > 0 && slices.Contains([]string{"PILOT", "CORPORATION", "ALLIANCE"}, entity.Type) {
-			unique[intelGroupKey(entity.Type, entity.ID)] = entity
+// cleanImportedName keeps a name from a file printable and short until the ESI check corrects it: control and invisible formatting characters, which could
+// make one name look like another, are taken out, and it is cut to maxImportedName. One with nothing left is named by its type and id.
+func cleanImportedName(entity intelFileEntity) string {
+	name := strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return -1
 		}
+		return r
+	}, entity.Name))
+	if runes := []rune(name); len(runes) > maxImportedName {
+		name = string(runes[:maxImportedName])
 	}
-
-	names := map[string]string{}
-	var mu sync.Mutex
-	var wait sync.WaitGroup
-	slots := make(chan struct{}, intelLookups)
-	for key, entity := range unique {
-		wait.Add(1)
-		go func() {
-			defer comm.RecoverGoroutine("checking an imported entity", nil)
-			defer wait.Done()
-			slots <- struct{}{}
-			defer func() { <-slots }()
-
-			name := ""
-			switch entity.Type {
-			case types.ALLIANCE.String():
-				if alliance, err := a.clients.ESIClient.GetAllianceInfo(entity.ID); err == nil && alliance != nil {
-					name = alliance.Name
-				}
-			case types.CORPORATION.String():
-				if corp, err := a.clients.ESIClient.GetCorporationInfo(entity.ID); err == nil && corp != nil {
-					name = corp.Name
-				}
-			case types.PILOT.String():
-				if pilot, err := a.clients.ESIClient.GetCharacterInfo(entity.ID); err == nil && pilot != nil {
-					name = pilot.Name
-				}
-			}
-			if name != "" {
-				mu.Lock()
-				names[key] = name
-				mu.Unlock()
-			}
-		}()
+	if name == "" {
+		name = fmt.Sprintf("%s %d", strings.ToLower(entity.Type), entity.ID)
 	}
-	wait.Wait()
-	return names
+	return name
 }

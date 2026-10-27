@@ -151,23 +151,8 @@ func (a *App) lookupEntity(text string, typeName string, allowed ...types.Entity
 	if found.Error != nil {
 		return EntityRef{}, errors.New(found.DisplayMessage)
 	}
-	entityType := found.TypeOfEntity
-	name := found.Name
-	switch entityType {
-	case types.ALLIANCE:
-		if alliance, err := a.clients.ESIClient.GetAllianceInfo(found.IDNumber); err == nil && alliance != nil {
-			name = alliance.Name
-		}
-	case types.CORPORATION:
-		if corp, err := a.clients.ESIClient.GetCorporationInfo(found.IDNumber); err == nil && corp != nil {
-			name = corp.Name
-		}
-	case types.PILOT:
-		if pilot, err := a.clients.ESIClient.GetCharacterInfo(found.IDNumber); err == nil && pilot != nil {
-			name = pilot.Name
-		}
-	}
-	return *entityRef(entityType, found.IDNumber, name), nil
+	// both lookups set the name as EVE spells it
+	return *entityRef(found.TypeOfEntity, found.IDNumber, found.Name), nil
 }
 
 /*

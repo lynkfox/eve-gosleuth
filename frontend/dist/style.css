@@ -2022,6 +2022,7 @@ tr.roster-divider td {
 
 /* Allies tab: the target's holdings above the table */
 .allies-holdings { margin: 0 0 10px; }
+.allies-note { margin: 0 0 8px; font-style: italic; }
 
 .context-menu-item:hover:not(:disabled),
 .context-menu-item:focus-visible { background: var(--panel); }

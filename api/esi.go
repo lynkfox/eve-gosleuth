@@ -16,6 +16,7 @@ import (
 type ESIClient interface {
 	GetEveIDsFromNames(names []string) (map[int]EntityIDAndName, error)
 	GetNamesFromEveIDs(idsNumbers []int) (map[int]string, error)
+	GetEntitiesFromEveIDs(idsNumbers []int) (map[int]EntityIDAndName, error)
 	GetCharacterAffiliations(characterIDs []int) (map[int]ESIAffiliation, error)
 	GetCharacterInfo(idNumber int) (*ESICharacter, error)
 	GetCorporationInfo(idNumber int) (*ESICorporation, error)
@@ -123,7 +124,30 @@ Returns:
   - error: any request or decode error
 */
 func (e ESIConnection) GetNamesFromEveIDs(idsNumbers []int) (map[int]string, error) {
+	entities, err := e.GetEntitiesFromEveIDs(idsNumbers)
+	if err != nil {
+		return nil, err
+	}
 	combined := make(map[int]string)
+	for id, entity := range entities {
+		combined[id] = entity.Name
+	}
+	return combined, nil
+}
+
+/*
+	GetEntitiesFromEveIDs resolves eve IDs to their names and kinds with the bulk ESI universe/names endpoint, ESI_BULK_IDS at a time.
+	The ESI answers a whole batch with a 404 if any id in it does not exist.
+
+Parameters:
+  - idsNumbers: the eve IDs to look up
+
+Returns:
+  - map[int]EntityIDAndName: by ID, with Category as the ESI gives it, ie character, corporation, or alliance
+  - error: any request or decode error, a 404 if an id does not exist
+*/
+func (e ESIConnection) GetEntitiesFromEveIDs(idsNumbers []int) (map[int]EntityIDAndName, error) {
+	combined := make(map[int]EntityIDAndName)
 
 	for batch := range slices.Chunk(idsNumbers, ESI_BULK_IDS) {
 		namesAndIds := []EntityIDAndName{}
@@ -145,13 +169,12 @@ func (e ESIConnection) GetNamesFromEveIDs(idsNumbers []int) (map[int]string, err
 			return nil, err
 		}
 
-		for i := 0; i < len(namesAndIds); i++ {
-			combined[namesAndIds[i].ID] = namesAndIds[i].Name
+		for _, entity := range namesAndIds {
+			combined[entity.ID] = entity
 		}
 	}
 
 	return combined, nil
-
 }
 
 /*

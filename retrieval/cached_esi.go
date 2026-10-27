@@ -299,7 +299,7 @@ func peekKnown[T any](c *CachedEveIDs, idNumber int) *T {
 		}
 		c.Known[idNumber] = entry
 	}
-	if entry.Value == nil {
+	if entry.Value == nil || otherType[T](entry.Value) {
 		return nil
 	}
 	casted, err := CastExpanded[T](entry.Value)
@@ -308,4 +308,11 @@ func peekKnown[T any](c *CachedEveIDs, idNumber int) *T {
 	}
 	entry.Value = casted
 	return casted
+}
+
+// GetEntitiesFromEveIDs asks the ESI for eve IDs' names and kinds every time, uncached, as it checks what other sources claim, ie a My Intel import
+func (c *CachedEveIDs) GetEntitiesFromEveIDs(idsNumbers []int) (map[int]api.EntityIDAndName, error) {
+	found, err := c.Client.GetEntitiesFromEveIDs(idsNumbers)
+	c.countFetched(1, err)
+	return found, err
 }

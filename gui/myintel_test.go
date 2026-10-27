@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -35,6 +36,24 @@ func (m intelESIClient) GetEveIDsFromNames(names []string) (map[int]api.EntityID
 	return found, nil
 }
 
+// GetEntitiesFromEveIDs answers as universe/names does: the names and kinds of every id, or a 404 for the whole batch if any id does not exist
+func (m intelESIClient) GetEntitiesFromEveIDs(ids []int) (map[int]api.EntityIDAndName, error) {
+	found := map[int]api.EntityIDAndName{}
+	for _, id := range ids {
+		known := false
+		for _, entity := range intelEntities {
+			if entity.ID == id {
+				found[id] = api.EntityIDAndName{ID: id, Name: entity.Name, Category: strings.TrimSuffix(strings.ReplaceAll(entity.Category, "corporations", "corporation"), "s")}
+				known = true
+			}
+		}
+		if !known {
+			return nil, fmt.Errorf("%w: %w", api.ErrRequestFailedToComplete, &api.StatusError{Host: "esi.evetech.net", Status: 404, Message: "Ensure all IDs are valid"})
+		}
+	}
+	return found, nil
+}
+
 func (m intelESIClient) GetNamesFromEveIDs(ids []int) (map[int]string, error) {
 	names := map[int]string{}
 	for _, entity := range intelEntities {
@@ -43,14 +62,14 @@ func (m intelESIClient) GetNamesFromEveIDs(ids []int) (map[int]string, error) {
 	return names, nil
 }
 
-// name is an entity's name if it is of the category, as the ESI only answers an alliance lookup for an alliance's id
+// name is an entity's name if it is of the category, else a 404 as the ESI answers, as it only answers an alliance lookup for an alliance's id
 func (m intelESIClient) name(id int, category string) (string, error) {
 	for _, entity := range intelEntities {
 		if entity.ID == id && entity.Category == category {
 			return entity.Name, nil
 		}
 	}
-	return "", api.ErrRequestFailedToComplete
+	return "", fmt.Errorf("%w: %w", api.ErrRequestFailedToComplete, &api.StatusError{Host: "esi.evetech.net", Status: 404, Message: "Not found"})
 }
 
 func (m intelESIClient) GetAllianceInfo(id int) (*api.ESIAlliance, error) {

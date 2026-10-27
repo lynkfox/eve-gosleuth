@@ -581,3 +581,44 @@ func TestDeletedCharacters(t *testing.T) {
 		assert.Equal(t, 2, raw.Calls("character"))
 	})
 }
+
+func TestCacheTypeConfusion(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+
+	t.Run("a corporation asked for as a pilot, ie from a wrong link or doctored import, is not converted, and the corporation is left whole", func(t *testing.T) {
+		raw := &RawESIClient{deleted: map[int]bool{98744491: true}} // the ESI has no pilot with a corporation's id
+		cache := retrieval.NewCache(raw, filepath.Join(t.TempDir(), "cache.db"))
+		corp, err := cache.GetCorporationInfo(98744491)
+		assert.NoError(t, err)
+		assert.Equal(t, "URSA PRIMUS", corp.Name)
+
+		pilot, err := cache.GetCharacterInfo(98744491)
+		assert.NoError(t, err)
+		assert.True(t, pilot.Deleted, "no such pilot, not the corporation passed off as one")
+
+		corp, err = cache.GetCorporationInfo(98744491)
+		assert.NoError(t, err)
+		assert.Equal(t, &api.ESICorporation{CorporationID: 98744491, Name: "URSA PRIMUS", AllianceID: 99013330}, corp)
+	})
+
+	t.Run("a target looked up by id as the wrong type is refused, even when another type's details are saved under that id", func(t *testing.T) {
+		raw := &RawESIClient{deleted: map[int]bool{98744491: true}}
+		path := filepath.Join(t.TempDir(), "cache.db")
+		cache := retrieval.NewCache(raw, path)
+		_, err := cache.GetCorporationInfo(98744491)
+		assert.NoError(t, err)
+		assert.NoError(t, retrieval.SaveCache(cache))
+		assert.NoError(t, cache.Close())
+		// a new session, where the corporation is only in the database, which reads it as whatever type is asked for
+		loaded, err := retrieval.LoadCache(raw, path)
+		assert.NoError(t, err)
+
+		target := retrieval.IntelTarget{Clients: retrieval.CollectionClientPool{ESIClient: loaded}}
+		target.GetTargetInfoByID(types.PILOT, 98744491)
+
+		assert.Error(t, target.Error)
+		corp, err := loaded.GetCorporationInfo(98744491)
+		assert.NoError(t, err)
+		assert.Equal(t, "URSA PRIMUS", corp.Name)
+	})
+}

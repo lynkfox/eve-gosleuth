@@ -58,6 +58,7 @@ const (
 	sectionIgnoredAllies        section = "ignored_ally"
 	sectionHoldings             section = "holding"
 	sectionZkillLists           section = "zkill_list"
+	sectionIntelChecks          section = "intel_check"
 )
 
 // compressed reports whether a section's values are gzipped. Killmails and zKillboard lists are most of the cache and shrink several times, the rest are small.

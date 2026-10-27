@@ -20,6 +20,9 @@ func (e *TargetError) Error() string {
 
 var ErrTooManyTargets = &TargetError{Message: "too many targets"}
 
+// ErrNoSuchTarget is a target looked up by id that does not exist as the type asked for, rather than one the ESI could not be asked about
+var ErrNoSuchTarget = &TargetError{Message: "no such target"}
+
 type IntelTarget struct {
 	IDNumber       int
 	Name           string
@@ -292,24 +295,8 @@ func (t *IntelTarget) fetchData() {
 	}
 
 	t.Data = data
-}
-
-/*
-	GetTargetInfoByID looks up the target by its eve id rather than its name, which the ESI can not find for every entity, ie L A Z E R H A W K S,
-	setting its Data, and Name as EVE spells it
-
-Parameters:
-  - entityType: what it is
-  - id: its eve id
-*/
-func (t *IntelTarget) GetTargetInfoByID(entityType types.EntityType, id int) {
-	t.TypeOfEntity, t.IDNumber = entityType, id
-	t.fetchData()
-	if t.Error != nil {
-		t.DisplayMessage = fmt.Sprintf("No %s found with id %d: %s", strings.ToLower(entityType.String()), id, api.FailureReason(t.Error))
-		return
-	}
-	switch data := t.Data.(type) {
+	// the name as EVE spells it
+	switch data := data.(type) {
 	case *api.ESIAlliance:
 		t.Name = data.Name
 	case *api.ESICorporation:
@@ -318,5 +305,48 @@ func (t *IntelTarget) GetTargetInfoByID(entityType types.EntityType, id int) {
 		t.Name = data.Name
 	case *api.ESICharacter:
 		t.Name = data.Name
+	}
+}
+
+// ownID is a pilot's, corporation's, alliance's, or system's details' own eve id, 0 for anything else
+func ownID(data any) int {
+	switch typed := data.(type) {
+	case *api.ESICharacter:
+		return typed.CharacterID
+	case *api.ESICorporation:
+		return typed.CorporationID
+	case *api.ESIAlliance:
+		return typed.AllianceID
+	case *api.ESISystem:
+		return typed.SystemID
+	}
+	return 0
+}
+
+/*
+	GetTargetInfoByID looks up the target by its eve id rather than its name, which the ESI can not find for every entity, ie L A Z E R H A W K S,
+	setting its Data, and Name as EVE spells it. One that does not exist as entityType, including a deleted pilot, sets an Error that is ErrNoSuchTarget.
+
+Parameters:
+  - entityType: what it is
+  - id: its eve id
+*/
+func (t *IntelTarget) GetTargetInfoByID(entityType types.EntityType, id int) {
+	t.TypeOfEntity, t.IDNumber = entityType, id
+	t.fetchData()
+	// a record of another id is not this one, ie a corporation's cached details read as a pilot's for a wrong link
+	if t.Error == nil && ownID(t.Data) != id {
+		t.Error = fmt.Errorf("%w: the details of %s %d are not its own", ErrNoSuchTarget, entityType, id)
+	}
+	// the ESI has no such pilot, which the cache keeps as deleted
+	if pilot, isPilot := t.Data.(*api.ESICharacter); t.Error == nil && isPilot && pilot.Deleted {
+		t.Error = fmt.Errorf("%w: pilot %d does not exist", ErrNoSuchTarget, id)
+	}
+	if api.IsNotFound(t.Error) {
+		t.Error = fmt.Errorf("%w: %w", ErrNoSuchTarget, t.Error)
+	}
+	if t.Error != nil {
+		t.DisplayMessage = fmt.Sprintf("No %s found with id %d: %s", strings.ToLower(entityType.String()), id, api.FailureReason(t.Error))
+		return
 	}
 }

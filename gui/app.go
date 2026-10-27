@@ -57,6 +57,10 @@ type App struct {
 	// the My Intel import last previewed, waiting for the user to agree to it, see PreviewMyIntelImport
 	importMu      sync.Mutex
 	pendingImport *importPlan
+
+	// checkMu lets one check of imported entities run at a time, see runIntelChecks, and closing stops one when the app closes
+	checkMu sync.Mutex
+	closing atomic.Bool
 }
 
 // sdeCheckInterval is the least time between checks for a new SDE release, which is what expires cached ESI data
@@ -291,6 +295,12 @@ func (a *App) startup(ctx context.Context) {
 
 	a.sde = api.NewSDEClient()
 	a.checkSDERelease()
+
+	// imported entities a check the app closed during did not finish
+	go func() {
+		defer comm.RecoverGoroutine("checking imported entities", nil)
+		a.runIntelChecks()
+	}()
 }
 
 // checkSDERelease drops cached ESI data from before a newer SDE release, at most once per sdeCheckInterval. If the check fails the cache is kept as is.
@@ -316,6 +326,11 @@ func (a *App) checkSDERelease() {
 func (a *App) shutdown(ctx context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	// a check of imported entities stops at its next call, the rest kept for the next start, and none starts
+	a.closing.Store(true)
+	a.checkMu.Lock()
+	defer a.checkMu.Unlock()
 
 	// debug mode lasts until the app closes, so no one forgets it is on
 	if a.GetSettings().DebugMode {
@@ -451,6 +466,8 @@ func (a *App) SearchTarget(name string, searchType string, id int) (result Targe
 	comm.Logger.Infof("Searching for %q as %q, id %d", name, searchType, id)
 
 	a.checkSDERelease()
+	// imported names are checked before a search uses them, a call or two, or nothing when there is none
+	a.runIntelChecks()
 
 	// a pasted zKillboard or EveWho link is searched by the id in it
 	if linkType, linkID, isLink := api.ParseEntityLink(name); isLink {

@@ -701,9 +701,9 @@ function renderMyIntel() {
 // myIntelShown are the cards the filter shows, which Check all ticks
 let myIntelShown = [];
 
-// pickedCards are the ticked cards, those added here first
+// pickedCards are the ticked cards the filter shows, those added here first. A ticked card the filter hides is left out, so Export and Delete never act on cards out of sight.
 function pickedCards() {
-  return [...myIntelAdded, ...myIntel].filter((group) => myIntelPicked.has(intelKey(group.entity)));
+  return myIntelShown.filter((group) => myIntelPicked.has(intelKey(group.entity)));
 }
 
 // showPickedCount names how many cards Export and Delete act on, and whether Check all ticks or unticks the cards shown
@@ -775,7 +775,7 @@ async function importMyIntel() {
 
   const skipped = el("myintel-import-skipped");
   skipped.hidden = preview.skipped === 0;
-  skipped.textContent = preview.skipped ? `${plural(preview.skipped, "entry was", "entries were")} left out, as they did not check out with the ESI: ${preview.skippedExamples.join("; ")}${preview.skipped > preview.skippedExamples.length ? "; …" : ""}` : "";
+  skipped.textContent = preview.skipped ? `${plural(preview.skipped, "entry was", "entries were")} left out, as they were not complete: ${preview.skippedExamples.join("; ")}${preview.skipped > preview.skippedExamples.length ? "; …" : ""}` : "";
   el("myintel-import-apply").hidden = changes === 0;
 
   const dialog = el("myintel-import");
@@ -865,7 +865,8 @@ function myIntelCard(group) {
     if (group.holdings.length === 0) body.append(myIntelNone("No holdings"));
     body.append(...group.holdings.map((holding) => myIntelRow(holding, {
       note: holding.note,
-      onNote: (note) => myIntelChange(() => backend().SaveHolding(entity.id, entity.type, entity.name, holding.name, holding.type, note), showError, `Saved the note on ${holding.name}`),
+      // by its link, so by id, as the ESI can not find every name
+      onNote: (note) => myIntelChange(() => backend().SaveHolding(entity.id, entity.type, entity.name, holding.zkillUrl, holding.type, note), showError, `Saved the note on ${holding.name}`),
       onRemove: () => myIntelChange(() => backend().RemoveHolding(entity.type, entity.id, holding.type, holding.id), showError, `Removed ${holding.name} as a holding of ${entity.name}`),
     })));
     body.append(add);
@@ -974,8 +975,9 @@ async function undoMyIntelRemove() {
   for (const group of groups) {
     const entity = group.entity;
     try {
-      for (const holding of group.holdings) await backend().SaveHolding(entity.id, entity.type, entity.name, holding.name, holding.type, holding.note);
-      for (const ally of group.ignoredAllies) await backend().AddIgnoredAlly(entity.type, entity.id, ally.name, ally.type);
+      // by their links, so by id, as the ESI can not find every name
+      for (const holding of group.holdings) await backend().SaveHolding(entity.id, entity.type, entity.name, holding.zkillUrl, holding.type, holding.note);
+      for (const ally of group.ignoredAllies) await backend().AddIgnoredAlly(entity.type, entity.id, ally.zkillUrl, ally.type);
     } catch (err) {
       failed.push(`${entity.name}: ${err}`);
     }
