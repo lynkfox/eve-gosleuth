@@ -369,7 +369,7 @@ func TestCacheCounts(t *testing.T) {
 		assert.Contains(t, messages, "Killmail details from the ESI 1/2 #1 (1 from the ESI)")
 		assert.Contains(t, messages, "Killmails read: 0 from zKillboard, 0 from cache, 2 from the ESI")
 		assert.Contains(t, messages, "Killmails read: 0 from zKillboard, 2 from cache, 0 from the ESI")
-		assert.Contains(t, messages, "Fetching killmail list from zKillboard (live, zKillboard is not cached)")
+		assert.Contains(t, messages, "Fetching killmail list from zKillboard (live, only as far as the cached list does not have it)")
 	})
 
 	t.Run("a killmail zKillboard sent whole is cached without asking the ESI", func(t *testing.T) {

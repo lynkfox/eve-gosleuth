@@ -38,10 +38,10 @@ type RecordingZkillClient struct {
 	requestedType types.EntityType
 }
 
-func (m *RecordingZkillClient) GetZkillResults(entityId int, entityType types.EntityType, paging api.ZkillPaging) (*[]api.ZkbResponse, error) {
+func (m *RecordingZkillClient) GetZkillResults(entityId int, entityType types.EntityType, paging api.ZkillPaging) (api.ZkillList, error) {
 	m.requestedID = entityId
 	m.requestedType = entityType
-	return &[]api.ZkbResponse{}, nil
+	return api.ZkillList{Ended: true}, nil
 }
 
 func TestGetTargetInfo(t *testing.T) {

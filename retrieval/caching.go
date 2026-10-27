@@ -81,6 +81,7 @@ type CachedEveIDs struct {
 	Searched             map[string]*CacheEntry // the search bar's recent searches, by recentSearchKey. Never expire, see AddRecentSearch.
 	IgnoredAllies        map[string]*CacheEntry // each target's allies left out of its Allies tab, by ignoredAlliesKey. Never expire, see SetIgnoredAllies.
 	Holdings             map[string]*CacheEntry // the user's holding links, by holdingKey. Never expire, see SaveHoldingLink.
+	ZkillLists           map[string]*CacheEntry // entities' zKillboard killmail lists, by zkillListKey. Never expire, see SaveKnownZkillList.
 	Client               api.ESIClient          // the uncached client that cache misses are fetched with
 	Path                 string                 // the database file
 	mu                   sync.Mutex
@@ -226,6 +227,9 @@ func (c *CachedEveIDs) ensureMaps() {
 	}
 	if c.Holdings == nil {
 		c.Holdings = make(map[string]*CacheEntry)
+	}
+	if c.ZkillLists == nil {
+		c.ZkillLists = make(map[string]*CacheEntry)
 	}
 	if c.dirty == nil {
 		c.dirty = make(map[rowKey]*CacheEntry)

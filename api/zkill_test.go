@@ -236,7 +236,7 @@ func TestGetZkillResults(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, 2, client.calls, "the short page 2 ends it, without asking for page 3")
-		assert.Len(t, *killmails, 219, "killmail 811 is on both pages")
+		assert.Len(t, killmails.Killmails, 219, "killmail 811 is on both pages")
 	})
 
 	t.Run("a short list is one request", func(t *testing.T) {
@@ -246,7 +246,7 @@ func TestGetZkillResults(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, 1, client.calls)
-		assert.Len(t, *killmails, 30)
+		assert.Len(t, killmails.Killmails, 30)
 	})
 
 	t.Run("the page after a short page 1 failing is the end of the list, not a partial pull", func(t *testing.T) {
@@ -255,7 +255,7 @@ func TestGetZkillResults(t *testing.T) {
 		killmails, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{MaxPages: 10})
 
 		assert.NoError(t, err)
-		assert.Len(t, *killmails, 190)
+		assert.Len(t, killmails.Killmails, 190)
 	})
 
 	t.Run("a page after a full one failing is a partial pull", func(t *testing.T) {
@@ -264,7 +264,7 @@ func TestGetZkillResults(t *testing.T) {
 		killmails, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{MaxPages: 10})
 
 		assert.ErrorIs(t, err, api.ErrOnlyPartialZkillPull)
-		assert.Len(t, *killmails, 200)
+		assert.Len(t, killmails.Killmails, 200)
 	})
 
 	fullPages := func() *pagesClient {
@@ -284,15 +284,54 @@ func TestGetZkillResults(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, 2, client.calls)
-		assert.Len(t, *killmails, 400)
+		assert.Len(t, killmails.Killmails, 400)
 	})
 
-	t.Run("pages at least MinPages, even past the killmails asked for", func(t *testing.T) {
+	t.Run("starts at StartPage", func(t *testing.T) {
 		client := fullPages()
-		_, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{Killmails: 20, MinPages: 3, MaxPages: 100})
+		client.calls = 2 // the client answers its pages in order, so this serves page 3 first
+		killmails, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{StartPage: 3, MaxPages: 3})
 
 		assert.NoError(t, err)
-		assert.Equal(t, 3, client.calls)
+		assert.Equal(t, 3, client.calls, "only page 3")
+		assert.Equal(t, 401, killmails.Killmails[0].KillmailID)
+		assert.False(t, killmails.Ended, "a full last page stopped by MaxPages is not the end")
+	})
+
+	t.Run("stops after the page listing a known killmail", func(t *testing.T) {
+		client := fullPages()
+		killmails, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{MaxPages: 10,
+			Known: func(killmailID int) bool { return killmailID == 250 }})
+
+		assert.NoError(t, err)
+		assert.Equal(t, 2, client.calls)
+		assert.Len(t, killmails.Killmails, 400)
+		assert.False(t, killmails.Ended)
+	})
+
+	t.Run("stops after the page reaching the date, and a list ending short has Ended", func(t *testing.T) {
+		now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+		timedPage := func(first, count, hoursBack int) string {
+			entries := []string{}
+			for index := range count {
+				at := now.Add(-time.Duration(hoursBack+index) * time.Hour).Format(time.RFC3339)
+				entries = append(entries, fmt.Sprintf(`{"killmail_id": %d, "killmail_time": %q}`, first-index, at))
+			}
+			return "[" + strings.Join(entries, ",") + "]"
+		}
+		pages := []string{timedPage(1000, 200, 0), timedPage(800, 200, 200), timedPage(600, 50, 400)}
+
+		dated := &pagesClient{pages: pages}
+		killmails, err := api.ZkillConnection{Client: dated}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{MaxPages: 10, NewerThan: now.Add(-300 * time.Hour)})
+		assert.NoError(t, err)
+		assert.Equal(t, 2, dated.calls, "page 2 reaches 300 hours back")
+		assert.False(t, killmails.Ended)
+
+		all := &pagesClient{pages: pages}
+		killmails, err = api.ZkillConnection{Client: all}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{MaxPages: 10})
+		assert.NoError(t, err)
+		assert.Len(t, killmails.Killmails, 450)
+		assert.True(t, killmails.Ended, "the short page 3 is the end of the list")
 	})
 
 	t.Run("progress says whose list a page is, when told", func(t *testing.T) {
@@ -312,7 +351,7 @@ func TestGetZkillResults(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, 2, client.calls)
-		assert.Len(t, *killmails, 400)
+		assert.Len(t, killmails.Killmails, 400)
 	})
 }
 

@@ -16,15 +16,23 @@ import (
 var ErrOnlyPartialZkillPull = errors.New("zkill pull failed to complete all pages")
 
 type ZkillClient interface {
-	GetZkillResults(entityId int, entityType types.EntityType, paging ZkillPaging) (*[]ZkbResponse, error)
+	GetZkillResults(entityId int, entityType types.EntityType, paging ZkillPaging) (ZkillList, error)
 }
 
 // ZkillPaging is how far GetZkillResults pages through a killmail list
 type ZkillPaging struct {
-	Killmails int    // stop once this many killmails are listed, 0 to page to MaxPages
-	MinPages  int    // page at least this far, even past Killmails
-	MaxPages  int    // never page past this, at most ZKILL_MAX_PAGES
-	For       string // whose list it is in progress messages, ie "holding URSA Holdings", empty to not say
+	Killmails int                       // stop once this many killmails are listed, 0 to page to MaxPages
+	MaxPages  int                       // never page past this, at most ZKILL_MAX_PAGES
+	StartPage int                       // the first page to pull, 0 for page 1, ie to carry on below a list already known
+	NewerThan time.Time                 // stop after a page that reaches a killmail this old or older, the zero time for no date limit
+	Known     func(killmailID int) bool // stop after a page listing a killmail this knows, ie one on a cached list, nil to not
+	For       string                    // whose list it is in progress messages, ie "holding URSA Holdings", empty to not say
+}
+
+// ZkillList is what GetZkillResults listed
+type ZkillList struct {
+	Killmails []ZkbResponse // newest first, each once
+	Ended     bool          // the list reached the end of zKillboard's, rather than stopping at a paging limit or failing
 }
 
 type ZkillConnection struct {
@@ -60,13 +68,13 @@ func NewZkillClient() *ZkillConnection {
 Parameters:
   - entityID:  the eve ID for the entity being checked on zkill (int)
   - typeOfEntity: the type, such as PILOT or ALLIANCE being checked (types.EntityType)
-  - paging: how many killmails, and how many pages, to list
+  - paging: where to start, and how many killmails, how many pages, how far back, or up to which known killmail, to list
 
 Returns:
-  - responses: a slice containing all there killmails across all pages (*[]ZkbResponse)
+  - ZkillList: the killmails listed across all pages, and whether that was the end of zKillboard's list
   - error: nill, ErrOnlyPartialZkillPull if it failed to reach the end of the killmail lists - the killmails retrieved will be returned as well
 */
-func (z ZkillConnection) GetZkillResults(entityId int, typeOfEntity types.EntityType, paging ZkillPaging) (*[]ZkbResponse, error) {
+func (z ZkillConnection) GetZkillResults(entityId int, typeOfEntity types.EntityType, paging ZkillPaging) (ZkillList, error) {
 	var DispatchMap = map[types.EntityType]string{
 		types.PILOT:       "characterID",
 		types.SYSTEM:      "systemID",
@@ -78,10 +86,11 @@ func (z ZkillConnection) GetZkillResults(entityId int, typeOfEntity types.Entity
 	allZkillmails := &[]ZkbResponse{}
 
 	maxPages := min(max(paging.MaxPages, 1), ZKILL_MAX_PAGES)
-	pageNumber := 1
+	pageNumber := max(paging.StartPage, 1)
 	previousShort := false
+	ended := false
 	for pageNumber <= maxPages {
-		if paging.Killmails > 0 && len(*allZkillmails) >= paging.Killmails && pageNumber > paging.MinPages {
+		if paging.Killmails > 0 && len(*allZkillmails) >= paging.Killmails {
 			break
 		}
 		listFor := ""
@@ -96,29 +105,66 @@ func (z ZkillConnection) GetZkillResults(entityId int, typeOfEntity types.Entity
 			// the page after a short one may be past the end of the list
 			if previousShort {
 				comm.Logger.WithError(err).Debugf("[Zkill] Page %d after a short page failed, taking it as the end of the list", pageNumber)
+				ended = true
 				break
 			}
-			return withoutDuplicates(allZkillmails), fmt.Errorf("%w at page %d: %w", ErrOnlyPartialZkillPull, pageNumber, err)
+			return ZkillList{Killmails: withoutDuplicates(*allZkillmails)}, fmt.Errorf("%w at page %d: %w", ErrOnlyPartialZkillPull, pageNumber, err)
 		}
-		previousShort = len(*allZkillmails)-listed < ZKILL_PAGE_SIZE
+		page := (*allZkillmails)[listed:]
+		previousShort = len(page) < ZKILL_PAGE_SIZE
+		if nextPage == zkillLastPage {
+			ended = true
+			break
+		}
+		if ReachesDate(page, paging.NewerThan) || listsKnown(page, paging.Known) {
+			break
+		}
 		pageNumber = nextPage
 	}
 
-	return withoutDuplicates(allZkillmails), nil
+	return ZkillList{Killmails: withoutDuplicates(*allZkillmails), Ended: ended}, nil
+}
+
+// zkillLastPage is what GetZkillPage returns as the next page when the page it pulled was the last
+const zkillLastPage = 9999
+
+// ReachesDate reports whether a list, newest first, has a killmail no newer than newerThan. The zero time never is reached.
+func ReachesDate(page []ZkbResponse, newerThan time.Time) bool {
+	if newerThan.IsZero() {
+		return false
+	}
+	for index := len(page) - 1; index >= 0; index-- {
+		if at := page[index].KillmailTime; !at.IsZero() {
+			return !at.After(newerThan)
+		}
+	}
+	return false
+}
+
+// listsKnown reports whether a page lists a killmail known reports, false without known
+func listsKnown(page []ZkbResponse, known func(int) bool) bool {
+	if known == nil {
+		return false
+	}
+	for _, km := range page {
+		if known(km.KillmailID) {
+			return true
+		}
+	}
+	return false
 }
 
 // withoutDuplicates keeps the first of each killmail id, in order
-func withoutDuplicates(killmails *[]ZkbResponse) *[]ZkbResponse {
-	seen := make(map[int]bool, len(*killmails))
-	unique := make([]ZkbResponse, 0, len(*killmails))
-	for _, km := range *killmails {
+func withoutDuplicates(killmails []ZkbResponse) []ZkbResponse {
+	seen := make(map[int]bool, len(killmails))
+	unique := make([]ZkbResponse, 0, len(killmails))
+	for _, km := range killmails {
 		if !seen[km.KillmailID] {
 			seen[km.KillmailID] = true
 			unique = append(unique, km)
 		}
 	}
-	return &unique
-
+	return unique
 }
 
 // zkillNearlyFullPage is how many killmails page 1 needs to go on to page 2, as it may be short by the newest killmails zKillboard holds back
@@ -146,7 +192,7 @@ func (z ZkillConnection) GetZkillPage(endpoint string, page int, allZkillmails *
 
 	thisPageKillmails := []ZkbResponse{}
 
-	var nextPage int = 9999
+	var nextPage int = zkillLastPage
 
 	url := fmt.Sprintf("%s/page/%d/", endpoint, page)
 	resp, err := z.Client.Request("GET", url, nil)
