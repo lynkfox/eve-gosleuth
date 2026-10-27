@@ -340,6 +340,7 @@ func MemberCorporations(alliance ESIAlliance, client ESIClient) []MemberCorp {
 	for index, corporationID := range members.CorporationIDs {
 		wait.Add(1)
 		go func() {
+			defer comm.RecoverGoroutine("looking up an alliance's member corporation", nil)
 			defer wait.Done()
 			slots <- struct{}{}
 			defer func() { <-slots }()
@@ -510,6 +511,7 @@ func StargateLinks(system ESISystem, client ESIClient) []SystemLink {
 	for index, stargateID := range system.Stargates {
 		wait.Add(1)
 		go func() {
+			defer comm.RecoverGoroutine("looking up a system's stargate", nil)
 			defer wait.Done()
 
 			stargate, err := client.GetStargateInfo(stargateID)

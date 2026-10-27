@@ -393,6 +393,7 @@ func fetchKillmails(client api.ESIClient, killmails []api.ZkbResponse, stop <-ch
 	}
 
 	go func() {
+		defer comm.RecoverGoroutine("starting killmail lookups", nil)
 		workers := make(chan struct{}, killmailWorkers)
 		for index, km := range killmails {
 			select {
@@ -402,6 +403,10 @@ func fetchKillmails(client api.ESIClient, killmails []api.ZkbResponse, stop <-ch
 			}
 			go func() {
 				defer func() { <-workers }()
+				// the search waits on each result, so a panic still sends one
+				defer comm.RecoverGoroutine("fetching a killmail", func(value any) {
+					results[index] <- fetchedKillmail{err: fmt.Errorf("%w: panicked: %v", api.ErrRequestFailedToComplete, value)}
+				})
 				killmail, err := client.GetKillmail(km)
 				results[index] <- fetchedKillmail{killmail: killmail, err: err}
 			}()

@@ -37,6 +37,13 @@ func TestSettings(t *testing.T) {
 		assert.Equal(t, Settings{Theme: "amarr", Preferences: Preferences{IncludeZkillLabels: true, MaxKillmails: 20, KillmailPages: 10, TimeZone: "eve", MaxRecentSearches: 5, IncludeHoldings: true, ShowCaveatWarning: true}}, loadSettings(path))
 	})
 
+	t.Run("debug mode is off again at each start, even if it was saved on", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "settings.json")
+		assert.NoError(t, os.WriteFile(path, []byte(`{"theme": "amarr", "debugMode": true}`), 0o600))
+
+		assert.False(t, loadSettings(path).DebugMode)
+	})
+
 	t.Run("a preference edited out of range in the file resets the preferences", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "settings.json")
 		assert.NoError(t, os.WriteFile(path, []byte(`{"theme": "amarr", "maxKillmails": 99999}`), 0o600))

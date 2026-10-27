@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- shown with the orange border while debug mode is on -->
+  <div id="debug-tag" class="debug-tag" hidden>Debug mode</div>
   <header class="topbar">
     <div class="brand">EVE <span>GoSleuth</span></div>
     <form id="search-form" class="search" autocomplete="off">
@@ -430,6 +432,17 @@
         <button id="cache-clear" class="danger" type="button">Clear cache…</button>
       </div>
       <p class="preference-help">The cache actions take effect straight away, without Save. Moving into a folder that already has a GoSleuth cache replaces it.</p>
+
+      <h3 class="preference-group">Debugging</h3>
+      <label class="preference">
+        <span class="preference-label" title="Logs everything each search does, zipped after it into the debug folder, to send when reporting a problem"><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Debug mode</span></span>
+        <span class="preference-check"><input id="pref-debug-mode" type="checkbox"></span>
+      </label>
+      <p class="preference-help">Each search's log is saved as a zip of readable text files, the newest 10 kept. It includes the targets searched and your preferences, but not your user name, recent searches, holdings, or ignored allies. Crashes are always logged. Debug mode turns itself off when the app closes.</p>
+      <div class="preference-field">
+        <span id="debug-latest" class="preference-help debug-latest"></span>
+        <button id="debug-open" class="secondary" type="button" disabled>Open debug folder</button>
+      </div>
       <p id="preferences-error" class="preferences-error" role="alert" hidden></p>
     </div>
     <div class="window-actions">
@@ -521,7 +534,7 @@
   </dialog>
 
   <footer id="ticker" class="ticker">
-    <ol id="ticker-history" class="ticker-history" hidden></ol>
+    <ol id="ticker-history" class="ticker-history" title="Click to close" hidden></ol>
     <div class="ticker-row">
       <!-- the running search's time, its space kept while hidden so the message never moves -->
       <span id="ticker-timer" class="ticker-timer idle" aria-hidden="true">0:00</span>

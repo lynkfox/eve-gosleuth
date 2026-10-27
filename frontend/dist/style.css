@@ -18,6 +18,7 @@
   --space-c4-5: #5b9ef0;
   --space-c6: #4a78e0;
   --radius: 6px;
+  --debug: #ff7a1a; /* the debug mode border, the same whatever the theme */
   color-scheme: dark;
 }
 
@@ -1334,6 +1335,9 @@ button.danger {
 .limits-menu .preferences-error { margin: 0; }
 .limits-actions { display: flex; justify-content: space-between; gap: 8px; }
 
+/* Preferences > Debugging: the newest debug log's name beside its button, wrapping rather than widening the window */
+.debug-latest { min-width: 0; overflow-wrap: anywhere; }
+
 .menu-themes {
   top: calc(100% + 6px);
   right: 0;
@@ -1385,6 +1389,32 @@ button.danger {
 /* Ticker: fixed status bar reporting backend progress events, click to expand recent history */
 
 body { padding-bottom: 40px; }
+
+/* debug mode: an orange border round the whole window, and its name at the top, so no one forgets it is on. Clicks pass through both. */
+body.debug-mode::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  border: 3px solid var(--debug);
+  pointer-events: none;
+}
+.debug-tag {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  z-index: 1000;
+  padding: 0 10px 2px;
+  background: var(--debug);
+  border-radius: 0 0 var(--radius) var(--radius);
+  color: #0b0e13;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
 
 .ticker {
   position: fixed;

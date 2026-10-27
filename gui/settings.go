@@ -43,6 +43,7 @@ type Preferences struct {
 	IncludeHoldings        bool   `json:"includeHoldings"`        // a corp or alliance search also collects its holdings' killmails, counted as its own. On by default.
 	CollapseTarget         bool   `json:"collapseTarget"`         // pull the target panel shut at each search, leaving more room for the report. Off by default.
 	ShowCaveatWarning      bool   `json:"showCaveatWarning"`      // warn as the app launches that killmails only show the losses. On by default.
+	DebugMode              bool   `json:"debugMode"`              // log everything, and zip each search's log into the debug folder to send with a problem report. Off by default, and off again at each start, so it is never left on.
 }
 
 // maxTabs is the most tab ids SetTabOrder keeps, well above the number of tabs, so a bad value from the frontend stays small
@@ -138,6 +139,8 @@ func loadSettings(path string) Settings {
 		settings.Preferences = defaultSettings().Preferences
 	}
 	settings.TabOrder = validTabOrder(settings.TabOrder)
+	// debug mode lasts until the app closes, even one that crashed before it could turn it off
+	settings.DebugMode = false
 
 	return settings
 }
@@ -221,6 +224,7 @@ func (a *App) SavePreferences(preferences Preferences) error {
 		return err
 	}
 	saveErr := a.updateSettings(func(settings *Settings) { settings.Preferences = preferences })
+	a.applyLogLevel()
 	if a.cache != nil {
 		a.cache.TrimRecentSearches(preferences.MaxRecentSearches)
 	}

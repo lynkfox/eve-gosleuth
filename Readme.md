@@ -48,7 +48,6 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
  * User data explorer - see all Main-Holding connections, all ignored allies of a main, and edit or add new ones.
   * have it be exportable to give to other users
  * Report data to be saved as a PDF for distribution.
- * Debug mode that outputs debugging logs to a file that can be sent to me for analysis
  * About tab, with isk donation instructions, maybe kofi?
 
 * Release

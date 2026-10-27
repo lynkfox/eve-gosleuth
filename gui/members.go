@@ -193,6 +193,7 @@ func (r *roster) loadCorps(client api.ESIClient, now time.Time) {
 	for index, corporationID := range members.CorporationIDs {
 		wait.Add(1)
 		go func() {
+			defer comm.RecoverGoroutine("looking up a member corporation", nil)
 			defer wait.Done()
 			slots <- struct{}{}
 			defer func() { <-slots }()
@@ -294,6 +295,7 @@ func fillMemberDetails(rows []MemberRow, targetID int, targetType types.EntityTy
 	for index := range rows {
 		wait.Add(1)
 		go func() {
+			defer comm.RecoverGoroutine("looking up a member", nil)
 			defer wait.Done()
 			slots <- struct{}{}
 			defer func() { <-slots }()

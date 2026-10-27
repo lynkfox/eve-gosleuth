@@ -50,6 +50,9 @@ type App struct {
 
 	// the last pilot, corp, or alliance search, so SaveIgnoredAllies can rank its allies again. Guarded by mu.
 	lastAllies *alliesSource
+
+	// writes each search's log to a file in debug mode, then zips it to send with a problem report. It has its own lock.
+	debug *debugRecorder
 }
 
 // sdeCheckInterval is the least time between checks for a new SDE release, which is what expires cached ESI data
@@ -264,6 +267,7 @@ func (a *App) startup(ctx context.Context) {
 
 	a.settingsPath = settingsPath()
 	a.settings = loadSettings(a.settingsPath)
+	a.setupDebug()
 
 	esi := api.NewESIClient()
 	a.esiGuard = esi.Guard()
@@ -307,6 +311,13 @@ func (a *App) checkSDERelease() {
 func (a *App) shutdown(ctx context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	// debug mode lasts until the app closes, so no one forgets it is on
+	if a.GetSettings().DebugMode {
+		if err := a.updateSettings(func(settings *Settings) { settings.DebugMode = false }); err != nil {
+			comm.Logger.WithError(err).Warn("Could not turn debug mode off")
+		}
+	}
 
 	if err := a.cache.Close(); err != nil {
 		comm.Logger.WithError(err).Error("Failed to save and close the cache")
@@ -400,6 +411,7 @@ Returns:
 func (a *App) SearchTarget(name string, searchType string) (result TargetResult, err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.finishDebugOnError(&err)
 	defer recoverAsError(&err)
 
 	// a new search starts unstopped, and the ESI is let through again once this part of it is done even if it was stopped
@@ -411,6 +423,8 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 	if name == "" {
 		return result, errors.New("Enter a name to search for")
 	}
+	a.startDebug(name)
+	comm.Logger.Infof("Searching for %q as %q", name, searchType)
 
 	a.checkSDERelease()
 
@@ -481,6 +495,9 @@ func (a *App) SearchTarget(name string, searchType string) (result TargetResult,
 		Display:         display,
 		SearchedHolding: searchedHolding,
 	}
+	a.noteDebugSearch(func(search *debugSearch) {
+		search.TargetID, search.TargetType, search.TargetName, search.Holding = result.ID, result.Type, foundName, searchedHolding
+	})
 	if canHold(result.Type) {
 		holdings := a.holdingsFor(result.Type, result.ID)
 		result.Holdings = &holdings
@@ -502,6 +519,15 @@ Returns:
 func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport, err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	// the search ends here, its debug log bundled after recoverAsError has turned any panic into err
+	defer func() {
+		a.finishDebug(func(search *debugSearch) {
+			search.Killmails, search.Stopped, search.RateLimited = len(report.Killmails), report.Stopped, report.RateLimited
+			if err != nil {
+				search.Error = err.Error()
+			}
+		})
+	}()
 	defer recoverAsError(&err)
 
 	// stopped between finding the target and collecting its intel
@@ -538,6 +564,11 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 	if settings.IncludeHoldings {
 		target.Holdings = a.targetHoldings(&target)
 	}
+	a.noteDebugSearch(func(search *debugSearch) {
+		for _, holding := range target.Holdings {
+			search.Holdings = append(search.Holdings, holding.Name)
+		}
+	})
 	limits := settings.KillmailLimits(time.Now().UTC())
 	limits.ConfirmIgnoreDate = a.confirmIgnoreDate(limits.NewerThan)
 	killmails, collectErr := retrieval.CollectKillmails(target, limits)
@@ -860,7 +891,7 @@ func buildFleetmates(top []aggregate.PilotSeen) []Fleetmate {
 // recoverAsError turns a panic in a bound method into an error for the frontend, rather than crashing the app
 func recoverAsError(err *error) {
 	if r := recover(); r != nil {
-		comm.Logger.Errorf("Recovered from panic: %v", r)
+		comm.RecordPanic("a frontend call", r)
 		comm.ReportProgress("Stopped, something went wrong: %v", r)
 		*err = fmt.Errorf("Something went wrong: %v", r)
 	}

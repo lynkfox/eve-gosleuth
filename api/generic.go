@@ -109,6 +109,24 @@ func (c APIConnection) UpdateHeaders(newHeaders map[string]string) {
 	maps.Copy(c.Headers, newHeaders)
 }
 
+// rateLimitHeaders are the response headers that say how close the app is to a server's rate limits, kept in the debug log
+var rateLimitHeaders = []string{"X-Esi-Error-Limit-Remain", "X-Esi-Error-Limit-Reset", "X-Ratelimit-Group", "X-Ratelimit-Limit", "X-Ratelimit-Remaining", "X-Ratelimit-Used", "Retry-After"}
+
+// responseFields are a response's log fields for the debug log: the method, its status, how long it took, and any rate limit headers. resp may be nil.
+func responseFields(method string, resp *http.Response, sent time.Time) logrus.Fields {
+	fields := logrus.Fields{"method": method, "ms": time.Since(sent).Milliseconds()}
+	if resp == nil {
+		return fields
+	}
+	fields["status"] = resp.StatusCode
+	for _, header := range rateLimitHeaders {
+		if value := resp.Header.Get(header); value != "" {
+			fields[header] = value
+		}
+	}
+	return fields
+}
+
 // Request performs an HTTP request with retries and backoff
 func (c APIConnection) Request(method, endpoint string, body interface{}) (*http.Response, error) {
 	// Build the full URL
@@ -161,6 +179,7 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 		}
 
 		// Send the request
+		sent := time.Now()
 		if c.Guard != nil {
 			release, refused := c.Guard.wait(route)
 			if refused != nil {
@@ -175,7 +194,7 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 			resp, err = c.HTTPClient.Do(req)
 		}
 		if err == nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			comm.Logger.WithFields(defaultFields.AddTemporaryDebugOnlyFields(logrus.Fields{"status": resp.StatusCode})).Debug("Request succeeded")
+			comm.Logger.WithFields(defaultFields.AddTemporaryDebugOnlyFields(responseFields(method, resp, sent))).Debug("Request succeeded")
 
 			return resp, nil
 		}
@@ -209,8 +228,9 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 				status = resp.StatusCode
 			}
 
-			comm.Logger.WithFields(defaultFields.AddTemporaryDebugOnlyFields(logrus.Fields{"body": body, "status": status,
-				"nextBackoff": backoffDuration})).WithError(err).Warn("Request failed, retrying")
+			failed := logrus.Fields{"body": body, "status": status, "nextBackoff": backoffDuration}
+			maps.Copy(failed, responseFields(method, resp, sent))
+			comm.Logger.WithFields(defaultFields.AddTemporaryDebugOnlyFields(failed)).WithError(err).Warn("Request failed, retrying")
 			// after a 420 the guard waits as long as the server asked, instead
 			if c.Guard == nil || status != 420 {
 				time.Sleep(backoffDuration)

@@ -1,6 +1,18 @@
 // Bound Go methods are injected by the Wails runtime as window.go.<package>.<struct>.<method>, each returning a Promise
 const backend = () => window.go.gui.App;
 
+// reportFrontendError sends a JavaScript error to the backend's log, and so to the debug log, as it is otherwise invisible. First, so it catches errors as the rest of this file loads.
+function reportFrontendError(message, error) {
+  const stack = error && error.stack ? `\n${error.stack}` : "";
+  try {
+    backend().LogFrontendError(`${message}${stack}`).catch(() => {});
+  } catch {
+    // the backend is not there yet, as in a test page
+  }
+}
+window.addEventListener("error", (event) => reportFrontendError(`${event.message} at ${event.filename}:${event.lineno}:${event.colno}`, event.error));
+window.addEventListener("unhandledrejection", (event) => reportFrontendError(`Unhandled rejection: ${event.reason}`, event.reason));
+
 const el = (id) => document.getElementById(id);
 
 const TICKER_HISTORY_LIMIT = 50;
@@ -3295,7 +3307,7 @@ const ALL_KILLMAILS = -1;
 const MAX_RECENT_SEARCHES = 25;
 
 // preferences are the saved Preferences window choices, as the backend's Preferences
-let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailPages: 10, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5, hideKilledAllies: false, includeHoldings: true, collapseTarget: false, showCaveatWarning: true };
+let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailPages: 10, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5, hideKilledAllies: false, includeHoldings: true, collapseTarget: false, showCaveatWarning: true, debugMode: false };
 
 // applySettings sets the saved theme and preferences on the app
 function applySettings(settings) {
@@ -3313,10 +3325,18 @@ function applySettings(settings) {
     includeHoldings: settings.includeHoldings !== false,
     collapseTarget: Boolean(settings.collapseTarget),
     showCaveatWarning: settings.showCaveatWarning !== false,
+    debugMode: Boolean(settings.debugMode),
   };
   showKillmailLabels = preferences.includeZkillLabels;
   showSearchLimits();
+  showDebugMode();
   redrawIntel();
+}
+
+// showDebugMode puts the orange border and its name round the window while debug mode is on
+function showDebugMode() {
+  document.body.classList.toggle("debug-mode", preferences.debugMode);
+  el("debug-tag").hidden = !preferences.debugMode;
 }
 
 // redrawIntel draws the shown report again after a preference that changes how it looks
@@ -3338,6 +3358,7 @@ function fillPreferencesForm(chosen) {
   el("pref-include-holdings").checked = chosen.includeHoldings;
   el("pref-collapse-target").checked = chosen.collapseTarget;
   el("pref-caveat-warning").checked = chosen.showCaveatWarning;
+  el("pref-debug-mode").checked = chosen.debugMode;
 }
 
 // showKillmailPagesUsed enables the pages box only while the max killmail count is -1, the only time it is used
@@ -3359,6 +3380,7 @@ function preferencesForm() {
     includeHoldings: el("pref-include-holdings").checked,
     collapseTarget: el("pref-collapse-target").checked,
     showCaveatWarning: el("pref-caveat-warning").checked,
+    debugMode: el("pref-debug-mode").checked,
   };
 }
 
@@ -3379,6 +3401,14 @@ function openPreferences() {
   showTabOrderReset();
   el("preferences").showModal();
   backend().GetCacheInfo().then(showCacheInfo).catch(() => {});
+  backend().GetDebugInfo().then(showDebugInfo).catch(() => {});
+}
+
+// showDebugInfo enables Open debug folder once there is a debug log to send, naming the newest
+function showDebugInfo(info) {
+  const button = el("debug-open");
+  button.disabled = !info.latest;
+  el("debug-latest").textContent = info.latest ? `Newest: ${info.latest}` : "No debug logs yet. Turn on Debug mode, save, and search.";
 }
 
 // formatBytes shortens a file size, ie 7208766 to 6.9 MB
@@ -3481,6 +3511,7 @@ async function savePreferences() {
   const alliesChanged = chosen.hideKilledAllies !== preferences.hideKilledAllies;
   preferences = chosen;
   showSearchLimits(); // new defaults, which the button shows unless it has limits of its own
+  showDebugMode();
   showKillmailLabels = chosen.includeZkillLabels;
   redrawIntel();
   // a changed preference applies again, hiding the allies the target killed if it is on
@@ -3491,6 +3522,7 @@ async function savePreferences() {
 
 el("themes-button").addEventListener("click", () => setMenuOpen(el("themes-button"), el("themes-menu"), el("themes-menu").hidden));
 el("limits-button").addEventListener("click", toggleLimitsMenu);
+el("debug-open").addEventListener("click", () => backend().OpenDebugFolder().catch((err) => tickerPush(`Error: ${err}`)));
 el("limits-menu").addEventListener("input", changeSearchLimits);
 el("limits-menu").addEventListener("change", changeSearchLimits);
 // Enter closes the popup rather than starting a search
@@ -3519,6 +3551,8 @@ document.addEventListener("keydown", (event) => {
 
 renderThemeList();
 applyTheme("");
+// the WebView's user agent names its version, for debug logs
+backend().SetFrontendInfo(navigator.userAgent).catch(() => {});
 backend().GetSettings().then((settings) => {
   applySettings(settings);
   showCaveatWarning();
@@ -3564,6 +3598,7 @@ el("recent-toggle").addEventListener("click", () => {
   el("search-input").focus();
 });
 el("ticker-bar").addEventListener("click", toggleTickerHistory);
+el("ticker-history").addEventListener("click", () => (el("ticker-history").hidden = true));
 el("caveat-understood").addEventListener("click", () => el("caveat-warning").close());
 el("caveat-warning-close").addEventListener("click", () => el("caveat-warning").close());
 el("caveat-warning").addEventListener("close", () => {
