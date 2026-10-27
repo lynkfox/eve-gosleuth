@@ -26,15 +26,15 @@ func TestSettings(t *testing.T) {
 		assert.Equal(t, defaultSettings(), loadSettings(corrupt))
 	})
 
-	t.Run("the defaults collect 20 killmails of any age, or 10 pages for all, with holdings, without labels or extra cached killmails, in EVE time, keeping 5 recent searches", func(t *testing.T) {
-		assert.Equal(t, Preferences{MaxKillmails: 20, KillmailPages: 10, TimeZone: "eve", MaxRecentSearches: 5, IncludeHoldings: true}, defaultSettings().Preferences)
+	t.Run("the defaults collect 20 killmails of any age, or 10 pages for all, with holdings, without labels or extra cached killmails, in EVE time, keeping 5 recent searches, with the caveat warning", func(t *testing.T) {
+		assert.Equal(t, Preferences{MaxKillmails: 20, KillmailPages: 10, TimeZone: "eve", MaxRecentSearches: 5, IncludeHoldings: true, ShowCaveatWarning: true}, defaultSettings().Preferences)
 	})
 
 	t.Run("settings saved before the killmail preferences existed keep their choices and get the default limits", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "settings.json")
 		assert.NoError(t, os.WriteFile(path, []byte(`{"theme": "amarr", "includeZkillLabels": true}`), 0o600))
 
-		assert.Equal(t, Settings{Theme: "amarr", Preferences: Preferences{IncludeZkillLabels: true, MaxKillmails: 20, KillmailPages: 10, TimeZone: "eve", MaxRecentSearches: 5, IncludeHoldings: true}}, loadSettings(path))
+		assert.Equal(t, Settings{Theme: "amarr", Preferences: Preferences{IncludeZkillLabels: true, MaxKillmails: 20, KillmailPages: 10, TimeZone: "eve", MaxRecentSearches: 5, IncludeHoldings: true, ShowCaveatWarning: true}}, loadSettings(path))
 	})
 
 	t.Run("a preference edited out of range in the file resets the preferences", func(t *testing.T) {
@@ -81,6 +81,20 @@ func TestSettings(t *testing.T) {
 
 		assert.Equal(t, Settings{Theme: "amarr", Preferences: chosen}, loadSettings(path))
 		assert.Equal(t, chosen, app.GetSettings().Preferences)
+	})
+
+	t.Run("dismissing the caveat warning turns it off and keeps the other preferences", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "settings.json")
+		app := &App{settingsPath: path, settings: defaultSettings()}
+		assert.NoError(t, app.SetTheme("amarr"))
+
+		assert.NoError(t, app.DismissCaveatWarning())
+
+		want := defaultSettings()
+		want.Theme = "amarr"
+		want.ShowCaveatWarning = false
+		assert.Equal(t, want, app.GetSettings())
+		assert.Equal(t, want, loadSettings(path))
 	})
 
 	t.Run("preferences out of range are refused and change nothing", func(t *testing.T) {

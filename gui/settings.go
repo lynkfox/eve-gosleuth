@@ -42,6 +42,7 @@ type Preferences struct {
 	HideKilledAllies       bool   `json:"hideKilledAllies"`       // leave out of every Allies tab the allies the target also killed. Off by default.
 	IncludeHoldings        bool   `json:"includeHoldings"`        // a corp or alliance search also collects its holdings' killmails, counted as its own. On by default.
 	CollapseTarget         bool   `json:"collapseTarget"`         // pull the target panel shut at each search, leaving more room for the report. Off by default.
+	ShowCaveatWarning      bool   `json:"showCaveatWarning"`      // warn as the app launches that killmails only show the losses. On by default.
 }
 
 // maxTabs is the most tab ids SetTabOrder keeps, well above the number of tabs, so a bad value from the frontend stays small
@@ -72,7 +73,7 @@ var killmailAgeChoices = []int{0, 7, 30, 90}
 
 // defaultSettings are the settings before the user changes anything
 func defaultSettings() Settings {
-	return Settings{Preferences: Preferences{MaxKillmails: retrieval.DefaultKillmailLimit, KillmailPages: retrieval.DefaultKillmailPages, TimeZone: "eve", MaxRecentSearches: retrieval.DefaultRecentSearches, IncludeHoldings: true}}
+	return Settings{Preferences: Preferences{MaxKillmails: retrieval.DefaultKillmailLimit, KillmailPages: retrieval.DefaultKillmailPages, TimeZone: "eve", MaxRecentSearches: retrieval.DefaultRecentSearches, IncludeHoldings: true, ShowCaveatWarning: true}}
 }
 
 // validate returns a user readable error for a preference out of range
@@ -225,6 +226,19 @@ func (a *App) SavePreferences(preferences Preferences) error {
 	}
 	if saveErr != nil {
 		return errors.New("Could not save the preferences, they will reset when the app restarts")
+	}
+	return nil
+}
+
+/*
+	DismissCaveatWarning turns off the warning shown as the app launches, from its Don't show this again box, leaving the other preferences as they are.
+
+Returns:
+  - error: a user readable message if it could not be saved, in which case it is still off for this session
+*/
+func (a *App) DismissCaveatWarning() error {
+	if err := a.updateSettings(func(settings *Settings) { settings.ShowCaveatWarning = false }); err != nil {
+		return errors.New("Could not save that choice, the warning will show again when the app restarts")
 	}
 	return nil
 }

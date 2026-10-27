@@ -2820,6 +2820,19 @@ function recentKeydown(event) {
   }
 }
 
+// showCaveatWarning opens the caveat warning as the app launches, while its preference is on
+function showCaveatWarning() {
+  if (!preferences.showCaveatWarning) return;
+  el("caveat-dont-show").checked = false;
+  el("caveat-warning").showModal();
+}
+
+// dismissCaveatWarning turns the caveat warning off from its Don't show this again box
+function dismissCaveatWarning() {
+  preferences.showCaveatWarning = false;
+  backend().DismissCaveatWarning().catch((err) => tickerPush(String(err)));
+}
+
 // search looks up the target, then immediately pulls its killmails, since every intel section is built from them
 async function search(event) {
   event.preventDefault();
@@ -2903,7 +2916,7 @@ function formatDuration(milliseconds) {
 }
 
 /*
-  THEMES are the Theme menu presets, after EVE's UI themes plus Triglavian. Each is its two theme colors and its accent, the button color, as shown in the menu.
+  THEMES are the Theme menu presets, after EVE's UI themes plus Triglavian and Vaporwave. Each is its two theme colors and its accent, the button color, as shown in the menu.
   The default ("") keeps the colors in style.css, the others derive their dark backgrounds from the first color. All are dark.
   Colors with a meaning (kill, loss, security, wormhole class) are not themed.
 */
@@ -2918,6 +2931,7 @@ const THEMES = [
   { key: "photon", name: "Photon", swatches: ["#4aa3b8", "#5cabc0", "#f0884a"] },
   { key: "sisters", name: "Sisters of EVE", swatches: ["#e04a4a", "#9fe3e3", "#e8eaee"] },
   { key: "triglavian", name: "Triglavian", swatches: ["#8c1d24", "#d6403a", "#e0453c"] },
+  { key: "vaporwave", name: "Vaporwave", swatches: ["#b967ff", "#01cdfe", "#ff71ce"] },
 ];
 
 // THEMED_PROPERTIES are the css variables a theme sets, cleared again for the default theme
@@ -3040,7 +3054,7 @@ const ALL_KILLMAILS = -1;
 const MAX_RECENT_SEARCHES = 25;
 
 // preferences are the saved Preferences window choices, as the backend's Preferences
-let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailPages: 10, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5, hideKilledAllies: false, includeHoldings: true, collapseTarget: false };
+let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailPages: 10, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5, hideKilledAllies: false, includeHoldings: true, collapseTarget: false, showCaveatWarning: true };
 
 // applySettings sets the saved theme and preferences on the app
 function applySettings(settings) {
@@ -3057,6 +3071,7 @@ function applySettings(settings) {
     hideKilledAllies: Boolean(settings.hideKilledAllies),
     includeHoldings: settings.includeHoldings !== false,
     collapseTarget: Boolean(settings.collapseTarget),
+    showCaveatWarning: settings.showCaveatWarning !== false,
   };
   showKillmailLabels = preferences.includeZkillLabels;
   redrawIntel();
@@ -3080,6 +3095,7 @@ function fillPreferencesForm(chosen) {
   el("pref-hide-killed-allies").checked = chosen.hideKilledAllies;
   el("pref-include-holdings").checked = chosen.includeHoldings;
   el("pref-collapse-target").checked = chosen.collapseTarget;
+  el("pref-caveat-warning").checked = chosen.showCaveatWarning;
 }
 
 // showKillmailPagesUsed enables the pages box only while the max killmail count is -1, the only time it is used
@@ -3100,6 +3116,7 @@ function preferencesForm() {
     hideKilledAllies: el("pref-hide-killed-allies").checked,
     includeHoldings: el("pref-include-holdings").checked,
     collapseTarget: el("pref-collapse-target").checked,
+    showCaveatWarning: el("pref-caveat-warning").checked,
   };
 }
 
@@ -3239,7 +3256,10 @@ document.addEventListener("keydown", (event) => {
 
 renderThemeList();
 applyTheme("");
-backend().GetSettings().then(applySettings).catch(() => applyTheme(""));
+backend().GetSettings().then((settings) => {
+  applySettings(settings);
+  showCaveatWarning();
+}).catch(() => applyTheme(""));
 loadRecentSearches();
 el("preferences-button").addEventListener("click", openPreferences);
 el("preferences-close").addEventListener("click", closePreferences);
@@ -3278,6 +3298,11 @@ el("recent-toggle").addEventListener("click", () => {
   el("search-input").focus();
 });
 el("ticker-bar").addEventListener("click", toggleTickerHistory);
+el("caveat-understood").addEventListener("click", () => el("caveat-warning").close());
+el("caveat-warning-close").addEventListener("click", () => el("caveat-warning").close());
+el("caveat-warning").addEventListener("close", () => {
+  if (el("caveat-dont-show").checked) dismissCaveatWarning();
+});
 el("search-confirm").addEventListener("close", () => {
   if (el("search-confirm").returnValue === "yes") {
     el("search-form").requestSubmit();

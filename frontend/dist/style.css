@@ -1216,6 +1216,18 @@ button.danger {
 .clear-user-data input { flex: none; margin-top: 4px; padding: 0; accent-color: var(--error); }
 .clear-user-data > span { display: flex; flex-direction: column; gap: 2px; }
 
+/* The caveat warning as the app launches: a reading width, the Don't show again box left of Understood */
+#caveat-warning { width: min(480px, calc(100vw - 32px)); }
+.caveat-body { gap: 10px; font-size: 13px; line-height: 1.5; }
+.caveat-body p,
+.caveat-body ul { margin: 0; }
+.caveat-body ul { display: grid; gap: 6px; padding-left: 20px; }
+.caveat-body .caveat-lead { color: var(--highlight); font-size: 15px; font-weight: 600; }
+.caveat-actions { justify-content: space-between; align-items: center; }
+.caveat-dismiss { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.caveat-dismiss input { flex: none; margin-top: 4px; padding: 0; accent-color: var(--accent); }
+.caveat-dismiss > span { display: flex; flex-direction: column; gap: 2px; }
+
 /* Holding links: the add or edit popup */
 .holding-dialog { width: min(400px, calc(100vw - 32px)); }
 .holding-dialog form { display: grid; gap: 12px; }

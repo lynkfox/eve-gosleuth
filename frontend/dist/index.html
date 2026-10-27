@@ -263,6 +263,32 @@
     </form>
   </dialog>
 
+  <!-- shown as the app launches while Preferences > Warn about what killmails miss is on -->
+  <dialog id="caveat-warning" class="window caveat-warning" aria-labelledby="caveat-warning-title">
+    <div class="window-titlebar">
+      <h2 id="caveat-warning-title">Before you read the tea leaves</h2>
+      <button id="caveat-warning-close" class="window-close" type="button" aria-label="Close" title="Close">×</button>
+    </div>
+    <div class="window-body caveat-body">
+      <p class="caveat-lead">Killmails only tell half the story.</p>
+      <p>Every number GoSleuth shows comes from killmails, and a killmail is only written when something dies. Nothing is recorded for the ships that warped off, the fights that ended with no losses, or the half of a battle on the other side of a gate or wormhole.</p>
+      <p>That's survivorship bias turned inside out: you see only the losses, never the ones who got away. Some things never appear on a killmail at all:</p>
+      <ul>
+        <li><strong>Objectives.</strong> A fight that cost 3B ISK to save a 20B Keepstar looks like a loss.</li>
+        <li><strong>Logistics.</strong> Logi pilots who kept everyone alive aren't listed, despite our requests.</li>
+        <li><strong>Fights with no deaths.</strong> If nothing died, it never happened as far as the data knows.</li>
+      </ul>
+      <p>GoSleuth gathers what the killmails show and lays it out clearly. <strong>Interpreting it is up to you.</strong> Treat what you see as clues, not conclusions.</p>
+    </div>
+    <div class="window-actions caveat-actions">
+      <label class="caveat-dismiss">
+        <input id="caveat-dont-show" type="checkbox">
+        <span><span class="preference-name">Don't show this again</span><span class="preference-help">You can turn it back on in Preferences</span></span>
+      </label>
+      <button id="caveat-understood" type="button" autofocus>Understood</button>
+    </div>
+  </dialog>
+
   <!-- the selected tab's help, popped out of its ? button: it stays open, can be dragged by its title bar, and follows the tab -->
   <dialog id="help-window" class="window help-window" aria-labelledby="help-window-title">
     <div id="help-window-titlebar" class="window-titlebar help-window-titlebar">
@@ -338,6 +364,10 @@
       <label class="preference">
         <span class="preference-label" title="Pull the target panel shut at each search, leaving more room for the report. The pull bar still opens it."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Collapse target on search</span></span>
         <span class="preference-check"><input id="pref-collapse-target" type="checkbox"></span>
+      </label>
+      <label class="preference">
+        <span class="preference-label" title="Each time the app opens, a reminder that killmails only show the losses, never the ships that got away"><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Warn about what killmails miss</span></span>
+        <span class="preference-check"><input id="pref-caveat-warning" type="checkbox"></span>
       </label>
       <div class="preference-field">
         <span class="preference-label" title="Drag a tab, or press Alt + ← / → on one, to move it. Resetting takes effect straight away, without Save."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Tab order</span></span>
