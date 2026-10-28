@@ -4971,7 +4971,7 @@ el("recent-toggle").addEventListener("click", () => {
 });
 el("ticker-bar").addEventListener("click", toggleTickerHistory);
 el("ticker-history").addEventListener("click", () => (el("ticker-history").hidden = true));
-// About opens at What it is, the other sections shut, its Caveats a copy of the caveat warning's text
+// About opens at What it is, the other sections shut, its Killmail Bias a copy of the caveat warning's text
 function openAbout() {
   for (const section of el("about").querySelectorAll(".about-section")) section.open = section.id === "about-what";
   el("about-body").scrollTop = 0;
@@ -4981,19 +4981,32 @@ el("about-caveats").replaceChildren(...[...document.querySelector("#caveat-warni
 backend().Version().then((version) => {
   el("about-version").textContent = version ? `Version ${version}` : "";
   el("brand-version").textContent = version ? `Version ${version}` : "";
-}).catch(() => {});
+}).catch((error) => reportFrontendError(`Could not read the version: ${error}`, error));
 el("brand").addEventListener("click", openAbout);
 // GoSleuth's GitHub issues, opened by About's Report a bug once its reminder about debug logs is past
 const BUG_REPORT_URL = "https://github.com/lynkfox/eve-gosleuth/issues";
-el("about-report-bug").addEventListener("click", () => el("bug-report-confirm").showModal());
+el("about-report-bug").addEventListener("click", () => {
+  const dialog = el("bug-report-confirm");
+  dialog.returnValue = "";
+  dialog.showModal();
+});
 el("bug-report-confirm").addEventListener("close", () => {
   if (el("bug-report-confirm").returnValue === "continue") window.runtime.BrowserOpenURL(BUG_REPORT_URL);
 });
 el("about-close").addEventListener("click", () => el("about").close());
-for (const link of el("about").querySelectorAll("[data-url]")) link.addEventListener("click", () => window.runtime.BrowserOpenURL(link.dataset.url));
-el("about-copy-name").addEventListener("click", () => window.runtime.ClipboardSetText("Luxxianna Seraph")
-  .then((copied) => tickerPush(copied ? "Luxxianna Seraph copied" : "Could not copy the name"))
-  .catch(() => tickerPush("Could not copy the name")));
+// every About link is a button with data-url, so one handler covers them all; each shows its address on mouseover
+for (const link of el("about-body").querySelectorAll("[data-url]")) link.title = link.dataset.url;
+el("about-body").addEventListener("click", (event) => {
+  const link = event.target.closest("[data-url]");
+  if (link) window.runtime.BrowserOpenURL(link.dataset.url);
+});
+// the donation name is copied as the button shows it, so it lives only in index.html
+el("about-copy-name").addEventListener("click", () => {
+  const name = el("about-copy-name").textContent;
+  window.runtime.ClipboardSetText(name)
+    .then((copied) => tickerPush(copied ? `${name} copied` : "Could not copy the name"))
+    .catch(() => tickerPush("Could not copy the name"));
+});
 el("caveat-understood").addEventListener("click", () => el("caveat-warning").close());
 el("caveat-warning-close").addEventListener("click", () => el("caveat-warning").close());
 el("caveat-warning").addEventListener("close", () => {

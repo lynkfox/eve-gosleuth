@@ -25,7 +25,12 @@ func ProjectVersion(wailsJSON []byte) string {
 	return project.Info.ProductVersion
 }
 
-// Version returns the app's version from wails.json, for the top bar and the About window, "" if it has none
+/*
+	Version returns the app's version from wails.json, for the top bar and the About window
+
+Returns:
+  - its info.productVersion, or "" if it has none
+*/
 func (a *App) Version() string {
 	return a.version
 }
