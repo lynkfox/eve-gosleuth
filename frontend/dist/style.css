@@ -1458,7 +1458,7 @@ button.text-link {
 .caveat-body .caveat-lead { color: var(--highlight); font-size: 15px; font-weight: 600; }
 .caveat-actions { justify-content: space-between; align-items: center; }
 
-/* About: the bear and version over sections that fold like Preferences > Advanced, the ISK donation and bug report below them */
+/* About: the bear and version over sections that fold like Preferences > Advanced, the bug report below them */
 /* a fixed size, so opening a section never resizes it: short sections sit at the top, long ones scroll */
 .about-window { width: min(540px, calc(100vw - 32px)); height: 85vh; }
 .about-body { gap: 10px; align-content: start; font-size: 13px; line-height: 1.5; }
@@ -1479,9 +1479,6 @@ button.text-link {
 .about-caveats { display: grid; }
 .about-list { display: grid; gap: 6px; margin: 0; padding-left: 20px; }
 .about-legal { color: var(--muted); font-size: 12px; }
-/* .window-actions, later in the file, would otherwise push both to the right */
-.window-actions.about-actions { justify-content: space-between; align-items: center; gap: 24px; }
-.about-donate { display: flex; gap: 6px; align-items: center; font-size: 13px; }
 .bug-report-steps { display: grid; gap: 4px; margin-bottom: 0; padding-left: 20px; }
 .caveat-dismiss { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
 .caveat-dismiss input { flex: none; margin-top: 4px; padding: 0; accent-color: var(--accent); }

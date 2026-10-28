@@ -2,7 +2,12 @@
 
 GoSleuth is an Eve Online Intel tool. Give it a target and it will pull killmails related to that - be it Pilot, Corp, Alliance, or System - and it will display the data in meaningful ways. This is useful for looking for alts/associates of a pilot, or where they tend to hang out, among many other things.
 
-In the grand tradition of eve tools like PyFa being coded in Python and using Py in its name, GoSleuth is coded in Go-lang.
+In the grand tradition of eve tools like **Py**Fa being coded in **Py**thon and using **Py** in its name, **Go**Sleuth is coded in **Go**-lang.
+
+GoSleuth will always be free, open source, free of ads, subscriptions, paid feature tiers, ect. This app runs entirely in your local environment and connects to no servers beyond the standard apis that are listed in the Data Sources. This app strives to maintain your privacy - if you feel that it is not for some reason, please submit a bug report on the issues page of this repo. 
+
+If you feel this app has been worth your time, feel free to - with no obligation or expectation - donate some Isk or Plex to Luxxianna Seraph in game.
+
 
 ## Yes. This app used AI in its development
 
