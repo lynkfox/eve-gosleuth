@@ -116,15 +116,41 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 
 ## Phase 3: tags
 
-**Rules come first.** The rules live in `static_data/fit_tag_rules.json`, so they can be tuned next to the exe without a rebuild.
+**Decided 2026-10-28.** Tags describe what a fit brings, for intel: what it shoots with, how it tanks, and what it is for.
 
-- Each module group or attribute signal adds weight to a tag, and a tag applies past its threshold.
-- The tag set needs discussing. Starting proposal:
-  - **Tank:** Shield, Armor or Hull, and Active or Buffer.
-  - **Speed:** Nano (overdrives, nanofibers and polycarbon rigs, with a propulsion module).
-  - **Role:** PvP (point, scram or web fitted), Ratting (no tackle, an omni or rat-tuned tank, drone or missile damage), Tackle, Logi, EWAR, Cloaky, Bait, Kitchen-sink.
-- Signals we already have: zKill `Labels` on the killmail (`pvp`, `npc`, `solo`, ...) and the Ratters tab logic.
-- Tags show on fit list rows and in the fitting window, and the list can be filtered by tag.
+### Rules
+
+- The rules live in `static_data/fit_tag_rules.json`, so they can be tuned beside the exe without a rebuild.
+- **Weights and thresholds.** Each signal (a module group, market group or type, fitted or counted) adds weight to a tag, positive or negative, and the tag applies once its total passes the tag's threshold.
+- Each tag remembers which modules gave it weight, so the fitting window can say why it applied ("Tackle: Warp Scrambler, Stasis Webifier").
+- **Data:** groups alone can't tell pulse from beam, blaster from rail, autocannon from artillery, or a sentry from other drones. `cmd/sdegen` adds each type's market group to `fit_types.json`, and rules can match a market group or any of its parents. Check the SDE's market tree splits these before relying on it. Phase 2b and phase 4 extend the same extract.
+
+### Tag set
+
+- **Weapons:** Lasers, Hybrids, Projectiles, Missiles, Drones, Fighters, Vorton, Disintegrator. Each also gets **Close** or **Long**:
+  - turrets by market group (pulse, blaster, autocannon are Close; beam, rail, artillery Long)
+  - launchers by group (rockets, heavy assault missiles, torpedoes Close; light, heavy and cruise missiles Long)
+  - drones: sentries Long, the rest Close.
+- **Tank:** Shield, Armor or Hull, and Active, Buffer or Passive (shield regen). No resist profile tags (omni or tuned).
+- **Movement:** Nano only (overdrives, nanofibers, polycarbon rigs, with a propulsion module).
+- **Roles:** Tackle, Bubbles, Logi, EWAR, Neut, Cloaky, Probes, Cyno (and Covert cyno if the extract can tell them apart), Kitchen-sink (more than one weapon system, or a mixed tank), Ratting.
+- **Bait**, a narrow weighted rule:
+  - a heavy buffer; a hull tank (bulkheads, hull repairers) weighs most
+  - little or no damage weighs for it
+  - tackle adds a little but isn't needed
+  - a cyno counts for nothing.
+- **Fleet Doctrine**, the one tag that reads the battle as well as the fit:
+  - a loss qualifies when its battle (`aggregate.CollectedData.BattleOfKillmail`) has at least 5 ships of its hull on the victim's side, and logi there too
+  - the victim's side is the target and its holdings in that battle, from their kills and losses there; the enemy flying the same hull doesn't count
+  - the hull count and the logi needed are in `fit_tag_rules.json`
+  - a merged fit gets the tag if any of its losses qualifies.
+- Other tags are read from the fit alone. zKill's `npc` and `solo` labels belong to single losses, so they don't make tags.
+
+### Showing tags
+
+- **The fitting window** shows every tag of the fit, with the reasons on hover.
+- **The fit list** hides tags by default, so rows don't get cluttered.
+- **The list can be filtered by tag.** This may come after the window, but the data must allow it from the start.
 
 **Data crunching comes later.** A debug export writes every fit in the cache to JSONL, to be clustered offline for tuning the rule weights. The app still classifies by rules only.
 
@@ -156,5 +182,4 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 
 ## Open decisions
 
-- The final tag set (discussed later; the phase 3 list is a start).
 - Where the phase 4 numbers show.
