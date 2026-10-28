@@ -1839,8 +1839,8 @@ function fitRow(fit, manyPilots) {
 }
 
 // FIT_TAGS mark a fit in the list as small filled badges, see FIT_KEY. Abyssal is red as it is a warning, so fixed; implants are in the theme's --badge color.
-const FIT_ABYSSAL_TAG = { key: "abyssal", letter: "A", className: "fit-tag fit-tag-abyssal", meaning: "Has an abyssal module, kept separate as the killmail does not record its rolled stats" };
-const FIT_IMPLANTS_TAG = { key: "implants", letter: "C", className: "fit-tag fit-tag-implants", meaning: "Has the implants of the capsule lost just after it. Listed first among its ship's fits" };
+const FIT_ABYSSAL_TAG = { key: "abyssal", letter: "A", className: "fit-tag fit-tag-abyssal", meaning: "Contains Abyssal Module" };
+const FIT_IMPLANTS_TAG = { key: "implants", letter: "C", className: "fit-tag fit-tag-implants", meaning: "Contains Implants from a related capsule killmail" };
 const FIT_TAGS = [FIT_ABYSSAL_TAG, FIT_IMPLANTS_TAG];
 
 // fitTag is a fit's one letter tag, named on hover
@@ -3112,15 +3112,19 @@ function renderKillmailCard(km) {
   const time = document.createElement("span");
   time.className = "killmail-time";
   time.textContent = formatKillmailTime(km.time);
-  // a killmail collected from one of the target's holdings says which
-  let via = null;
+  const value = column([`Dropped ${formatIsk(km.droppedValue || 0)}`, outcome], "killmail-value");
+  value.append(time);
+
+  // a killmail collected from one of the target's holdings says which, at the foot of the victim's corp and alliance column on the date's line,
+  // as that column's width is fixed and the value column's is not
+  const victimLines = column([victimGroup], "killmail-victim");
   if (km.via) {
-    via = document.createElement("span");
+    const via = document.createElement("span");
     via.className = "killmail-via";
     via.textContent = `via ${km.via}`;
+    via.title = via.textContent;
+    victimLines.append(via);
   }
-  const value = column([`Dropped ${formatIsk(km.droppedValue || 0)}`, outcome, via], "killmail-value");
-  value.append(time);
 
   // the headings share the top line, with the ship image and each heading's details on the line below
   card.append(
@@ -3129,7 +3133,7 @@ function renderKillmailCard(km) {
     cardHeading(attackers, "killmail-attackers"),
     cardHeading(formatIsk(km.totalValue), "killmail-total"),
     ship,
-    column([victimGroup], "killmail-victim"),
+    victimLines,
     column([location, km.class ? spaceLabel(km.class) : km.region || null], "killmail-ship"),
     column([finalBlow, finalBlowGroup], "killmail-attackers"),
     value,
@@ -4335,7 +4339,7 @@ function formatDuration(milliseconds) {
 }
 
 /*
-  THEMES are the Theme menu presets, after EVE's UI themes plus Triglavian and Vaporwave. Each is its two theme colors and its accent, the button color, as shown in the menu.
+  THEMES are the Theme menu presets, after EVE's UI themes plus Triglavian and Synthwave. Each is its two theme colors and its accent, the button color, as shown in the menu.
   The default ("") keeps the colors in style.css, the others derive their dark backgrounds from the first color. All are dark.
   Colors with a meaning (kill, loss, security, wormhole class) are not themed.
 */
@@ -4350,7 +4354,7 @@ const THEMES = [
   { key: "photon", name: "Photon", swatches: ["#4aa3b8", "#5cabc0", "#f0884a"] },
   { key: "sisters", name: "Sisters of EVE", swatches: ["#e04a4a", "#9fe3e3", "#e8eaee"] },
   { key: "triglavian", name: "Triglavian", swatches: ["#8c1d24", "#d6403a", "#e0453c"] },
-  { key: "vaporwave", name: "Vaporwave", swatches: ["#b967ff", "#01cdfe", "#ff71ce"] },
+  { key: "synthwave", name: "Synthwave", swatches: ["#b967ff", "#01cdfe", "#ff71ce"] },
 ];
 
 // THEMED_PROPERTIES are the css variables a theme sets, cleared again for the default theme

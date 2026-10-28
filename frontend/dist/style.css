@@ -1015,7 +1015,7 @@ body.help-popped .tab-help .tab-help-popup { display: none; }
 .killmail-heading.killmail-total { grid-column: 5; text-align: right; font-variant-numeric: tabular-nums; }
 
 .killmail-col { grid-row: 2; }
-.killmail-col.killmail-victim { grid-column: 2; }
+.killmail-col.killmail-victim { grid-column: 2; align-self: stretch; }
 .killmail-col.killmail-ship { grid-column: 3; }
 .killmail-col.killmail-attackers { grid-column: 4; }
 .killmail-col.killmail-value { grid-column: 5; align-self: stretch; }
@@ -1060,8 +1060,9 @@ body.help-popped .tab-help .tab-help-popup { display: none; }
 .loss .outcome { color: var(--error); }
 .internal .outcome { color: var(--muted); }
 
-/* the holding a killmail was collected from, under its outcome */
-.killmail-via {
+/* the holding a killmail was collected from, at the foot of the victim's corp and alliance column on the date's line */
+.killmail-col > .killmail-via {
+  margin-top: auto;
   font-size: 11px;
   font-style: italic;
 }
@@ -1862,6 +1863,8 @@ body.debug-mode::after {
 
 .fit-tag-abyssal { background: var(--error); color: #0b0e13; }
 .fit-tag-implants { background: var(--badge); color: var(--badge-text); }
+/* in the help's color key the tag is a grid cell, which would stretch it over its meaning's lines */
+.help-content dt.fit-tag { align-self: center; justify-self: start; }
 
 .fit-view {
   display: flex;
