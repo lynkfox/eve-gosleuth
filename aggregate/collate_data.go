@@ -2,6 +2,7 @@ package aggregate
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -147,14 +148,13 @@ func CollateAllKillmailData(killmails *[]retrieval.RawKillmail, esiClient *api.E
 		CorporationsSeen: make(map[int]CorporationSeen),
 	}
 
-	// the battles a killmail can still join, see JoinBattle
-	openBattles := []*BattleFought{}
-
 	// looked up together first, in bulk and in parallel, so expanding each killmail is answered from the cache
 	cachedData.PrefetchKillmailEntities(*killmails)
 
-	for index, km := range *killmails {
-
+	// every killmail is expanded first, so its battle can be worked out from all of them before anything records it
+	raws := []*retrieval.RawKillmail{}
+	for index := range *killmails {
+		km := &(*killmails)[index]
 		before := cachedData.Counts()
 		expandedKM := km.Expand(esiClient, cachedData)
 		comm.ReportProgress("%s", cachedData.Counts().Since(before).Annotate(fmt.Sprintf("Processed killmail %d/%d #%d", index+1, len(*killmails), km.ESIKillmail.KillmailID)))
@@ -164,28 +164,27 @@ func CollateAllKillmailData(killmails *[]retrieval.RawKillmail, esiClient *api.E
 			continue
 		}
 		results.Killmails = append(results.Killmails, expandedKM)
+		raws = append(raws, km)
+	}
 
-		var currentBattle *BattleFought
-		currentBattle, openBattles = results.JoinBattle(openBattles, &km, killmailPilots(expandedKM))
+	battleOf := results.FindBattles(results.Killmails)
 
-		results.UpdateOrAddSystem(&km, expandedKM.System, currentBattle.BattleIDReference)
+	for index, km := range raws {
+		expandedKM := results.Killmails[index]
+		battleID := battleOf[expandedKM.KillmailID]
 
-		results.UpdateOrAddStructures(&km, expandedKM, currentBattle.BattleIDReference)
+		results.UpdateOrAddSystem(km, expandedKM.System, battleID)
+
+		results.UpdateOrAddStructures(km, expandedKM, battleID)
 
 		// structure and deployable losses have no victim pilot to record
 		if expandedKM.Victim.Pilot != nil {
-			results.UpdateOrAddPilot(&km, expandedKM, expandedKM.Victim.Pilot, expandedKM.Victim.Ship, expandedKM.Victim.CorpAtKill, expandedKM.Victim.AllianceAtKill, currentBattle.BattleIDReference, true)
+			results.UpdateOrAddPilot(km, expandedKM, expandedKM.Victim.Pilot, expandedKM.Victim.Ship, expandedKM.Victim.CorpAtKill, expandedKM.Victim.AllianceAtKill, battleID, true)
 		}
 
 		for _, attacker := range expandedKM.Attackers {
-			results.UpdateOrAddPilot(&km, expandedKM, attacker.Pilot, attacker.Ship, attacker.CorpAtKill, attacker.AllianceAtKill, currentBattle.BattleIDReference, false)
+			results.UpdateOrAddPilot(km, expandedKM, attacker.Pilot, attacker.Ship, attacker.CorpAtKill, attacker.AllianceAtKill, battleID, false)
 		}
-
-	}
-
-	// the last battles have no next killmail to close them
-	for _, battle := range openBattles {
-		results.SaveBattle(battle)
 	}
 
 	return results
@@ -529,72 +528,108 @@ func (s *SystemVisted) UpdateOrAddStructure(structureType *retrieval.Item, corp 
 }
 
 /*
-	JoinBattle adds a killmail to the battle it belongs to, or starts a new one, so every killmail belongs to a battle with an id.
-	Killmails come in time order (either way), and a battle stays open while each killmail is within 15 minutes of the one before it in that battle.
-	Several battles can be open at once, as unrelated fights happen at the same time. A killmail joins an open battle:
+	FindBattles works out which battle each killmail was in, and records each battle of more than one killmail in BattlesFought.
+	Killmails are taken oldest first, and a battle stays open while each killmail is within 15 minutes of the one before it in that battle, however long it runs.
+	Several battles can be open at once, as unrelated fights happen at the same time. A killmail joins every open battle:
 	  - in the same system, or
-	  - failing that, in another system with pilots in common, as when a fight moves through a gate. It joins the one with the most in common.
-	A battle no longer within 15 minutes of the killmail is closed and saved.
+	  - in another system with pilots in common, as when a fight moves through a gate.
+	A killmail joining more than one merges them into the oldest, so a fight that splits and meets again stays one battle.
+	A battle's id is its first system and the time of its first killmail.
 
 Parameters:
-  - open: the battles still open
-  - km: the killmail to add
-  - pilots: the character ids on the killmail, victim and attackers
+  - killmails: the expanded killmails, in any order
 
 Returns:
-  - *BattleFought: the battle the killmail is now in
-  - []*BattleFought: the battles still open, including it
+  - map[int]string: each killmail id to its battle's id, a killmail on its own in a battle of its own
 */
-func (c *CollectedData) JoinBattle(open []*BattleFought, km *retrieval.RawKillmail, pilots []int) (*BattleFought, []*BattleFought) {
-	at := km.ESIKillmail.KillmailTime
-	system := km.ESIKillmail.SolarSystemID
+func (c *CollectedData) FindBattles(killmails []*retrieval.Killmail) map[int]string {
+	ordered := slices.Clone(killmails)
+	slices.SortStableFunc(ordered, func(a, b *retrieval.Killmail) int { return a.KillmailTime.Compare(b.KillmailTime) })
 
-	stillOpen := open[:0]
-	for _, battle := range open {
-		if WithinFifteenMinutes(battle.LatestTime, at) {
-			stillOpen = append(stillOpen, battle)
-		} else {
-			c.SaveBattle(battle)
+	open := []*BattleFought{}
+	all := []*BattleFought{}
+	for _, km := range ordered {
+		system := 0
+		if km.System != nil {
+			system = km.System.SystemID
 		}
-	}
+		pilots := killmailPilots(km)
 
-	var joined *BattleFought
-	mostShared := 0
-	for _, battle := range stillOpen {
-		if _, here := battle.Systems[system]; here {
-			joined = battle
-			break
-		}
-		shared := 0
-		for _, pilot := range pilots {
-			if _, on := battle.UniquePilots[pilot]; on {
-				shared++
+		stillOpen := []*BattleFought{}
+		var joined *BattleFought
+		for _, battle := range open {
+			if !WithinFifteenMinutes(battle.LatestTime, km.KillmailTime) {
+				continue
+			}
+			if !battle.sharesWith(system, pilots) {
+				stillOpen = append(stillOpen, battle)
+				continue
+			}
+			if joined == nil {
+				joined = battle
+				stillOpen = append(stillOpen, battle)
+			} else {
+				joined.absorb(battle)
 			}
 		}
-		if shared > mostShared {
-			joined, mostShared = battle, shared
+
+		if joined == nil {
+			joined = &BattleFought{
+				BattleIDReference: fmt.Sprintf("%d/%s", system, km.KillmailTime.Format("200601021504")),
+				SystemID:          system,
+				Systems:           make(map[int]struct{}),
+				UniquePilots:      make(map[int]struct{}),
+				KillmailIDs:       []int{},
+			}
+			stillOpen = append(stillOpen, joined)
+			all = append(all, joined)
 		}
+		joined.TotalKillmails++
+		joined.KillmailIDs = append(joined.KillmailIDs, km.KillmailID)
+		joined.Systems[system] = struct{}{}
+		for _, pilot := range pilots {
+			joined.UniquePilots[pilot] = struct{}{}
+		}
+		joined.LatestTime = km.KillmailTime
+		open = stillOpen
 	}
 
-	if joined == nil {
-		joined = &BattleFought{
-			BattleIDReference: fmt.Sprintf("%d/%s", system, at.Format("200601021504")),
-			SystemID:          system,
-			Systems:           make(map[int]struct{}),
-			UniquePilots:      make(map[int]struct{}),
-			KillmailIDs:       []int{},
+	battleOf := map[int]string{}
+	for _, battle := range all {
+		if battle.TotalKillmails == 0 {
+			continue // absorbed into another
 		}
-		stillOpen = append(stillOpen, joined)
+		c.SaveBattle(battle)
+		for _, killmailID := range battle.KillmailIDs {
+			battleOf[killmailID] = battle.BattleIDReference
+		}
 	}
+	return battleOf
+}
 
-	joined.TotalKillmails++
-	joined.KillmailIDs = append(joined.KillmailIDs, km.ESIKillmail.KillmailID)
-	joined.Systems[system] = struct{}{}
+// sharesWith is whether a killmail in this system with these pilots belongs to the battle: one of its systems, or any of its pilots
+func (battle *BattleFought) sharesWith(system int, pilots []int) bool {
+	if _, here := battle.Systems[system]; here {
+		return true
+	}
 	for _, pilot := range pilots {
-		joined.UniquePilots[pilot] = struct{}{}
+		if _, on := battle.UniquePilots[pilot]; on {
+			return true
+		}
 	}
-	joined.LatestTime = at
-	return joined, stillOpen
+	return false
+}
+
+// absorb merges another battle into this one, leaving the other empty
+func (battle *BattleFought) absorb(other *BattleFought) {
+	battle.TotalKillmails += other.TotalKillmails
+	battle.KillmailIDs = append(battle.KillmailIDs, other.KillmailIDs...)
+	maps.Copy(battle.Systems, other.Systems)
+	maps.Copy(battle.UniquePilots, other.UniquePilots)
+	if other.LatestTime.After(battle.LatestTime) {
+		battle.LatestTime = other.LatestTime
+	}
+	*other = BattleFought{}
 }
 
 // killmailPilots are the character ids on a killmail, victim and attackers, leaving out NPCs and structures, which have none

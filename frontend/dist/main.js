@@ -1520,7 +1520,7 @@ function renderIntelSections(report) {
   if (report.fits) {
     renderFits(report.fits);
   } else {
-    fitsShown = { fits: null, selected: 0, folded: new Set(), select: null };
+    fitsShown = noFitsShown();
   }
 
   el("tab-structures").hidden = !report.structures;
@@ -1688,7 +1688,12 @@ function renderCapitals(capitals) {
 }
 
 // fitsShown is the Fits tab's list as drawn, kept so a redraw (ie the time zone changed) and Show fit keep the chosen fit and the folded hulls
-let fitsShown = { fits: null, selected: 0, folded: new Set(), select: null };
+let fitsShown = noFitsShown();
+
+// noFitsShown is fitsShown before any Fits tab is drawn. byKillmail is each loss's fit, by the loss's and its capsule's killmail ids.
+function noFitsShown() {
+  return { fits: null, selected: 0, folded: new Set(), select: null, byKillmail: new Map() };
+}
 
 // FITS_FOLD_OVER is how many fits the tab lists before it starts with every hull folded, but the chosen one's
 const FITS_FOLD_OVER = 12;
@@ -1696,12 +1701,18 @@ const FITS_FOLD_OVER = 12;
 /*
   renderFits fills the Fits tab of a pilot, corp, or alliance search: the target's fits, identical fits merged with a count, under a heading for each ship that folds.
   Selecting one draws it in the fitting window on the right, with its losses to choose from. Copy EFT puts the chosen loss on the clipboard for the in-game Import from clipboard.
-  The newest fit is selected to start, and a redraw keeps the one chosen.
+  The first fit listed is selected to start, and a redraw keeps the one chosen.
 */
 function renderFits(fits) {
   if (fitsShown.fits !== fits) {
-    fitsShown = { fits, selected: 0, folded: new Set(), select: null };
+    fitsShown = { ...noFitsShown(), fits };
     if (fits.length > FITS_FOLD_OVER) fits.forEach((fit) => fitsShown.folded.add(fit.shipName));
+    for (const fit of fits) {
+      for (const loss of fit.losses) {
+        fitsShown.byKillmail.set(loss.killmailId, fit);
+        if (loss.podKillmailId) fitsShown.byKillmail.set(loss.podKillmailId, fit);
+      }
+    }
   }
   // a corp or alliance's fits say who flew them, a pilot's do not
   const manyPilots = new Set(fits.flatMap((fit) => fit.losses.map((loss) => loss.pilotName))).size > 1;
@@ -1719,14 +1730,16 @@ function renderFits(fits) {
     return rows.get(fit);
   };
   fitsShown.select = (killmailId) => {
-    const fit = fits.find((each) => each.losses.some((loss) => isFitLoss(loss, killmailId)));
+    const fit = fitsShown.byKillmail.get(killmailId);
     return fit ? select(fit, killmailId) : null;
   };
 
+  const ofHull = new Map();
+  for (const fit of fits) ofHull.set(fit.shipName, [...(ofHull.get(fit.shipName) || []), fit]);
   const items = [];
   for (const fit of fits) {
     if (!hulls.has(fit.shipName)) {
-      const hull = fitsHull(fit, fits.filter((each) => each.shipName === fit.shipName));
+      const hull = fitsHull(fit, ofHull.get(fit.shipName));
       hulls.set(fit.shipName, hull);
       items.push(hull.item);
     }
@@ -1741,7 +1754,17 @@ function renderFits(fits) {
 
   el("fits-layout").hidden = fits.length === 0;
   el("fits-empty").hidden = fits.length > 0;
-  if (fits.length > 0 && !fitsShown.select(fitsShown.selected)) select(fits[0]);
+  if (fits.length === 0) {
+    // nothing of the last search's fit is left behind
+    el("fit-view-title").textContent = "";
+    el("fit-view-note").hidden = true;
+    el("fit-losses").replaceChildren();
+    el("fit-ring").replaceChildren();
+    el("fit-copy").disabled = true;
+    el("fit-copy").onclick = null;
+  } else if (!fitsShown.select(fitsShown.selected)) {
+    select(fits[0]);
+  }
 }
 
 // fitsHull is a hull's heading in the fit list, with its losses counted, and the list of its fits beneath that it folds away
@@ -1795,10 +1818,11 @@ function fitRow(fit, manyPilots) {
     who.title = pilots.join("\n");
     text.append(who);
   }
-  const systems = new Set(fit.losses.map((loss) => loss.systemName));
+  // a system that could not be looked up has no name, and is left out
+  const systems = new Set(fit.losses.map((loss) => loss.systemName).filter(Boolean));
   const when = document.createElement("span");
   when.className = "fit-row-when";
-  when.textContent = `${spokenDate(newest.time)} · ${systems.size > 1 ? `${systems.size} systems` : newest.systemName}`;
+  when.textContent = [spokenDate(newest.time), systems.size > 1 ? `${systems.size} systems` : [...systems][0]].filter(Boolean).join(" · ");
   text.append(when);
   row.append(text);
   for (const tag of FIT_TAGS) {
@@ -1867,7 +1891,7 @@ function renderFitWindow(fit, loss, choose) {
     button.type = "button";
     button.className = "fit-loss";
     button.setAttribute("aria-selected", String(each === loss));
-    button.textContent = `${each.pilotName} · ${spokenDate(each.time)} · ${each.systemName}`;
+    button.textContent = [each.pilotName, spokenDate(each.time), each.systemName].filter(Boolean).join(" · ");
     if (each.podKillmailId) button.append(" ", fitTag(FIT_IMPLANTS_TAG));
     button.addEventListener("click", () => choose(each.killmailId));
     withMenu(button, [
@@ -1949,7 +1973,7 @@ function showFit(killmailId) {
 
 // hasFit is whether a killmail is one of the target's losses listed on the Fits tab, or the capsule lost with one
 function hasFit(killmailId) {
-  return Boolean(fitsShown.fits && fitsShown.fits.some((fit) => fit.losses.some((loss) => isFitLoss(loss, killmailId))));
+  return fitsShown.byKillmail.has(killmailId);
 }
 
 // isFitLoss is whether a killmail is this loss, or the capsule whose implants it shows

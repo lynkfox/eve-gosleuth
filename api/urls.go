@@ -61,12 +61,29 @@ func TypeRenderURL(typeID int) string {
 	return TypeRenderURLAt(typeID, 128)
 }
 
-// TypeRenderURLAt returns the EVE image server render of an item type at a size the server offers (32 to 1024, powers of two), such as a hull in the fitting window
+/*
+	TypeRenderURLAt returns the EVE image server render of an item type at a given size, such as a hull in the fitting window
+
+Parameters:
+  - typeID: the item type
+  - size: a size the server offers, a power of two from 32 to 1024
+
+Returns:
+  - string: the render's url
+*/
 func TypeRenderURLAt(typeID int, size int) string {
 	return fmt.Sprintf("%s/types/%d/render?size=%d", IMAGE_SERVER_URL, typeID, size)
 }
 
-// EveRefTypeURL returns EVE Ref's page for an item type, such as a module or a ship
+/*
+	EveRefTypeURL returns EVE Ref's page for an item type, such as a module or a ship
+
+Parameters:
+  - typeID: the item type
+
+Returns:
+  - string: the page's url
+*/
 func EveRefTypeURL(typeID int) string {
 	return fmt.Sprintf("%s/types/%d", EVE_REF_URL, typeID)
 }

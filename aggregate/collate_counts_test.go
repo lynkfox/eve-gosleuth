@@ -179,3 +179,42 @@ func TestFleetmates(t *testing.T) {
 		assert.False(t, aggregate.IsSameGroupAsTarget(&target, retrieval.Corporation{CorporationID: 98000002, Alliance: &retrieval.Alliance{AllianceID: 99000001}}))
 	})
 }
+
+func TestFindBattles(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+	start := time.Date(2026, 10, 27, 20, 0, 0, 0, time.UTC)
+	x, y := &retrieval.System{SystemID: 1}, &retrieval.System{SystemID: 2}
+	killmail := func(id int, minutes int, system *retrieval.System, pilots ...int) *retrieval.Killmail {
+		km := &retrieval.Killmail{KillmailID: id, KillmailTime: start.Add(time.Duration(minutes) * time.Minute), System: system, Victim: &retrieval.KillmailVictim{}}
+		for _, pilot := range pilots {
+			km.Attackers = append(km.Attackers, &retrieval.KillmailAttacker{Pilot: &retrieval.Pilot{CharacterID: pilot}})
+		}
+		return km
+	}
+
+	t.Run("a killmail linking two open battles merges them into the older", func(t *testing.T) {
+		collected := &aggregate.CollectedData{BattlesFought: map[string]aggregate.BattleFought{}}
+		// a fight in X, another already going in Y, then X's pilots fight in Y
+		battleOf := collected.FindBattles([]*retrieval.Killmail{
+			killmail(4, 6, y, 1, 2, 3),
+			killmail(1, 0, x, 1, 2, 3),
+			killmail(2, 1, y, 7, 8),
+			killmail(3, 3, y, 7),
+		})
+
+		assert.Len(t, collected.BattlesFought, 1)
+		assert.ElementsMatch(t, []int{1, 2, 3, 4}, collected.BattlesFought["1/202610272000"].KillmailIDs)
+		assert.Equal(t, battleOf[1], battleOf[4])
+		assert.Equal(t, battleOf[2], battleOf[4], "the fight already going in Y joins too")
+		assert.Equal(t, 1, collected.BattlesFought["1/202610272000"].SystemID, "named for where it started, though given newest first")
+	})
+
+	t.Run("a killmail on its own still has a battle id", func(t *testing.T) {
+		collected := &aggregate.CollectedData{BattlesFought: map[string]aggregate.BattleFought{}}
+		battleOf := collected.FindBattles([]*retrieval.Killmail{killmail(1, 0, x, 1), killmail(2, 60, x, 1)})
+
+		assert.Empty(t, collected.BattlesFought)
+		assert.NotEqual(t, battleOf[1], battleOf[2])
+		assert.NotEmpty(t, battleOf[2])
+	})
+}

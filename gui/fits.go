@@ -179,6 +179,19 @@ Returns:
   - map[int]*retrieval.Killmail: each paired ship's killmail id to its capsule's killmail
 */
 func podsWithShips(ships []*retrieval.Killmail, pods []*retrieval.Killmail, battleOf map[int]string) map[int]*retrieval.Killmail {
+	// only a ship of the same pilot in the same battle can be a capsule's
+	type pilotInBattle struct {
+		pilot  int
+		battle string
+	}
+	shipsOf := map[pilotInBattle][]*retrieval.Killmail{}
+	for _, ship := range ships {
+		if battle := battleOf[ship.KillmailID]; battle != "" && ship.Victim.Pilot != nil {
+			key := pilotInBattle{ship.Victim.Pilot.CharacterID, battle}
+			shipsOf[key] = append(shipsOf[key], ship)
+		}
+	}
+
 	podOf := map[int]*retrieval.Killmail{}
 	for _, pod := range pods {
 		battle := battleOf[pod.KillmailID]
@@ -186,11 +199,8 @@ func podsWithShips(ships []*retrieval.Killmail, pods []*retrieval.Killmail, batt
 			continue
 		}
 		var ship *retrieval.Killmail
-		for _, candidate := range ships {
-			if candidate.Victim.Pilot == nil || candidate.Victim.Pilot.CharacterID != pod.Victim.Pilot.CharacterID || podOf[candidate.KillmailID] != nil {
-				continue
-			}
-			if battleOf[candidate.KillmailID] != battle || candidate.KillmailTime.After(pod.KillmailTime) {
+		for _, candidate := range shipsOf[pilotInBattle{pod.Victim.Pilot.CharacterID, battle}] {
+			if podOf[candidate.KillmailID] != nil || candidate.KillmailTime.After(pod.KillmailTime) {
 				continue
 			}
 			if ship == nil || candidate.KillmailTime.After(ship.KillmailTime) {
