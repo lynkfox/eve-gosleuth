@@ -766,6 +766,9 @@ button.secondary {
   gap: 12px;
 }
 
+/* why a search has no cards, across the whole row */
+.glance > p { grid-column: 1 / -1; margin: 0; }
+
 .glance-card {
   display: flex;
   flex-direction: column;

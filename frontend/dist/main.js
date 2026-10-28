@@ -1451,6 +1451,9 @@ function renderIntel(report) {
 
 // renderIntelSections draws the killmail page and each tab of a report, keeping the page and tab the user is on
 function renderIntelSections(report) {
+  // every search has these two, though showProfileOnly hides them
+  el("tab-killmails").hidden = false;
+  el("tab-activity").hidden = false;
   setTabCount("tab-killmails", killmails.length);
   setTabCount("tab-pi", report.piPilots && report.piPilots.length);
   setTabCount("tab-ratters", report.ratters && report.ratters.length);
@@ -1523,6 +1526,22 @@ function renderIntelSections(report) {
   if (report.memberList) renderRosterPage();
 
   renderGlance(report);
+}
+
+/*
+  showProfileOnly shows the report area with only At a glance, holding the target's Profile and why there is nothing else,
+  for a search that ended without a report, so the target's details are still shown somewhere.
+*/
+function showProfileOnly(reason) {
+  for (const tab of el("tab-list").querySelectorAll(".tab")) tab.hidden = true;
+  const note = document.createElement("p");
+  note.className = "muted";
+  note.textContent = reason;
+  el("glance-cards").replaceChildren(note);
+  selectTab("tab-glance");
+  el("intel-loading").hidden = true;
+  el("intel-tabs").hidden = false;
+  el("intel").hidden = false;
 }
 
 // setTabCount shows how many rows a tab has beside its name in the sidebar, or nothing for a count of 0 or none
@@ -3920,7 +3939,10 @@ async function search(event) {
     if (target.searchedHolding) setStatus(`${target.searchedHolding} is a holding of ${target.display.Name}, so this is ${target.display.Name}'s search, with its holdings.`);
     // SearchTarget cached the found target as a recent search
     loadRecentSearches();
-    if (stopRequested) return;
+    if (stopRequested) {
+      showProfileOnly("The search was stopped before any killmails were collected.");
+      return;
+    }
 
     el("intel-loading").hidden = false;
     el("intel").hidden = false;
@@ -3932,7 +3954,7 @@ async function search(event) {
       showReportWarning(report);
       retrievedName = target.display.Name;
     } else {
-      el("intel").hidden = true;
+      showProfileOnly("No report: the search stopped or failed before its killmails were collected.");
     }
   } finally {
     const took = formatDuration(performance.now() - started);

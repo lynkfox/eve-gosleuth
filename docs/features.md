@@ -110,7 +110,7 @@ The full plan and the decisions behind it are in `docs/fits-plan.md`.
 - **Collapsing.** The « button shrinks the sidebar to its icons, with counts as badges and names in tooltips.
   - The choice is saved (`Settings.SidebarCollapsed` via `SetSidebarCollapsed`), so a first run starts expanded and later runs open the way it was left.
   - A window under 760 px wide shows icons only whatever was chosen, without changing the saved choice.
-- **At a glance** (`renderGlance`) is the tab shown after each search. Across its top is the target's Profile: its details and its history, member corps, or stargates, filled by `renderTarget`. Profile is not a tab of its own.
+- **At a glance** (`renderGlance`) is the tab shown after each search. Across its top is the target's Profile: its details and its history, member corps, or stargates, filled by `renderTarget`. Profile is not a tab of its own. A search that ends without a report (stopped early, or failed) still shows At a glance with the Profile alone (`showProfileOnly`).
   - Below it is a card per tab the search has, each with its top two rows (`GLANCE_ROWS`, `GLANCE_CARDS`) and an Open link to the full tab.
   - The cards keep a set order (`GLANCE_ORDER`, the tabs' default order), whatever order the sidebar is in, and are all the same size.
   - A j-space system also gets a Last Structure Lost card after Activity, opening the Activity tab.
