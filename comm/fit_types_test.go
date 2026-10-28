@@ -56,13 +56,13 @@ func TestLoadFitTypes(t *testing.T) {
 		assert.Equal(t, 42, comm.FitTypesSDEBuild())
 	})
 
-	t.Run("a file without types loads as empty", func(t *testing.T) {
-		files := fstest.MapFS{"empty.json": {Data: []byte(`{}`)}}
+	t.Run("a file without types is an error, and leaves the previous types", func(t *testing.T) {
+		files := fstest.MapFS{"empty.json": {Data: []byte(`{}`)}, "null.json": {Data: []byte(`{"types": null}`)}}
 
-		assert.NoError(t, comm.LoadFitTypes(files, "empty.json"))
-		assert.Nil(t, comm.FitTypeOf(1))
-		assert.False(t, comm.KeptInFitCargo(&comm.FitType{CategoryID: 8}))
-		assert.Equal(t, 0, comm.FitTypesSDEBuild())
+		assert.Error(t, comm.LoadFitTypes(files, "empty.json"))
+		assert.Error(t, comm.LoadFitTypes(files, "null.json"))
+		assert.Equal(t, "Hull", comm.FitTypeOf(1).Name)
+		assert.Equal(t, 42, comm.FitTypesSDEBuild())
 	})
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	staticdata "github.com/lynkfox/go_eve_sleuth/static_data"
@@ -45,24 +46,30 @@ func (a *App) ExportStaticData() (dir string, err error) {
 	return dir, nil
 }
 
-// exportStaticData writes the static data files and the readme to a folder, removing any json file a previous export left there
+// exportStaticData writes the static data files and the readme to a folder, then removes any other json file a previous export left there
 func exportStaticData(dir string, files map[string][]byte) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
-	}
-	previous, err := filepath.Glob(filepath.Join(dir, "*.json"))
-	if err != nil {
-		return err
-	}
-	for _, path := range previous {
-		if err := os.Remove(path); err != nil {
-			return err
-		}
 	}
 	for name, data := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
 			return err
 		}
 	}
-	return os.WriteFile(filepath.Join(dir, staticExportReadmeName), []byte(staticExportReadme), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, staticExportReadmeName), []byte(staticExportReadme), 0o644); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(dir) // not a glob, which would read brackets in the user's folder names as a pattern
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if _, written := files[entry.Name()]; written || entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".json") {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dir, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }

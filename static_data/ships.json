@@ -7,11 +7,10 @@
         "883": "Capital Industrial Ship",
         "902": "Jump Freighter",
         "1538": "Force Auxiliary",
-        "4594": "Lancer Dreadnought"
+        "4594": "Lancer Dreadnought",
+        "513": "Freighter"
     },
-    "capital_types": {
-        "34328": "Bowhead"
-    },
+    "capital_types": {},
     "hauler_groups": {
         "28": "Hauler",
         "380": "Deep Space Transport",

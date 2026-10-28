@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
 	"testing/fstest"
@@ -15,7 +16,7 @@ const VERSION = "0.0.2"
 // The id to name lists of the sectioned static data files: ships.json, structures.json, and items.json. Groups and categories are ESI ones, matched against a type's through fit_types.json (StaticValues.ContainsGroupOf). Empty until InitStaticData is called.
 var (
 	CapitalGroups        = newStaticValues() // the groups of the ships the Capital Pilots tab counts: titans, dreadnoughts, carriers, force auxiliaries, ...
-	CapitalTypes         = newStaticValues() // capital ship types outside CapitalGroups, ie the Bowhead, a freighter
+	CapitalTypes         = newStaticValues() // capital ship types outside CapitalGroups, none built in, for edited copies
 	HaulerGroups         = newStaticValues() // the groups of the ships that count as PI haulers: T1 haulers and T2 transports, not freighters
 	HaulerExclusions     = newStaticValues() // ship types in HaulerGroups that are not haulers, ie the Noctis salvager
 	FitIgnoredCategories = newStaticValues() // FitIgnoredCategories, FitIgnoredGroups, and FitIgnoredTypes are the hulls whose losses are not shown as fits (FitHullIgnored)
@@ -188,6 +189,7 @@ func loadMerged(name string, sources []fs.FS, load func(fs.FS, string) error) er
 	mergeJSON lays an edited static data file over another
 
 Objects are merged key by key, an edited key's value laid over the other's, and a key edited to null is removed. Anything else, lists included, is replaced whole.
+Both must be a single json object, as every static data file is.
 
 Parameters:
   - base: the file being edited
@@ -195,14 +197,24 @@ Parameters:
 
 Returns:
   - []byte: the merged file
-  - error: either is not valid json
+  - error: either is not a single valid json object
 */
 func mergeJSON(base []byte, edited []byte) ([]byte, error) {
-	decode := func(data []byte) (any, error) {
+	decode := func(data []byte) (map[string]any, error) {
 		var value any
 		decoder := json.NewDecoder(bytes.NewReader(data))
 		decoder.UseNumber() // ids and masses stay exact
-		return value, decoder.Decode(&value)
+		if err := decoder.Decode(&value); err != nil {
+			return nil, err
+		}
+		if _, err := decoder.Token(); err != io.EOF {
+			return nil, errors.New("there is more after the json object")
+		}
+		object, isObject := value.(map[string]any)
+		if !isObject {
+			return nil, errors.New("it is not a json object")
+		}
+		return object, nil
 	}
 	under, err := decode(base)
 	if err != nil {
@@ -212,7 +224,13 @@ func mergeJSON(base []byte, edited []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal the edited json: %w", err)
 	}
-	return json.Marshal(mergeValues(under, over))
+	var merged bytes.Buffer
+	encoder := json.NewEncoder(&merged)
+	encoder.SetEscapeHTML(false) // names keep their & as written, for StaticDataFiles
+	if err := encoder.Encode(mergeValues(under, over)); err != nil {
+		return nil, err
+	}
+	return merged.Bytes(), nil
 }
 
 // mergeValues lays one decoded json value over another, see mergeJSON

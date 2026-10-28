@@ -9,12 +9,12 @@ You don't copy and edit the whole file. You write a small file holding only your
 1. Close GoSleuth.
 2. In the folder that holds `eve-gosleuth.exe`, make a folder named `static_data`.
 3. In it, make a file with the same name as the built-in file you want to change (see [the files](#the-files)), for example `ships.json`.
-4. Put only your changes in it, for example to stop the Bowhead counting as a capital:
+4. Put only your changes in it, for example to stop freighters counting as capitals:
 
    ```json
    {
-       "capital_types": {
-           "34328": null
+       "capital_groups": {
+           "513": null
        }
    }
    ```
@@ -46,6 +46,8 @@ Your file is matched against the built-in file of the same name, piece by piece:
 | A key you leave out | The built-in value is kept. |
 | A list `[ ... ]` | Your list replaces the built-in one whole. Give the complete list. |
 
+To empty a section, set each of its ids to `null`. Setting a whole section to `null` (or giving it as `{}`, which changes nothing) won't do it: a file missing one of its sections can't be used.
+
 For example, the built-in `items.json` has:
 
 ```json
@@ -71,7 +73,7 @@ The result keeps every PI group except 1032, with 1042 renamed. `smartbomb_group
 ## Rules for writing the files
 
 - **Files must be valid JSON.** Every id is in double quotes (`"34328"`, not `34328`), a comma goes between entries but never after the last one, and comments are not allowed. If you aren't sure about a file, paste it into any online JSON validator.
-- **If GoSleuth can't use your file, it is ignored completely** and the built-in data is used. That happens when the file is not valid JSON, or when it would leave the data broken (for example, a wormhole system given a static that isn't in the `wormholes` list). GoSleuth does not show a message when this happens. If your change doesn't seem to take effect, check the file first, then [export the data](#seeing-the-data-in-full) to see whether your change is in it.
+- **If GoSleuth can't use your file, it is ignored completely** and the built-in data is used. That happens when the file is not a single valid JSON object, or when it would leave the data broken: a section removed, `fit_types.json` left with no types, or a wormhole system given a static that isn't in the `wormholes` list. GoSleuth does not show a message when this happens. If your change doesn't seem to take effect, check the file first, then [export the data](#seeing-the-data-in-full) to see whether your change is in it.
 - **Ids are what count.** In the id lists, the text after each id is a readable label. GoSleuth only uses it in progress messages.
 - **Use groups where you can.** A group covers every ship or item in it, including ones CCP adds later. Use single types only for exceptions, such as `capital_types` or `hauler_exclusions`.
 
@@ -89,7 +91,7 @@ Each section is a list of `"id": "label"` entries.
 | Section | Holds | Used for |
 |---|---|---|
 | `capital_groups` | ship groups | The Capital Pilots tab: titans, dreadnoughts, carriers, force auxiliaries, ... |
-| `capital_types` | ship types | Single ships that count as capitals although their group doesn't (built in: the Bowhead) |
+| `capital_types` | ship types | Single ships that count as capitals although their group doesn't (none built in) |
 | `hauler_groups` | ship groups | The PI Pilots tab's haulers: T1 haulers and transports, not freighters |
 | `hauler_exclusions` | ship types | Ships in those groups that aren't haulers (built in: the Noctis) |
 | `fit_ignored_categories` | categories | Losses not shown on the Fits tab, by category, group, or single type: capsules, shuttles, haulers, mining ships, structures, ... |

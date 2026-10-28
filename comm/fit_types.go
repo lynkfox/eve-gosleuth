@@ -24,14 +24,14 @@ type FitTypesFile struct {
 var fitTypes = FitTypesFile{Types: map[int]*FitType{}}
 
 /*
-	LoadFitTypes reads fit_types.json for FitTypeOf, KeptInFitCargo, and FitTypesSDEBuild, leaving them as they were if the file can not be read
+	LoadFitTypes reads fit_types.json for FitTypeOf, KeptInFitCargo, and FitTypesSDEBuild, leaving them as they were if the file can not be read or has no types
 
 Parameters:
   - staticFiles: the filesystem holding the file
   - filename: the file's name, ie fit_types.json
 
 Returns:
-  - error: the file could not be opened or read
+  - error: the file could not be opened or read, or has no types
 */
 func LoadFitTypes(staticFiles fs.FS, filename string) error {
 	file, err := staticFiles.Open(filename)
@@ -43,6 +43,9 @@ func LoadFitTypes(staticFiles fs.FS, filename string) error {
 	loaded := FitTypesFile{}
 	if err := json.NewDecoder(file).Decode(&loaded); err != nil {
 		return fmt.Errorf("failed to unmarshal the json file %s: %w", filename, err)
+	}
+	if len(loaded.Types) == 0 {
+		return fmt.Errorf("the json file %s has no types", filename) // ie an edited copy set types to null, which would leave every type unknown
 	}
 
 	types := make(map[int]*FitType, len(loaded.Types))

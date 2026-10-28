@@ -1,6 +1,7 @@
 package comm_test
 
 import (
+	"encoding/json"
 	"testing"
 	"testing/fstest"
 
@@ -18,7 +19,7 @@ func TestLoadStaticData(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.True(t, comm.CapitalGroups.ContainsName("Titan"))
-		assert.True(t, comm.CapitalTypes.ContainsName("Bowhead"))
+		assert.True(t, comm.CapitalGroups.ContainsName("Freighter"))
 		assert.True(t, comm.HaulerGroups.ContainsIDNumber(28))
 		assert.True(t, comm.HaulerExclusions.ContainsName("Noctis"))
 		assert.True(t, comm.FitIgnoredGroups.ContainsName("Capsule"))
@@ -35,7 +36,13 @@ func TestLoadStaticData(t *testing.T) {
 
 		assert.True(t, comm.CapitalGroups.ContainsGroupOf(19720), "Revelation, a dreadnought")
 		assert.True(t, comm.CapitalGroups.ContainsGroupOf(78576), "Azariel, a titan")
+		assert.True(t, comm.CapitalGroups.ContainsGroupOf(20185), "Charon, a freighter")
+		assert.True(t, comm.CapitalGroups.ContainsGroupOf(81040), "Avalanche, a freighter")
+		assert.True(t, comm.CapitalGroups.ContainsGroupOf(28850), "Ark, a jump freighter")
+		assert.True(t, comm.CapitalGroups.ContainsGroupOf(28352), "Rorqual, a capital industrial")
 		assert.False(t, comm.CapitalGroups.ContainsGroupOf(587), "Rifter, a frigate")
+		assert.False(t, comm.CapitalGroups.ContainsGroupOf(2998), "Noctis")
+		assert.True(t, comm.UpwellStructureGroups.ContainsGroupOf(47512), "'Moreau' Fortizar, a faction citadel")
 		assert.True(t, comm.UpwellStructureGroups.ContainsGroupOf(35825), "Raitaru")
 		assert.True(t, comm.ControlTowerGroups.ContainsGroupOf(12235), "Amarr Control Tower")
 		assert.True(t, comm.MinorStructureGroups.ContainsGroupOf(81826), "Metenox Moon Drill")
@@ -55,10 +62,10 @@ func TestLoadStaticData(t *testing.T) {
 	})
 
 	t.Run("an id edited to null is removed", func(t *testing.T) {
-		overrides := fstest.MapFS{"ships.json": {Data: []byte(`{"capital_types": {"34328": null}}`)}}
+		overrides := fstest.MapFS{"ships.json": {Data: []byte(`{"capital_groups": {"513": null}}`)}}
 
 		assert.NoError(t, comm.InitStaticData(staticdata.Files, overrides))
-		assert.False(t, comm.CapitalTypes.ContainsName("Bowhead"))
+		assert.False(t, comm.CapitalGroups.ContainsName("Freighter"))
 		assert.True(t, comm.CapitalGroups.ContainsName("Titan"))
 	})
 
@@ -94,6 +101,34 @@ func TestLoadStaticData(t *testing.T) {
 		assert.True(t, comm.HaulerGroups.ContainsIDNumber(28))
 	})
 
+	t.Run("an edited copy that is not one json object is skipped", func(t *testing.T) {
+		for _, edited := range []string{`null`, `[]`, `"text"`, `{"types": {}} {"types": null}`} {
+			overrides := fstest.MapFS{"fit_types.json": {Data: []byte(edited)}}
+
+			assert.NoError(t, comm.InitStaticData(staticdata.Files, overrides), edited)
+			assert.NotNil(t, comm.FitTypeOf(587), edited)
+		}
+	})
+
+	t.Run("an edited copy that empties a file's main list is skipped", func(t *testing.T) {
+		overrides := fstest.MapFS{
+			"fit_types.json":      {Data: []byte(`{"types": null}`)},
+			"jspace_statics.json": {Data: []byte(`{"systems": null}`)},
+		}
+
+		assert.NoError(t, comm.InitStaticData(staticdata.Files, overrides))
+		assert.NotNil(t, comm.FitTypeOf(587))
+		assert.Len(t, comm.JSpaceStatics["J001025"], 2)
+	})
+
+	t.Run("an edited copy that removes a whole section is skipped", func(t *testing.T) {
+		overrides := fstest.MapFS{"items.json": {Data: []byte(`{"smartbomb_groups": null, "pi_material_groups": {"99999": "New"}}`)}}
+
+		assert.NoError(t, comm.InitStaticData(staticdata.Files, overrides))
+		assert.True(t, comm.SmartbombGroups.ContainsIDNumber(72))
+		assert.False(t, comm.PIMaterialGroups.ContainsIDNumber(99999), "none of the copy is used")
+	})
+
 	t.Run("an edited copy the loader rejects is skipped", func(t *testing.T) {
 		overrides := fstest.MapFS{"jspace_statics.json": {Data: []byte(`{"systems": {"J001025": ["NOPE"]}}`)}}
 
@@ -102,17 +137,19 @@ func TestLoadStaticData(t *testing.T) {
 	})
 
 	t.Run("the files are given back as loaded, merged with the edited copies, indented", func(t *testing.T) {
-		overrides := fstest.MapFS{"ships.json": {Data: []byte(`{"capital_types": {"34328": null, "99999": "New Capital"}}`)}}
+		overrides := fstest.MapFS{"ships.json": {Data: []byte(`{"capital_groups": {"513": null}, "capital_types": {"99999": "Cap & Trade"}}`)}}
 		assert.NoError(t, comm.InitStaticData(staticdata.Files, overrides))
 
 		files := comm.StaticDataFiles()
 		assert.Contains(t, files, "fit_types.json")
 		assert.Contains(t, files, "jspace_statics.json")
-		ships := string(files["ships.json"])
-		assert.Contains(t, ships, `"99999": "New Capital"`)
-		assert.NotContains(t, ships, "Bowhead")
-		assert.Contains(t, ships, `"Titan"`, "the built in data")
-		assert.Contains(t, ships, "\n    \"capital_groups\"", "indented")
+		ships := map[string]map[string]string{}
+		assert.NoError(t, json.Unmarshal(files["ships.json"], &ships))
+		assert.Equal(t, "Cap & Trade", ships["capital_types"]["99999"])
+		assert.NotContains(t, ships["capital_groups"], "513")
+		assert.Equal(t, "Titan", ships["capital_groups"]["30"], "the built in data")
+		assert.Contains(t, string(files["ships.json"]), "\n    \"capital_groups\"", "indented")
+		assert.Contains(t, string(files["ships.json"]), "Cap & Trade", "not escaped")
 	})
 
 	t.Run("a file no source has is an error, and the others still load", func(t *testing.T) {

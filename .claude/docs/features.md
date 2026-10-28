@@ -74,7 +74,7 @@ Every row's menu is built by `withMenu` in main.js from sections (`openSectionsM
 
 ## Capital Pilots
 
-- `GetCapitalPilots` (aggregate/capitalPilots.go) feeds a corp or alliance target's Capital Pilots tab: the target's non-NPC pilots on its killmails, victim or attacker, flying a capital, by ship type. A capital is a ship in `capital_groups` of `ships.json` (titans, dreadnoughts and lancers, carriers, supercarriers, force auxiliaries, capital industrials, jump freighters), matched by its type's group in `fit_types.json`, or one of `capital_types` (the Bowhead, the one freighter that counts).
+- `GetCapitalPilots` (aggregate/capitalPilots.go) feeds a corp or alliance target's Capital Pilots tab: the target's non-NPC pilots on its killmails, victim or attacker, flying a capital, by ship type. A capital is a ship in `capital_groups` of `ships.json` (titans, dreadnoughts and lancers, carriers, supercarriers, force auxiliaries, capital industrials, freighters, jump freighters), matched by its type's group in `fit_types.json`, or one of `capital_types` (none built in, for edited copies).
 
 ## Fits
 
@@ -107,9 +107,9 @@ The full plan and the decisions behind it are in `.claude/docs/fits-plan.md`.
 ## Static data overrides
 
 - The user guide is `docs/static-data-overrides.md`; keep it in step with the files' sections and these rules.
-- A json file in the `static_data` folder beside the exe (`staticdata.Overrides()`) is merged over the built-in file of the same name (`comm.loadMerged`, `mergeJSON`), so it need only hold what it adds or changes: objects merge key by key, an id or key set to `null` is removed, and anything else, lists included (`inventory_flags.json`'s slots, a j-space system's statics), is replaced whole. For example `{"capital_types": {"34328": null}}` as `ships.json` stops the Bowhead counting as a capital, and `{"types": {"587": {"group": 26}}}` as `fit_types.json` changes only the Rifter's group.
-- A copy that is not valid json, or whose merge its loader rejects (a j-space system given a wormhole code the file does not list), is skipped with a warning and the built-in file is used. Debug mode's `session.json` lists the copies in the folder with their hashes.
-- Preferences > Game data > Export game data (`App.ExportStaticData`, gui/static_data.go) writes every file as loaded, merged and indented (`comm.StaticDataFiles`), to `static_data_export` beside the settings with a `README.txt` saying editing them changes nothing, removing json a previous export left, and opens the folder with the readme selected.
+- A json file in the `static_data` folder beside the exe (`staticdata.Overrides()`) is merged over the built-in file of the same name (`comm.loadMerged`, `mergeJSON`), so it need only hold what it adds or changes: objects merge key by key, an id or key set to `null` is removed, and anything else, lists included (`inventory_flags.json`'s slots, a j-space system's statics), is replaced whole. For example `{"capital_groups": {"513": null}}` as `ships.json` stops freighters counting as capitals, and `{"types": {"587": {"group": 26}}}` as `fit_types.json` changes only the Rifter's group.
+- A copy that is not one json object (`mergeJSON` rejects `null`, lists, and trailing text), or whose merge its loader rejects (a section of a sectioned file removed, `fit_types.json` with no types, `jspace_statics.json` with no systems or a system given a code it does not list), is skipped with a warning and the built-in file is used. Debug mode's `session.json` lists the copies in the folder with their hashes.
+- Preferences > Game data > Export game data (`App.ExportStaticData`, gui/static_data.go) writes every file as loaded, merged and indented (`comm.StaticDataFiles`), to `static_data_export` beside the settings with a `README.txt` saying editing them changes nothing, then removing any other json a previous export left (`os.ReadDir`, as a glob would read brackets in the user's folder names), and opens the folder with the readme selected.
 
 ## Other GUI details
 

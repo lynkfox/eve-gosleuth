@@ -54,7 +54,7 @@ type jspaceStaticsFile struct {
 	Systems   map[string][]string       `json:"systems"`
 }
 
-// LoadJSpaceStatics reads the j-space system statics file into JSpaceStatics, leaving it as it was if the file can not be read or a system has a code it does not list
+// LoadJSpaceStatics reads the j-space system statics file into JSpaceStatics, leaving it as it was if the file can not be read, has no systems, or a system has a code it does not list
 func LoadJSpaceStatics(staticFiles fs.FS, filename string) error {
 	file, err := staticFiles.Open(filename)
 	if err != nil {
@@ -68,6 +68,9 @@ func LoadJSpaceStatics(staticFiles fs.FS, filename string) error {
 		return fmt.Errorf("failed to unmarshal the json file %s: %w", filename, err)
 	}
 
+	if len(loaded.Systems) == 0 {
+		return fmt.Errorf("the json file %s has no systems", filename) // ie an edited copy set systems to null
+	}
 	statics := make(map[string][]WormholeStatic, len(loaded.Systems))
 	for system, codes := range loaded.Systems {
 		for _, code := range codes {
