@@ -102,7 +102,7 @@ The full plan and the decisions behind it are in `docs/fits-plan.md`.
 ## Sidebar and At a glance
 
 - **Sidebar.** The report's tabs run down its left (`#tab-sidebar`). Only the tabs a search type has are shown.
-  - Each tab has an icon, its name, and a count where the list is not a fixed top 10: Killmails, PI Pilots, Ratters, Capital Pilots, Structures, and Fits (`setTabCount`).
+  - Each tab has an icon, its name, and a count where the list is not a fixed top 10: Killmails, PI Pilots, Ratters, Capital Pilots (each pilot once), Structures, and Fits (`setTabCount`). Counts over 999 are shown in thousands, ie 1.2k or 200k, so they fit the collapsed sidebar's badge; its tooltip has the full count.
   - The icons are `<symbol>`s in one sprite at the top of the report in `index.html`, drawn with `currentColor`. To change an icon, edit its symbol.
   - The panel header above the panels shows the selected tab's name, color key, and `?` help (`selectTab`).
 - **Order.** At a glance is always first and can't be moved. The tabs below it (`#tab-list`) can be dragged, or moved with Alt+↑/↓.

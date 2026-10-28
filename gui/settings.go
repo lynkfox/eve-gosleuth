@@ -221,7 +221,8 @@ Parameters:
 Returns:
   - error: a user readable message if it could not be saved. It still applies for this session.
 */
-func (a *App) SetSidebarCollapsed(collapsed bool) error {
+func (a *App) SetSidebarCollapsed(collapsed bool) (err error) {
+	defer recoverAsError(&err)
 	if err := a.updateSettings(func(settings *Settings) { settings.SidebarCollapsed = collapsed }); err != nil {
 		return errors.New("Could not save the sidebar's state, it will reset when the app restarts")
 	}

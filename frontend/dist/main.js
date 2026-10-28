@@ -439,6 +439,9 @@ let targetCollapsed = false;
 let holdingsTucked = false;
 // targetHasHoldings is true while the target shown has holding links saved, at either end
 let targetHasHoldings = false;
+// holdingsShownFor and holdingsCount are the target whose holdings were last drawn and how many links it had, to tell when one is added
+let holdingsShownFor = null;
+let holdingsCount = 0;
 
 // PULL_DISTANCE is how far, in pixels, the pull bar is dragged up or down to shut or open the target panel
 const PULL_DISTANCE = 24;
@@ -544,9 +547,13 @@ let shownTarget = null;
 */
 function renderHoldings(holdings) {
   const strip = el("target-holdings");
-  targetHasHoldings = Boolean(holdings && (holdings.holdings.length || holdings.heldFor.length));
-  // with none, nothing stays put away, so a first holding added shows at once
-  setHoldingsTucked(holdingsTucked && targetHasHoldings);
+  const count = holdings ? holdings.holdings.length + holdings.heldFor.length : 0;
+  // put away, a holding just added to the same target would not show, so they come out again. With none, nothing stays put away.
+  const added = holdingsShownFor === shownTarget && count > holdingsCount;
+  holdingsShownFor = shownTarget;
+  holdingsCount = count;
+  targetHasHoldings = count > 0;
+  setHoldingsTucked(holdingsTucked && targetHasHoldings && !added);
   if (!holdings) {
     strip.replaceChildren();
     strip.hidden = true;
@@ -655,8 +662,6 @@ async function saveHolding() {
     const holdings = await backend().SaveHolding(target.id, target.type, target.name, el("holding-name").value, el("holding-type").value, el("holding-note").value);
     el("holding-dialog").close();
     if (shownTarget === target) {
-      // put away, the holding just saved would not show
-      holdingsTucked = false;
       renderHoldings(holdings);
       holdingsChanged();
     }
@@ -1457,7 +1462,8 @@ function renderIntelSections(report) {
   setTabCount("tab-killmails", killmails.length);
   setTabCount("tab-pi", report.piPilots && report.piPilots.length);
   setTabCount("tab-ratters", report.ratters && report.ratters.length);
-  setTabCount("tab-capitals", report.capitals && report.capitals.length);
+  // its pilots, each once though they flew more than one hull
+  setTabCount("tab-capitals", report.capitals && new Set(report.capitals.flatMap((capital) => capital.pilots.map((pilot) => pilot.id))).size);
   setTabCount("tab-structures", report.structures && report.structures.used.length + report.structures.destroyed.length);
   setTabCount("tab-fits", report.fits && report.fits.length);
   renderKillmailPage();
@@ -1546,22 +1552,49 @@ function showProfileOnly(reason) {
 
 // setTabCount shows how many rows a tab has beside its name in the sidebar, or nothing for a count of 0 or none
 function setTabCount(tabId, count) {
-  el(tabId).querySelector(".tab-count").textContent = count ? count.toLocaleString("en-US") : "";
+  const shown = el(tabId).querySelector(".tab-count");
+  shown.textContent = count ? shortCount(count) : "";
+  // in full for the collapsed sidebar's tooltip
+  shown.dataset.count = count ? count.toLocaleString("en-US") : "";
+}
+
+// shortCount fits a count in the collapsed sidebar's badge: as it is up to 999, then in thousands, ie 1.2k under 10,000 and 200k above
+function shortCount(count) {
+  if (count < 1000) return String(count);
+  const thousands = count / 1000;
+  return `${thousands < 10 ? Math.floor(thousands * 10) / 10 : Math.floor(thousands)}k`;
 }
 
 // ACTIVITY_DAYS are the histogram's rows, Monday first, as [name, Date.getDay() value]
 const ACTIVITY_DAYS = [["Monday", 1], ["Tuesday", 2], ["Wednesday", 3], ["Thursday", 4], ["Friday", 5], ["Saturday", 6], ["Sunday", 0]];
+
+// activityCounts counts times by the weekday and hour they fall in, as [weekday][hour] with 0 as Sunday, in EVE or local time as chosen in Preferences
+function activityCounts(times) {
+  const counts = Array.from({ length: 7 }, () => Array(24).fill(0));
+  for (const time of times) {
+    const parts = timeParts(time);
+    counts[parts.weekday][parts.hour]++;
+  }
+  return counts;
+}
+
+// timeRange is the oldest and newest of ISO times, as [oldest, newest], in one pass rather than a sort
+function timeRange(times) {
+  let oldest = times[0];
+  let newest = times[0];
+  for (const time of times) {
+    if (time < oldest) oldest = time;
+    if (time > newest) newest = time;
+  }
+  return [oldest, newest];
+}
 
 /*
   renderActivity draws the Activity tab: a grid of the killmails seen in each hour of each day of the week, in the time zone chosen in Preferences.
   The busier an hour, the stronger its accent color, and each hour shows its count. The last row and column total each hour and day.
 */
 function renderActivity(kms) {
-  const counts = Array.from({ length: 7 }, () => Array(24).fill(0)); // [weekday][hour]
-  for (const km of kms) {
-    const parts = timeParts(km.time);
-    counts[parts.weekday][parts.hour]++;
-  }
+  const counts = activityCounts(kms.map((km) => km.time));
   const busiest = Math.max(0, ...counts.flat());
   const zone = preferences.timeZone === "local" ? "local" : "EVE";
 
@@ -1601,8 +1634,7 @@ function renderActivity(kms) {
   el("activity-note").hidden = kms.length === 0;
 
   // the dates the chart covers, from the oldest killmail to the newest
-  const times = kms.map((km) => km.time).sort();
-  el("activity-span").textContent = times.length ? killmailSpan(times[0], times[times.length - 1], true) : "";
+  el("activity-span").textContent = kms.length ? killmailSpan(...timeRange(kms.map((km) => km.time)), true) : "";
   el("activity-span").hidden = kms.length === 0;
   el("activity-empty").hidden = kms.length > 0;
 }
@@ -2103,7 +2135,7 @@ function showSidebar() {
     // a tab's own title, ie Allies?' note, is kept to show again in full
     if (tab.dataset.title === undefined) tab.dataset.title = tab.title;
     const name = tab.querySelector(".tab-name").textContent;
-    const count = tab.querySelector(".tab-count").textContent;
+    const count = tab.querySelector(".tab-count").dataset.count;
     tab.title = collapsed ? [name + (count ? ` (${count})` : ""), tab.dataset.title].filter(Boolean).join(": ") : tab.dataset.title;
   }
 }
@@ -2220,8 +2252,8 @@ function rankedPilots(pilots) {
 
 // busiestHour is the hour of the day most of the times fall in, ie 19:00 EVE, in EVE or local time as chosen in Preferences. A tie goes to the earliest hour.
 function busiestHour(times) {
-  const hours = Array(24).fill(0);
-  for (const time of times) hours[timeParts(time).hour]++;
+  const counts = activityCounts(times);
+  const hours = Array.from({ length: 24 }, (_, hour) => counts.reduce((sum, day) => sum + day[hour], 0));
   return `${pad2(hours.indexOf(Math.max(...hours)))}:00 ${preferences.timeZone === "local" ? "local" : "EVE"}`;
 }
 
@@ -2241,8 +2273,7 @@ const GLANCE_CARDS = {
   "tab-killmails": (report) => {
     const kms = report.killmails || [];
     if (!kms.length) return { rows: [], note: "No killmails found." };
-    const times = kms.map((km) => km.time).sort();
-    const note = killmailSpan(times[0], times[times.length - 1], true);
+    const note = killmailSpan(...timeRange(kms.map((km) => km.time)), true);
     // a system has no side, its killmails are only destroyed value
     if (!kms[0].outcome) {
       const destroyed = kms.reduce((sum, km) => sum + km.totalValue, 0);
@@ -2263,8 +2294,7 @@ const GLANCE_CARDS = {
   "tab-activity": (report) => {
     const kms = report.killmails || [];
     if (!kms.length) return null;
-    const days = Array(7).fill(0);
-    for (const km of kms) days[timeParts(km.time).weekday]++;
+    const days = activityCounts(kms.map((km) => km.time)).map((hours) => hours.reduce((sum, count) => sum + count, 0));
     const busiestDay = ACTIVITY_DAYS.find(([, weekday]) => weekday === days.indexOf(Math.max(...days)))[0];
     return {
       rows: [
