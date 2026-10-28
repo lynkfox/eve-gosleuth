@@ -324,15 +324,31 @@ func (a *App) checkSDERelease() {
 	}
 }
 
-// shutdown is called when the app closes, saving anything newly cached and closing the cache database
-func (a *App) shutdown(ctx context.Context) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+// shutdownSearchWait is how long closing the app waits for a running search to stop before saving the cache without it
+var shutdownSearchWait = 5 * time.Second
 
+/*
+shutdown is called when the app closes, saving anything newly cached and closing the cache database.
+A running search holds a.mu until it ends, which could be minutes, with the window already gone. So it is stopped as StopSearch does, and waited for only
+shutdownSearchWait; past that the cache is saved and closed anyway (it has its own locks, and a search writing to it after only keeps that for the session).
+A save is one transaction, so even a process killed while saving keeps the cache as it last was.
+*/
+func (a *App) shutdown(ctx context.Context) {
 	// a check of imported entities stops at its next call, the rest kept for the next start, and none starts
 	a.closing.Store(true)
-	a.checkMu.Lock()
-	defer a.checkMu.Unlock()
+
+	locked := a.mu.TryLock()
+	if !locked {
+		a.StopSearch()
+		locked = a.lockWithin(shutdownSearchWait)
+	}
+	if locked {
+		defer a.mu.Unlock()
+		a.checkMu.Lock()
+		defer a.checkMu.Unlock()
+	} else {
+		comm.Logger.Warn("The running search did not stop in time, saving the cache without it")
+	}
 
 	// debug mode lasts until the app closes, so no one forgets it is on
 	if a.GetSettings().DebugMode {
@@ -341,8 +357,25 @@ func (a *App) shutdown(ctx context.Context) {
 		}
 	}
 
+	a.closeCache()
+}
+
+// closeCache saves the cache and closes its database, logging rather than failing as the app is closing
+func (a *App) closeCache() {
 	if err := a.cache.Close(); err != nil {
 		comm.Logger.WithError(err).Error("Failed to save and close the cache")
+	}
+}
+
+// lockWithin takes a.mu if it comes free within wait, reporting whether it did
+func (a *App) lockWithin(wait time.Duration) bool {
+	for deadline := time.Now().Add(wait); ; time.Sleep(20 * time.Millisecond) {
+		if a.mu.TryLock() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
 	}
 }
 

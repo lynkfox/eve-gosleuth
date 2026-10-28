@@ -21,7 +21,7 @@ Recent searches live in the cache, not settings (retrieval/recent_searches.go): 
 
 ## Stopping a search
 
-`StopSearch` (gui/search_control.go) halts the ESI `RateGuard` (`api.ErrStopped` for every request), so killmail collection ends where it is and the report is built from what is cached; `SearchTarget` and `CollectIntel` resume it when they return, and the report's `stopped`/`rateLimited` flags show a warning above it. A search asks the frontend a question with `ask` (a Wails event) and waits for `AnswerPrompt`.
+`StopSearch` (gui/search_control.go) halts the ESI `RateGuard` (`api.ErrStopped` for every request), so killmail collection ends where it is and the report is built from what is cached; `SearchTarget` and `CollectIntel` resume it when they return, and the report's `stopped`/`rateLimited` flags show a warning above it. A search asks the frontend a question with `ask` (a Wails event) and waits for `AnswerPrompt`. Closing the app during a search stops it the same way (`shutdown`), waits up to `shutdownSearchWait` (5s) for it to let go of `a.mu`, and past that saves and closes the cache without it, so the process never lingers windowless until the search ends. A cache save is one SQLite transaction (WAL), so even a killed process keeps the cache as last saved.
 
 ## Debug mode
 
