@@ -43,8 +43,7 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
 * Systems
 
 * Other
- * Add a window that can be popped out on its own that can contain running live kill trackers - Per system, Per Entity, Per Types (such as all citadels).
-  * have an option to pull the kills since the tracker was last open
+
  * Report data to be saved as a PDF for distribution.
  * About tab, with isk donation instructions, maybe kofi?
  * Fits 
@@ -63,3 +62,8 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
  * Version easily bumpable outside of code
  * GitActions workflows to build and release
  * Auto Update-er and Update changelong Splash screen
+
+* Future plans
+ * Add a window that can be popped out on its own that can contain running live kill trackers - Per system, Per Entity, Per Types (such as all citadels).
+  * have an option to pull the kills since the tracker was last open
+ * Ability to use killmail dumps to bypass zkill calls, SDE dumps as well
