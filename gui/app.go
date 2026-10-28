@@ -680,13 +680,21 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		if system, _ := target.Expanded.(*retrieval.System); system != nil {
 			report.JSpace = comm.WormholeClass(system.Name, system.Region) != ""
 		}
+		isMoon := systemMoons(a.clients.ESIClient)
+		moonIDs := []int{}
+		for _, km := range append([]*retrieval.Killmail{structures.last}, structures.previous...) {
+			if km != nil {
+				moonIDs = append(moonIDs, towerMoon(km, isMoon))
+			}
+		}
+		prefetchMoons(a.clients.ESIClient, moonIDs)
 		if structures.last != nil {
-			loss := structureLoss(a.clients.ESIClient, structures.last)
+			loss := structureLoss(a.clients.ESIClient, isMoon, structures.last)
 			report.LastStructureLoss = &loss
 		}
 		report.PreviousStructureLosses = []StructureLoss{}
 		for _, km := range structures.previous {
-			report.PreviousStructureLosses = append(report.PreviousStructureLosses, structureLoss(a.clients.ESIClient, km))
+			report.PreviousStructureLosses = append(report.PreviousStructureLosses, structureLoss(a.clients.ESIClient, isMoon, km))
 		}
 	}
 

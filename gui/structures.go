@@ -144,7 +144,24 @@ func (a *App) collectStructureKillmails(target retrieval.IntelTarget, limits ret
 // buildStructures builds a corp or alliance target's Structures tab, from its structures' kills and losses and the structures among its own killmails
 func buildStructures(esi api.ESIClient, found structureKillmails, killmails []*retrieval.Killmail, target *retrieval.IntelTarget) *StructuresReport {
 	report := &StructuresReport{Used: []StructureSummary{}, Destroyed: []StructureLoss{}, Lost: []StructureLoss{}}
-	for _, use := range aggregate.StructuresUsed(found.used, found.lost, target) {
+	isMoon := systemMoons(esi)
+	uses := aggregate.StructuresUsed(found.used, found.lost, target, isMoon)
+	destroyed := aggregate.StructuresDestroyed(killmails, target)
+
+	// the towers' moons are named on their rows, so look up the ones not cached yet together first
+	moonIDs := []int{}
+	for _, use := range uses {
+		moonIDs = append(moonIDs, use.MoonID)
+	}
+	for _, kill := range destroyed {
+		moonIDs = append(moonIDs, towerMoon(kill.Killmail, isMoon))
+	}
+	for _, km := range found.lost {
+		moonIDs = append(moonIDs, towerMoon(km, isMoon))
+	}
+	prefetchMoons(esi, moonIDs)
+
+	for _, use := range uses {
 		summary := StructureSummary{
 			Type:      "Control Tower",
 			System:    structureSystem(use.System),
@@ -176,13 +193,13 @@ func buildStructures(esi api.ESIClient, found structureKillmails, killmails []*r
 		}
 		report.Used = append(report.Used, summary)
 	}
-	for _, kill := range aggregate.StructuresDestroyed(killmails, target) {
-		loss := structureLoss(esi, kill.Killmail)
+	for _, kill := range destroyed {
+		loss := structureLoss(esi, isMoon, kill.Killmail)
 		loss.Pilots = kill.Pilots
 		report.Destroyed = append(report.Destroyed, loss)
 	}
 	for _, km := range found.lost {
-		loss := structureLoss(esi, km)
+		loss := structureLoss(esi, isMoon, km)
 		if km.Via != nil {
 			loss.Via = km.Via.Name
 		}
@@ -192,14 +209,12 @@ func buildStructures(esi api.ESIClient, found structureKillmails, killmails []*r
 }
 
 // structureLoss describes a structure killmail's victim, a control tower's moon, and who destroyed it
-func structureLoss(esi api.ESIClient, km *retrieval.Killmail) StructureLoss {
+func structureLoss(esi api.ESIClient, isMoon func(systemID, celestialID int) bool, km *retrieval.Killmail) StructureLoss {
 	loss := StructureLoss{System: structureSystem(km.System), Death: structureDeath(km)}
 	if ship := km.Victim.Ship; ship != nil {
 		loss.TypeID, loss.Type = ship.ItemID, ship.Name
 		loss.ImageURL, loss.RenderURL = api.TypeImageURL(ship.ItemID), api.TypeRenderURL(ship.ItemID)
-		if comm.ControlTowerGroups.ContainsGroupOf(ship.ItemID) {
-			loss.Moon = moonName(esi, km.LocationID, km.System)
-		}
+		loss.Moon = moonName(esi, towerMoon(km, isMoon), km.System)
 	}
 	loss.Owner, loss.OwnerAlliance = groupRefs(km.Victim.CorpAtKill, km.Victim.AllianceAtKill)
 	return loss
@@ -211,6 +226,39 @@ func structureDeath(km *retrieval.Killmail) StructureDeath {
 	death := StructureDeath{KillmailID: km.KillmailID, ZkillURL: api.ZkillKillmailURL(km.KillmailID), Time: km.KillmailTime, Attackers: killer.Attackers}
 	death.KillerCorp, death.KillerAlliance = groupRefs(killer.Corporation, killer.Alliance)
 	return death
+}
+
+// towerMoon is the moon a control tower was lost at, 0 for another victim or when zKillboard's nearest celestial is not one of its system's moons
+func towerMoon(km *retrieval.Killmail, isMoon func(systemID, celestialID int) bool) int {
+	if km.Victim == nil || km.Victim.Ship == nil || !comm.ControlTowerGroups.ContainsGroupOf(km.Victim.Ship.ItemID) {
+		return 0
+	}
+	return aggregate.MoonOf(km, isMoon)
+}
+
+// systemMoons reports whether a celestial is one of a system's moons, from the system's planets, each system looked up once
+func systemMoons(esi api.ESIClient) func(systemID, celestialID int) bool {
+	moons := map[int]map[int]bool{}
+	return func(systemID, celestialID int) bool {
+		if _, found := moons[systemID]; !found {
+			moons[systemID] = map[int]bool{}
+			if system, err := esi.GetSystemInfo(systemID); err == nil && system != nil {
+				for _, planet := range system.Planets {
+					for _, moonID := range planet.Moons {
+						moons[systemID][moonID] = true
+					}
+				}
+			}
+		}
+		return moons[systemID][celestialID]
+	}
+}
+
+// prefetchMoons looks up the moons not cached yet together, when the client is the cache
+func prefetchMoons(esi api.ESIClient, moonIDs []int) {
+	if cache, ok := esi.(*retrieval.CachedEveIDs); ok {
+		cache.PrefetchMoons(moonIDs)
+	}
 }
 
 // moonName names a control tower's moon without its system's name, ie III - Moon 2, empty when it is not known or can not be looked up

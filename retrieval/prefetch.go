@@ -141,6 +141,32 @@ func (cached *CachedEveIDs) PrefetchItemTypes(typeIDs []int) {
 	comm.ReportProgress("%s", cached.Counts().Since(before).Annotate(fmt.Sprintf("Looked up %d item types in %s", len(lookups), time.Since(started).Round(time.Millisecond))))
 }
 
+/*
+	PrefetchMoons looks up moons that are not cached yet, prefetchWorkers at a time, ie the moons of a corp's control towers, as the ESI has no bulk call
+	that names a moon. Each moon is cached until a newer SDE.
+
+Parameters:
+  - moonIDs: the moons, repeats are looked up once
+*/
+func (cached *CachedEveIDs) PrefetchMoons(moonIDs []int) {
+	seen := map[int]struct{}{}
+	lookups := []func(){}
+	for _, moonID := range moonIDs {
+		if _, done := seen[moonID]; done || moonID == 0 {
+			continue
+		}
+		seen[moonID] = struct{}{}
+		if !held[api.ESIMoon](cached, sectionKnown, cached.Known, moonID) {
+			lookups = append(lookups, func() { _, _ = cached.GetIfNotCached(moonID, types.MOON) })
+		}
+	}
+	if len(lookups) == 0 {
+		return
+	}
+	comm.ReportProgress("Looking up %d moons", len(lookups))
+	runParallel(lookups, prefetchWorkers)
+}
+
 // idsOnKillmails collects the unique ids the killmails refer to, with the victims' item types fit_types.json does not have. NPC attackers have no character.
 func idsOnKillmails(killmails []RawKillmail) (pilots, corporations, alliances, items, systems map[int]struct{}) {
 	pilots, corporations, alliances, items, systems = map[int]struct{}{}, map[int]struct{}{}, map[int]struct{}{}, map[int]struct{}{}, map[int]struct{}{}

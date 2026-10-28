@@ -64,8 +64,10 @@ func TestStructures(t *testing.T) {
 		lost(13, 300, other, tower, mainCorp, pilot(50, enemyCorp)),                           // the tower its battery stood for
 	}
 
+	noMoons := func(systemID, celestialID int) bool { return false }
+
 	t.Run("structures are found on kills by type, system, and owner, and grayed by a later loss", func(t *testing.T) {
-		uses := aggregate.StructuresUsed(used, losses, target)
+		uses := aggregate.StructuresUsed(used, losses, target, noMoons)
 		assert.Len(t, uses, 4, "the enemy's Fortizar is not the target's")
 
 		assert.Equal(t, astrahus, uses[0].Structure.ItemID, "standing ones first, newest kill first")
@@ -87,7 +89,8 @@ func TestStructures(t *testing.T) {
 	})
 
 	t.Run("control towers in one system are told apart by their moon, and each loss is matched to its moon", func(t *testing.T) {
-		const moonA, moonB, moonC = 40000001, 40000002, 40000003
+		const moonA, moonB, moonC, planet = 40000001, 40000002, 40000003, 40000010
+		isMoon := func(systemID, celestialID int) bool { return celestialID != planet }
 		at := func(km *retrieval.Killmail, moonID int) *retrieval.Killmail {
 			km.LocationID = moonID
 			return km
@@ -97,13 +100,14 @@ func TestStructures(t *testing.T) {
 			at(kill(31, 4, home, onKill(artillery, mainCorp)), moonB),
 			at(kill(32, 6, home, onKill(artillery, mainCorp)), moonA),
 			at(kill(33, 9, other, onKill(artillery, mainCorp)), 0),
+			at(kill(34, 10, other, onKill(artillery, mainCorp)), planet), // nearest a planet, so its moon is not known either
 		}
 		losses := []*retrieval.Killmail{
 			at(lost(40, 2, home, tower, mainCorp, pilot(50, enemyCorp)), moonB),  // after both towers' newest kills, but at B's moon
 			at(lost(41, 3, home, tower, mainCorp, pilot(50, enemyCorp)), moonC),  // a third tower's, seen on no kill
 			at(lost(42, 7, other, tower, mainCorp, pilot(50, enemyCorp)), moonC), // the moon of a tower seen with none is not known, so it matches
 		}
-		uses := aggregate.StructuresUsed(used, losses, target)
+		uses := aggregate.StructuresUsed(used, losses, target, isMoon)
 		assert.Len(t, uses, 3, "two towers in one system, and one elsewhere")
 
 		assert.Equal(t, moonA, uses[0].MoonID)
@@ -115,6 +119,7 @@ func TestStructures(t *testing.T) {
 		assert.Equal(t, tower, uses[1].Structure.ItemID)
 
 		assert.Equal(t, 0, uses[2].MoonID)
+		assert.Equal(t, 2, uses[2].Kills, "a kill nearest a planet is the same tower as one nearest nothing")
 		assert.Equal(t, 42, uses[2].Loss.KillmailID)
 	})
 

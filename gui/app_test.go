@@ -193,9 +193,16 @@ func TestMatchTargets(t *testing.T) {
 	})
 }
 
-// moonESIClient knows one moon, and fails for any other
+// moonESIClient knows one moon, in system 31000001 beside planet 40000010, and fails for any other
 type moonESIClient struct {
 	api.ESIClient
+}
+
+func (m moonESIClient) GetSystemInfo(idNumber int) (*api.ESISystem, error) {
+	if idNumber == 31000001 {
+		return &api.ESISystem{SystemID: idNumber, Name: "J100001", Planets: []api.ESIPlanet{{PlanetID: 40000010, Moons: []int{40000001}}}}, nil
+	}
+	return nil, api.ErrRequestFailedToComplete
 }
 
 func (m moonESIClient) GetMoonInfo(idNumber int) (*api.ESIMoon, error) {
@@ -224,15 +231,16 @@ func TestBuildStructuresLost(t *testing.T) {
 		return &retrieval.Killmail{KillmailID: id, System: system, LocationID: moonID, Via: via,
 			Victim: &retrieval.KillmailVictim{Ship: &retrieval.Item{ItemID: typeID, Name: "Structure"}, CorpAtKill: &retrieval.Corporation{CorporationID: 98000001, Name: "Corp"}}}
 	}
-	found := structureKillmails{lost: []*retrieval.Killmail{lost(1, 12235, 40000001, nil), lost(2, 35832, 40000001, holding)}}
+	found := structureKillmails{lost: []*retrieval.Killmail{lost(1, 12235, 40000001, nil), lost(2, 35832, 40000001, holding), lost(3, 12235, 40000010, nil)}}
 
 	report := buildStructures(moonESIClient{}, found, nil, target)
 	assert.Empty(t, report.Used, "a structure never on a kill is not used")
-	if assert.Len(t, report.Lost, 2, "every structure lost is listed, seen on a kill or not") {
+	if assert.Len(t, report.Lost, 3, "every structure lost is listed, seen on a kill or not") {
 		assert.Equal(t, "III - Moon 2", report.Lost[0].Moon, "a tower's moon is named")
 		assert.Equal(t, "", report.Lost[0].Via)
 		assert.Equal(t, "Corp", report.Lost[0].Owner.Name)
 		assert.Equal(t, "", report.Lost[1].Moon, "an upwell structure has no moon")
 		assert.Equal(t, "Holding", report.Lost[1].Via)
+		assert.Equal(t, "", report.Lost[2].Moon, "a tower nearest a planet is not named after it")
 	}
 }

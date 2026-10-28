@@ -12,13 +12,13 @@ import (
 /*
 StructureUse is one of a corp or alliance target's structures seen on its kills: an upwell structure, or a control tower seen through its batteries.
 Killmails give a structure no name or id, so a structure is its type, system, and owning corp: two of one type a corp has in one system are one StructureUse.
-A control tower is also told apart by its moon, as a moon holds one tower: zKillboard's nearest celestial to its kills.
+A control tower is also told apart by its moon, as a moon holds one tower: zKillboard's nearest celestial to its kills, when that is one of its system's moons.
 */
 type StructureUse struct {
 	Structure   *retrieval.Item // the upwell structure's or control tower's type. A tower seen only through its batteries has none, unless its loss names it.
 	Battery     *retrieval.Item // a control tower's battery on its newest kill, nil for an upwell structure
 	System      *retrieval.System
-	MoonID      int // a control tower's moon, 0 for an upwell structure or when zKillboard named no celestial
+	MoonID      int // a control tower's moon, 0 for an upwell structure or when zKillboard named no moon of its system
 	Corporation *retrieval.Corporation
 	Alliance    *retrieval.Alliance    // the owning corp's alliance on its newest kill, nil for none
 	Via         *retrieval.TargetGroup // the holding owning it, nil for the target itself
@@ -38,11 +38,12 @@ Parameters:
   - used: the expanded killmails the target's structures were on, newest first
   - lost: the target's expanded structure losses, newest first
   - target: the corp or alliance target, with any Holdings
+  - isMoon: whether a celestial is one of a system's moons, as zKillboard's nearest celestial may be a planet, belt, or stargate
 
 Returns:
   - []StructureUse: the structures standing first, then those lost, each newest kill first
 */
-func StructuresUsed(used []*retrieval.Killmail, lost []*retrieval.Killmail, target *retrieval.IntelTarget) []StructureUse {
+func StructuresUsed(used []*retrieval.Killmail, lost []*retrieval.Killmail, target *retrieval.IntelTarget, isMoon func(systemID, celestialID int) bool) []StructureUse {
 	byKey := map[string]*StructureUse{}
 	order := []string{}
 	for _, km := range used {
@@ -65,7 +66,7 @@ func StructuresUsed(used []*retrieval.Killmail, lost []*retrieval.Killmail, targ
 			}
 			moonID := 0
 			if isTower(structure) {
-				moonID = km.LocationID
+				moonID = MoonOf(km, isMoon)
 			}
 			key := structureKey(structure, km.System.SystemID, moonID, attacker.CorpAtKill)
 			if onKill[key] {
@@ -90,7 +91,7 @@ func StructuresUsed(used []*retrieval.Killmail, lost []*retrieval.Killmail, targ
 	for _, key := range order {
 		use := byKey[key]
 		for _, loss := range lost {
-			if loss.KillmailTime.After(use.LastSeen) && lossOf(use, loss) {
+			if loss.KillmailTime.After(use.LastSeen) && lossOf(use, loss, isMoon) {
 				use.Loss = loss // lost is newest first, so this ends at the first loss after its newest kill
 			}
 		}
@@ -126,13 +127,21 @@ func structureKey(structure *retrieval.Item, systemID int, moonID int, corp *ret
 	return fmt.Sprintf("%s:%d:%d:%d", kind, systemID, moonID, corpID)
 }
 
+// MoonOf is the moon a killmail was nearest, 0 when zKillboard's nearest celestial is not one of its system's moons
+func MoonOf(km *retrieval.Killmail, isMoon func(systemID, celestialID int) bool) int {
+	if km.System == nil || km.LocationID == 0 || !isMoon(km.System.SystemID, km.LocationID) {
+		return 0
+	}
+	return km.LocationID
+}
+
 // lossOf reports whether a structure loss is the structure's: the same type, or any control tower for a tower, in its system, of its corp, and for a tower at its moon when both are known
-func lossOf(use *StructureUse, loss *retrieval.Killmail) bool {
+func lossOf(use *StructureUse, loss *retrieval.Killmail, isMoon func(systemID, celestialID int) bool) bool {
 	victim := loss.Victim
 	if victim.Ship == nil || loss.System == nil || victim.Pilot != nil {
 		return false
 	}
-	if isTower(use.Structure) && use.MoonID != 0 && loss.LocationID != 0 && use.MoonID != loss.LocationID {
+	if moonID := MoonOf(loss, isMoon); isTower(use.Structure) && use.MoonID != 0 && moonID != 0 && use.MoonID != moonID {
 		return false
 	}
 	return structureKey(victim.Ship, loss.System.SystemID, 0, victim.CorpAtKill) == structureKey(use.Structure, use.System.SystemID, 0, use.Corporation)
