@@ -74,8 +74,11 @@ func InitStaticData(staticFiles fs.FS, overrides ...fs.FS) error {
 		{"pos_battery_groups.json", PosBatteryGroups.LoadStaticType},
 		{"minor_structure_groups.json", MinorStructureGroups.LoadStaticType},
 		{"minor_structures.json", MinorStructures.LoadStaticType},
+		{"fit_ignored_hulls.json", LoadFitIgnoredHulls},
 		{"jspace_statics.json", LoadJSpaceStatics},
 		{"space_classes.json", LoadSpaceClasses},
+		{"inventory_flags.json", LoadInventoryFlags},
+		{"fit_types.json", LoadFitTypes},
 	} {
 		if err := loadFirstReadable(file.name, sources, file.load); err != nil {
 			errs = append(errs, err)

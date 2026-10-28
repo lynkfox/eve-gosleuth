@@ -71,6 +71,23 @@ Every row's menu is built by `withMenu` in main.js from sections (`openSectionsM
 - A j-space system target gets `IntelReport.LastStructureLoss` and `PreviousStructureLosses` (`retrieval.StructureLosses`, page 1 of each structure and minor structure group's losses in the system, no limits: the newest non-minor loss, and the `PreviousStructureLosses` (5) newest others), the box above its Activity with the others collapsed under it.
 - A corp or alliance target gets the Structures tab (`IntelReport.Structures`): Used in Kills is `CollectStructureKillmails`, each structure group's kills (not towers) and losses, and each battery group's kills, for the target and its holdings, to Max or Pages but ignoring the date limit, then `aggregate.StructuresUsed` groups them by type (towers as one kind), system, and owner corp, as killmails give no structure name or id, grayed by a loss of the same after its newest kill (which also names a tower seen only through batteries). Destroyed is `aggregate.StructuresDestroyed`, the structure and minor structure losses on the search's own killmails that the target's pilots were on.
 
+## Fits
+
+The full plan and the decisions behind it are in `docs/fits-plan.md`.
+
+- **Building a fit.** `RawKillmail.Expand` builds each victim's `Fit` with `BuildFit` (retrieval/fits.go):
+  - Each item's killmail flag is placed through `inventory_flags.json` (`comm.FitSlotOf`).
+  - Each type is read from `fit_types.json` (`comm.FitTypeOf`). That file is generated from the SDE by `cmd/sdegen`, so type names cost no ESI call. Only victim types missing from it are prefetched from the ESI during the search, and they are listed in `Fit.MissingTypes`.
+  - Charges pair with the module on the same flag.
+  - Cargo keeps only `cargo_kept` types: charges, scripts, boosters and nanite paste.
+  - Items nested under another item are dropped when the killmail is read.
+- **Fits tab.** Pilot, corp and alliance searches get `IntelReport.Fits` (`buildFits`, gui/fits.go): the target's losses (holdings included) by ship name, newest first.
+  - Non-combat hulls are left out by category, group, or type (`fit_ignored_hulls.json`: capsules, shuttles, corvettes, haulers and transports, freighters, mining and ORE ships, the Zephyr, yachts, structures, deployables, starbases), as is any loss with nothing fitted (`Fit.HasModules`).
+  - Each entry carries its EFT text (`Fit.EFT`, retrieval/eft.go, mirroring pyfa's export).
+  - The tab lists the losses on the left and the selected one's EFT on the right. Copy EFT puts it on the clipboard through the Wails runtime.
+- `App.FitEFT(killmailID)` returns the same text for a killmail in the last pilot, corp or alliance search. A system search clears that.
+- The CLI prints the target's losses as EFT.
+
 ## System tabs
 
 - `GetPIPilots` (aggregate/piPilots.go) feeds a system target's PI Pilots tab: hauler losses, T1 and T2 transports but no freighters (`hauler_groups.json` minus `hauler_exclusions.json`) whose zKill `locationID` (`Killmail.LocationID`, the nearest celestial) is one of the system's planets, plus any loss with PI aboard wherever it died (the victims' item types are prefetched with `PrefetchItemTypes` first), with PI cargo found by item group (`pi_material_groups.json`) from the raw `Victim.Items`.
@@ -82,3 +99,19 @@ Every row's menu is built by `withMenu` in main.js from sections (`openSectionsM
 - The tab order in `index.html` is the default; a saved order (`Settings.TabOrder` via `SetTabOrder`) fills the slots of the tabs it names (`tabOrderFrom` in main.js), so a new tab keeps its default place.
 - `api/esi_gui.go` builds `TargetDisplay` values (four title/value panels) per entity type via `TargetEntity.BuildDisplay`. `api.EntityImageURL` gives EVE image server portraits/logos.
 - Themes are defined in `frontend/dist/main.js` (`THEMES`); only colors without a meaning are themed, kill/loss, security, and wormhole class colors stay fixed.
+
+## Planned: sidebar tabs and At a glance
+
+Not built yet. Decided 2026-10-27, after the window was widened 25% to 1375 px (content area 1200 px) because the app was getting crowded.
+
+- **Sidebar.** The tab bar becomes a vertical list on the left of the report.
+  - Each entry has an icon, its name, and a count where one makes sense (killmails, members, allies, structures, fits).
+  - Only the tabs a search type has are listed, as now.
+  - The saved tab order (`Settings.TabOrder`, drag to reorder) carries over as the list's order.
+  - Each tab's color key and `?` help move to the top of its panel.
+  - The panel takes the full height beside the list, and the tab bar row is gone.
+- **At a glance.** A new first entry in the sidebar, an overview of the search:
+  - A card per tab showing its top two or three rows (Top Members, Top Systems, Fits by hull, Allies?, Capitals, Structures, and for systems PI Pilots and Ratters).
+  - Each card has an "Open" link to its full tab.
+  - It is built only from report data already fetched during the search (no lazy calls).
+  - It could later be the base for the PDF report export on the Readme list.

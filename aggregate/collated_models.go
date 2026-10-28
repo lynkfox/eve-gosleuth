@@ -59,7 +59,7 @@ type Structure struct {
 	Structure        *retrieval.Item
 	Corporation      *retrieval.Corporation // owner at the time of the killmail
 	Alliance         *retrieval.Alliance    // owner's alliance at the time of the killmail, nil if the corp had none
-	Fits             map[string][]*retrieval.FitItem
+	Fits             map[string]*retrieval.Fit
 	TotalKillmails   int
 	KillmailIDs      []int
 	Activity         []time.Time
@@ -70,7 +70,7 @@ type Structure struct {
 type ShipFlown struct {
 	Ship                *retrieval.Item
 	PilotID             int
-	Fits                map[string][]*retrieval.FitItem //key of KillmailID-shipID
+	Fits                map[string]*retrieval.Fit //key of KillmailID-shipID
 	TotalKillmails      int
 	Activity            []time.Time
 	BattlesFoughtIDs    map[string]struct{}

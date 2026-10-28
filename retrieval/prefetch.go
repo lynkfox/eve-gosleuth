@@ -20,6 +20,7 @@ const prefetchWorkers = 20
 	- Pilots are looked up in bulk, api.ESI_BULK_IDS at a time: their names with universe/names, and their current corp and alliance with characters/affiliation.
 	  Pilots either bulk call failed for are left to ExpandPilot, which looks them up one at a time.
 	- Corporations, alliances, ship and weapon types, and systems have no bulk call, so each is looked up on its own, prefetchWorkers at a time.
+	- So are the types of victims' items that fit_types.json does not have, which BuildFit names through the cache.
 
 	Only what is not already cached is looked up.
 
@@ -139,7 +140,7 @@ func (cached *CachedEveIDs) PrefetchItemTypes(typeIDs []int) {
 	comm.ReportProgress("%s", cached.Counts().Since(before).Annotate(fmt.Sprintf("Looked up %d item types in %s", len(lookups), time.Since(started).Round(time.Millisecond))))
 }
 
-// idsOnKillmails collects the unique ids the killmails refer to. NPC attackers have no character.
+// idsOnKillmails collects the unique ids the killmails refer to, with the victims' item types fit_types.json does not have. NPC attackers have no character.
 func idsOnKillmails(killmails []RawKillmail) (pilots, corporations, alliances, items, systems map[int]struct{}) {
 	pilots, corporations, alliances, items, systems = map[int]struct{}{}, map[int]struct{}{}, map[int]struct{}{}, map[int]struct{}{}, map[int]struct{}{}
 	add := func(set map[int]struct{}, id *int) {
@@ -155,6 +156,12 @@ func idsOnKillmails(killmails []RawKillmail) (pilots, corporations, alliances, i
 		add(pilots, esiKM.Victim.CharacterID)
 		add(corporations, esiKM.Victim.CorporationID)
 		add(alliances, esiKM.Victim.AllianceID)
+		// a fit names its items from fit_types.json, so only types newer than it are looked up
+		for _, item := range esiKM.Victim.Items {
+			if comm.FitTypeOf(item.ItemTypeID) == nil {
+				add(items, &item.ItemTypeID)
+			}
+		}
 		for _, attacker := range esiKM.Attackers {
 			add(items, &attacker.ShipTypeID)
 			add(items, attacker.WeaponTypeID)

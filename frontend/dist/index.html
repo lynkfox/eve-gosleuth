@@ -129,6 +129,7 @@
           <button id="tab-roster" class="tab" type="button" role="tab" aria-controls="panel-roster" aria-selected="false">Members</button>
           <button id="tab-allies" class="tab" type="button" role="tab" aria-controls="panel-allies" aria-selected="false" title="Potential allies, not confirmed">Allies?</button>
           <button id="tab-structures" class="tab" type="button" role="tab" aria-controls="panel-structures" aria-selected="false">Structures</button>
+          <button id="tab-fits" class="tab" type="button" role="tab" aria-controls="panel-fits" aria-selected="false">Fits</button>
           <div id="tab-key" class="tab-key"></div>
         </div>
 
@@ -266,6 +267,21 @@
         <div id="panel-capitals" class="tab-panel" role="tabpanel" aria-labelledby="tab-capitals" hidden>
           <div id="capitals-list" class="capitals"></div>
           <p id="capitals-empty" class="muted" hidden>No members flying capitals on the collected killmails.</p>
+        </div>
+
+        <div id="panel-fits" class="tab-panel" role="tabpanel" aria-labelledby="tab-fits" hidden>
+          <div id="fits-layout" class="fits">
+            <ul id="fits-list" class="fits-list"></ul>
+            <section class="fit-view">
+              <div class="fit-view-head">
+                <span id="fit-view-title" class="fit-view-title"></span>
+                <button id="fit-copy" class="secondary" type="button" disabled>Copy EFT</button>
+              </div>
+              <p id="fit-view-note" class="muted" hidden></p>
+              <pre id="fit-view-eft" class="fit-eft"></pre>
+            </section>
+          </div>
+          <p id="fits-empty" class="muted" hidden>No losses with a fit on the collected killmails.</p>
         </div>
 
         <div id="panel-roster" class="tab-panel paged-panel" role="tabpanel" aria-labelledby="tab-roster" hidden>

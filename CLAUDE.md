@@ -13,6 +13,7 @@ An EVE Online intel tool written in Go (module `github.com/lynkfox/go_eve_sleuth
 ```bash
 wails build -platform windows/amd64 -skipbindings   # GUI -> build/bin/eve-gosleuth.exe (wails CLI v2: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0)
 go run ./cmd/cli                        # CLI scratch driver (target is hardcoded in cmd/cli/main.go)
+go run ./cmd/sdegen                     # regenerate static_data/fit_types.json from the latest SDE (-sde-dir DIR or -sde-zip FILE to use a local copy)
 go test ./...                           # all tests
 go test ./aggregate -run TestName -v    # single test
 GOOS=windows go vet ./...               # vet including the Wails windows code

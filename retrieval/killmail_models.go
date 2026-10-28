@@ -50,8 +50,8 @@ type KillmailVictim struct {
 	AllianceAtKill *Alliance
 	Ship           *Item
 	DamageTaken    int
-	Fit            []*FitItem
-	Items          []api.ESIKillmailItem // what the victim had fitted and carried, as the ESI lists it. Unlike Fit, the item types are not looked up.
+	Fit            *Fit                  // the victim's fit, read from Items with BuildFit
+	Items          []api.ESIKillmailItem // what the victim had fitted and carried, as the ESI lists it
 }
 
 type Item struct {
@@ -59,15 +59,6 @@ type Item struct {
 	TypeOfEntity types.EntityType `json:"-"`
 	Name         string           `json:"name"`
 	ImageUrl     string           `json:"image"`
-}
-
-type FitItem struct {
-	Item              *Item  `json:"item"`
-	Flag              int    `json:"-"`
-	FitLocationName   string `json:"slot"`
-	QuantityDestroyed int    `json:"quantity_destroyed"`
-	QuantityDropped   int    `json:"quantity_dropped"`
-	Singleton         int    `json:"singleton"`
 }
 
 type System struct {

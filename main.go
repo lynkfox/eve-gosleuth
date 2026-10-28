@@ -18,7 +18,7 @@ func main() {
 
 	err := wails.Run(&options.App{
 		Title:     "EVE GoSleuth",
-		Width:     1100,
+		Width:     1375,
 		Height:    1000,
 		MinWidth:  720,
 		MinHeight: 560,

@@ -1,0 +1,31 @@
+{
+    "categories": {
+        "22": "Deployable",
+        "23": "Starbase",
+        "65": "Structure"
+    },
+    "groups": {
+        "28": "Hauler",
+        "29": "Capsule",
+        "31": "Shuttle",
+        "237": "Corvette",
+        "380": "Deep Space Transport",
+        "463": "Mining Barge",
+        "513": "Freighter",
+        "543": "Exhumer",
+        "883": "Capital Industrial Ship",
+        "902": "Jump Freighter",
+        "941": "Industrial Command Ship",
+        "1022": "Prototype Exploration Ship",
+        "1202": "Blockade Runner",
+        "1283": "Expedition Frigate",
+        "5087": "Special Edition Yachts"
+    },
+    "types": {
+        "32880": "Venture",
+        "89240": "Pioneer",
+        "89647": "Pioneer Consortium Issue",
+        "89648": "Venture Consortium Issue",
+        "91174": "Perseverance"
+    }
+}

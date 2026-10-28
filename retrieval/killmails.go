@@ -447,6 +447,7 @@ func (rkm *RawKillmail) Expand(esiClient *api.ESIClient, cached *CachedEveIDs) *
 		Ship:        cached.ExpandItem(rkm.ESIKillmail.Victim.ShipTypeID),
 		DamageTaken: rkm.ESIKillmail.Victim.DamageTaken,
 		Items:       rkm.ESIKillmail.Victim.Items,
+		Fit:         cached.BuildFit(rkm.ESIKillmail.Victim.ShipTypeID, rkm.ESIKillmail.Victim.Items),
 	}
 	// structure and deployable losses have no pilot, only the owning corp and alliance
 	if rkm.ESIKillmail.Victim.CharacterID != nil {

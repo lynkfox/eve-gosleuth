@@ -1461,6 +1461,11 @@ function renderIntelSections(report) {
     renderCapitals(report.capitals);
   }
 
+  el("tab-fits").hidden = !report.fits;
+  if (report.fits) {
+    renderFits(report.fits);
+  }
+
   el("tab-structures").hidden = !report.structures;
   if (report.structures) {
     renderStructures(report.structures);
@@ -1574,6 +1579,66 @@ function renderCapitals(capitals) {
     return ship;
   }));
   el("capitals-empty").hidden = capitals.length > 0;
+}
+
+/*
+  renderFits fills the Fits tab of a pilot, corp, or alliance search: the target's losses with a fit, under a heading for each ship, newest first.
+  Selecting one shows its fit as EFT on the right, where Copy EFT puts it on the clipboard for the in-game Import from clipboard. The first is selected to start.
+*/
+function renderFits(fits) {
+  const rows = [];
+  const select = (fit, row) => {
+    rows.forEach((other) => other.setAttribute("aria-selected", String(other === row)));
+    el("fit-view-title").textContent = `${fit.shipName} · ${fit.pilotName} · ${spokenDate(fit.time)}`;
+    el("fit-view-eft").textContent = fit.eft;
+    const note = el("fit-view-note");
+    note.hidden = !fit.missingTypes;
+    note.textContent = fit.missingTypes ? `${fit.missingTypes} item ${fit.missingTypes === 1 ? "type is" : "types are"} newer than GoSleuth's item data, so this fit may be missing pieces.` : "";
+    el("fit-copy").disabled = false;
+    el("fit-copy").onclick = () => window.runtime.ClipboardSetText(fit.eft).then((copied) => tickerPush(copied ? "Fit copied" : "Could not copy the fit"));
+  };
+
+  const items = [];
+  let hull = "";
+  for (const fit of fits) {
+    if (fit.shipName !== hull) {
+      hull = fit.shipName;
+      const heading = document.createElement("li");
+      heading.className = "fits-hull";
+      heading.textContent = hull;
+      items.push(heading);
+    }
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "fit-row";
+    row.setAttribute("aria-selected", "false");
+    const image = document.createElement("img");
+    image.src = fit.shipImageUrl;
+    image.alt = "";
+    const text = document.createElement("span");
+    text.className = "fit-row-text";
+    const who = document.createElement("span");
+    who.textContent = fit.pilotName;
+    const when = document.createElement("span");
+    when.className = "fit-row-when";
+    when.textContent = spokenDate(fit.time);
+    text.append(who, when);
+    row.append(image, text);
+    row.addEventListener("click", () => select(fit, row));
+    rows.push(row);
+    const item = document.createElement("li");
+    item.append(row);
+    items.push(item);
+  }
+  el("fits-list").replaceChildren(...items);
+
+  el("fits-layout").hidden = fits.length === 0;
+  el("fits-empty").hidden = fits.length > 0;
+  el("fit-view-title").textContent = "";
+  el("fit-view-eft").textContent = "";
+  el("fit-view-note").hidden = true;
+  el("fit-copy").disabled = true;
+  if (fits.length > 0) select(fits[0], rows[0]);
 }
 
 // renderPIPilots fills the PI Pilots tab of a system search: each pilot with PI losses, haulers near its planets or any ship with PI aboard, newest first
@@ -1989,6 +2054,11 @@ const TAB_HELP = {
   "tab-structures": [
     "Used in Kills: this corp's and its holdings' citadels and POSes seen on its kills, at any age.",
     "Destroyed: structures it helped kill on this search's killmails.",
+  ],
+  "tab-fits": [
+    "This target's losses with their fits, by ship, newest first.",
+    "Non-combat ships (pods, shuttles, haulers, mining ships), structures, and losses with nothing fitted are left out.",
+    "Copy EFT puts the fit on the clipboard for Import from clipboard in the game's fitting window.",
   ],
   "tab-capitals": [
     "Capital ships its pilots flew on these killmails, and who flew them. Click a pilot to search.",

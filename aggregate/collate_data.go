@@ -382,7 +382,7 @@ func UpdateShipFlown(found bool, shipFlown ShipFlown, ship *retrieval.Item, expa
 	if !found {
 		shipFlown = ShipFlown{
 			Ship:                ship,
-			Fits:                make(map[string][]*retrieval.FitItem),
+			Fits:                make(map[string]*retrieval.Fit),
 			AttackerKillmailIDs: []int{},
 			VictimKillmailIDs:   []int{},
 		}
@@ -394,7 +394,7 @@ func UpdateShipFlown(found bool, shipFlown ShipFlown, ship *retrieval.Item, expa
 	if isVictim {
 		shipFlown.Destroyed = 1 + shipFlown.Destroyed
 		shipFlown.VictimKillmailIDs = append(shipFlown.VictimKillmailIDs, km.ESIKillmail.KillmailID)
-		if len(expandedKillmail.Victim.Fit) > 0 {
+		if expandedKillmail.Victim.Fit != nil {
 			shipFlown.Fits[fmt.Sprintf("%d-%d", km.ESIKillmail.KillmailID, ship.ItemID)] = expandedKillmail.Victim.Fit
 		}
 	} else {
@@ -497,7 +497,7 @@ func (s *SystemVisted) UpdateOrAddStructure(structureType *retrieval.Item, corp 
 			Structure:        structureType,
 			Corporation:      corp,
 			Alliance:         alliance,
-			Fits:             make(map[string][]*retrieval.FitItem),
+			Fits:             make(map[string]*retrieval.Fit),
 			TotalKillmails:   1,
 			KillmailIDs:      []int{expandedKillmail.KillmailID},
 			Activity:         []time.Time{expandedKillmail.KillmailTime},
@@ -522,7 +522,7 @@ func (s *SystemVisted) UpdateOrAddStructure(structureType *retrieval.Item, corp 
 			Structure:        structureType,
 			Corporation:      corp,
 			Alliance:         alliance,
-			Fits:             map[string][]*retrieval.FitItem{fitIdentifier: expandedKillmail.Victim.Fit},
+			Fits:             map[string]*retrieval.Fit{fitIdentifier: expandedKillmail.Victim.Fit},
 			TotalKillmails:   1,
 			KillmailIDs:      []int{expandedKillmail.KillmailID},
 			Activity:         []time.Time{expandedKillmail.KillmailTime},
