@@ -34,23 +34,13 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
 
 # Things to do
 
-* Pilot:
- * Fits
-
-* Corporation/Alliances
- * Fits
-
-* Systems
-
-* Other
+* Pre-Release
 
  * Report data to be saved as a PDF for distribution.
  * About tab, with isk donation instructions, maybe kofi?
  * Fits 
   * Tags (Nano, Armor Fleet, Armor Kitchen Sink, Roller, ect)
   * Get expected resist holes, ewar resistance
-  * eft export format
-  * Fitting window
  * Update Structure searches on pos's
   * only one pos per moon, so we can use the location of the killmail to potentially link pos kills to their destructions
  * first time user tour
@@ -67,3 +57,5 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
  * Add a window that can be popped out on its own that can contain running live kill trackers - Per system, Per Entity, Per Types (such as all citadels).
   * have an option to pull the kills since the tracker was last open
  * Ability to use killmail dumps to bypass zkill calls, SDE dumps as well
+ * Battles that the group has fought (we're already tracking, so just a display update)
+  * needs warnings/reminders that its an estimation and may be wrong
