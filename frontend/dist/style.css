@@ -1891,8 +1891,8 @@ body.debug-mode::after {
 }
 
 .fit-view-title { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.fit-page { padding: 0 8px; line-height: 1.4; }
-.fit-page-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fit-page { flex: none; padding: 0 8px; line-height: 1.4; }
+.fit-page-count { flex: none; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fit-view-actions { display: flex; flex: none; gap: 8px; }
 
 /* the loss shown, under the ship's name: who lost it, when, and where */

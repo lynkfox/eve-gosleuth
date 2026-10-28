@@ -24,6 +24,7 @@ type FitGroup struct {
 	Abyssal       bool      `json:"abyssal"`  // it has a mutated module, whose rolled stats are unknown
 	Implants      bool      `json:"implants"` // a loss of it has the implants of its capsule (see podsWithShips). Implants don't decide which fits merge.
 	Losses        []FitLoss `json:"losses"`   // most implants first, then newest
+	LastLost      time.Time `json:"lastLost"` // its newest loss, which need not be its first
 }
 
 // FitLoss is one loss of a fit, with its own charges and cargo
@@ -154,6 +155,11 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 			}
 			return b.Time.Compare(a.Time)
 		})
+		for _, loss := range group.Losses {
+			if loss.Time.After(group.LastLost) {
+				group.LastLost = loss.Time
+			}
+		}
 		fits = append(fits, *group)
 	}
 	slices.SortStableFunc(fits, func(a, b FitGroup) int {
@@ -166,20 +172,9 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 			}
 			return 1
 		}
-		return newestLoss(b).Compare(newestLoss(a))
+		return b.LastLost.Compare(a.LastLost)
 	})
 	return fits
-}
-
-// newestLoss is when a fit was last lost, which its first loss need not be as those with implants come first
-func newestLoss(fit FitGroup) time.Time {
-	newest := fit.Losses[0].Time
-	for _, loss := range fit.Losses[1:] {
-		if loss.Time.After(newest) {
-			newest = loss.Time
-		}
-	}
-	return newest
 }
 
 /*

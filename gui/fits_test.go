@@ -222,4 +222,5 @@ func TestBuildFitsGivesShipsTheirPodsImplants(t *testing.T) {
 	assert.Len(t, fits, 2)
 	assert.Equal(t, []int{1, 3}, []int{fits[0].Losses[0].KillmailID, fits[0].Losses[1].KillmailID}, "lost last at 3, so listed before the refit lost at 21")
 	assert.Equal(t, 21, fits[1].Losses[0].KillmailID)
+	assert.Equal(t, start.Add(10*time.Hour), fits[0].LastLost, "its newest loss, not its first")
 }

@@ -1763,7 +1763,7 @@ function renderFits(fits) {
     el("fit-prev").hidden = true;
     el("fit-next").hidden = true;
     el("fit-page-count").textContent = "";
-    el("fit-view").onkeydown = null;
+    el("panel-fits").onkeydown = null;
     for (const button of [el("fit-copy"), el("fit-zkill")]) {
       button.disabled = true;
       button.onclick = null;
@@ -1811,7 +1811,6 @@ function fitsHull(fit, ofHull) {
 
 // fitRow is one fit in the list: who flew it for a corp or alliance, when and where it was last lost, and how many times
 function fitRow(fit, manyPilots) {
-  const newest = fit.losses[0];
   const row = document.createElement("button");
   row.type = "button";
   row.className = "fit-row";
@@ -1829,7 +1828,7 @@ function fitRow(fit, manyPilots) {
   const systems = new Set(fit.losses.map((loss) => loss.systemName).filter(Boolean));
   const when = document.createElement("span");
   when.className = "fit-row-when";
-  when.textContent = [spokenDate(newest.time), systems.size > 1 ? `${systems.size} systems` : [...systems][0]].filter(Boolean).join(" · ");
+  when.textContent = [spokenDate(fit.lastLost), systems.size > 1 ? `${systems.size} systems` : [...systems][0]].filter(Boolean).join(" · ");
   text.append(when);
   row.append(text);
   for (const tag of FIT_TAGS) {
@@ -1881,7 +1880,7 @@ const FIT_ARCS = [
 
 /*
   renderFitWindow draws a loss of a fit: the hull with its modules around it, loaded charges as a badge on their module, and an empty slot as a hollow socket.
-  Arrows beside the ship's name (or ← →) page through its losses, wrapping round at either end, the one shown named under it, and its implants, boosters, drones and fighters curve around the outside (FIT_ARCS).
+  Arrows beside the ship's name (or ← → anywhere on the tab) page through its losses, wrapping round at either end, the one shown named under it, and its implants, boosters, drones and fighters curve around the outside (FIT_ARCS).
   The hull, each module and charge, and each of those has a right click menu to open it on EVE Ref.
 */
 function renderFitWindow(fit, loss, choose) {
@@ -1897,9 +1896,13 @@ function renderFitWindow(fit, loss, choose) {
   el("fit-prev").onclick = () => page(-1);
   el("fit-next").onclick = () => page(1);
   el("fit-page-count").textContent = paged ? `${index + 1} of ${count}` : "";
-  el("fit-view").onkeydown = (event) => {
-    if (event.key === "ArrowLeft") page(-1);
-    if (event.key === "ArrowRight") page(1);
+  // anywhere on the tab, so a fit just picked from the list pages at once; a modified arrow is left to the WebView
+  el("panel-fits").onkeydown = (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    page(step);
   };
 
   // the loss shown, and its menu: its killmail, and the capsule whose implants it shows
