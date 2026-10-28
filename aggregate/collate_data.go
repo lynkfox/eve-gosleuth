@@ -394,7 +394,7 @@ func UpdateShipFlown(found bool, shipFlown ShipFlown, ship *retrieval.Item, expa
 	if isVictim {
 		shipFlown.Destroyed = 1 + shipFlown.Destroyed
 		shipFlown.VictimKillmailIDs = append(shipFlown.VictimKillmailIDs, km.ESIKillmail.KillmailID)
-		if expandedKillmail.Victim.Fit != nil {
+		if expandedKillmail.Victim.Fit.HasModules() {
 			shipFlown.Fits[fmt.Sprintf("%d-%d", km.ESIKillmail.KillmailID, ship.ItemID)] = expandedKillmail.Victim.Fit
 		}
 	} else {

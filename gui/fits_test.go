@@ -12,35 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFitEFT(t *testing.T) {
-	comm.InitLogger(logrus.InfoLevel)
-
-	fit := &retrieval.Fit{Hull: &retrieval.Item{ItemID: 587, Name: "Rifter"}, Lows: []*retrieval.FittedModule{{Module: &retrieval.Item{ItemID: 2048, Name: "Damage Control II"}}}}
-	killmails := []*retrieval.Killmail{
-		{KillmailID: 1, Victim: &retrieval.KillmailVictim{Pilot: &retrieval.Pilot{Name: "Luxxianna Seraph"}, Fit: fit}},
-		{KillmailID: 2, Victim: &retrieval.KillmailVictim{Pilot: &retrieval.Pilot{Name: "Someone"}}},
-	}
-	app := &App{lastAllies: &alliesSource{killmails: killmails}}
-
-	t.Run("a killmail in the last search is written as EFT", func(t *testing.T) {
-		text, err := app.FitEFT(1)
-		assert.NoError(t, err)
-		assert.Equal(t, "[Rifter, GoSleuth - Luxxianna Seraph]\n\nDamage Control II", text)
-	})
-
-	t.Run("a killmail without a fit, or not in the last search, is an error", func(t *testing.T) {
-		_, err := app.FitEFT(2)
-		assert.Error(t, err)
-		_, err = app.FitEFT(3)
-		assert.Error(t, err)
-	})
-
-	t.Run("before any search there is nothing to export", func(t *testing.T) {
-		_, err := (&App{}).FitEFT(1)
-		assert.Error(t, err)
-	})
-}
-
 func TestBuildFits(t *testing.T) {
 	comm.InitLogger(logrus.InfoLevel)
 	assert.NoError(t, comm.InitStaticData(staticdata.Files))

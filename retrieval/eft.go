@@ -86,14 +86,19 @@ func (f *Fit) EFT(title string) string {
 func eftStacks(stacks []*FitCargo) string {
 	sorted := slices.Clone(stacks)
 	slices.SortStableFunc(sorted, func(a, b *FitCargo) int {
+		// known types by category and group, then those fit_types.json does not have, each by name
 		aType, bType := comm.FitTypeOf(a.Item.ItemID), comm.FitTypeOf(b.Item.ItemID)
-		if aType != nil && bType != nil {
-			if byCategory := cmp.Compare(aType.CategoryID, bType.CategoryID); byCategory != 0 {
-				return byCategory
+		if aType == nil || bType == nil {
+			if byKnown := cmp.Compare(boolOrder(aType == nil), boolOrder(bType == nil)); byKnown != 0 {
+				return byKnown
 			}
-			if byGroup := cmp.Compare(aType.GroupID, bType.GroupID); byGroup != 0 {
-				return byGroup
-			}
+			return cmp.Compare(a.Item.Name, b.Item.Name)
+		}
+		if byCategory := cmp.Compare(aType.CategoryID, bType.CategoryID); byCategory != 0 {
+			return byCategory
+		}
+		if byGroup := cmp.Compare(aType.GroupID, bType.GroupID); byGroup != 0 {
+			return byGroup
 		}
 		return cmp.Compare(a.Item.Name, b.Item.Name)
 	})
@@ -102,6 +107,14 @@ func eftStacks(stacks []*FitCargo) string {
 		lines[index] = fmt.Sprintf("%s x%d", stack.Item.Name, stack.Quantity)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// boolOrder sorts false before true
+func boolOrder(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 /*

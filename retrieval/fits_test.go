@@ -279,7 +279,16 @@ func TestBuildFit(t *testing.T) {
 				assert.Equal(t, []string{"125mm Gatling AutoCannon II, Loki", "Loki", "", ""}, slotNames(fit.Highs))
 				assert.Equal(t, 99003, fit.Highs[1].Module.ItemID, "the first of two it cannot tell apart is the module")
 				assert.Empty(t, fit.Cargo, "unknown cargo can not be checked against the cargo rules")
-				assert.Equal(t, []int{99001, 99002, 99003, 99004, 99005}, fit.MissingTypes)
+				assert.Equal(t, []int{99001, 99002, 99003, 99004}, fit.MissingTypes, "cargo a fit does not show is never missing from it")
+			},
+		},
+		{
+			name:  "a known charge listed before a new module on its flag is the charge, not the module",
+			hull:  587,
+			items: fitItems([4]int{27, 21894, 100, 0}, [4]int{27, 99006, 1, 0}),
+			checks: func(t *testing.T, fit *retrieval.Fit) {
+				assert.Equal(t, 99006, fit.Highs[0].Module.ItemID)
+				assert.Equal(t, "Republic Fleet EMP S", fit.Highs[0].Charge.Name)
 			},
 		},
 		{
@@ -357,7 +366,7 @@ func TestFitOnExpandedKillmail(t *testing.T) {
 		}
 	})
 
-	t.Run("victims' item types fit_types.json does not have are prefetched, the rest are not looked up", func(t *testing.T) {
+	t.Run("victims' fitted item types fit_types.json does not have are prefetched, the rest and new cargo are not looked up", func(t *testing.T) {
 		km := killmailWith(1, 101)
 		km.ESIKillmail.Victim.ShipTypeID = 587
 		km.ESIKillmail.Victim.Items = fitItems([4]int{11, 2048, 1, 0}, [4]int{12, 99001, 1, 0}, [4]int{5, 99002, 1, 0})
@@ -365,7 +374,7 @@ func TestFitOnExpandedKillmail(t *testing.T) {
 		cache := retrieval.NewCache(raw, filepath.Join(t.TempDir(), "cache.db"))
 
 		cache.PrefetchKillmailEntities([]retrieval.RawKillmail{km})
-		assert.Equal(t, 3, raw.Calls("item"), "the two new types, and the ship, which is always looked up")
+		assert.Equal(t, 2, raw.Calls("item"), "the new module, and the ship, which is always looked up. The new cargo is never shown, so it is not looked up.")
 		calls := raw.total()
 
 		cache.BuildFit(587, km.ESIKillmail.Victim.Items)

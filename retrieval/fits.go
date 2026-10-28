@@ -31,6 +31,9 @@ type Fit struct {
 
 // HasModules reports whether anything is fitted in any of the fit's slots, so a loss with nothing fitted can be left out
 func (f *Fit) HasModules() bool {
+	if f == nil {
+		return false
+	}
 	for _, slots := range [][]*FittedModule{f.Highs, f.Mids, f.Lows, f.Rigs, f.Subsystems, f.Services} {
 		for _, slot := range slots {
 			if slot != nil {
@@ -124,7 +127,8 @@ func (cached *CachedEveIDs) BuildFit(shipTypeID int, items []api.ESIKillmailItem
 			comm.Logger.Debugf("Fit of %d: leaving out type %d at flag %d, inventory_flags.json does not list the flag", shipTypeID, entry.typeID, entry.flag)
 			continue
 		}
-		if entry.fitType == nil {
+		// cargo is only shown when fit_types.json keeps it, so a type it does not have there (ore, loot, blueprints) is not missing from the fit
+		if entry.fitType == nil && slot != comm.SlotCargo {
 			missing[entry.typeID] = struct{}{}
 		}
 
@@ -207,7 +211,8 @@ func (cached *CachedEveIDs) BuildFit(shipTypeID int, items []api.ESIKillmailItem
 /*
 	moduleAt picks the module and its charge from the entries at one slot flag, in killmail order.
 
-	- A type with a slot is the module. Without one, the first entry is: some modules have no slot in fit_types.json (ie the Lux Kontos, quantum cores), and an item alone on a slot flag is fitted there.
+	- A type with a slot is the module. Without one, the first entry that is not a charge is (a type fit_types.json does not have counts as one): some modules have no slot in fit_types.json (ie the Lux Kontos, quantum cores), and an item alone on a slot flag is fitted there.
+	  Only when every entry is a charge is the first one the module.
 	- The charge is a type fit_types.json has without a slot. A type it does not have is the charge only beside a module with a slot, as otherwise the two can not be told apart.
 	- Anything else at the flag is left out.
 
@@ -226,7 +231,16 @@ func (cached *CachedEveIDs) moduleAt(shipTypeID int, at *slotted) *FittedModule 
 	}
 	hasSlot := module != nil
 	if !hasSlot && len(rest) > 0 {
-		module, rest = rest[0], rest[1:]
+		// a charge, which KeptInFitCargo shows, never takes the slot from a module it can be told apart from
+		pick := 0
+		for index, entry := range rest {
+			if !comm.KeptInFitCargo(entry.fitType) {
+				pick = index
+				break
+			}
+		}
+		module = rest[pick]
+		rest = slices.Delete(slices.Clone(rest), pick, pick+1)
 	}
 	if module == nil {
 		return nil

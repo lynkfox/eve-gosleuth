@@ -118,6 +118,18 @@ Scourge Heavy Missile x1000`,
 		assert.Equal(t, "[Cargo Container, GoSleuth - Pilot - 1]\n\nSynth Crash Booster x3", fit.EFT("GoSleuth - Pilot - 1"))
 		assert.Equal(t, 2, fit.Cargo[0].Quantity)
 	})
+
+	t.Run("stacks of types fit_types.json does not have come after the known ones, whatever order they were listed in", func(t *testing.T) {
+		known := &retrieval.FitCargo{Item: &retrieval.Item{ItemID: 2488, Name: "Hornet EC-300"}, Quantity: 5}
+		unknownA := &retrieval.FitCargo{Item: &retrieval.Item{ItemID: 99001, Name: "Aardvark Drone"}, Quantity: 1}
+		unknownZ := &retrieval.FitCargo{Item: &retrieval.Item{ItemID: 99002, Name: "Zebra Drone"}, Quantity: 1}
+		hull := &retrieval.Item{ItemID: 23, Name: "Cargo Container"}
+		want := "[Cargo Container, T]\n\nHornet EC-300 x5\nAardvark Drone x1\nZebra Drone x1"
+
+		for _, order := range [][]*retrieval.FitCargo{{unknownZ, known, unknownA}, {unknownA, unknownZ, known}, {known, unknownZ, unknownA}} {
+			assert.Equal(t, want, (&retrieval.Fit{Hull: hull, Drones: order}).EFT("T"))
+		}
+	})
 }
 
 func TestEFTTitle(t *testing.T) {

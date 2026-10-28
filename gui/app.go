@@ -699,9 +699,6 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		report.Fits = buildFits(collected.Killmails, &target)
 		comm.ReportProgress("Ranking systems")
 		report.Systems = buildSystemSummaries(aggregate.GetMostVisitedSystems(systemLimit, collected.SystemsVisted), collected.Killmails, &target)
-	} else {
-		// FitEFT reads the last search's killmails from here, and a system search has no fits
-		a.lastAllies = nil
 	}
 
 	// a killmail pull fills the cache with many new entries, save them now rather than only on shutdown

@@ -20,7 +20,8 @@ const prefetchWorkers = 20
 	- Pilots are looked up in bulk, api.ESI_BULK_IDS at a time: their names with universe/names, and their current corp and alliance with characters/affiliation.
 	  Pilots either bulk call failed for are left to ExpandPilot, which looks them up one at a time.
 	- Corporations, alliances, ship and weapon types, and systems have no bulk call, so each is looked up on its own, prefetchWorkers at a time.
-	- So are the types of victims' items that fit_types.json does not have, which BuildFit names through the cache.
+	- So are the types of victims' fitted items, drones, fighters, implants, and boosters that fit_types.json does not have, which BuildFit names through the cache.
+	  Cargo and other holds are not: a fit shows only cargo fit_types.json keeps.
 
 	Only what is not already cached is looked up.
 
@@ -156,9 +157,9 @@ func idsOnKillmails(killmails []RawKillmail) (pilots, corporations, alliances, i
 		add(pilots, esiKM.Victim.CharacterID)
 		add(corporations, esiKM.Victim.CorporationID)
 		add(alliances, esiKM.Victim.AllianceID)
-		// a fit names its items from fit_types.json, so only types newer than it are looked up
+		// a fit names its items from fit_types.json, so only types newer than it, in the places BuildFit names them, are looked up
 		for _, item := range esiKM.Victim.Items {
-			if comm.FitTypeOf(item.ItemTypeID) == nil {
+			if comm.FitTypeOf(item.ItemTypeID) == nil && namedOnFit(item.Flag) {
 				add(items, &item.ItemTypeID)
 			}
 		}
@@ -171,6 +172,12 @@ func idsOnKillmails(killmails []RawKillmail) (pilots, corporations, alliances, i
 		}
 	}
 	return
+}
+
+// namedOnFit reports whether BuildFit names an item at this flag even when fit_types.json does not have its type: a slot, the drone or fighter bay, an implant, or a booster
+func namedOnFit(flag int) bool {
+	slot, _ := comm.FitSlotOf(flag)
+	return slot != comm.SlotCargo && slot != comm.SlotIgnored && slot != comm.SlotUnknown
 }
 
 // prefetchSystem looks up a system and the constellation and region ExpandSystem names it with

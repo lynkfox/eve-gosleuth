@@ -85,7 +85,6 @@ The full plan and the decisions behind it are in `docs/fits-plan.md`.
   - Non-combat hulls are left out by category, group, or type (`fit_ignored_hulls.json`: capsules, shuttles, corvettes, haulers and transports, freighters, mining and ORE ships, the Zephyr, yachts, structures, deployables, starbases), as is any loss with nothing fitted (`Fit.HasModules`).
   - Each entry carries its EFT text (`Fit.EFT`, retrieval/eft.go, mirroring pyfa's export).
   - The tab lists the losses on the left and the selected one's EFT on the right. Copy EFT puts it on the clipboard through the Wails runtime.
-- `App.FitEFT(killmailID)` returns the same text for a killmail in the last pilot, corp or alliance search. A system search clears that.
 - The CLI prints the target's losses as EFT.
 
 ## System tabs

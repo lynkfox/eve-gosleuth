@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -68,35 +67,4 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget) [
 		return b.Time.Compare(a.Time)
 	})
 	return fits
-}
-
-/*
-	FitEFT writes the victim's fit on a killmail from the last pilot, corporation, or alliance search in EFT format, for the in-game "Import from clipboard"
-
-Parameters:
-  - killmailID: the killmail, which must be in the last search's report
-
-Returns:
-  - string: the fit, titled GoSleuth - <pilot>
-  - error: a user readable message if the killmail is not in the last search or its victim has no fit
-*/
-func (a *App) FitEFT(killmailID int) (text string, err error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	defer recoverAsError(&err)
-
-	// the last search's killmails are kept with its allies, and only pilot, corporation, and alliance searches have fits
-	if a.lastAllies == nil {
-		return "", errors.New("Search for a pilot, corporation, or alliance first")
-	}
-	for _, killmail := range a.lastAllies.killmails {
-		if killmail.KillmailID != killmailID {
-			continue
-		}
-		if killmail.Victim == nil || killmail.Victim.Fit == nil {
-			return "", errors.New("This killmail's victim has no fit")
-		}
-		return killmail.Victim.Fit.EFT(retrieval.EFTTitle(killmail)), nil
-	}
-	return "", errors.New("That killmail is not in the last search")
 }

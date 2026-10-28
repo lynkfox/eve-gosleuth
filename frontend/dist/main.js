@@ -1595,7 +1595,9 @@ function renderFits(fits) {
     note.hidden = !fit.missingTypes;
     note.textContent = fit.missingTypes ? `${fit.missingTypes} item ${fit.missingTypes === 1 ? "type is" : "types are"} newer than GoSleuth's item data, so this fit may be missing pieces.` : "";
     el("fit-copy").disabled = false;
-    el("fit-copy").onclick = () => window.runtime.ClipboardSetText(fit.eft).then((copied) => tickerPush(copied ? "Fit copied" : "Could not copy the fit"));
+    el("fit-copy").onclick = () => window.runtime.ClipboardSetText(fit.eft)
+      .then((copied) => tickerPush(copied ? "Fit copied" : "Could not copy the fit"))
+      .catch(() => tickerPush("Could not copy the fit"));
   };
 
   const items = [];
