@@ -65,7 +65,7 @@ func TestStructures(t *testing.T) {
 	}
 
 	t.Run("structures are found on kills by type, system, and owner, and grayed by a later loss", func(t *testing.T) {
-		uses := aggregate.StructuresUsed(used, losses, target, esi)
+		uses := aggregate.StructuresUsed(used, losses, target)
 		assert.Len(t, uses, 4, "the enemy's Fortizar is not the target's")
 
 		assert.Equal(t, astrahus, uses[0].Structure.ItemID, "standing ones first, newest kill first")

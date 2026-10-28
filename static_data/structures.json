@@ -1,0 +1,26 @@
+{
+    "upwell_structure_groups": {
+        "1657": "Citadel",
+        "1404": "Engineering Complex",
+        "1406": "Refinery"
+    },
+    "control_tower_groups": {
+        "365": "Control Tower"
+    },
+    "pos_battery_groups": {
+        "417": "Mobile Missile Sentry",
+        "426": "Mobile Projectile Sentry",
+        "430": "Mobile Laser Sentry",
+        "449": "Mobile Hybrid Sentry",
+        "439": "Electronic Warfare Battery",
+        "440": "Sensor Dampening Battery",
+        "441": "Stasis Webification Battery",
+        "443": "Warp Scrambling Battery",
+        "837": "Energy Neutralizing Battery",
+        "877": "Target Painting Battery"
+    },
+    "minor_structure_groups": {
+        "4744": "Upwell Moon Drill",
+        "1025": "Orbital Infrastructure"
+    }
+}

@@ -452,9 +452,9 @@ func (results *CollectedData) UpdateOrAddStructures(km *retrieval.RawKillmail, e
 	}
 }
 
-// IsStructure returns true if the item is an upwell structure or control tower
+// IsStructure returns true if the item is an upwell structure or control tower, one of comm.UpwellStructureGroups or comm.ControlTowerGroups
 func IsStructure(item *retrieval.Item) bool {
-	return item != nil && (comm.UpwellStructures.Contains(item.ItemID) || comm.ControlTowers.Contains(item.ItemID))
+	return item != nil && (comm.UpwellStructureGroups.ContainsGroupOf(item.ItemID) || comm.ControlTowerGroups.ContainsGroupOf(item.ItemID))
 }
 
 // StructureIdentifier is the StructuresSeen key for a structure type owned by a corp and alliance combination. A nil corp or alliance is keyed as 0.

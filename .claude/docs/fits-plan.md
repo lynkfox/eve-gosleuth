@@ -1,6 +1,6 @@
 # Fits plan
 
-How victim fits are read, shown, exported, tagged, and (later) analysed. The phases are in build order. When a phase lands, its behaviour moves into `docs/features.md` and it is struck from here.
+How victim fits are read, shown, exported, tagged, and (later) analysed. The phases are in build order. When a phase lands, its behaviour moves into `.claude/docs/features.md` and it is struck from here.
 
 ## Where things stand
 
@@ -52,7 +52,7 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 
 ## Phase 2: Fits tab, fitting window, and EFT export
 
-**Status (2026-10-27): built,** as described in `docs/features.md` under Fits. Not yet done: importing several exports in-game. Where the phase 4 numbers go in the window is still open.
+**Status (2026-10-27): built,** as described in `.claude/docs/features.md` under Fits. Not yet done: importing several exports in-game. Where the phase 4 numbers go in the window is still open.
 
 ### Which searches
 

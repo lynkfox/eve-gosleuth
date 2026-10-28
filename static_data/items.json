@@ -1,0 +1,14 @@
+{
+    "pi_material_groups": {
+        "1032": "Planet Solid - Raw Resource",
+        "1033": "Planet Liquid-Gas - Raw Resource",
+        "1035": "Planet Organic - Raw Resource",
+        "1042": "Basic Commodities - Tier 1",
+        "1034": "Refined Commodities - Tier 2",
+        "1040": "Specialized Commodities - Tier 3",
+        "1041": "Advanced Commodities - Tier 4"
+    },
+    "smartbomb_groups": {
+        "72": "Smart Bomb"
+    }
+}

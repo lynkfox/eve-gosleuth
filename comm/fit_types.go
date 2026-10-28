@@ -97,43 +97,24 @@ func FitTypesSDEBuild() int {
 	return fitTypes.SDEBuild
 }
 
-// FitIgnoredHulls is the layout of fit_ignored_hulls.json: the hulls whose losses are not shown as fits, ie capsules, haulers, mining ships, and structures, by category, group, or single type. Each maps an id to a readable name.
-type FitIgnoredHulls struct {
-	Categories map[int]string `json:"categories"`
-	Groups     map[int]string `json:"groups"`
-	Types      map[int]string `json:"types"`
-}
-
-// fitIgnoredHulls is the loaded fit_ignored_hulls.json. Empty until InitStaticData is called.
-var fitIgnoredHulls = FitIgnoredHulls{}
-
 /*
-	LoadFitIgnoredHulls reads fit_ignored_hulls.json for FitHullIgnored, leaving it as it was if the file can not be read
+	TypeGroup looks up an item type's group in fit_types.json, which has every ship, module, structure, and control tower
 
 Parameters:
-  - staticFiles: the filesystem holding the file
-  - filename: the file's name, ie fit_ignored_hulls.json
+  - typeID: the item type
 
 Returns:
-  - error: the file could not be opened or read
+  - int: the group, 0 for a type fit_types.json does not have
 */
-func LoadFitIgnoredHulls(staticFiles fs.FS, filename string) error {
-	file, err := staticFiles.Open(filename)
-	if err != nil {
-		return fmt.Errorf("unable to load file %s: %w", filename, err)
+func TypeGroup(typeID int) int {
+	if fitType := fitTypes.Types[typeID]; fitType != nil {
+		return fitType.GroupID
 	}
-	defer file.Close()
-
-	loaded := FitIgnoredHulls{}
-	if err := json.NewDecoder(file).Decode(&loaded); err != nil {
-		return fmt.Errorf("failed to unmarshal the json file %s: %w", filename, err)
-	}
-	fitIgnoredHulls = loaded
-	return nil
+	return 0
 }
 
 /*
-	FitHullIgnored reports whether a hull's losses are left out of fits, by its type, group, or category in fit_ignored_hulls.json
+	FitHullIgnored reports whether a hull's losses are left out of fits, by its type, group, or category: FitIgnoredTypes, FitIgnoredGroups, and FitIgnoredCategories
 
 Parameters:
   - hull: the hull's type, nil for a type fit_types.json does not have
@@ -145,8 +126,5 @@ func FitHullIgnored(hull *FitType) bool {
 	if hull == nil {
 		return false
 	}
-	_, byType := fitIgnoredHulls.Types[hull.TypeID]
-	_, byGroup := fitIgnoredHulls.Groups[hull.GroupID]
-	_, byCategory := fitIgnoredHulls.Categories[hull.CategoryID]
-	return byType || byGroup || byCategory
+	return FitIgnoredTypes.ContainsIDNumber(hull.TypeID) || FitIgnoredGroups.ContainsIDNumber(hull.GroupID) || FitIgnoredCategories.ContainsIDNumber(hull.CategoryID)
 }

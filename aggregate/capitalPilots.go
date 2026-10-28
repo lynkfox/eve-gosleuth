@@ -39,6 +39,11 @@ func flewForTarget(corp *retrieval.Corporation, alliance *retrieval.Alliance, ta
 	return target.IsGroup(groupIDs(corp, alliance))
 }
 
+// isCapital reports whether a ship is a capital: one of comm.CapitalGroups, or comm.CapitalTypes
+func isCapital(ship *retrieval.Item) bool {
+	return comm.CapitalTypes.ContainsIDNumber(ship.ItemID) || comm.CapitalGroups.ContainsGroupOf(ship.ItemID)
+}
+
 /*
 	GetCapitalPilots finds the corp or alliance target's pilots flying capitals on the killmails, as victim or attacker, grouped by capital ship type.
 
@@ -56,7 +61,7 @@ func GetCapitalPilots(killmails []*retrieval.Killmail, target *retrieval.IntelTa
 
 	for _, km := range killmails {
 		for _, seen := range participants(km) {
-			if seen.pilot == nil || seen.pilot.NPC || seen.ship == nil || !comm.CapitalShips.Contains(seen.ship.ItemID) {
+			if seen.pilot == nil || seen.pilot.NPC || seen.ship == nil || !isCapital(seen.ship) {
 				continue
 			}
 			if !flewForTarget(seen.corp, seen.alliance, target) {

@@ -1,10 +1,31 @@
 {
-    "categories": {
+    "capital_groups": {
+        "30": "Titan",
+        "485": "Dreadnought",
+        "547": "Carrier",
+        "659": "Supercarrier",
+        "883": "Capital Industrial Ship",
+        "902": "Jump Freighter",
+        "1538": "Force Auxiliary",
+        "4594": "Lancer Dreadnought"
+    },
+    "capital_types": {
+        "34328": "Bowhead"
+    },
+    "hauler_groups": {
+        "28": "Hauler",
+        "380": "Deep Space Transport",
+        "1202": "Blockade Runner"
+    },
+    "hauler_exclusions": {
+        "2998": "Noctis"
+    },
+    "fit_ignored_categories": {
         "22": "Deployable",
         "23": "Starbase",
         "65": "Structure"
     },
-    "groups": {
+    "fit_ignored_groups": {
         "28": "Hauler",
         "29": "Capsule",
         "31": "Shuttle",
@@ -21,7 +42,7 @@
         "1283": "Expedition Frigate",
         "5087": "Special Edition Yachts"
     },
-    "types": {
+    "fit_ignored_types": {
         "32880": "Venture",
         "89240": "Pioneer",
         "89647": "Pioneer Consortium Issue",

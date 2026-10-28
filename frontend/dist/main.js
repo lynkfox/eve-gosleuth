@@ -4713,6 +4713,7 @@ function openPreferences() {
   el("preferences").showModal();
   backend().GetCacheInfo().then(showCacheInfo).catch(() => {});
   backend().GetDebugInfo().then(showDebugInfo).catch(() => {});
+  el("static-export-result").textContent = "";
 }
 
 // showDebugInfo enables Open debug folder once there is a debug log to send, naming the newest
@@ -4720,6 +4721,16 @@ function showDebugInfo(info) {
   const button = el("debug-open");
   button.disabled = !info.latest;
   el("debug-latest").textContent = info.latest ? `Newest: ${info.latest}` : "No debug logs yet. Turn on Debug mode, save, and search.";
+}
+
+// exportStaticData writes the game data in use to a folder and opens it, naming the folder under the button
+function exportStaticData() {
+  const button = el("static-export");
+  button.disabled = true;
+  backend().ExportStaticData()
+    .then((dir) => { el("static-export-result").textContent = `Exported to ${dir}`; })
+    .catch((err) => tickerPush(`Error: ${err}`))
+    .finally(() => { button.disabled = false; });
 }
 
 // formatBytes shortens a file size, ie 7208766 to 6.9 MB
@@ -4843,6 +4854,7 @@ el("myintel-pick-all").addEventListener("click", pickAllShown);
 el("myintel-delete-button").addEventListener("click", () => removeMyIntelCards(pickedCards()));
 el("myintel-import-button").addEventListener("click", importMyIntel);
 el("debug-open").addEventListener("click", () => backend().OpenDebugFolder().catch((err) => tickerPush(`Error: ${err}`)));
+el("static-export").addEventListener("click", exportStaticData);
 el("limits-menu").addEventListener("input", changeSearchLimits);
 el("limits-menu").addEventListener("change", changeSearchLimits);
 // Enter closes the popup rather than starting a search

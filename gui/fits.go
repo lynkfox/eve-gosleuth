@@ -74,7 +74,7 @@ type FitPart struct {
 /*
 	buildFits lists the target's losses with their fits, identical fits merged (see fitKey), by ship name, those with implants first, and then newest loss first.
 	A fit's own losses are the one with the most implants first, then newest, so the fitting window opens on its first.
-	Non-combat hulls in fit_ignored_hulls.json (capsules, shuttles, corvettes, haulers, mining ships, structures, deployables) are left out, as is any loss with nothing fitted.
+	Non-combat hulls in ships.json's fit_ignored lists (capsules, shuttles, corvettes, haulers, mining ships, structures, deployables) are left out, as is any loss with nothing fitted.
 	A capsule lost with implants after a ship in the same battle gives that ship's loss its implants (see podsWithShips).
 
 Parameters:

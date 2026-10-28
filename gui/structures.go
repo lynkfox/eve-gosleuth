@@ -137,9 +137,9 @@ func (a *App) collectStructureKillmails(target retrieval.IntelTarget, limits ret
 }
 
 // buildStructures builds a corp or alliance target's Structures tab, from its structures' kills and losses and the structures among its own killmails
-func buildStructures(found structureKillmails, killmails []*retrieval.Killmail, target *retrieval.IntelTarget, esi api.ESIClient) *StructuresReport {
+func buildStructures(found structureKillmails, killmails []*retrieval.Killmail, target *retrieval.IntelTarget) *StructuresReport {
 	report := &StructuresReport{Used: []StructureSummary{}, Destroyed: []StructureLoss{}}
-	for _, use := range aggregate.StructuresUsed(found.used, found.lost, target, esi) {
+	for _, use := range aggregate.StructuresUsed(found.used, found.lost, target) {
 		summary := StructureSummary{
 			Type:      "Control Tower",
 			System:    structureSystem(use.System),

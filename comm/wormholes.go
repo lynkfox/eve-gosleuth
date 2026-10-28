@@ -9,9 +9,9 @@ import (
 
 // WormholeStatic is one static wormhole of a j-space system, from jspace_statics.json
 type WormholeStatic struct {
-	Identification string `json:"identification"` // the wormhole type code, ie H296
-	Origin         string `json:"origin"`         // the class of system the wormhole type spawns in, or Unknown
-	Destination    string `json:"destination"`    // Highsec, Lowsec, Nullsec, or C1 - C6
+	Identification string `json:"-"`           // the wormhole type code, ie H296, its key in jspace_statics.json
+	Origin         string `json:"origin"`      // the class of system the wormhole type spawns in, or Unknown
+	Destination    string `json:"destination"` // Highsec, Lowsec, Nullsec, or C1 - C6
 }
 
 // JSpaceStatics maps a j-space system name to its statics. It is empty until InitStaticData is called.
@@ -48,7 +48,13 @@ func LoadSpaceClasses(staticFiles fs.FS, filename string) error {
 	return nil
 }
 
-// LoadJSpaceStatics reads the j-space system statics file into JSpaceStatics
+// jspaceStaticsFile is the layout of jspace_statics.json: each wormhole type once by its code, and each j-space system's statics as codes
+type jspaceStaticsFile struct {
+	Wormholes map[string]WormholeStatic `json:"wormholes"`
+	Systems   map[string][]string       `json:"systems"`
+}
+
+// LoadJSpaceStatics reads the j-space system statics file into JSpaceStatics, leaving it as it was if the file can not be read or a system has a code it does not list
 func LoadJSpaceStatics(staticFiles fs.FS, filename string) error {
 	file, err := staticFiles.Open(filename)
 	if err != nil {
@@ -57,9 +63,21 @@ func LoadJSpaceStatics(staticFiles fs.FS, filename string) error {
 
 	defer file.Close()
 
-	statics := map[string][]WormholeStatic{}
-	if err := json.NewDecoder(file).Decode(&statics); err != nil {
+	loaded := jspaceStaticsFile{}
+	if err := json.NewDecoder(file).Decode(&loaded); err != nil {
 		return fmt.Errorf("failed to unmarshal the json file %s: %w", filename, err)
+	}
+
+	statics := make(map[string][]WormholeStatic, len(loaded.Systems))
+	for system, codes := range loaded.Systems {
+		for _, code := range codes {
+			wormhole, found := loaded.Wormholes[code]
+			if !found {
+				return fmt.Errorf("the json file %s gives %s the static %s, which its wormholes do not list", filename, system, code)
+			}
+			wormhole.Identification = code
+			statics[system] = append(statics[system], wormhole)
+		}
 	}
 
 	JSpaceStatics = statics

@@ -11,9 +11,6 @@ import (
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
 )
 
-// controlTowerGroup is the ESI group of control towers, which are never on a killmail's attackers, their batteries are instead
-const controlTowerGroup = 365
-
 // StructureKillmails are the killmails a corp or alliance target's own structures were on, from its zKillboard lists narrowed to structure groups
 type StructureKillmails struct {
 	Used []RawKillmail // kills the target's upwell structures or control tower batteries were on, newest first
@@ -22,7 +19,7 @@ type StructureKillmails struct {
 
 /*
 	CollectStructureKillmails lists the kills a corp or alliance target's own structures were on, and the structures it lost, for the Structures tab.
-	Each of comm.StructureGroups and comm.PosBatteryGroups is its own zKillboard list (api.ZkillPaging Filter), for the target and each of its Holdings,
+	Each of comm.UpwellStructureGroups, comm.ControlTowerGroups, and comm.PosBatteryGroups is its own zKillboard list (api.ZkillPaging Filter), for the target and each of its Holdings,
 	paged and cached like the target's whole list (see listEntity) to the limits' Max or Pages, but never stopping at the date limit, as a structure
 	may have stood for years. Control towers are only listed for losses, their batteries stand in for them on kills.
 	Each killmail is the cache's copy, else zKillboard's, else fetched from the ESI.
@@ -82,12 +79,13 @@ func CollectStructureKillmails(target IntelTarget, limits KillmailLimits) (Struc
 
 	comm.ReportProgress("Fetching structure killmail lists from zKillboard (live, only as far as the cached lists do not have them)")
 	for _, on := range entities {
-		for _, groupID := range comm.StructureGroups.IDNumbers() {
-			name := comm.StructureGroups.NameOf(groupID)
-			if groupID != controlTowerGroup {
-				pull(on, "kills", groupID, name, &found.Used, seenUsed)
-			}
+		for _, groupID := range comm.UpwellStructureGroups.IDNumbers() {
+			name := comm.UpwellStructureGroups.NameOf(groupID)
+			pull(on, "kills", groupID, name, &found.Used, seenUsed)
 			pull(on, "losses", groupID, name, &found.Lost, seenLost)
+		}
+		for _, groupID := range comm.ControlTowerGroups.IDNumbers() {
+			pull(on, "losses", groupID, comm.ControlTowerGroups.NameOf(groupID), &found.Lost, seenLost) // a tower is never on a killmail's attackers, its batteries are instead
 		}
 		for _, groupID := range comm.PosBatteryGroups.IDNumbers() {
 			pull(on, "kills", groupID, comm.PosBatteryGroups.NameOf(groupID), &found.Used, seenUsed)
@@ -106,7 +104,7 @@ const PreviousStructureLosses = 5
 
 /*
 	StructureLosses finds the structures lost in a system target, however long ago, from page 1 of each zKillboard loss list for the system
-	of comm.StructureGroups and comm.MinorStructureGroups.
+	of comm.UpwellStructureGroups, comm.ControlTowerGroups, and comm.MinorStructureGroups.
 
 Parameters:
   - target: the system IntelTarget
@@ -121,7 +119,7 @@ func StructureLosses(target IntelTarget) (*RawKillmail, []RawKillmail, error) {
 	lists := [][]api.ZkbResponse{}
 	minor := map[int]bool{} // killmails on the minor structures' lists
 	comm.ReportProgress("Fetching the system's structures lost from zKillboard (live)")
-	pull := func(groups comm.StaticData, minorGroups bool) {
+	pull := func(groups *comm.StaticValues, minorGroups bool) {
 		for _, groupID := range groups.IDNumbers() {
 			name := groups.NameOf(groupID)
 			paging := api.ZkillPaging{MaxPages: 1, Filter: fmt.Sprintf("losses/groupID/%d", groupID), For: name + " losses"}
@@ -135,7 +133,8 @@ func StructureLosses(target IntelTarget) (*RawKillmail, []RawKillmail, error) {
 			}
 		}
 	}
-	pull(comm.StructureGroups, false)
+	pull(comm.UpwellStructureGroups, false)
+	pull(comm.ControlTowerGroups, false)
 	pull(comm.MinorStructureGroups, true)
 	listed := combine(lists...) // each list is newest first, but not with each other
 

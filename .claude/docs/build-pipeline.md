@@ -4,7 +4,7 @@ Initial design notes for building, releasing, and keeping static data current. O
 
 ## Static data from the SDE
 
-`static_data/fit_types.json` is generated from CCP's static data export (SDE) by `cmd/sdegen` (see `docs/fits-plan.md`). The file records the SDE build it came from in `sde_build`.
+`static_data/fit_types.json` is generated from CCP's static data export (SDE) by `cmd/sdegen` (see `.claude/docs/fits-plan.md`). The file records the SDE build it came from in `sde_build`.
 
 **Decision (2026-10-27): `cmd/sdegen` stays a dev tool and is not bundled with the app.**
 
@@ -14,7 +14,7 @@ Initial design notes for building, releasing, and keeping static data current. O
 
 ### Steps
 
-1. **Now (manual):** when a patch adds hulls or modules, run `go run ./cmd/sdegen` and commit the new JSON. A user who can't wait for a release can drop the new file into the `static_data` folder beside the exe, which `staticdata.Overrides()` already reads first.
+1. **Now (manual):** when a patch adds hulls or modules, run `go run ./cmd/sdegen` and commit the new JSON. A user who can't wait for a release can drop the new file into the `static_data` folder beside the exe, which `staticdata.Overrides()` merges over the built-in one.
 2. **With CI:** a scheduled GitHub Action reads `https://developers.eveonline.com/static-data/tranquility/latest.jsonl`. When its build number differs from `sde_build` in `fit_types.json`, it runs `cmd/sdegen` and opens a PR. Because the extract is one type per line in id order, that diff is easy to review.
 3. **With the auto-updater:** when the app's `sde_build` is behind the latest release's, it downloads only the release's `fit_types.json` (not the SDE or the parser) into the override folder.
 4. **Phase 4 (dogma engine):** the extract grows to hold effects and modifiers. It is still generated in CI and shipped as data.

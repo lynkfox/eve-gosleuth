@@ -80,7 +80,7 @@ func TestStructureKillmails(t *testing.T) {
 			ids = append(ids, km.ESIKillmail.KillmailID)
 		}
 		assert.Equal(t, []int{20, 10, 9, 8, 7}, ids, "the five newest others, newest first")
-		assert.Len(t, zkill.asked, len(comm.StructureGroups.IDNumbers())+len(comm.MinorStructureGroups.IDNumbers()), "page 1 of each group")
+		assert.Len(t, zkill.asked, len(comm.UpwellStructureGroups.IDNumbers())+len(comm.ControlTowerGroups.IDNumbers())+len(comm.MinorStructureGroups.IDNumbers()), "page 1 of each group")
 	})
 
 	t.Run("a system with no structure lost has none", func(t *testing.T) {

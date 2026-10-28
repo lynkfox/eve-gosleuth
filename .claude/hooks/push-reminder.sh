@@ -24,7 +24,7 @@ range=$(grep -Eo '\b[0-9a-f]{7,40}\.\.\.?[0-9a-f]{7,40}\b' <<<"$OUT" | head -n1)
 git -C "$CLAUDE_PROJECT_DIR" diff --name-only "$range" 2>/dev/null | grep -Eq '\.(go|js|html|css)$' || exit 0
 
 subject=$(git -C "$CLAUDE_PROJECT_DIR" log -1 --format=%s 2>/dev/null) || exit 0
-msg="Pushed \"$subject\". Time to /clear: make sure anything worth keeping is in CLAUDE.md, docs/features.md, or memory first."
+msg="Pushed \"$subject\". Time to /clear: make sure anything worth keeping is in CLAUDE.md, .claude/docs/features.md, or memory first."
 
 jq -n --arg m "$msg" '{
   systemMessage: $m,

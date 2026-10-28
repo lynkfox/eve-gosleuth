@@ -668,7 +668,7 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		a.setRoster(newRoster(targetID, entityType, collected.PilotsSeen, memberCount))
 		report.MemberList = true
 		comm.ReportProgress("Finding structures")
-		report.Structures = buildStructures(structures, collected.Killmails, &target, a.clients.ESIClient)
+		report.Structures = buildStructures(structures, collected.Killmails, &target)
 	case types.SYSTEM:
 		comm.ReportProgress("Ranking pilots and corporations")
 		report.Pilots = buildFleetmates(aggregate.GetTopPilots(pilotLimit, collected.PilotsSeen))

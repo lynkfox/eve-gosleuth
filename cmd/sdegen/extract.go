@@ -21,6 +21,7 @@ var keptCategories = []int{
 	8,  // Charge
 	18, // Drone
 	20, // Implant (and boosters)
+	23, // Starbase: control towers, for comm.TypeGroup
 	32, // Subsystem
 	65, // Structure
 	66, // Structure Module
@@ -30,6 +31,11 @@ var keptCategories = []int{
 // keptGroups are groups outside keptCategories whose published types go in fit_types.json
 var keptGroups = []int{
 	916, // Nanite Repair Paste
+}
+
+// keptUnpublishedGroups are groups whose types go in fit_types.json even though the SDE marks every one of them unpublished
+var keptUnpublishedGroups = []int{
+	1025, // Orbital Infrastructure: customs offices, for comm.TypeGroup
 }
 
 // cargoKept is which cargo a fit shows, written into fit_types.json for comm.KeptInFitCargo
@@ -140,7 +146,8 @@ func Extract(sde fs.FS) (*comm.FitTypesFile, error) {
 
 	err = eachLine(sde, "types.jsonl", func(item *sdeType) {
 		category := groupCategory[item.GroupID]
-		if !item.Published || !(slices.Contains(keptCategories, category) || slices.Contains(keptGroups, item.GroupID)) {
+		kept := item.Published && (slices.Contains(keptCategories, category) || slices.Contains(keptGroups, item.GroupID))
+		if !kept && !slices.Contains(keptUnpublishedGroups, item.GroupID) {
 			return
 		}
 		extract.Types[item.Key] = &comm.FitType{TypeID: item.Key, Name: item.Name["en"], GroupID: item.GroupID, CategoryID: category, Abyssal: item.MetaGroupID == abyssalMetaGroup}

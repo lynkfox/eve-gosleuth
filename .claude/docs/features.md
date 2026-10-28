@@ -68,13 +68,17 @@ Every row's menu is built by `withMenu` in main.js from sections (`openSectionsM
 ## Structures
 
 - Structures (retrieval/structures.go, aggregate/structures.go, gui/structures.go) are pulled with the killmails in `CollectIntel`, before the report, and prefetched with them.
-- Structure groups are `structure_groups.json` (citadels, engineering complexes, refineries, control towers) and control tower batteries `pos_battery_groups.json`, since a tower is never a killmail attacker, only its batteries. Structures with no guns, Metenox moon drills and customs offices, are `minor_structure_groups.json` and `minor_structures.json`: never a last structure lost, never on kills, but listed among previous losses and Destroyed.
+- Structure groups are sections of `structures.json`: `upwell_structure_groups` (citadels, engineering complexes, refineries), `control_tower_groups`, and control tower batteries `pos_battery_groups`, since a tower is never a killmail attacker, only its batteries. Structures with no guns, Metenox moon drills and customs offices, are `minor_structure_groups`: never a last structure lost, never on kills, but listed among previous losses and Destroyed. A killmail's structure is matched to these by its type's group in `fit_types.json` (`StaticValues.ContainsGroupOf`), which is why sdegen keeps control towers and the unpublished customs offices.
 - A j-space system target gets `IntelReport.LastStructureLoss` and `PreviousStructureLosses` (`retrieval.StructureLosses`, page 1 of each structure and minor structure group's losses in the system, no limits: the newest non-minor loss, and the `PreviousStructureLosses` (5) newest others), the box above its Activity with the others collapsed under it.
 - A corp or alliance target gets the Structures tab (`IntelReport.Structures`): Used in Kills is `CollectStructureKillmails`, each structure group's kills (not towers) and losses, and each battery group's kills, for the target and its holdings, to Max or Pages but ignoring the date limit, then `aggregate.StructuresUsed` groups them by type (towers as one kind), system, and owner corp, as killmails give no structure name or id, grayed by a loss of the same after its newest kill (which also names a tower seen only through batteries). Destroyed is `aggregate.StructuresDestroyed`, the structure and minor structure losses on the search's own killmails that the target's pilots were on.
 
+## Capital Pilots
+
+- `GetCapitalPilots` (aggregate/capitalPilots.go) feeds a corp or alliance target's Capital Pilots tab: the target's non-NPC pilots on its killmails, victim or attacker, flying a capital, by ship type. A capital is a ship in `capital_groups` of `ships.json` (titans, dreadnoughts and lancers, carriers, supercarriers, force auxiliaries, capital industrials, jump freighters), matched by its type's group in `fit_types.json`, or one of `capital_types` (the Bowhead, the one freighter that counts).
+
 ## Fits
 
-The full plan and the decisions behind it are in `docs/fits-plan.md`.
+The full plan and the decisions behind it are in `.claude/docs/fits-plan.md`.
 
 - **Building a fit.** `RawKillmail.Expand` builds each victim's `Fit` with `BuildFit` (retrieval/fits.go):
   - Each item's killmail flag is placed through `inventory_flags.json` (`comm.FitSlotOf`).
@@ -83,7 +87,7 @@ The full plan and the decisions behind it are in `docs/fits-plan.md`.
   - Cargo keeps only `cargo_kept` types: charges, scripts, boosters and nanite paste.
   - Items nested under another item are dropped when the killmail is read.
 - **Fits tab.** Pilot, corp and alliance searches get `IntelReport.Fits` (`buildFits`, gui/fits.go): the target's losses (holdings included) as `FitGroup`s, by ship name, then newest loss first.
-  - Non-combat hulls are left out by category, group, or type (`fit_ignored_hulls.json`: capsules, shuttles, corvettes, haulers and transports, freighters, mining and ORE ships, the Zephyr, yachts, structures, deployables, starbases), as is any loss with nothing fitted (`Fit.HasModules`).
+  - Non-combat hulls are left out by category, group, or type (`ships.json` sections `fit_ignored_categories`, `fit_ignored_groups`, and `fit_ignored_types`: capsules, shuttles, corvettes, haulers and transports, freighters, mining and ORE ships, the Zephyr, yachts, structures, deployables, starbases), as is any loss with nothing fitted (`Fit.HasModules`).
   - Identical fits are one group (`fitKey`): the same hull with the same module types in each rack, in any order. Charges, drones and cargo don't count, since they are easily used up or forgotten before the ship dies. For a corp or alliance this merges across pilots.
   - A capsule lost with implants is not a fit, but its implants go to the ship the pilot lost before it in the same battle, the latest if several (`podsWithShips`, with `aggregate.CollectedData.BattleOfKillmail`). A capsule can outlive its ship by a long while, even through a gate. zKill's API doesn't link the two. Implants and boosters are in slot order, from the extract's `head_slot`.
   - The loss carries `PodKillmailID` and `PodURL`, the zKillboard button's right-click menu opens the capsule, and Show fit on the capsule's killmail selects the ship. A fit with such a loss is marked `Implants`, listed first among its hull's fits, and tagged C, as is the loss when shown. Its losses with the most implants come first, so picking a merged fit opens on one of those. Implants don't decide which fits merge.
@@ -97,8 +101,15 @@ The full plan and the decisions behind it are in `docs/fits-plan.md`.
 
 ## System tabs
 
-- `GetPIPilots` (aggregate/piPilots.go) feeds a system target's PI Pilots tab: hauler losses, T1 and T2 transports but no freighters (`hauler_groups.json` minus `hauler_exclusions.json`) whose zKill `locationID` (`Killmail.LocationID`, the nearest celestial) is one of the system's planets, plus any loss with PI aboard wherever it died (the victims' item types are prefetched with `PrefetchItemTypes` first), with PI cargo found by item group (`pi_material_groups.json`) from the raw `Victim.Items`.
-- `GetRatters` (aggregate/ratters.go) feeds its Ratters tab: any pilot loss with an NPC attacker (no character, in an NPC corp or none, so structures are not rats), each tagged by who else was on it: NPCs only, players using only smartbombs (weapon group in `smartbomb_groups.json`), or other players; pilots with the surest loss rank first.
+- `GetPIPilots` (aggregate/piPilots.go) feeds a system target's PI Pilots tab: hauler losses, T1 and T2 transports but no freighters (`hauler_groups` minus `hauler_exclusions` in `ships.json`) whose zKill `locationID` (`Killmail.LocationID`, the nearest celestial) is one of the system's planets, plus any loss with PI aboard wherever it died (the victims' item types are prefetched with `PrefetchItemTypes` first), with PI cargo found by item group (`pi_material_groups` in `items.json`) from the raw `Victim.Items`.
+- `GetRatters` (aggregate/ratters.go) feeds its Ratters tab: any pilot loss with an NPC attacker (no character, in an NPC corp or none, so structures are not rats), each tagged by who else was on it: NPCs only, players using only smartbombs (weapon group in `smartbomb_groups` of `items.json`), or other players; pilots with the surest loss rank first.
+
+## Static data overrides
+
+- The user guide is `docs/static-data-overrides.md`; keep it in step with the files' sections and these rules.
+- A json file in the `static_data` folder beside the exe (`staticdata.Overrides()`) is merged over the built-in file of the same name (`comm.loadMerged`, `mergeJSON`), so it need only hold what it adds or changes: objects merge key by key, an id or key set to `null` is removed, and anything else, lists included (`inventory_flags.json`'s slots, a j-space system's statics), is replaced whole. For example `{"capital_types": {"34328": null}}` as `ships.json` stops the Bowhead counting as a capital, and `{"types": {"587": {"group": 26}}}` as `fit_types.json` changes only the Rifter's group.
+- A copy that is not valid json, or whose merge its loader rejects (a j-space system given a wormhole code the file does not list), is skipped with a warning and the built-in file is used. Debug mode's `session.json` lists the copies in the folder with their hashes.
+- Preferences > Game data > Export game data (`App.ExportStaticData`, gui/static_data.go) writes every file as loaded, merged and indented (`comm.StaticDataFiles`), to `static_data_export` beside the settings with a `README.txt` saying editing them changes nothing, removing json a previous export left, and opens the folder with the readme selected.
 
 ## Other GUI details
 

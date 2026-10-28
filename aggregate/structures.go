@@ -5,7 +5,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
 )
@@ -36,12 +35,11 @@ Parameters:
   - used: the expanded killmails the target's structures were on, newest first
   - lost: the target's expanded structure losses, newest first
   - target: the corp or alliance target, with any Holdings
-  - esiClient: looks up an attacker's type group, to tell a control tower battery, ie the cache
 
 Returns:
   - []StructureUse: the structures standing first, then those lost, each newest kill first
 */
-func StructuresUsed(used []*retrieval.Killmail, lost []*retrieval.Killmail, target *retrieval.IntelTarget, esiClient api.ESIClient) []StructureUse {
+func StructuresUsed(used []*retrieval.Killmail, lost []*retrieval.Killmail, target *retrieval.IntelTarget) []StructureUse {
 	byKey := map[string]*StructureUse{}
 	order := []string{}
 	for _, km := range used {
@@ -55,9 +53,9 @@ func StructuresUsed(used []*retrieval.Killmail, lost []*retrieval.Killmail, targ
 			}
 			var structure, battery *retrieval.Item
 			switch {
-			case comm.UpwellStructures.ContainsIDNumber(attacker.Ship.ItemID), comm.ControlTowers.ContainsIDNumber(attacker.Ship.ItemID):
+			case IsStructure(attacker.Ship):
 				structure = attacker.Ship
-			case isPosBattery(attacker.Ship, esiClient):
+			case comm.PosBatteryGroups.ContainsGroupOf(attacker.Ship.ItemID):
 				battery = attacker.Ship
 			default:
 				continue
@@ -109,7 +107,7 @@ func StructuresUsed(used []*retrieval.Killmail, lost []*retrieval.Killmail, targ
 // structureKey keys a structure by its type, or as a control tower when it is one or only its battery was seen, its system, and its owning corp
 func structureKey(structure *retrieval.Item, systemID int, corp *retrieval.Corporation) string {
 	kind := "tower"
-	if structure != nil && !comm.ControlTowers.ContainsIDNumber(structure.ItemID) {
+	if structure != nil && !comm.ControlTowerGroups.ContainsGroupOf(structure.ItemID) {
 		kind = fmt.Sprint(structure.ItemID)
 	}
 	corpID, _ := groupIDs(corp, nil)
@@ -123,16 +121,6 @@ func lossOf(use *StructureUse, loss *retrieval.Killmail) bool {
 		return false
 	}
 	return structureKey(victim.Ship, loss.System.SystemID, victim.CorpAtKill) == structureKey(use.Structure, use.System.SystemID, use.Corporation)
-}
-
-// isPosBattery reports whether a type is a control tower battery, one of comm.PosBatteryGroups
-func isPosBattery(item *retrieval.Item, esiClient api.ESIClient) bool {
-	info, err := esiClient.GetItemInfo(item.ItemID)
-	if err != nil || info == nil {
-		comm.Logger.WithError(err).Warnf("Unable to look up type %d, it is not counted as a control tower battery", item.ItemID)
-		return false
-	}
-	return comm.PosBatteryGroups.ContainsIDNumber(info.GroupID)
 }
 
 // viaFor is the holding a corp or alliance on a killmail is, nil when it is the target itself
@@ -149,9 +137,9 @@ func viaFor(target *retrieval.IntelTarget, corp *retrieval.Corporation, alliance
 	return nil
 }
 
-// isMinorStructure reports whether a type is a structure with no guns, ie a Metenox moon drill or customs office, one of comm.MinorStructures
+// isMinorStructure reports whether a type is a structure with no guns, ie a Metenox moon drill or customs office, one of comm.MinorStructureGroups
 func isMinorStructure(item *retrieval.Item) bool {
-	return item != nil && comm.MinorStructures.ContainsIDNumber(item.ItemID)
+	return item != nil && comm.MinorStructureGroups.ContainsGroupOf(item.ItemID)
 }
 
 // StructureKill is a structure the target took part in destroying
@@ -161,7 +149,7 @@ type StructureKill struct {
 }
 
 /*
-	StructuresDestroyed finds the upwell structures, control towers, and minor structures (comm.MinorStructures) the target took part in destroying, among its killmails
+	StructuresDestroyed finds the upwell structures, control towers, and minor structures (comm.MinorStructureGroups) the target took part in destroying, among its killmails
 
 Parameters:
   - killmails: the target's expanded killmails, newest first
