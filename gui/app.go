@@ -26,6 +26,7 @@ const progressEvent = "progress"
 // App holds the backend state shared by every call from the frontend. Its exported methods are bound to the frontend by Wails, as window.go.gui.App.<Method>.
 type App struct {
 	ctx          context.Context
+	version      string     // from wails.json, see ProjectVersion
 	mu           sync.Mutex // Wails runs each frontend call in its own goroutine, one search runs at a time
 	clients      retrieval.CollectionClientPool
 	cache        *retrieval.CachedEveIDs
@@ -248,8 +249,8 @@ const (
 const systemLimit = 10
 
 // NewApp creates a new App application struct
-func NewApp() *App {
-	return &App{}
+func NewApp(version string) *App {
+	return &App{version: version}
 }
 
 /*

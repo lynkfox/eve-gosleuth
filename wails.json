@@ -4,6 +4,13 @@
   "outputfilename": "eve-gosleuth",
   "frontend:install": "",
   "frontend:build": "",
+  "info": {
+    "productName": "EVE GoSleuth",
+    "productVersion": "0.9.0",
+    "companyName": "lynkfox",
+    "copyright": "lynkfox. EVE Online is a trademark of Fenris Creations.",
+    "comments": "EVE Online intel from killmails"
+  },
   "author": {
     "name": "lynkfox",
     "email": "lynkfox@gmail.com"

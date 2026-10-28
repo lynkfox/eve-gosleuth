@@ -10,7 +10,7 @@
   <!-- shown with the orange border while debug mode is on -->
   <div id="debug-tag" class="debug-tag" hidden>Debug mode</div>
   <header class="topbar">
-    <div class="brand">EVE <span>GoSleuth</span></div>
+    <button id="brand" class="brand" type="button" title="About GoSleuth" aria-haspopup="dialog" aria-controls="about"><img class="brand-icon" src="icons/gosleuth.png" alt=""><span class="brand-text"><span class="brand-name">EVE <span>GoSleuth</span></span><span id="brand-version" class="brand-version"></span></span></button>
     <form id="search-form" class="search" autocomplete="off">
       <div class="search-field">
         <input id="search-input" type="text" placeholder="Exact name, or a zKillboard or EveWho link" spellcheck="false" autofocus
@@ -393,6 +393,121 @@
       </label>
       <button id="caveat-understood" type="button" autofocus>Understood</button>
     </div>
+  </dialog>
+
+  <!-- opened from the bear and title at the left of the top bar: What it is opens each time, and its sections share a name so only one is open at a time -->
+  <dialog id="about" class="window about-window" aria-labelledby="about-title">
+    <div class="window-titlebar">
+      <h2 id="about-title">About GoSleuth</h2>
+      <button id="about-close" class="window-close" type="button" aria-label="Close" title="Close">×</button>
+    </div>
+    <!-- a data-url button opens its address in the browser -->
+    <div id="about-body" class="window-body about-body">
+      <div class="about-head">
+        <img class="about-icon" src="icons/gosleuth.png" alt="">
+        <div>
+          <p class="about-name">EVE <span>GoSleuth</span></p>
+          <p id="about-version" class="preference-help"></p>
+        </div>
+        <!-- the logos are drawn in the text color, so they show in every theme -->
+        <svg class="about-eve-logo" viewBox="0 0 198.4 78.66" fill="currentColor" role="img" aria-label="EVE Online"><path d="M 0,0 0,13.88 10.97,13.88 10.97,10.31 60.69,10.31 60.69,0 0,0 z M 65.84,0 99.22,58.09 132.6,0 120.7,0 C 120.7,0 100.5,34.91 99.22,37.16 97.92,34.91 77.75,0 77.75,0 L 65.84,0 z M 137.8,0 137.8,13.88 148.7,13.88 148.7,10.31 198.4,10.31 198.4,0 137.8,0 z M 0,19.12 0,29.47 60.69,29.47 60.69,19.12 0,19.12 z M 137.8,19.12 137.8,29.47 198.4,29.47 198.4,19.12 137.8,19.12 z M 0,34.66 0,48.59 60.69,48.59 60.69,38.25 10.97,38.25 10.97,34.66 0,34.66 z M 137.8,34.66 137.8,48.59 198.4,48.59 198.4,38.25 148.7,38.25 148.7,34.66 137.8,34.66 z M 42.19,69.72 C 41.32,69.72 40.71,69.89 40.41,70.19 40.1,70.49 39.97,71.03 39.97,71.84 L 39.97,76.56 C 39.97,77.38 40.1,77.93 40.41,78.22 40.71,78.52 41.32,78.66 42.19,78.66 L 48.72,78.66 C 49.59,78.66 50.19,78.52 50.5,78.22 50.8,77.93 50.97,77.38 50.97,76.56 L 50.97,71.84 C 50.97,71.03 50.8,70.49 50.5,70.19 50.19,69.89 49.59,69.72 48.72,69.72 L 42.19,69.72 z M 64.37,69.72 64.37,78.66 66.25,78.66 66.25,73.84 C 66.25,73.66 66.23,73.43 66.22,73.19 66.2,72.94 66.18,72.69 66.16,72.41 66.26,72.53 66.38,72.67 66.5,72.78 66.62,72.89 66.75,73.01 66.91,73.16 L 73.47,78.66 74.88,78.66 74.88,69.72 73.03,69.72 73.03,74.41 C 73.03,74.52 73.05,74.7 73.06,74.91 73.07,75.11 73.09,75.47 73.12,75.97 72.99,75.81 72.82,75.66 72.66,75.5 72.49,75.35 72.31,75.18 72.09,75 L 65.81,69.72 64.37,69.72 z M 88.53,69.72 88.53,78.66 97.31,78.66 97.31,77 90.59,77 90.59,69.72 88.53,69.72 z M 109.4,69.72 109.4,78.66 111.5,78.66 111.5,69.72 109.4,69.72 z M 125.1,69.72 125.1,78.66 127,78.66 127,73.84 C 127,73.66 127,73.43 126.9,73.19 126.9,72.94 126.9,72.69 126.9,72.41 127,72.53 127.1,72.67 127.2,72.78 127.3,72.89 127.5,73.01 127.6,73.16 L 134.2,78.66 135.6,78.66 135.6,69.72 133.8,69.72 133.8,74.41 C 133.8,74.52 133.8,74.7 133.8,74.91 133.8,75.11 133.8,75.47 133.8,75.97 133.7,75.81 133.6,75.66 133.4,75.5 133.2,75.35 133,75.18 132.8,75 L 126.5,69.72 125.1,69.72 z M 149.3,69.72 149.3,78.66 158.5,78.66 158.5,77 151.3,77 151.3,74.78 155.4,74.78 155.4,73.25 151.3,73.25 151.3,71.25 158.4,71.25 158.4,69.72 149.3,69.72 z M 42.03,71.31 48.87,71.31 48.87,77 42.03,77 42.03,71.31 z"/></svg>
+      </div>
+
+      <details id="about-what" class="about-section" name="about-section" open>
+        <summary class="preference-group">What it is</summary>
+        <p class="about-lead">So... is this some sort of zKill browser?</p>
+        <p>GoSleuth is an EVE Online intel tool. Give it a pilot, corporation, alliance, or system and it pulls their killmails from zKillboard, then lays them out to be easily read: who they fly with, where and when they are active, what they fly, the battles they have been in, and more.</p>
+        <p>Use it to find a pilot's alts and associates, size up a corporation or alliance, or learn who lives in a system.</p>
+        <p>In the grand tradition of <strong>Py</strong>fa being written in <strong>Py</strong>thon, <strong>Go</strong>Sleuth is written in <strong>Go</strong>.</p>
+      </details>
+
+      <!-- filled at load with a copy of the caveat warning's text -->
+      <details class="about-section" name="about-section">
+        <summary class="preference-group">Killmail Bias</summary>
+        <div id="about-caveats" class="caveat-body about-caveats"></div>
+      </details>
+
+      <details class="about-section" name="about-section">
+        <summary class="preference-group">Author</summary>
+        <p class="about-lead">I'm just a guy who likes data.</p>
+        <p>I'm <button class="text-link" type="button" data-url="https://github.com/lynkfox" title="lynkfox on GitHub">Lynkfox</button>, known in game as <button class="text-link" type="button" data-url="https://zkillboard.com/character/2121139046/" title="Luxxianna Seraph on zKillboard">Luxxianna Seraph</button>, and sometimes known around J-space as "The Spreadsheet Guy".</p>
+        <p>I am a developer by trade, having coded for much of my life. I love to dabble in tools for EVE, having built many a small thing here or there to give myself or my corpmates some cool tools to use. GoSleuth is something I've been working on for many years, and it has had many iterations.</p>
+      </details>
+
+      <details class="about-section" name="about-section">
+        <summary class="preference-group">AI disclosure</summary>
+        <p class="about-lead">Unfortunately coded with Claude Opus 5.5</p>
+        <p>Before GoSleuth, I wrote a tool in Python I called eve-info. My corporation and I used it internally, and it had pretty much all the same functionality GoSleuth has. I wrote that tool entirely by hand, and it worked. I knew I wanted to port it to Go, to take advantage of its asynchronous goroutines and its much better speed in general.</p>
+        <p>I wrote GoSleuth's original backend by hand, about 2,600 lines of Go. Everything added after Oct 24th, 2026, the whole interface included, was built with Claude, an AI coding assistant, under my direction. </p>
+        <p>I would estimate that at this time, about 25% of the backend (not GUI or test related) is either my code or based heavily on my code. This number will undoubtedly decrease as I release more updates utilizing Claude Opus 5.5.</p>
+        <p>I am no fan of AI or how it is used today, and the README explains why I used it anyway. If you would rather not use AI assisted software, I completely understand.</p>
+        <p><button class="text-link" type="button" data-url="https://github.com/lynkfox/eve-gosleuth#yes-this-app-used-ai-in-its-development">Read the full note in the README</button></p>
+      </details>
+
+      <details class="about-section" name="about-section">
+        <summary class="preference-group">Links</summary>
+        <p class="about-lead">To the Internet!</p>
+        <ul class="about-list">
+          <li><button class="text-link" type="button" data-url="https://github.com/lynkfox/eve-gosleuth">GoSleuth on GitHub</button>: the source code and README</li>
+          <li><button class="text-link" type="button" data-url="https://github.com/lynkfox/eve-gosleuth/releases">Releases</button>: new versions to download</li>
+          <li><button class="text-link" type="button" data-url="https://github.com/lynkfox/eve-gosleuth/blob/main/docs/static-data-overrides.md">Editing GoSleuth's game data</button>: a lightweight method to handle a few game data changes without having to rely on a full app update</li>
+        </ul>
+      </details>
+
+      <details class="about-section" name="about-section">
+        <summary class="preference-group">Data sources</summary>
+        <p class="about-lead">I guess it's more than just a zKill browser after all</p>
+        <ul class="about-list">
+          <li><button class="text-link" type="button" data-url="https://zkillboard.com">zKillboard</button>: the killmails</li>
+          <li><button class="text-link" type="button" data-url="https://developers.eveonline.com">Fenris Creations' ESI and Static Data Export</button>: names, affiliations, ships, items, systems, and any killmail zKillboard lacks</li>
+          <li><button class="text-link" type="button" data-url="https://images.evetech.net">Fenris Creations' image server</button>: portraits, logos, and ship pictures</li>
+          <li><button class="text-link" type="button" data-url="https://evewho.com">EveWho</button>, <button class="text-link" type="button" data-url="https://evemaps.dotlan.net">Dotlan</button>, and <button class="text-link" type="button" data-url="https://everef.net">EVE Ref</button>: linked from the right click menus for more detail</li>
+        </ul>
+      </details>
+
+      <details class="about-section" name="about-section">
+        <summary class="preference-group">Fenris Creations notice</summary>
+        <svg class="about-fc-logo" viewBox="0 0 191 40" fill="currentColor" role="img" aria-label="Fenris Creations"><path d="M0 1.48047L3.43909 4.968H21.7826V1.48047H0Z"/><path d="M1.55371 10.7812V24.7314H4.9928V14.2688H18.3234L14.8843 10.7812H1.55371Z"/><path d="M152.448 1.48047H149.009V24.7264H152.448V1.48047Z"/><path d="M128.722 24.729L118.402 14.2638L127.568 4.968H113.893L110.454 1.48047H132.227V4.968H132.221L123.057 14.2638L133.377 24.729H128.722Z"/><path d="M169.23 4.96719V4.96484L169.233 4.96719H169.23Z"/><path d="M98.0831 0.00165192L94.7373 3.39453L98.0831 6.78741L101.429 3.39453L98.0831 0.00165192Z" fill="#FF5E1A"/><path d="M98.0834 21.2388L77.1396 0V24.7289H80.5787V8.41943L98.0834 26.1732V21.2388Z"/><path d="M60.3523 4.968V1.48047H38.5723V14.269L48.8895 24.7316H53.5426L43.2253 14.269H56.9132L53.4741 10.7814H42.0114V4.968H60.3523Z"/><path d="M172.733 24.729L183.053 14.2638L173.888 4.968H187.561L191 1.48047H169.23V4.968H169.233L178.397 14.2638L168.077 24.729H172.733Z"/><path d="M38.2756 39.9998C36.8513 39.9998 35.7793 38.8741 35.7793 37.3835C35.7793 35.8928 36.8817 34.7363 38.2908 34.7363C39.1804 34.7363 39.7126 35.0602 40.2372 35.5485L40.2727 35.5819L39.9457 35.9211L39.9128 35.8877C39.5479 35.5305 39.0714 35.1655 38.2832 35.1655C37.125 35.1655 36.2532 36.1062 36.2532 37.3526C36.2532 38.5991 37.1478 39.5706 38.2908 39.5706C38.9295 39.5706 39.411 39.3495 39.9559 38.8047L39.9888 38.7713L40.3005 39.0797L40.2676 39.1131C39.8292 39.55 39.2513 39.9972 38.2781 39.9972L38.2756 39.9998Z"/><path d="M54.6857 39.9155L53.1144 37.844H51.571V39.9155H51.1123V34.8242H53.2285C53.8215 34.8242 54.3258 35.0041 54.6477 35.3305C54.8935 35.5798 55.0355 35.9293 55.0355 36.2917C55.0355 37.0781 54.5108 37.6204 53.6314 37.7695L55.2661 39.918H54.6832L54.6857 39.9155ZM53.1879 37.4148C54.0319 37.4148 54.5793 36.9856 54.5793 36.32C54.5793 35.6543 54.0673 35.2611 53.2107 35.2611H51.5736V37.4174H53.1879V37.4148Z"/><path d="M65.877 39.9141V34.8203H69.4757V35.2572H66.3357V37.1282H69.1589V37.5625H66.3357V39.4772H69.5112V39.9141H65.877Z"/><path d="M96.4331 39.9141V35.2572H94.7148V34.8203H98.6101V35.2572H96.8918V39.9141H96.4331Z"/><path d="M109.936 34.8203H109.478V39.9115H109.936V34.8203Z"/><path d="M123.298 39.9998C121.863 39.9998 120.781 38.8741 120.781 37.3835C120.781 36.0753 121.729 34.7363 123.313 34.7363C124.747 34.7363 125.83 35.862 125.83 37.3526C125.83 38.6608 124.882 39.9998 123.298 39.9998ZM123.298 35.1655C122.132 35.1655 121.253 36.1062 121.253 37.3526C121.253 38.5991 122.157 39.5706 123.311 39.5706C124.464 39.5706 125.356 38.6299 125.356 37.3835C125.356 36.137 124.451 35.1681 123.298 35.1681V35.1655Z"/><path d="M153.54 39.9852C152.764 39.9852 152.143 39.7359 151.522 39.173L151.489 39.1422L151.517 39.1062L151.809 38.8106L151.842 38.8415C152.389 39.3478 152.888 39.556 153.56 39.556C154.267 39.556 154.761 39.1679 154.761 38.6102C154.761 38.1142 154.546 37.8109 153.405 37.577C152.199 37.3303 151.707 36.9088 151.707 36.125C151.707 35.3411 152.409 34.75 153.337 34.75C154.019 34.75 154.513 34.9273 155.05 35.3617L155.091 35.3951L154.761 35.7292L154.728 35.7009C154.3 35.3385 153.866 35.1766 153.324 35.1766C152.653 35.1766 152.166 35.5544 152.166 36.0736C152.166 36.5927 152.389 36.8908 153.565 37.135C154.726 37.374 155.222 37.8006 155.222 38.5588C155.222 39.4043 154.53 39.9826 153.542 39.9826L153.54 39.9852Z"/><path d="M82.9202 34.8203H82.4767L80.1553 39.9115H80.6368L81.2628 38.5109H84.1114L84.7373 39.9115H85.2417L82.9202 34.8203ZM81.4605 38.0843L82.6921 35.3523L83.9162 38.0843H81.4605Z"/><path d="M140.86 39.9141V34.8203H140.417V39.0814L137.084 34.8203H136.671V39.9141H137.114V35.5605L140.521 39.9141H140.86Z"/></svg>
+        <p class="about-legal">EVE Online® and Fenris Creations™ (formerly CCP Games) and all related logos and other elements are trademarks of Fenris Creations. ©2026 Fenris Creations. All rights reserved. All other trademarks are the property of their respective owners.</p>
+        <p class="about-legal">GoSleuth uses EVE Online data and images under the EVE developer license. Fenris Creations does not endorse, and is not in any way affiliated with, GoSleuth. Fenris Creations is in no way responsible for the content on or functioning of this application, nor can it be liable for any damage arising from the use of this application.</p>
+      </details>
+
+      <!-- the rest of ATTRIBUTION.md, kept in step with it -->
+      <details class="about-section" name="about-section">
+        <summary class="preference-group">Attributions</summary>
+        <p>GoSleuth's own code is under the MIT License. The materials below are not, and stay under their owners' terms.</p>
+        <p>The app icon is the "Bear" icon by Mayor Icons from Flaticon, used under the Flaticon free license: <button class="text-link" type="button" data-url="https://www.flaticon.com/free-icon/bear_17199791">Bear icon</button> created by <button class="text-link" type="button" data-url="https://www.flaticon.com/authors/mayor-icons">Mayor Icons</button> - <button class="text-link" type="button" data-url="https://www.flaticon.com/">Flaticon</button></p>
+        <ul class="about-list">
+          <li>Killmail lists from <button class="text-link" type="button" data-url="https://zkillboard.com/">zKillboard</button></li>
+          <li>Corporation and alliance member lists from <button class="text-link" type="button" data-url="https://evewho.com/">EveWho</button></li>
+          <li>System maps from <button class="text-link" type="button" data-url="https://evemaps.dotlan.net/">Dotlan EveMaps</button>, linked to from systems</li>
+          <li>The zKillboard, EveWho, and Dotlan link icons are those sites' own favicons, used to link to them</li>
+        </ul>
+      </details>
+    </div>
+    <!-- kept below the scrolling sections -->
+    <div class="window-actions about-actions">
+      <span class="about-donate">Donate ISK to <button id="about-copy-name" class="text-link" type="button" title="Click to copy the name, to paste into an ISK transfer in game">Luxxianna Seraph</button></span>
+      <button id="about-report-bug" type="button" title="Report a problem on GoSleuth's GitHub">Report a bug</button>
+    </div>
+  </dialog>
+
+  <!-- About's Report a bug asks for a debug log first, Continue opening the GitHub issues -->
+  <dialog id="bug-report-confirm" class="confirm" aria-labelledby="bug-report-title">
+    <form method="dialog">
+      <p id="bug-report-title">Have you generated a Debug of a faulty search?</p>
+      <p class="confirm-detail">A debug log of a faulty search is the best way to help us diagnose a bug. To make one:</p>
+      <ol class="confirm-detail bug-report-steps">
+        <li>Open <strong>Preferences</strong> at the top right, then <strong>Advanced</strong></li>
+        <li>Tick <strong>Debug mode</strong> and Save</li>
+        <li>Run the faulty search again</li>
+        <li>Back in Preferences &gt; Advanced, <strong>Open debug folder</strong> and attach the newest zip to your report</li>
+      </ol>
+      <div class="confirm-actions">
+        <button class="secondary" value="cancel">Cancel</button>
+        <button value="continue" autofocus>Continue</button>
+      </div>
+    </form>
   </dialog>
 
   <!-- when a searched name is a pilot, corp, alliance, or system more than once, or is some ticker, which one: each match is a button whose value is its place in the list -->

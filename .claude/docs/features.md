@@ -111,6 +111,13 @@ The full plan and the decisions behind it are in `.claude/docs/fits-plan.md`.
 - A copy that is not one json object (`mergeJSON` rejects `null`, lists, and trailing text), or whose merge its loader rejects (a section of a sectioned file removed, `fit_types.json` with no types, `jspace_statics.json` with no systems or a system given a code it does not list), is skipped with a warning and the built-in file is used. Debug mode's `session.json` lists the copies in the folder with their hashes.
 - Preferences > Advanced > Game data > Export game data (`App.ExportStaticData`, gui/static_data.go) writes every file as loaded, merged and indented (`comm.StaticDataFiles`), to `static_data_export` beside the settings with a `README.txt` saying editing them changes nothing, then removing any other json a previous export left (`os.ReadDir`, as a glob would read brackets in the user's folder names), and opens the folder with the readme selected.
 
+## About
+
+- The bear and title at the left of the top bar (`#brand`, the bear is `build/appicon.png` scaled to 96px as `frontend/dist/icons/gosleuth.png`) open `#about`. `openAbout` opens What it is each time; the sections share `name="about-section"`, so opening one shuts the rest.
+- Its Caveats are copied at load from `#caveat-warning`'s text, so edit them there. Its version, also shown under the top bar's title, comes from `App.Version()`, ie `wails.json`'s `info.productVersion` (see CLAUDE.md).
+- The Fenris Creations notice and the Attributions section repeat `ATTRIBUTION.md`: change both together.
+- Every link is a button with `data-url`, opened by `BrowserOpenURL`. The window has a fixed size, its sections at the top. The ISK donation (the name copies itself when clicked) and Report a bug sit in `.window-actions`, outside the scrolling body. Report a bug opens `#bug-report-confirm`, which tells how to make a debug log; its Continue opens the GitHub issues.
+
 ## Other GUI details
 
 - The window itself never scrolls (end of style.css): the header, target panel, and sidebar stay put and each `.tab-panel` scrolls on its own. A paged tab (`.paged-panel`, Killmails and Members) scrolls only its `.panel-scroll` list, keeping its pager in reach.

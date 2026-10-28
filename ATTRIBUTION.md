@@ -8,11 +8,18 @@ The app icon (`build/appicon.png`) is the "Bear" icon by **Mayor Icons** from Fl
 
 [Bear icon](https://www.flaticon.com/free-icon/bear_17199791) created by [Mayor Icons](https://www.flaticon.com/authors/mayor-icons) - [Flaticon](https://www.flaticon.com/)
 
-## EVE Online
+## EVE Online and Fenris Creations
 
-EVE Online and the EVE logo are the registered trademarks of CCP hf. All rights are reserved worldwide. All other trademarks are the property of their respective owners. EVE Online, the EVE logo, EVE and all associated logos and designs are the intellectual property of CCP hf. All artwork, screenshots, characters, vehicles, storylines, world facts or other recognizable features of the intellectual property relating to these trademarks are likewise the intellectual property of CCP hf. CCP hf. has granted permission to GoSleuth to use EVE Online and all associated logos and designs for promotional and information purposes but does not endorse, and is not in any way affiliated with, GoSleuth. CCP is in no way responsible for the content on or functioning of this application, nor can it be liable for any damage arising from the use of this application.
+EVE Online® and Fenris Creations™ (formerly CCP Games) and all related logos and other elements are trademarks of Fenris Creations. ©2026 Fenris Creations. All rights reserved. All other trademarks are the property of their respective owners.
 
-Portraits, logos, and ship images are loaded from CCP's image server (images.evetech.net), and game data from CCP's ESI.
+GoSleuth uses EVE Online data and images under the EVE developer license. Fenris Creations does not endorse, and is not in any way affiliated with, GoSleuth. Fenris Creations is in no way responsible for the content on or functioning of this application, nor can it be liable for any damage arising from the use of this application.
+
+Portraits, logos, and ship images are loaded from Fenris Creations' image server (images.evetech.net), and game data from Fenris Creations' ESI and Static Data Export.
+
+The About window shows two trademarks, drawn inline in `frontend/dist/index.html`:
+
+- The EVE Online logo, from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:EVE_online_logo.svg) (CCP's press kit, public domain as a text logo, still a trademark of Fenris Creations).
+- The Fenris Creations logo, from [fenris.com](https://fenris.com/).
 
 ## Other data sources
 

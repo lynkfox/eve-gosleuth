@@ -12,8 +12,14 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// holds the app's version, bumped there as info.productVersion
+//
+//go:embed wails.json
+var wailsJSON []byte
+
 func main() {
-	app := gui.NewApp()
+	version := gui.ProjectVersion(wailsJSON)
+	app := gui.NewApp(version)
 	startup, shutdown := gui.Lifecycle(app)
 
 	err := wails.Run(&options.App{

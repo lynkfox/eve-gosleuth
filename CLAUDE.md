@@ -22,6 +22,7 @@ GOOS=windows go vet ./...               # vet including the Wails windows code
 ```
 
 - The GUI is a Wails v2 app targeting **Windows**, developed in WSL. WSL has no GTK/WebKit, so `wails dev` and Linux GUI builds don't work there; cross-build the Windows exe from WSL (Wails on Windows needs no cgo) and run it from Windows. `-skipbindings` is required, since generating bindings builds and runs a Linux binary.
+- The version is `info.productVersion` in `wails.json` (three numbers): bump it there. `main.go` embeds the file, so `App.Version()`, shown under the top bar's title and in About, follows it, and Wails puts it in the exe's file properties.
 - A plain `go build` of the root package without Wails build tags produces a binary that refuses to run; always build the GUI with `wails build`.
 - The cache lives at `retrieval.DefaultCachePath()`: `%LocalAppData%\eve-gosleuth\cache.db` (SQLite) on Windows, `~/.cache/eve-gosleuth/` on Linux, unless the user moved it in Preferences (`Settings.CacheDir`).
 

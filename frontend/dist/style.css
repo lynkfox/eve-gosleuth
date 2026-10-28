@@ -42,14 +42,30 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+/* the bear and title, which open About */
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  background: none;
+  color: var(--text);
   font-size: 18px;
   font-weight: 600;
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
-.brand span { color: var(--highlight); }
+.brand:hover .brand-name,
+.brand:focus-visible .brand-name { text-decoration: underline; }
+
+.brand-icon { width: 32px; height: 32px; }
+
+.brand-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
+
+.brand-name > span { color: var(--highlight); }
+
+.brand-version { color: var(--muted); font-size: 11px; font-weight: 400; }
 
 .search {
   display: flex;
@@ -1319,22 +1335,26 @@ button.danger {
 /* Advanced folds Debug mode and Game data away, its heading the toggle with an arrow that turns down when open */
 .preference-advanced { display: grid; gap: 14px; }
 
-.preference-advanced > summary {
+.preference-advanced > summary,
+.about-section > summary {
   margin-bottom: 0;
   cursor: pointer;
   list-style: none;
 }
 
-.preference-advanced > summary::-webkit-details-marker { display: none; }
+.preference-advanced > summary::-webkit-details-marker,
+.about-section > summary::-webkit-details-marker { display: none; }
 
-.preference-advanced > summary::before {
+.preference-advanced > summary::before,
+.about-section > summary::before {
   content: "▸";
   display: inline-block;
   margin-right: 6px;
   transition: transform 0.15s;
 }
 
-.preference-advanced[open] > summary::before { transform: rotate(90deg); }
+.preference-advanced[open] > summary::before,
+.about-section[open] > summary::before { transform: rotate(90deg); }
 
 .preference-advanced > .preference-help { margin: 0; }
 
@@ -1437,6 +1457,32 @@ button.text-link {
 .caveat-body ul { display: grid; gap: 6px; padding-left: 20px; }
 .caveat-body .caveat-lead { color: var(--highlight); font-size: 15px; font-weight: 600; }
 .caveat-actions { justify-content: space-between; align-items: center; }
+
+/* About: the bear and version over sections that fold like Preferences > Advanced, the ISK donation and bug report below them */
+/* a fixed size, so opening a section never resizes it: short sections sit at the top, long ones scroll */
+.about-window { width: min(540px, calc(100vw - 32px)); height: 85vh; }
+.about-body { gap: 10px; align-content: start; font-size: 13px; line-height: 1.5; }
+.about-body p { margin: 0; }
+.about-head { display: flex; gap: 14px; align-items: center; margin-bottom: 4px; }
+.about-icon { width: 64px; height: 64px; }
+.about-eve-logo { height: 48px; margin-left: auto; }
+.about-fc-logo { height: 28px; justify-self: start; }
+.about-section > .about-fc-logo + p { margin-top: 12px; }
+.about-name { font-size: 20px; font-weight: 600; letter-spacing: 0.04em; }
+.about-name > span { color: var(--highlight); }
+.about-section { display: grid; gap: 10px; }
+/* a full blank line between paragraphs: a details' gap only spaces its summary from the rest */
+.about-section > p + * { margin-top: 1.5em; }
+/* each section's lead line, styled as the caveat warning's, sits closer to what follows it */
+.about-body .about-lead { color: var(--highlight); font-size: 15px; font-weight: 600; }
+.about-section > .about-lead + * { margin-top: 8px; }
+.about-caveats { display: grid; }
+.about-list { display: grid; gap: 6px; margin: 0; padding-left: 20px; }
+.about-legal { color: var(--muted); font-size: 12px; }
+/* .window-actions, later in the file, would otherwise push both to the right */
+.window-actions.about-actions { justify-content: space-between; align-items: center; gap: 24px; }
+.about-donate { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+.bug-report-steps { display: grid; gap: 4px; margin-bottom: 0; padding-left: 20px; }
 .caveat-dismiss { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
 .caveat-dismiss input { flex: none; margin-top: 4px; padding: 0; accent-color: var(--accent); }
 .caveat-dismiss > span { display: flex; flex-direction: column; gap: 2px; }
