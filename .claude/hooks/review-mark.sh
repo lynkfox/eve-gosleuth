@@ -2,8 +2,9 @@
 # When the user runs /code-review, leave a marker in .git so push-guard.sh lets
 # the next push to main through. push-reminder.sh removes it after a push, so
 # every push needs its own review.
-# Runs on UserPromptSubmit (the prompt starts with /code-review) and on
-# UserPromptExpansion (the expanded command is code-review).
+# Runs on UserPromptSubmit (the prompt starts with /code-review), on
+# UserPromptExpansion (the expanded command is code-review), and after Claude
+# runs the code-review skill at the user's request (PostToolUse on Skill).
 INPUT=$(cat)
 printf '%s' "$INPUT" | jq -e '[.. | strings] | any(test("^\\s*/?code-review(\\s|$)"))' >/dev/null 2>&1 || exit 0
 

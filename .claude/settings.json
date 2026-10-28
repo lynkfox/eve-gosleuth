@@ -36,6 +36,17 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Skill(code-review*)",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/review-mark.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
