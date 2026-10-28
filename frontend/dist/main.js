@@ -4705,15 +4705,22 @@ function showPreferencesError(message) {
   el("preferences-error").hidden = !message;
 }
 
+// what Export game data does, beside its button until an export says where it went
+const STATIC_EXPORT_HINT = "Every game data file as GoSleuth reads it, your changes merged in";
+
+// the user guide to the static_data folder, linked from Game data's description in Preferences > Advanced
+const STATIC_DATA_GUIDE_URL = "https://github.com/lynkfox/eve-gosleuth/blob/main/docs/static-data-overrides.md";
+
 function openPreferences() {
   closeThemesMenu();
   fillPreferencesForm(preferences);
   showPreferencesError("");
   showTabOrderReset();
+  el("preferences-advanced").open = false;
   el("preferences").showModal();
   backend().GetCacheInfo().then(showCacheInfo).catch(() => {});
   backend().GetDebugInfo().then(showDebugInfo).catch(() => {});
-  el("static-export-result").textContent = "";
+  el("static-export-result").textContent = STATIC_EXPORT_HINT;
 }
 
 // showDebugInfo enables Open debug folder once there is a debug log to send, naming the newest
@@ -4855,6 +4862,21 @@ el("myintel-delete-button").addEventListener("click", () => removeMyIntelCards(p
 el("myintel-import-button").addEventListener("click", importMyIntel);
 el("debug-open").addEventListener("click", () => backend().OpenDebugFolder().catch((err) => tickerPush(`Error: ${err}`)));
 el("static-export").addEventListener("click", exportStaticData);
+// a Preferences group's i opens its description, copied from the template its data-more names
+for (const button of document.querySelectorAll(".preference-more")) {
+  button.addEventListener("click", () => {
+    const more = el(`more-${button.dataset.more}`);
+    el("preference-more-title").textContent = more.dataset.title;
+    el("preference-more-body").replaceChildren(more.content.cloneNode(true));
+    for (const link of el("preference-more-body").querySelectorAll("[data-guide]")) link.addEventListener("click", () => window.runtime.BrowserOpenURL(STATIC_DATA_GUIDE_URL));
+    el("preference-more").showModal();
+  });
+}
+el("preference-more-close").addEventListener("click", () => el("preference-more").close());
+// opening Advanced at the foot of Preferences brings it into view
+el("preferences-advanced").addEventListener("toggle", (event) => {
+  if (event.currentTarget.open) event.currentTarget.scrollIntoView({ block: "nearest", behavior: "smooth" });
+});
 el("limits-menu").addEventListener("input", changeSearchLimits);
 el("limits-menu").addEventListener("change", changeSearchLimits);
 // Enter closes the popup rather than starting a search

@@ -564,29 +564,54 @@
       </div>
       <p class="preference-help">The cache actions take effect straight away, without Save. Moving into a folder that already has a GoSleuth cache replaces it.</p>
 
-      <h3 class="preference-group">Debugging</h3>
+      <!-- rarely needed, so closed each time Preferences opens -->
+      <details id="preferences-advanced" class="preference-advanced">
+      <summary class="preference-group">Advanced</summary>
+      <!-- a filled i opens its longer description in #preference-more, from the template its data-more names -->
       <label class="preference">
-        <span class="preference-label" title="Logs everything each search does, zipped after it into the debug folder, to send when reporting a problem"><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Debug mode</span></span>
+        <span class="preference-label preference-label-more"><button class="preference-more" type="button" data-more="debug-mode" title="Click for more information" aria-label="More about Debug mode">i</button><span class="preference-name">Debug mode</span></span>
         <span class="preference-check"><input id="pref-debug-mode" type="checkbox"></span>
       </label>
-      <p class="preference-help">Each search's log is saved as a zip of readable text files, the newest 10 kept. It includes the targets searched and your preferences, but not your user name, recent searches, holdings, or ignored allies. Crashes are always logged. Debug mode turns itself off when the app closes.</p>
       <div class="preference-field">
         <span id="debug-latest" class="preference-help debug-latest"></span>
         <button id="debug-open" class="secondary" type="button" disabled>Open debug folder</button>
       </div>
 
-      <h3 class="preference-group">Game data</h3>
-      <p class="preference-help">The game data GoSleuth uses, such as which ships are capitals and every wormhole's statics, with any changes from a static_data folder beside the app. Export it to read it in full or to copy from it; editing the exported files changes nothing.</p>
+      <div class="preference">
+        <span class="preference-label preference-label-more"><button class="preference-more" type="button" data-more="game-data" title="Click for more information" aria-label="More about Game data">i</button><span class="preference-name">Game data</span></span>
+      </div>
       <div class="preference-field">
-        <span id="static-export-result" class="preference-help"></span>
+        <span id="static-export-result" class="preference-help debug-latest"></span>
         <button id="static-export" class="secondary" type="button">Export game data</button>
       </div>
+      </details>
       <p id="preferences-error" class="preferences-error" role="alert" hidden></p>
     </div>
     <div class="window-actions">
       <button id="preferences-save" type="button">Save</button>
     </div>
   </dialog>
+
+  <!-- a Preferences group's longer description, opened from the i on its heading -->
+  <dialog id="preference-more" class="window preference-more-window" aria-labelledby="preference-more-title">
+    <div class="window-titlebar">
+      <h2 id="preference-more-title"></h2>
+      <button id="preference-more-close" class="window-close" type="button" aria-label="Close" title="Close">×</button>
+    </div>
+    <div id="preference-more-body" class="window-body preference-more-body"></div>
+  </dialog>
+
+  <template id="more-debug-mode" data-title="Debug mode">
+    <p>Debug mode logs everything each search does, to send when reporting a problem.</p>
+    <p>Each search's log is saved as a zip of readable text files, the newest 10 kept. It includes the targets searched and your preferences, but not your user name, recent searches, holdings, or ignored allies.</p>
+    <p>Crashes are always logged. Debug mode turns itself off when the app closes.</p>
+  </template>
+
+  <template id="more-game-data" data-title="Game data">
+    <p>The game data GoSleuth uses, such as which ships are capitals and every wormhole's statics, with any changes from a static_data folder beside the app.</p>
+    <p>Export it to read it in full or to copy from it; editing the exported files changes nothing.</p>
+    <p>To change it, read the guide <button class="text-link" type="button" data-guide>Editing GoSleuth's game data</button>.</p>
+  </template>
 
   <dialog id="discard-confirm" class="confirm">
     <form method="dialog">

@@ -1316,6 +1316,67 @@ button.danger {
   text-transform: uppercase;
 }
 
+/* Advanced folds Debug mode and Game data away, its heading the toggle with an arrow that turns down when open */
+.preference-advanced { display: grid; gap: 14px; }
+
+.preference-advanced > summary {
+  margin-bottom: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.preference-advanced > summary::-webkit-details-marker { display: none; }
+
+.preference-advanced > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 0.15s;
+}
+
+.preference-advanced[open] > summary::before { transform: rotate(90deg); }
+
+.preference-advanced > .preference-help { margin: 0; }
+
+/* a setting whose i opens a window has no hover text to wait for */
+.preference-label-more { cursor: default; }
+
+/* the i on a setting, filled where a hover i is hollow, as it opens a window rather than showing hover text */
+button.preference-more {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  background: var(--muted);
+  border-radius: 50%;
+  color: var(--panel-raised);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: none;
+}
+
+button.preference-more:hover,
+button.preference-more:focus-visible { background: var(--accent); }
+
+.preference-more-body p { margin: 0 0 10px; }
+.preference-more-body p:last-child { margin-bottom: 0; }
+
+/* a link in running text, ie the game data guide, opened in the browser */
+button.text-link {
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  font-weight: inherit;
+  text-decoration: underline;
+}
+
 /* a named setting with its control at the right, ie Max killmail count and its number box */
 .preference-field {
   display: flex;
@@ -1549,7 +1610,7 @@ button.danger {
 .myintel-undo[hidden] { display: none; }
 .myintel-undo button { font-size: 12px; }
 
-/* Preferences > Debugging: the newest debug log's name beside its button, wrapping rather than widening the window */
+/* Preferences > Advanced: the newest debug log's name, or what Export game data does, beside its button, wrapping rather than widening the window */
 .debug-latest { min-width: 0; overflow-wrap: anywhere; }
 
 .menu-themes {

@@ -32,7 +32,7 @@ To undo your changes, delete your file (or the whole `static_data` folder) and r
 
 ## Seeing the data in full
 
-In GoSleuth, open **Preferences** and, at the bottom under **Game data**, choose **Export game data**. GoSleuth writes every file it is using, with your changes already merged in, to a `static_data_export` folder and opens it. Read these files, or copy pieces from them into your own files. Editing the exported files changes nothing. Export again after changing your files to check the result: if your change isn't in the export, GoSleuth couldn't use your file (see [the rules](#rules-for-writing-the-files)).
+In GoSleuth, open **Preferences**, open **Advanced** at the bottom, and beside **Game data** choose **Export game data**. GoSleuth writes every file it is using, with your changes already merged in, to a `static_data_export` folder and opens it. Read these files, or copy pieces from them into your own files. Editing the exported files changes nothing. Export again after changing your files to check the result: if your change isn't in the export, GoSleuth couldn't use your file (see [the rules](#rules-for-writing-the-files)).
 
 ## How your changes are combined
 
@@ -166,4 +166,4 @@ When a GoSleuth release has a newer `fit_types.json` but you don't want to updat
 
 ## Reporting a problem
 
-If GoSleuth behaves oddly while you have files in `static_data`, say so in your report. If you send the debug zip (Preferences → Debug mode), it lists the files in your `static_data` folder.
+If GoSleuth behaves oddly while you have files in `static_data`, say so in your report. If you send the debug zip (Preferences → Advanced → Debug mode), it lists the files in your `static_data` folder.
