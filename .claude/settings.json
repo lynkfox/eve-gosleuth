@@ -1,4 +1,3 @@
-
 {
   "permissions": {
     "allow": [
@@ -15,7 +14,6 @@
       "Read(./secrets/**)"
     ]
   },
-
   "hooks": {
     "PostToolUse": [
       {
@@ -40,10 +38,44 @@
         ]
       }
     ],
-     "UserPromptSubmit": [
-      { "hooks": [ { "type": "command",
-        "command": "TZ=America/New_York date '+Current time (Eastern): %a %b %-d %H:%M %Z'",
-        "timeout": 5 } ] }
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "TZ=America/New_York date '+Current time (Eastern): %a %b %-d %H:%M %Z'",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/review-mark.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/push-guard.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptExpansion": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/review-mark.sh",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }
