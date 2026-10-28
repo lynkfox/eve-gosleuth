@@ -38,6 +38,9 @@ var cargoKept = comm.FitCargoRules{
 	Groups:     []int{303, 916}, // Booster, Nanite Repair Paste
 }
 
+// abyssalMetaGroup is the meta group of mutated modules, marked Abyssal in fit_types.json
+const abyssalMetaGroup = 15
+
 // hullCategories are the categories whose slot and hardpoint counts are kept
 var hullCategories = []int{6, 65} // Ship, Structure
 
@@ -68,14 +71,17 @@ const (
 	attrLowSlotModifier   = 1376
 	attrServiceSlots      = 2056
 	attrFitsToShipType    = 1380
+	attrImplantness       = 331
+	attrBoosterness       = 1087
 )
 
 // sdeType is the part of a types.jsonl line the extract reads
 type sdeType struct {
-	Key       int               `json:"_key"`
-	GroupID   int               `json:"groupID"`
-	Name      map[string]string `json:"name"`
-	Published bool              `json:"published"`
+	Key         int               `json:"_key"`
+	GroupID     int               `json:"groupID"`
+	MetaGroupID int               `json:"metaGroupID"`
+	Name        map[string]string `json:"name"`
+	Published   bool              `json:"published"`
 }
 
 // sdeGroup is the part of a groups.jsonl line the extract reads
@@ -137,7 +143,7 @@ func Extract(sde fs.FS) (*comm.FitTypesFile, error) {
 		if !item.Published || !(slices.Contains(keptCategories, category) || slices.Contains(keptGroups, item.GroupID)) {
 			return
 		}
-		extract.Types[item.Key] = &comm.FitType{TypeID: item.Key, Name: item.Name["en"], GroupID: item.GroupID, CategoryID: category}
+		extract.Types[item.Key] = &comm.FitType{TypeID: item.Key, Name: item.Name["en"], GroupID: item.GroupID, CategoryID: category, Abyssal: item.MetaGroupID == abyssalMetaGroup}
 	})
 	if err != nil {
 		return nil, err
@@ -163,6 +169,9 @@ func Extract(sde fs.FS) (*comm.FitTypesFile, error) {
 		isHull := slices.Contains(hullCategories, fitType.CategoryID)
 		for _, attribute := range dogma.Attributes {
 			value := int(math.Round(attribute.Value))
+			if attribute.AttributeID == attrImplantness || attribute.AttributeID == attrBoosterness {
+				fitType.HeadSlot = value
+			}
 			if isHull {
 				switch attribute.AttributeID {
 				case attrHiSlots:

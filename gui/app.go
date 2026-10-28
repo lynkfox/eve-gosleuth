@@ -107,7 +107,7 @@ type IntelReport struct {
 	Holdings   []HoldingActivity `json:"holdings"`
 	Systems    []SystemSummary   `json:"systems"`
 	Capitals   []CapitalShip     `json:"capitals"`   // a corp or alliance target's capital ships and the members who flew them
-	Fits       []FitEntry        `json:"fits"`       // a pilot, corp, or alliance target's losses with their fits
+	Fits       []FitGroup        `json:"fits"`       // a pilot, corp, or alliance target's losses with their fits, identical fits merged
 	PIPilots   []PIPilot         `json:"piPilots"`   // a system target's pilots who lost haulers near its planets, or ships with PI aboard
 	Ratters    []Ratter          `json:"ratters"`    // a system target's pilots who lost ships with NPCs on the killmail
 	MemberList bool              `json:"memberList"` // a corp or alliance target has a Members tab, its rows come from GetMembers
@@ -696,7 +696,7 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		a.lastAllies = &alliesSource{target: target, killmails: collected.Killmails}
 		report.Allies, report.IgnoredAllies, report.KilledAllies = a.rankAllies(a.lastAllies)
 		report.Holdings = a.holdingActivity(a.lastAllies)
-		report.Fits = buildFits(collected.Killmails, &target)
+		report.Fits = buildFits(collected.Killmails, &target, collected.BattleOfKillmail())
 		comm.ReportProgress("Ranking systems")
 		report.Systems = buildSystemSummaries(aggregate.GetMostVisitedSystems(systemLimit, collected.SystemsVisted), collected.Killmails, &target)
 	}

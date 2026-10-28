@@ -1519,6 +1519,8 @@ function renderIntelSections(report) {
   el("tab-fits").hidden = !report.fits;
   if (report.fits) {
     renderFits(report.fits);
+  } else {
+    fitsShown = { fits: null, selected: 0, folded: new Set(), select: null };
   }
 
   el("tab-structures").hidden = !report.structures;
@@ -1685,66 +1687,275 @@ function renderCapitals(capitals) {
   el("capitals-empty").hidden = capitals.length > 0;
 }
 
+// fitsShown is the Fits tab's list as drawn, kept so a redraw (ie the time zone changed) and Show fit keep the chosen fit and the folded hulls
+let fitsShown = { fits: null, selected: 0, folded: new Set(), select: null };
+
+// FITS_FOLD_OVER is how many fits the tab lists before it starts with every hull folded, but the chosen one's
+const FITS_FOLD_OVER = 12;
+
 /*
-  renderFits fills the Fits tab of a pilot, corp, or alliance search: the target's losses with a fit, under a heading for each ship, newest first.
-  Selecting one shows its fit as EFT on the right, where Copy EFT puts it on the clipboard for the in-game Import from clipboard. The first is selected to start.
+  renderFits fills the Fits tab of a pilot, corp, or alliance search: the target's fits, identical fits merged with a count, under a heading for each ship that folds.
+  Selecting one draws it in the fitting window on the right, with its losses to choose from. Copy EFT puts the chosen loss on the clipboard for the in-game Import from clipboard.
+  The newest fit is selected to start, and a redraw keeps the one chosen.
 */
 function renderFits(fits) {
-  const rows = [];
-  const select = (fit, row) => {
-    rows.forEach((other) => other.setAttribute("aria-selected", String(other === row)));
-    el("fit-view-title").textContent = `${fit.shipName} · ${fit.pilotName} · ${spokenDate(fit.time)}`;
-    el("fit-view-eft").textContent = fit.eft;
-    const note = el("fit-view-note");
-    note.hidden = !fit.missingTypes;
-    note.textContent = fit.missingTypes ? `${fit.missingTypes} item ${fit.missingTypes === 1 ? "type is" : "types are"} newer than GoSleuth's item data, so this fit may be missing pieces.` : "";
-    el("fit-copy").disabled = false;
-    el("fit-copy").onclick = () => window.runtime.ClipboardSetText(fit.eft)
-      .then((copied) => tickerPush(copied ? "Fit copied" : "Could not copy the fit"))
-      .catch(() => tickerPush("Could not copy the fit"));
+  if (fitsShown.fits !== fits) {
+    fitsShown = { fits, selected: 0, folded: new Set(), select: null };
+    if (fits.length > FITS_FOLD_OVER) fits.forEach((fit) => fitsShown.folded.add(fit.shipName));
+  }
+  // a corp or alliance's fits say who flew them, a pilot's do not
+  const manyPilots = new Set(fits.flatMap((fit) => fit.losses.map((loss) => loss.pilotName))).size > 1;
+
+  const rows = new Map();
+  const hulls = new Map();
+  // a fit picked from the list opens on its loss with the most implants, the newest of those
+  const select = (fit, killmailId) => {
+    const loss = fit.losses.find((each) => isFitLoss(each, killmailId))
+      || fit.losses.reduce((most, each) => (each.fit.implants || []).length > (most.fit.implants || []).length ? each : most);
+    fitsShown.selected = loss.killmailId;
+    for (const [shown, row] of rows) row.setAttribute("aria-selected", String(shown === fit));
+    if (fitsShown.folded.delete(fit.shipName)) hulls.get(fit.shipName).unfold();
+    renderFitWindow(fit, loss, (other) => select(fit, other));
+    return rows.get(fit);
+  };
+  fitsShown.select = (killmailId) => {
+    const fit = fits.find((each) => each.losses.some((loss) => isFitLoss(loss, killmailId)));
+    return fit ? select(fit, killmailId) : null;
   };
 
   const items = [];
-  let hull = "";
   for (const fit of fits) {
-    if (fit.shipName !== hull) {
-      hull = fit.shipName;
-      const heading = document.createElement("li");
-      heading.className = "fits-hull";
-      heading.textContent = hull;
-      items.push(heading);
+    if (!hulls.has(fit.shipName)) {
+      const hull = fitsHull(fit, fits.filter((each) => each.shipName === fit.shipName));
+      hulls.set(fit.shipName, hull);
+      items.push(hull.item);
     }
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = "fit-row";
-    row.setAttribute("aria-selected", "false");
-    const image = document.createElement("img");
-    image.src = fit.shipImageUrl;
-    image.alt = "";
-    const text = document.createElement("span");
-    text.className = "fit-row-text";
-    const who = document.createElement("span");
-    who.textContent = fit.pilotName;
-    const when = document.createElement("span");
-    when.className = "fit-row-when";
-    when.textContent = spokenDate(fit.time);
-    text.append(who, when);
-    row.append(image, text);
-    row.addEventListener("click", () => select(fit, row));
-    rows.push(row);
+    const row = fitRow(fit, manyPilots);
+    row.addEventListener("click", () => select(fit));
+    rows.set(fit, row);
     const item = document.createElement("li");
     item.append(row);
-    items.push(item);
+    hulls.get(fit.shipName).rows.append(item);
   }
   el("fits-list").replaceChildren(...items);
 
   el("fits-layout").hidden = fits.length === 0;
   el("fits-empty").hidden = fits.length > 0;
-  el("fit-view-title").textContent = "";
-  el("fit-view-eft").textContent = "";
-  el("fit-view-note").hidden = true;
-  el("fit-copy").disabled = true;
-  if (fits.length > 0) select(fits[0], rows[0]);
+  if (fits.length > 0 && !fitsShown.select(fitsShown.selected)) select(fits[0]);
+}
+
+// fitsHull is a hull's heading in the fit list, with its losses counted, and the list of its fits beneath that it folds away
+function fitsHull(fit, ofHull) {
+  const item = document.createElement("li");
+  item.className = "fits-hull";
+  const heading = document.createElement("button");
+  heading.type = "button";
+  heading.className = "fits-hull-head";
+  const image = document.createElement("img");
+  image.src = fit.shipImageUrl;
+  image.alt = "";
+  const name = document.createElement("span");
+  name.className = "fits-hull-name";
+  name.textContent = fit.shipName;
+  const count = document.createElement("span");
+  count.className = "fits-hull-count";
+  const losses = ofHull.reduce((sum, each) => sum + each.losses.length, 0);
+  count.textContent = ofHull.length === losses ? plural(losses, "loss", "losses") : `${plural(losses, "loss", "losses")} · ${plural(ofHull.length, "fit", "fits")}`;
+  heading.append(image, name, count);
+  const rows = document.createElement("ul");
+  rows.className = "fits-hull-rows";
+  const show = (folded) => {
+    heading.setAttribute("aria-expanded", String(!folded));
+    rows.hidden = folded;
+  };
+  show(fitsShown.folded.has(fit.shipName));
+  heading.addEventListener("click", () => {
+    const folded = !fitsShown.folded.has(fit.shipName);
+    if (folded) fitsShown.folded.add(fit.shipName);
+    else fitsShown.folded.delete(fit.shipName);
+    show(folded);
+  });
+  item.append(heading, rows);
+  return { item, rows, unfold: () => show(false) };
+}
+
+// fitRow is one fit in the list: who flew it for a corp or alliance, when and where it was last lost, and how many times
+function fitRow(fit, manyPilots) {
+  const newest = fit.losses[0];
+  const row = document.createElement("button");
+  row.type = "button";
+  row.className = "fit-row";
+  row.setAttribute("aria-selected", "false");
+  const text = document.createElement("span");
+  text.className = "fit-row-text";
+  if (manyPilots) {
+    const pilots = [...new Set(fit.losses.map((loss) => loss.pilotName))];
+    const who = document.createElement("span");
+    who.textContent = pilots.length > 2 ? `${pilots.slice(0, 2).join(", ")} +${pilots.length - 2}` : pilots.join(", ");
+    who.title = pilots.join("\n");
+    text.append(who);
+  }
+  const systems = new Set(fit.losses.map((loss) => loss.systemName));
+  const when = document.createElement("span");
+  when.className = "fit-row-when";
+  when.textContent = `${spokenDate(newest.time)} · ${systems.size > 1 ? `${systems.size} systems` : newest.systemName}`;
+  text.append(when);
+  row.append(text);
+  for (const tag of FIT_TAGS) {
+    if (fit[tag.key]) row.append(fitTag(tag));
+  }
+  if (fit.losses.length > 1) {
+    const count = document.createElement("span");
+    count.className = "fit-row-count";
+    count.textContent = `×${fit.losses.length}`;
+    count.title = `Lost ${fit.losses.length} times with these modules`;
+    row.append(count);
+  }
+  return row;
+}
+
+// FIT_TAGS mark a fit in the list as small filled badges, see FIT_KEY. Abyssal is red as it is a warning, so fixed; implants are in the theme's --badge color.
+const FIT_ABYSSAL_TAG = { key: "abyssal", letter: "A", className: "fit-tag fit-tag-abyssal", meaning: "Has an abyssal module, kept separate as the killmail does not record its rolled stats" };
+const FIT_IMPLANTS_TAG = { key: "implants", letter: "C", className: "fit-tag fit-tag-implants", meaning: "Has the implants of the capsule lost just after it. Listed first among its ship's fits" };
+const FIT_TAGS = [FIT_ABYSSAL_TAG, FIT_IMPLANTS_TAG];
+
+// fitTag is a fit's one letter tag, named on hover
+function fitTag(tag) {
+  const mark = document.createElement("span");
+  mark.className = tag.className;
+  mark.textContent = tag.letter;
+  mark.title = tag.meaning;
+  return mark;
+}
+
+// FIT_RACKS place each rack of slots on the fitting window's ring, as EVE's does: highs over the top, mids down the right, lows along the bottom, and rigs and subsystems inside on the left. Angles are clockwise from the right, in degrees.
+const FIT_RACKS = [
+  { key: "highs", label: "High", centre: -90, ring: "outer" },
+  { key: "mids", label: "Mid", centre: 0, ring: "outer" },
+  { key: "lows", label: "Low", centre: 90, ring: "outer" },
+  { key: "rigs", label: "Rig", centre: 155, ring: "inner" },
+  { key: "subsystems", label: "Subsystem", centre: 207, ring: "inner" },
+];
+const FIT_SLOT_STEP = { outer: 11, inner: 14.5, far: 9.5 };
+
+/*
+  FIT_ARCS curve the rest of the fit around the outside of the ring, one icon each, named on hover. Cargo is not shown.
+  Implants, in slot order, then boosters run down the left from its top left corner, and drones then fighters up the right from its bottom right.
+*/
+const FIT_ARCS = [
+  { keys: ["implants", "boosters"], start: 225, direction: -1 },
+  { keys: ["drones", "fighters"], start: 45, direction: -1 },
+];
+
+/*
+  renderFitWindow draws a loss of a fit: the hull with its modules around it, loaded charges as a badge on their module, and an empty slot as a hollow socket.
+  Its losses are listed below to choose from, and its implants, boosters, drones and fighters curve around the outside (FIT_ARCS).
+  The hull, each module and charge, and each of those has a right click menu to open it on EVE Ref.
+*/
+function renderFitWindow(fit, loss, choose) {
+  el("fit-view-title").textContent = fit.shipName;
+  const note = el("fit-view-note");
+  note.hidden = !loss.missingTypes;
+  note.textContent = loss.missingTypes ? `${loss.missingTypes} item ${loss.missingTypes === 1 ? "type is" : "types are"} newer than GoSleuth's item data, so this fit may be missing pieces.` : "";
+  el("fit-copy").disabled = false;
+  el("fit-copy").onclick = () => window.runtime.ClipboardSetText(loss.eft)
+    .then((copied) => tickerPush(copied ? "Fit copied" : "Could not copy the fit"))
+    .catch(() => tickerPush("Could not copy the fit"));
+
+  el("fit-losses").replaceChildren(...fit.losses.map((each) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "fit-loss";
+    button.setAttribute("aria-selected", String(each === loss));
+    button.textContent = `${each.pilotName} · ${spokenDate(each.time)} · ${each.systemName}`;
+    if (each.podKillmailId) button.append(" ", fitTag(FIT_IMPLANTS_TAG));
+    button.addEventListener("click", () => choose(each.killmailId));
+    withMenu(button, [
+      killmailSection(each.url),
+      ...(each.podUrl ? [{ heading: "Capsule", items: [{ label: "Open on zKillboard", action: () => window.runtime.BrowserOpenURL(each.podUrl) }] }] : []),
+    ]);
+    const item = document.createElement("li");
+    item.append(button);
+    return item;
+  }));
+
+  const render = document.createElement("img");
+  render.className = "fit-hull-render";
+  render.src = fit.shipRenderUrl;
+  render.alt = "";
+  withMenu(render, [typeSection({ name: fit.shipName, eveRefUrl: fit.shipEveRefUrl })]);
+  const slots = [render];
+  for (const rack of FIT_RACKS) {
+    const rackSlots = loss.fit[rack.key] || [];
+    const step = FIT_SLOT_STEP[rack.ring];
+    rackSlots.forEach((slot, index) => {
+      const socket = document.createElement("span");
+      // not .empty, which is the page's padded "nothing here" message
+      socket.className = `fit-slot fit-slot-${rack.ring}${slot ? "" : " fit-slot-empty"}`;
+      socket.style.setProperty("--angle", `${rack.centre + (index - (rackSlots.length - 1) / 2) * step}deg`);
+      if (!slot) {
+        socket.title = `Empty ${rack.label.toLowerCase()} slot`;
+      } else {
+        socket.title = slot.charge ? `${slot.module.name}\n${slot.charge.name}` : slot.module.name;
+        socket.append(fitIcon(slot.module, "fit-module"));
+        if (slot.charge) socket.append(fitIcon(slot.charge, "fit-charge"));
+        withMenu(socket, [typeSection(slot.module), ...(slot.charge ? [typeSection(slot.charge)] : [])]);
+      }
+      slots.push(socket);
+    });
+  }
+  for (const arc of FIT_ARCS) {
+    arc.keys.flatMap((key) => loss.fit[key] || []).forEach((stack, index) => {
+      const item = document.createElement("span");
+      item.className = "fit-slot fit-slot-far";
+      item.style.setProperty("--angle", `${arc.start + arc.direction * index * FIT_SLOT_STEP.far}deg`);
+      item.title = stack.quantity > 1 ? `${stack.name} ×${stack.quantity.toLocaleString()}` : stack.name;
+      item.append(fitIcon(stack, "fit-module"));
+      if (stack.quantity > 1) {
+        const count = document.createElement("span");
+        count.className = "fit-stack-count";
+        count.textContent = stack.quantity.toLocaleString();
+        item.append(count);
+      }
+      withMenu(item, [typeSection(stack)]);
+      slots.push(item);
+    });
+  }
+  el("fit-ring").replaceChildren(...slots);
+}
+
+// fitIcon is an item type's icon in the fitting window
+function fitIcon(part, className) {
+  const image = document.createElement("img");
+  if (className) image.className = className;
+  image.src = part.imageUrl;
+  image.alt = "";
+  return image;
+}
+
+// typeSection is an item type's menu section, ie a module in the fitting window, opening it on EVE Ref
+function typeSection(part) {
+  return { heading: part.name, items: [{ label: "Open on EVE Ref", action: () => window.runtime.BrowserOpenURL(part.eveRefUrl) }] };
+}
+
+// showFit switches to the Fits tab and selects a killmail's fit, from a killmail's right click menu
+function showFit(killmailId) {
+  if (!fitsShown.select) return;
+  const row = fitsShown.select(killmailId);
+  if (!row) return;
+  selectTab("tab-fits");
+  row.scrollIntoView({ block: "nearest" });
+}
+
+// hasFit is whether a killmail is one of the target's losses listed on the Fits tab, or the capsule lost with one
+function hasFit(killmailId) {
+  return Boolean(fitsShown.fits && fitsShown.fits.some((fit) => fit.losses.some((loss) => isFitLoss(loss, killmailId))));
+}
+
+// isFitLoss is whether a killmail is this loss, or the capsule whose implants it shows
+function isFitLoss(loss, killmailId) {
+  // podKillmailId is left out when there is no capsule, so no id must not match it
+  return Boolean(killmailId) && (loss.killmailId === killmailId || loss.podKillmailId === killmailId);
 }
 
 // renderPIPilots fills the PI Pilots tab of a system search: each pilot with PI losses, haulers near its planets or any ship with PI aboard, newest first
@@ -2352,11 +2563,11 @@ const GLANCE_CARDS = {
     const hulls = new Map();
     for (const fit of report.fits) {
       const hull = hulls.get(fit.shipName) || { name: fit.shipName, imageUrl: fit.shipImageUrl, losses: 0 };
-      hull.losses++;
+      hull.losses += fit.losses.length;
       hulls.set(fit.shipName, hull);
     }
     return {
-      rows: topBy([...hulls.values()], (hull) => hull.losses).map((hull) => ({ name: hull.name, imageUrl: hull.imageUrl, value: plural(hull.losses, "fit", "fits") })),
+      rows: topBy([...hulls.values()], (hull) => hull.losses).map((hull) => ({ name: hull.name, imageUrl: hull.imageUrl, value: plural(hull.losses, "loss", "losses") })),
       note: hulls.size > GLANCE_ROWS ? `${plural(report.fits.length, "fit", "fits")} across ${plural(hulls.size, "hull", "hulls")}` : "",
     };
   },
@@ -2367,8 +2578,9 @@ const GLANCE_CARDS = {
 // UNIQUE_DAYS_HELP explains the Unique Days column the ranked tabs share
 const UNIQUE_DAYS_HELP = "Unique Days: total days with killmails (days spanned across)";
 
-// ROW_MENU_HELP ends every tab's help, see selectTab
-const ROW_MENU_HELP = "Many things have a right-click menu with more options.";
+// PILOT_MENU_HELP and CORP_MENU_HELP close the help of tabs whose right-click menus only search and link, as most do. A tab with other menu items says so in its own words.
+const PILOT_MENU_HELP = "Right-click a pilot, corp, or alliance to search it, or open it on an external site.";
+const CORP_MENU_HELP = "Right-click a corp or alliance to search it, or open it on an external site.";
 
 /*
   TAB_HELP explains each tab as bullet points, shown with its color key, if any, on hover over the tab's ? button.
@@ -2378,10 +2590,15 @@ const ROW_MENU_HELP = "Many things have a right-click menu with more options.";
 const TAB_HELP = {
   "tab-glance": [
     "An overview of this search: the top few rows of each tab. Open goes to the full tab.",
+    "The « button at the top of the sidebar shrinks it to its icons.",
+    "Drag the tabs, or use Alt+↑/↓, to reorder them. At a glance stays at the top.",
+    "The bar under the target's box pulls it shut, its holdings first if it has any.",
+    "Right-click a row for the same menu it has in its full tab.",
   ],
   "tab-killmails": [
     "This search's killmails, newest first. Click one to open it on zKillboard.",
     "How many, and how far back, is set in Preferences.",
+    "Right-click the victim or final blow to search them or open them on an external site, or a loss to Show fit.",
   ],
   "tab-activity": [
     "When the killmails happened, by weekday and hour, to show active times.",
@@ -2390,63 +2607,74 @@ const TAB_HELP = {
   "tab-fleetmates": [
     "The 10 pilots most often on killmails with this pilot, or in its corp or alliance now.",
     UNIQUE_DAYS_HELP,
+    PILOT_MENU_HELP,
   ],
   "tab-members": [
     "The 10 pilots on the most killmails for this corp or alliance, by who they flew for then.",
     UNIQUE_DAYS_HELP,
+    PILOT_MENU_HELP,
   ],
   "tab-pilots": [
     "The 10 pilots on the most killmails in this system.",
     UNIQUE_DAYS_HELP,
+    PILOT_MENU_HELP,
   ],
   "tab-allies": [
     "The 10 alliances most on this target's kills, then corps with no alliance.",
-    "Holdings are listed above the table. Right-click an ally to add it as a holding, or ignore it.",
+    "Holdings are listed above the table.",
     "Left out under the table: ignored allies (× restores one) and, by Preference, allies it also killed.",
     UNIQUE_DAYS_HELP,
+    "Right-click an ally to add it as a holding, ignore it, search it, or open it on an external site.",
   ],
   "tab-corps": [
     "The 10 corporations on the most killmails in this system.",
     UNIQUE_DAYS_HELP,
+    CORP_MENU_HELP,
   ],
   "tab-systems": [
     "The 10 systems with the most of this target's killmails. Kills and Losses are the target's.",
     UNIQUE_DAYS_HELP,
+    "Right-click a system to search it, or open it on an external site.",
   ],
   "tab-pi": [
     "Haulers lost near a planet, and any ship lost with PI aboard. Hover a PI tag to see the cargo.",
+    "Right-click a pilot to search them, their corp, or alliance, or a loss to open it on an external site.",
   ],
   "tab-ratters": [
     "Ships lost here with NPCs on the killmail. Hover a loss to see who was on it.",
+    "Right-click a pilot to search them, their corp, or alliance, or a loss to open it on an external site.",
   ],
   "tab-structures": [
     "Used in Kills: this corp's and its holdings' citadels and POSes seen on its kills, at any age.",
     "Destroyed: structures it helped kill on this search's killmails.",
+    "Right-click a structure to search its system, owner, or killers, or open it on an external site.",
   ],
   "tab-fits": [
-    "This target's losses with their fits, by ship, newest first.",
+    "Fits by ship. Losses with the same modules are merged into one, whatever slots they were in.",
     "Non-combat ships (pods, shuttles, haulers, mining ships), structures, and losses with nothing fitted are left out.",
-    "Copy EFT puts the fit on the clipboard for Import from clipboard in the game's fitting window.",
+    "Below the fit are its killmails. Click one to see its own layout, charges, and drones.",
+    "Right-click the hull, a module, a drone, or a killmail to open it on an external site.",
   ],
   "tab-capitals": [
     "Capital ships its pilots flew on these killmails, and who flew them. Click a pilot to search.",
     "A struck-through pilot has since left the alliance.",
+    PILOT_MENU_HELP,
   ],
   "tab-roster": (type) => type === "ALLIANCE"
-    ? ["Current member corporations, their member counts, and how long they've been in."]
+    ? ["Current member corporations, their member counts, and how long they've been in.", CORP_MENU_HELP]
     : [
       "Current members: those on these killmails first, latest first, then the rest from EveWho.",
       "Red underline: EveWho still lists them, but the ESI says they've left.",
+      PILOT_MENU_HELP,
     ],
 };
 
 function selectTab(tabId) {
   const points = typeof TAB_HELP[tabId] === "function" ? TAB_HELP[tabId](roster ? roster.type : "") : TAB_HELP[tabId];
-  const help = points ? [...points, ROW_MENU_HELP] : null;
   const key = TAB_COLOR_KEYS[tabId];
   const title = el(tabId).querySelector(".tab-name").textContent;
   el("panel-title").textContent = title;
-  shownHelp = help || key ? { title, points: help || [], sections: key || [] } : null;
+  shownHelp = points || key ? { title, points: points || [], sections: key || [] } : null;
   el("tab-key").replaceChildren(...(shownHelp ? [tabHelp(shownHelp.points, shownHelp.sections)] : []));
   if (el("help-window").open) renderHelpWindow();
 
@@ -2683,8 +2911,15 @@ const RATTER_KEY = {
   items: Object.entries(RAT_KINDS).map(([kind, [label, meaning]]) => ({ sample: label, className: `pi-tag rat-kind-${kind}`, meaning })),
 };
 
+// FIT_KEY is the Fits tab's tags, on a fit in the list and, for implants, on its loss under the window
+const FIT_KEY = {
+  title: "Tags",
+  items: FIT_TAGS.map((tag) => ({ sample: tag.letter, className: tag.className, meaning: tag.meaning })),
+};
+
 // TAB_COLOR_KEYS is the color key shown for each tab, tabs without colored data have none
 const TAB_COLOR_KEYS = {
+  "tab-fits": [FIT_KEY],
   "tab-ratters": [RATTER_KEY],
   "tab-structures": [STRUCTURE_STATE_KEY],
   "tab-killmails": [OUTCOME_KEY, SECURITY_KEY, WORMHOLE_CLASS_KEY],
@@ -2805,6 +3040,7 @@ function groupLine(...groups) {
 function killmailCardSections(km, clicked) {
   const on = (part) => Boolean(clicked && clicked.closest && clicked.closest(`.${part}`));
   const sections = [killmailSection(km.url)];
+  if (hasFit(km.id)) sections[0].items.push({ label: "Show fit", action: () => showFit(km.id) });
   if (on("killmail-victim")) {
     if (km.victim) sections.push(refSection(km.victim, `Victim: ${km.victim.name}`));
     sections.push(...groupSections(km.victimCorp, km.victimAlliance, "Victim"));
@@ -4094,7 +4330,7 @@ const THEMES = [
 ];
 
 // THEMED_PROPERTIES are the css variables a theme sets, cleared again for the default theme
-const THEMED_PROPERTIES = ["--bg", "--panel", "--panel-raised", "--border", "--muted", "--accent", "--accent-text", "--highlight"];
+const THEMED_PROPERTIES = ["--bg", "--panel", "--panel-raised", "--border", "--muted", "--accent", "--accent-text", "--highlight", "--badge", "--badge-text"];
 
 // mixColor blends a little of color into base, ie mixColor("#a68a64", "#07090c", 0.06) is a near black tinted tan
 function mixColor(color, base, amount) {
@@ -4138,6 +4374,9 @@ function themeColors([primary, secondary, accent]) {
     // button text: dark on a light accent such as Sisters' white, white on a dark one such as Minmatar's red
     "--accent-text": contrastRatio("#0b0e13", accent) >= contrastRatio("#ffffff", accent) ? "#0b0e13" : "#ffffff",
     "--highlight": readableOn(secondary, panelRaised),
+    // a filled badge, ie the Fits tab's C, in the accent so it stands apart from the highlight's counts
+    "--badge": accent,
+    "--badge-text": contrastRatio("#0b0e13", accent) >= contrastRatio("#ffffff", accent) ? "#0b0e13" : "#ffffff",
   };
 }
 

@@ -96,6 +96,46 @@ func TestBattles(t *testing.T) {
 		assert.Equal(t, []int{2, 3}, collected.BattlesFought["31001861/202610251058"].KillmailIDs)
 	})
 
+	// elsewhere moves a killmail to another system, and with strangers gives it other attackers, so it shares no pilots
+	elsewhere := func(killmail *api.ESIKillmail, system int, strangers bool) *api.ESIKillmail {
+		killmail.SolarSystemID = system
+		if strangers {
+			for index := range killmail.Attackers {
+				id := 2113000000 + index
+				killmail.Attackers[index].CharacterID = &id
+			}
+		}
+		return killmail
+	}
+
+	t.Run("a fight that moves to another system with the same pilots stays one battle", func(t *testing.T) {
+		collected := collate(t, lossAt(t, 1, 0), elsewhere(lossAt(t, 2, 5*time.Minute), 31000005, false), elsewhere(lossAt(t, 3, 10*time.Minute), 31000005, false))
+
+		assert.Len(t, collected.BattlesFought, 1)
+		assert.Equal(t, []int{1, 2, 3}, collected.BattlesFought["31001861/202610250858"].KillmailIDs)
+		assert.Equal(t, collected.BattleOfKillmail()[1], collected.BattleOfKillmail()[3])
+	})
+
+	t.Run("an unrelated fight elsewhere at the same time is its own battle and does not split this one", func(t *testing.T) {
+		collected := collate(t,
+			lossAt(t, 1, 0),
+			elsewhere(lossAt(t, 2, 2*time.Minute), 31000005, true),
+			lossAt(t, 3, 8*time.Minute),
+			elsewhere(lossAt(t, 4, 9*time.Minute), 31000005, true),
+		)
+
+		assert.Len(t, collected.BattlesFought, 2)
+		assert.Equal(t, []int{1, 3}, collected.BattlesFought["31001861/202610250858"].KillmailIDs)
+		assert.Equal(t, []int{2, 4}, collected.BattlesFought["31000005/202610250900"].KillmailIDs)
+	})
+
+	t.Run("a battle lasts as long as each killmail is within 15 minutes of the one before", func(t *testing.T) {
+		collected := collate(t, lossAt(t, 1, 0), lossAt(t, 2, 14*time.Minute), lossAt(t, 3, 28*time.Minute), lossAt(t, 4, 42*time.Minute))
+
+		assert.Len(t, collected.BattlesFought, 1)
+		assert.Equal(t, 4, collected.BattlesFought["31001861/202610250858"].TotalKillmails)
+	})
+
 	t.Run("every killmail is in a battle with an id, even on its own", func(t *testing.T) {
 		collected := collate(t, lossAt(t, 1, 0), lossAt(t, 2, 2*time.Hour))
 

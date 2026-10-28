@@ -30,6 +30,7 @@ const ZKILL_MAX_PAGES = 100
 // ZKILL_MAX_KILLMAILS is the most killmails zKillboard lists for one entity
 const ZKILL_MAX_KILLMAILS = ZKILL_PAGE_SIZE * ZKILL_MAX_PAGES
 const EVE_WHO_URL = "https://evewho.com"
+const EVE_REF_URL = "https://everef.net"
 const EVE_WHO_API_URL = EVE_WHO_URL + "/api"
 
 // EntityImageURL returns the EVE image server url for a pilot portrait or corp/alliance logo, or an empty string for other entity types
@@ -57,7 +58,17 @@ func TypeImageURL(typeID int) string {
 
 // TypeRenderURL returns the EVE image server render of an item type, such as a system's star
 func TypeRenderURL(typeID int) string {
-	return fmt.Sprintf("%s/types/%d/render?size=128", IMAGE_SERVER_URL, typeID)
+	return TypeRenderURLAt(typeID, 128)
+}
+
+// TypeRenderURLAt returns the EVE image server render of an item type at a size the server offers (32 to 1024, powers of two), such as a hull in the fitting window
+func TypeRenderURLAt(typeID int, size int) string {
+	return fmt.Sprintf("%s/types/%d/render?size=%d", IMAGE_SERVER_URL, typeID, size)
+}
+
+// EveRefTypeURL returns EVE Ref's page for an item type, such as a module or a ship
+func EveRefTypeURL(typeID int) string {
+	return fmt.Sprintf("%s/types/%d", EVE_REF_URL, typeID)
 }
 
 // ZkillKillmailURL returns the zKillboard page for a killmail

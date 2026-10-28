@@ -82,7 +82,9 @@ type ShipFlown struct {
 type BattleFought struct {
 	BattleIDReference string // also used as the id in the CollectedData map. systemID/YYYYMMDDHH
 	TotalKillmails    int
-	SystemID          int
-	UniquePilots      map[int]struct{}
+	SystemID          int              // the system it started in
+	Systems           map[int]struct{} // every system it spread to, see JoinBattle
+	UniquePilots      map[int]struct{} // every pilot on its killmails, victims and attackers
 	KillmailIDs       []int
+	LatestTime        time.Time // the time of the killmail added last, which the next must be within 15 minutes of
 }

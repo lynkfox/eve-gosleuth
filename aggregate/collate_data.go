@@ -147,8 +147,8 @@ func CollateAllKillmailData(killmails *[]retrieval.RawKillmail, esiClient *api.E
 		CorporationsSeen: make(map[int]CorporationSeen),
 	}
 
-	// empty until the first killmail starts a battle
-	currentBattle := &BattleFought{}
+	// the battles a killmail can still join, see JoinBattle
+	openBattles := []*BattleFought{}
 
 	// looked up together first, in bulk and in parallel, so expanding each killmail is answered from the cache
 	cachedData.PrefetchKillmailEntities(*killmails)
@@ -165,15 +165,8 @@ func CollateAllKillmailData(killmails *[]retrieval.RawKillmail, esiClient *api.E
 		}
 		results.Killmails = append(results.Killmails, expandedKM)
 
-		lastKillmailTime := km.ESIKillmail.KillmailTime
-		previousKillmailSystem := km.ESIKillmail.SolarSystemID
-
-		if index > 0 {
-			lastKillmailTime = (*killmails)[index-1].ESIKillmail.KillmailTime
-			previousKillmailSystem = (*killmails)[index-1].ESIKillmail.SolarSystemID
-		}
-
-		currentBattle = results.UpdateOrCreateCurrentBattle(lastKillmailTime, &km, previousKillmailSystem, currentBattle)
+		var currentBattle *BattleFought
+		currentBattle, openBattles = results.JoinBattle(openBattles, &km, killmailPilots(expandedKM))
 
 		results.UpdateOrAddSystem(&km, expandedKM.System, currentBattle.BattleIDReference)
 
@@ -190,8 +183,10 @@ func CollateAllKillmailData(killmails *[]retrieval.RawKillmail, esiClient *api.E
 
 	}
 
-	// the last battle has no next killmail to close it
-	results.SaveBattle(currentBattle)
+	// the last battles have no next killmail to close them
+	for _, battle := range openBattles {
+		results.SaveBattle(battle)
+	}
 
 	return results
 
@@ -534,32 +529,102 @@ func (s *SystemVisted) UpdateOrAddStructure(structureType *retrieval.Item, corp 
 }
 
 /*
-	UpdateOrCreateCurrentBattle adds a killmail to the current battle if it was within 15 minutes of the previous killmail in the same system.
-	Otherwise the current battle is saved and the killmail starts a new one, so every killmail belongs to a battle with an id.
+	JoinBattle adds a killmail to the battle it belongs to, or starts a new one, so every killmail belongs to a battle with an id.
+	Killmails come in time order (either way), and a battle stays open while each killmail is within 15 minutes of the one before it in that battle.
+	Several battles can be open at once, as unrelated fights happen at the same time. A killmail joins an open battle:
+	  - in the same system, or
+	  - failing that, in another system with pilots in common, as when a fight moves through a gate. It joins the one with the most in common.
+	A battle no longer within 15 minutes of the killmail is closed and saved.
 
 Parameters:
-  - lastKillmailTime, previousKillmailSystem: when and where the previous killmail happened
+  - open: the battles still open
   - km: the killmail to add
-  - currentBattle: the battle so far, empty before the first killmail
+  - pilots: the character ids on the killmail, victim and attackers
 
 Returns:
   - *BattleFought: the battle the killmail is now in
+  - []*BattleFought: the battles still open, including it
 */
-func (c *CollectedData) UpdateOrCreateCurrentBattle(lastKillmailTime time.Time, km *retrieval.RawKillmail, previousKillmailSystem int, currentBattle *BattleFought) *BattleFought {
-	sameFight := WithinFifteenMinutes(lastKillmailTime, km.ESIKillmail.KillmailTime) && previousKillmailSystem == km.ESIKillmail.SolarSystemID
-	if currentBattle.TotalKillmails == 0 || !sameFight {
-		c.SaveBattle(currentBattle)
-		currentBattle = &BattleFought{
-			BattleIDReference: fmt.Sprintf("%d/%s", km.ESIKillmail.SolarSystemID, km.ESIKillmail.KillmailTime.Format("200601021504")),
-			SystemID:          km.ESIKillmail.SolarSystemID,
-			UniquePilots:      make(map[int]struct{}),
-			KillmailIDs:       []int{},
+func (c *CollectedData) JoinBattle(open []*BattleFought, km *retrieval.RawKillmail, pilots []int) (*BattleFought, []*BattleFought) {
+	at := km.ESIKillmail.KillmailTime
+	system := km.ESIKillmail.SolarSystemID
+
+	stillOpen := open[:0]
+	for _, battle := range open {
+		if WithinFifteenMinutes(battle.LatestTime, at) {
+			stillOpen = append(stillOpen, battle)
+		} else {
+			c.SaveBattle(battle)
 		}
 	}
 
-	currentBattle.TotalKillmails = 1 + currentBattle.TotalKillmails
-	currentBattle.KillmailIDs = append(currentBattle.KillmailIDs, km.ESIKillmail.KillmailID)
-	return currentBattle
+	var joined *BattleFought
+	mostShared := 0
+	for _, battle := range stillOpen {
+		if _, here := battle.Systems[system]; here {
+			joined = battle
+			break
+		}
+		shared := 0
+		for _, pilot := range pilots {
+			if _, on := battle.UniquePilots[pilot]; on {
+				shared++
+			}
+		}
+		if shared > mostShared {
+			joined, mostShared = battle, shared
+		}
+	}
+
+	if joined == nil {
+		joined = &BattleFought{
+			BattleIDReference: fmt.Sprintf("%d/%s", system, at.Format("200601021504")),
+			SystemID:          system,
+			Systems:           make(map[int]struct{}),
+			UniquePilots:      make(map[int]struct{}),
+			KillmailIDs:       []int{},
+		}
+		stillOpen = append(stillOpen, joined)
+	}
+
+	joined.TotalKillmails++
+	joined.KillmailIDs = append(joined.KillmailIDs, km.ESIKillmail.KillmailID)
+	joined.Systems[system] = struct{}{}
+	for _, pilot := range pilots {
+		joined.UniquePilots[pilot] = struct{}{}
+	}
+	joined.LatestTime = at
+	return joined, stillOpen
+}
+
+// killmailPilots are the character ids on a killmail, victim and attackers, leaving out NPCs and structures, which have none
+func killmailPilots(km *retrieval.Killmail) []int {
+	pilots := []int{}
+	if km.Victim != nil && km.Victim.Pilot != nil && km.Victim.Pilot.CharacterID != 0 {
+		pilots = append(pilots, km.Victim.Pilot.CharacterID)
+	}
+	for _, attacker := range km.Attackers {
+		if attacker.Pilot != nil && attacker.Pilot.CharacterID != 0 {
+			pilots = append(pilots, attacker.Pilot.CharacterID)
+		}
+	}
+	return pilots
+}
+
+/*
+	BattleOfKillmail maps each killmail in a battle of more than one killmail to that battle's id. A killmail on its own is not in it.
+
+Returns:
+  - map[int]string: killmail id to battle id
+*/
+func (c *CollectedData) BattleOfKillmail() map[int]string {
+	battleOf := map[int]string{}
+	for id, battle := range c.BattlesFought {
+		for _, killmailID := range battle.KillmailIDs {
+			battleOf[killmailID] = id
+		}
+	}
+	return battleOf
 }
 
 // SaveBattle records a battle in BattlesFought if it had more than one killmail, a single killmail is not a battle

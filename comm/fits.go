@@ -26,7 +26,9 @@ type FitType struct {
 	Name       string  `json:"name"`
 	GroupID    int     `json:"group"`
 	CategoryID int     `json:"category"`
-	Slot       FitSlot `json:"slot,omitempty"` // the slot a module fits in: high, mid, low, rig, subsystem, or service. Empty for anything that is not a module, ie a charge.
+	Slot       FitSlot `json:"slot,omitempty"`      // the slot a module fits in: high, mid, low, rig, subsystem, or service. Empty for anything that is not a module, ie a charge.
+	Abyssal    bool    `json:"abyssal,omitempty"`   // a mutated (abyssal) module, whose rolled stats a killmail does not record
+	HeadSlot   int     `json:"head_slot,omitempty"` // an implant's slot (1-10), or a booster's (1-4)
 
 	// a hull's slots and hardpoints
 	HighSlots      int `json:"high_slots,omitempty"`

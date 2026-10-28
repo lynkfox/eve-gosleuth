@@ -45,12 +45,14 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 
 ### Decisions from the first real run (2026-10-27)
 
-- **Capsules are not fits.** A capsule loss is left out of the Fits tab, except when the same pilot loses a capsule with implants in the same system and battle, after a ship. Those implants then belong with that ship loss, shown in a way still to be designed.
+- **Capsules are not fits.** A capsule loss is left out of the Fits tab. When the same pilot loses a capsule with implants later in the same battle as a ship, those implants belong with that ship loss. Built 2026-10-27: they curve down the window's left side.
 - **Nested items are ignored entirely.** Ships in a maintenance bay, ships in an escape bay, and container contents are escape ships, cap-stick trucks, or cargo, so they don't matter here. The ESI item struct already drops them.
 - **Modules with no slot in the SDE** (built-in hull weapons such as the Lux Kontos, quantum cores, the moon drill) can be ignored. They are still placed by their flag.
 - **Tactical destroyer modes** wait for phase 4, where they change live stats.
 
 ## Phase 2: Fits tab, fitting window, and EFT export
+
+**Status (2026-10-27): built,** as described in `docs/features.md` under Fits. Not yet done: importing several exports in-game. Where the phase 4 numbers go in the window is still open.
 
 ### Which searches
 
@@ -97,6 +99,19 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
   5. Cargo as `Name xN`. Boosters go here too, since the in-game importer is fussier about a separate booster section.
 - Check several exports by importing them in-game before calling this done.
 
+### Next: tighten the fitting window (noted 2026-10-27)
+
+- **The loss chips need another home** now that the window is bigger. Proposal: page through a fit's losses across the top, in line with the ship name, with a subtitle holding what the chip shows now (pilot · date · system, and the C tag). The zKill link (and the capsule's) then needs to move somewhere else.
+- **Make the window a little smaller.** Tighten the spacing where possible, keeping in mind that hulls with many slots leave little room.
+- **T3 cruisers need more space between subsystems and rigs.** Both could overlap the hull render by about half, which would free room to pull the outer ring in.
+
+## Phase 2b: finding and folding fits
+
+- **A filter box** above the fit list. It matches the hull, the pilot, the system, and any module, charge, drone or cargo name. Hull headings with no match left are hidden.
+- **Merge fits whose modules differ only by name.** Since tiericide, many modules with different names have the same stats and meta level, such as the named T1 variants within one meta group. Two fits merge when each pair of differing modules shares the same group, meta group and meta level, and the same dogma attributes.
+  - The equivalence comes from the `cmd/sdegen` extract: an `equivalent` id per module, or a list of equivalence classes, worked out at generation time. The app does no attribute comparison itself.
+  - The merged row shows the most common name for each slot and says that variants were folded in. The fitting window shows the selected loss's own modules.
+
 ## Phase 3: tags
 
 **Rules come first.** The rules live in `static_data/fit_tag_rules.json`, so they can be tuned next to the exe without a rebuild.
@@ -121,7 +136,7 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 - **Data:** extend the `cmd/sdegen` extract with the attributes, effects and `modifierInfo` the engine needs (decided 2026-10-27: SDE extract, not the ESI).
 - **Known traps:**
   - Some CCP effects have no `modifierInfo` (Pyfa hand-codes hundreds of them). Each needs a written case.
-  - An abyssal module appears on a killmail as its base type, so its mutated stats can't be known. Flag such fits.
+  - A mutated module's rolled stats are not on the killmail, so they can't be known. Such fits are already flagged ABYSS in the list (the extract's `abyssal` flag).
   - The Reactive Armor Hardener starts at an even split.
   - Killmails don't record whether modules were online or active, so assume all are online and active.
   - No heat and no fleet boosts.
@@ -134,6 +149,7 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
   - remote rep output for logi
   - sensor strength and type, plus any `*Resistance` ewar attributes the hull has
 - **How they are shown:** to be decided, within the room phase 2 leaves in the fitting window.
+- **Reference:** Pyfa's engine, `eos` (https://github.com/pyfa-org/Pyfa/tree/master/eos), computes all of Pyfa's stats. Scan it before building this phase for how modifiers are applied, its stacking penalty groups, and the effects it hand-codes (`eos/effects.py`).
 - **Proving it's right:** golden tests, a set of reference fits whose expected numbers come from Pyfa, with the Pyfa version recorded. They cover T3s, command ships, Marauders, capitals and logi. The tests fail if any number drifts beyond rounding.
 
 ## Open decisions
