@@ -527,6 +527,8 @@ func missingID(value any) bool {
 		return typed.TypeID == 0 // a star response has no id of its own
 	case *api.ESIPlanetInfo:
 		return typed.PlanetID == 0
+	case *api.ESIMoon:
+		return typed.MoonID == 0
 	case *api.ESICategory:
 		return typed.CategoryID == 0
 	case *api.ESIItem:
@@ -606,6 +608,8 @@ func (c *CachedEveIDs) GetIfNotCached(idNumber int, typeOfEntity types.EntityTyp
 		found = knownAs[api.ESIStar](c, idNumber)
 	case types.PLANET:
 		found = knownAs[api.ESIPlanetInfo](c, idNumber)
+	case types.MOON:
+		found = knownAs[api.ESIMoon](c, idNumber)
 	case types.CATEGORY:
 		found = knownAs[api.ESICategory](c, idNumber)
 	}
@@ -640,6 +644,8 @@ func (c *CachedEveIDs) GetIfNotCached(idNumber int, typeOfEntity types.EntityTyp
 		output, err = c.Client.GetStarInfo(idNumber)
 	case types.PLANET:
 		output, err = c.Client.GetPlanetInfo(idNumber)
+	case types.MOON:
+		output, err = c.Client.GetMoonInfo(idNumber)
 	case types.CATEGORY:
 		output, err = c.Client.GetCategoryInfo(idNumber)
 	default:

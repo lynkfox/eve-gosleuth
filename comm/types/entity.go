@@ -14,6 +14,7 @@ const (
 	STAR                            // 9
 	PLANET                          // 10
 	CATEGORY                        // 11
+	MOON                            // 12
 )
 
 func (e EntityType) String() string {
@@ -40,6 +41,8 @@ func (e EntityType) String() string {
 		return "PLANET"
 	case CATEGORY:
 		return "CATEGORY"
+	case MOON:
+		return "MOON"
 	default:
 		return "UNKNOWN"
 	}

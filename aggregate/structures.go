@@ -12,11 +12,13 @@ import (
 /*
 StructureUse is one of a corp or alliance target's structures seen on its kills: an upwell structure, or a control tower seen through its batteries.
 Killmails give a structure no name or id, so a structure is its type, system, and owning corp: two of one type a corp has in one system are one StructureUse.
+A control tower is also told apart by its moon, as a moon holds one tower: zKillboard's nearest celestial to its kills.
 */
 type StructureUse struct {
 	Structure   *retrieval.Item // the upwell structure's or control tower's type. A tower seen only through its batteries has none, unless its loss names it.
 	Battery     *retrieval.Item // a control tower's battery on its newest kill, nil for an upwell structure
 	System      *retrieval.System
+	MoonID      int // a control tower's moon, 0 for an upwell structure or when zKillboard named no celestial
 	Corporation *retrieval.Corporation
 	Alliance    *retrieval.Alliance    // the owning corp's alliance on its newest kill, nil for none
 	Via         *retrieval.TargetGroup // the holding owning it, nil for the target itself
@@ -29,7 +31,8 @@ type StructureUse struct {
 
 /*
 	StructuresUsed finds the target's structures on the kills its structures were on, and which of them were lost since. A loss counts for a structure
-	when it is the same type (any control tower, for a tower), in the same system, of the same corp, after the structure's newest kill.
+	when it is the same type (any control tower, for a tower), in the same system, of the same corp, after the structure's newest kill. A tower's loss
+	must also be at its moon, unless either one's moon is not known.
 
 Parameters:
   - used: the expanded killmails the target's structures were on, newest first
@@ -60,7 +63,11 @@ func StructuresUsed(used []*retrieval.Killmail, lost []*retrieval.Killmail, targ
 			default:
 				continue
 			}
-			key := structureKey(structure, km.System.SystemID, attacker.CorpAtKill)
+			moonID := 0
+			if isTower(structure) {
+				moonID = km.LocationID
+			}
+			key := structureKey(structure, km.System.SystemID, moonID, attacker.CorpAtKill)
 			if onKill[key] {
 				continue
 			}
@@ -69,7 +76,7 @@ func StructuresUsed(used []*retrieval.Killmail, lost []*retrieval.Killmail, targ
 			use, found := byKey[key]
 			if !found {
 				// killmails are newest first, so the first is its newest
-				use = &StructureUse{Structure: structure, Battery: battery, System: km.System, Corporation: attacker.CorpAtKill, Alliance: attacker.AllianceAtKill,
+				use = &StructureUse{Structure: structure, Battery: battery, System: km.System, MoonID: moonID, Corporation: attacker.CorpAtKill, Alliance: attacker.AllianceAtKill,
 					Via: viaFor(target, attacker.CorpAtKill, attacker.AllianceAtKill), LastSeen: km.KillmailTime, LatestKill: km}
 				byKey[key] = use
 				order = append(order, key)
@@ -104,23 +111,31 @@ func StructuresUsed(used []*retrieval.Killmail, lost []*retrieval.Killmail, targ
 	return uses
 }
 
-// structureKey keys a structure by its type, or as a control tower when it is one or only its battery was seen, its system, and its owning corp
-func structureKey(structure *retrieval.Item, systemID int, corp *retrieval.Corporation) string {
+// isTower reports whether a structure on a kill is a control tower, nil when only its battery was seen
+func isTower(structure *retrieval.Item) bool {
+	return structure == nil || comm.ControlTowerGroups.ContainsGroupOf(structure.ItemID)
+}
+
+// structureKey keys a structure by its type, or as a control tower when it is one or only its battery was seen, its system, its moon for a tower, and its owning corp
+func structureKey(structure *retrieval.Item, systemID int, moonID int, corp *retrieval.Corporation) string {
 	kind := "tower"
-	if structure != nil && !comm.ControlTowerGroups.ContainsGroupOf(structure.ItemID) {
+	if !isTower(structure) {
 		kind = fmt.Sprint(structure.ItemID)
 	}
 	corpID, _ := groupIDs(corp, nil)
-	return fmt.Sprintf("%s:%d:%d", kind, systemID, corpID)
+	return fmt.Sprintf("%s:%d:%d:%d", kind, systemID, moonID, corpID)
 }
 
-// lossOf reports whether a structure loss is the structure's: the same type, or any control tower for a tower, in its system, of its corp
+// lossOf reports whether a structure loss is the structure's: the same type, or any control tower for a tower, in its system, of its corp, and for a tower at its moon when both are known
 func lossOf(use *StructureUse, loss *retrieval.Killmail) bool {
 	victim := loss.Victim
 	if victim.Ship == nil || loss.System == nil || victim.Pilot != nil {
 		return false
 	}
-	return structureKey(victim.Ship, loss.System.SystemID, victim.CorpAtKill) == structureKey(use.Structure, use.System.SystemID, use.Corporation)
+	if isTower(use.Structure) && use.MoonID != 0 && loss.LocationID != 0 && use.MoonID != loss.LocationID {
+		return false
+	}
+	return structureKey(victim.Ship, loss.System.SystemID, 0, victim.CorpAtKill) == structureKey(use.Structure, use.System.SystemID, 0, use.Corporation)
 }
 
 // viaFor is the holding a corp or alliance on a killmail is, nil when it is the target itself

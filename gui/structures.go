@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"strings"
 	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/aggregate"
@@ -38,6 +39,7 @@ type StructureSummary struct {
 	ImageURL      string          `json:"imageUrl"`
 	Battery       string          `json:"battery"` // a control tower's battery on its newest kill, empty for an upwell structure
 	System        SystemSummary   `json:"system"`
+	Moon          string          `json:"moon"` // a control tower's moon, ie III - Moon 2, empty when not known
 	Owner         *EntityRef      `json:"owner"`
 	OwnerAlliance *EntityRef      `json:"ownerAlliance"`
 	Via           string          `json:"via"` // the holding owning it, empty for the target itself
@@ -50,23 +52,26 @@ type StructureSummary struct {
 	Destroyed     *StructureDeath `json:"destroyed"` // its loss since its newest kill, nil while it stands
 }
 
-// StructureLoss is a structure destroyed: a j-space system's last structure lost, or one in the Structures tab's Destroyed list
+// StructureLoss is a structure destroyed: a j-space system's last structure lost, or one in the Structures tab's Destroyed or Lost list
 type StructureLoss struct {
 	TypeID        int            `json:"typeId"`
 	Type          string         `json:"type"`
 	ImageURL      string         `json:"imageUrl"`
 	RenderURL     string         `json:"renderUrl"` // 128px
 	System        SystemSummary  `json:"system"`
+	Moon          string         `json:"moon"` // a control tower's moon, ie III - Moon 2, empty when not known
 	Owner         *EntityRef     `json:"owner"`
 	OwnerAlliance *EntityRef     `json:"ownerAlliance"`
 	Death         StructureDeath `json:"death"`
 	Pilots        int            `json:"pilots"` // the target's pilots on it, for the Destroyed list
+	Via           string         `json:"via"`    // the holding that lost it, for the Lost list, empty for the target itself
 }
 
 // StructuresReport is a corp or alliance target's Structures tab
 type StructuresReport struct {
 	Used      []StructureSummary `json:"used"`
 	Destroyed []StructureLoss    `json:"destroyed"`
+	Lost      []StructureLoss    `json:"lost"` // every upwell structure and control tower it or a holding lost, newest first, seen on its kills or not
 }
 
 // structureKillmails are the expanded killmails the Structures tab and a j-space system's last structure lost are built from, collected with the target's killmails
@@ -137,12 +142,13 @@ func (a *App) collectStructureKillmails(target retrieval.IntelTarget, limits ret
 }
 
 // buildStructures builds a corp or alliance target's Structures tab, from its structures' kills and losses and the structures among its own killmails
-func buildStructures(found structureKillmails, killmails []*retrieval.Killmail, target *retrieval.IntelTarget) *StructuresReport {
-	report := &StructuresReport{Used: []StructureSummary{}, Destroyed: []StructureLoss{}}
+func buildStructures(esi api.ESIClient, found structureKillmails, killmails []*retrieval.Killmail, target *retrieval.IntelTarget) *StructuresReport {
+	report := &StructuresReport{Used: []StructureSummary{}, Destroyed: []StructureLoss{}, Lost: []StructureLoss{}}
 	for _, use := range aggregate.StructuresUsed(found.used, found.lost, target) {
 		summary := StructureSummary{
 			Type:      "Control Tower",
 			System:    structureSystem(use.System),
+			Moon:      moonName(esi, use.MoonID, use.System),
 			Kills:     use.Kills,
 			FirstSeen: use.FirstSeen,
 			LastSeen:  use.LastSeen,
@@ -171,19 +177,29 @@ func buildStructures(found structureKillmails, killmails []*retrieval.Killmail, 
 		report.Used = append(report.Used, summary)
 	}
 	for _, kill := range aggregate.StructuresDestroyed(killmails, target) {
-		loss := structureLoss(kill.Killmail)
+		loss := structureLoss(esi, kill.Killmail)
 		loss.Pilots = kill.Pilots
 		report.Destroyed = append(report.Destroyed, loss)
+	}
+	for _, km := range found.lost {
+		loss := structureLoss(esi, km)
+		if km.Via != nil {
+			loss.Via = km.Via.Name
+		}
+		report.Lost = append(report.Lost, loss)
 	}
 	return report
 }
 
-// structureLoss describes a structure killmail's victim and who destroyed it
-func structureLoss(km *retrieval.Killmail) StructureLoss {
+// structureLoss describes a structure killmail's victim, a control tower's moon, and who destroyed it
+func structureLoss(esi api.ESIClient, km *retrieval.Killmail) StructureLoss {
 	loss := StructureLoss{System: structureSystem(km.System), Death: structureDeath(km)}
 	if ship := km.Victim.Ship; ship != nil {
 		loss.TypeID, loss.Type = ship.ItemID, ship.Name
 		loss.ImageURL, loss.RenderURL = api.TypeImageURL(ship.ItemID), api.TypeRenderURL(ship.ItemID)
+		if comm.ControlTowerGroups.ContainsGroupOf(ship.ItemID) {
+			loss.Moon = moonName(esi, km.LocationID, km.System)
+		}
 	}
 	loss.Owner, loss.OwnerAlliance = groupRefs(km.Victim.CorpAtKill, km.Victim.AllianceAtKill)
 	return loss
@@ -195,6 +211,22 @@ func structureDeath(km *retrieval.Killmail) StructureDeath {
 	death := StructureDeath{KillmailID: km.KillmailID, ZkillURL: api.ZkillKillmailURL(km.KillmailID), Time: km.KillmailTime, Attackers: killer.Attackers}
 	death.KillerCorp, death.KillerAlliance = groupRefs(killer.Corporation, killer.Alliance)
 	return death
+}
+
+// moonName names a control tower's moon without its system's name, ie III - Moon 2, empty when it is not known or can not be looked up
+func moonName(esi api.ESIClient, moonID int, system *retrieval.System) string {
+	if moonID == 0 {
+		return ""
+	}
+	moon, err := esi.GetMoonInfo(moonID)
+	if err != nil || moon == nil {
+		comm.Logger.WithError(err).Warnf("Unable to look up moon %d", moonID)
+		return ""
+	}
+	if system != nil {
+		return strings.TrimPrefix(moon.Name, system.Name+" ")
+	}
+	return moon.Name
 }
 
 // structureSystem is the system a structure is in, as the Top Systems tab describes a system, without its counts

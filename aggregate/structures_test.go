@@ -86,6 +86,38 @@ func TestStructures(t *testing.T) {
 		assert.Equal(t, tower, uses[3].Structure.ItemID)
 	})
 
+	t.Run("control towers in one system are told apart by their moon, and each loss is matched to its moon", func(t *testing.T) {
+		const moonA, moonB, moonC = 40000001, 40000002, 40000003
+		at := func(km *retrieval.Killmail, moonID int) *retrieval.Killmail {
+			km.LocationID = moonID
+			return km
+		}
+		used := []*retrieval.Killmail{ // newest first
+			at(kill(30, 1, home, onKill(artillery, mainCorp)), moonA),
+			at(kill(31, 4, home, onKill(artillery, mainCorp)), moonB),
+			at(kill(32, 6, home, onKill(artillery, mainCorp)), moonA),
+			at(kill(33, 9, other, onKill(artillery, mainCorp)), 0),
+		}
+		losses := []*retrieval.Killmail{
+			at(lost(40, 2, home, tower, mainCorp, pilot(50, enemyCorp)), moonB),  // after both towers' newest kills, but at B's moon
+			at(lost(41, 3, home, tower, mainCorp, pilot(50, enemyCorp)), moonC),  // a third tower's, seen on no kill
+			at(lost(42, 7, other, tower, mainCorp, pilot(50, enemyCorp)), moonC), // the moon of a tower seen with none is not known, so it matches
+		}
+		uses := aggregate.StructuresUsed(used, losses, target)
+		assert.Len(t, uses, 3, "two towers in one system, and one elsewhere")
+
+		assert.Equal(t, moonA, uses[0].MoonID)
+		assert.Equal(t, 2, uses[0].Kills)
+		assert.Nil(t, uses[0].Loss, "the losses at other moons are not its")
+
+		assert.Equal(t, moonB, uses[1].MoonID)
+		assert.Equal(t, 40, uses[1].Loss.KillmailID)
+		assert.Equal(t, tower, uses[1].Structure.ItemID)
+
+		assert.Equal(t, 0, uses[2].MoonID)
+		assert.Equal(t, 42, uses[2].Loss.KillmailID)
+	})
+
 	t.Run("structures destroyed are the target's kills of a structure", func(t *testing.T) {
 		killmails := []*retrieval.Killmail{
 			lost(20, 1, home, astrahus, enemyCorp, pilot(60, mainCorp), pilot(61, holdingCorp), pilot(62, enemyCorp)),

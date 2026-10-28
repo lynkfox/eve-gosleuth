@@ -237,6 +237,7 @@
             <div class="subtabs" role="tablist" aria-label="Structures">
               <button id="subtab-structures-used" class="subtab" type="button" role="tab" aria-controls="structures-used" aria-selected="true">Used in Kills <span id="structures-used-count" class="tab-count"></span></button>
               <button id="subtab-structures-destroyed" class="subtab" type="button" role="tab" aria-controls="structures-destroyed" aria-selected="false">Destroyed <span id="structures-destroyed-count" class="tab-count"></span></button>
+              <button id="subtab-structures-lost" class="subtab" type="button" role="tab" aria-controls="structures-lost" aria-selected="false">Lost <span id="structures-lost-count" class="tab-count"></span></button>
             </div>
             <div id="structures-used" role="tabpanel" aria-labelledby="subtab-structures-used">
               <table>
@@ -255,6 +256,15 @@
                 <tbody id="structures-destroyed-body"></tbody>
               </table>
               <p id="structures-destroyed-empty" class="muted" hidden>The target took part in destroying no structures on the collected killmails.</p>
+            </div>
+            <div id="structures-lost" role="tabpanel" aria-labelledby="subtab-structures-lost" hidden>
+              <table>
+                <thead>
+                  <tr><th></th><th>Structure</th><th>Owner</th><th>Destroyed</th></tr>
+                </thead>
+                <tbody id="structures-lost-body"></tbody>
+              </table>
+              <p id="structures-lost-empty" class="muted" hidden>zKillboard lists no citadels or POSes the target lost.</p>
             </div>
           </div>
 

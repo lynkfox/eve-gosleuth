@@ -1464,7 +1464,7 @@ function renderIntelSections(report) {
   setTabCount("tab-ratters", report.ratters && report.ratters.length);
   // its pilots, each once though they flew more than one hull
   setTabCount("tab-capitals", report.capitals && new Set(report.capitals.flatMap((capital) => capital.pilots.map((pilot) => pilot.id))).size);
-  setTabCount("tab-structures", report.structures && report.structures.used.length + report.structures.destroyed.length);
+  setTabCount("tab-structures", report.structures && report.structures.used.length + report.structures.destroyed.length + report.structures.lost.length);
   setTabCount("tab-fits", report.fits && report.fits.length);
   renderKillmailPage();
   renderActivity(report.killmails || []);
@@ -2604,6 +2604,7 @@ const GLANCE_CARDS = {
     rows: [
       { name: "Used in kills", value: report.structures.used.length.toLocaleString("en-US") },
       { name: "Destroyed", value: report.structures.destroyed.length.toLocaleString("en-US") },
+      { name: "Lost", value: report.structures.lost.length.toLocaleString("en-US") },
     ],
   }),
   "tab-fits": (report) => {
@@ -2695,6 +2696,7 @@ const TAB_HELP = {
   "tab-structures": [
     "Used in Kills: this corp's and its holdings' citadels and POSes seen on its kills, at any age.",
     "Destroyed: structures it helped kill on this search's killmails.",
+    "Lost: every citadel and POS it or its holdings lost, at any age.",
     "Right-click a structure to search its system, owner, or killers, or open it on an external site.",
   ],
   "tab-fits": [
@@ -3308,7 +3310,7 @@ function renderCorporations(corporations) {
 // entityChip is a pilot, corp, or alliance's logo and name. ref is a backend EntityRef, null gives null. Its row's structureMenu covers it.
 function entityChip(ref) {
   if (!ref) return null;
-  return groupLine([ref.iconUrl, ref.name]);
+  return groupLine(ref);
 }
 
 // ownerLine is a structure's owning corp and alliance
@@ -3382,7 +3384,7 @@ function renderStructureLoss(jspace, loss, previous) {
   details.className = "structure-loss-details";
   const type = document.createElement("div");
   type.className = "structure-loss-type";
-  type.textContent = loss.type;
+  type.textContent = loss.moon ? `${loss.type} · ${loss.moon}` : loss.type;
   const owner = document.createElement("div");
   owner.append("Owner: ", ownerLine(loss.owner, loss.ownerAlliance));
   const death = document.createElement("div");
@@ -3479,7 +3481,7 @@ function previousStructureLosses(previous) {
     icon.alt = "";
     const type = document.createElement("span");
     type.className = "structure-previous-type";
-    type.textContent = loss.type;
+    type.textContent = loss.moon ? `${loss.type} · ${loss.moon}` : loss.type;
     const who = document.createElement("span");
     who.className = "structure-previous-who";
     const owner = document.createElement("div");
@@ -3514,7 +3516,7 @@ function structureState(destroyed) {
   return mark;
 }
 
-// structureNameCell is a structure row's type, system, and any battery or holding it was seen through
+// structureNameCell is a structure row's type, system, and any moon, battery, or holding it was seen through
 function structureNameCell(type, system, extras) {
   const cell = document.createElement("td");
   const name = document.createElement("div");
@@ -3529,7 +3531,7 @@ function structureNameCell(type, system, extras) {
 
 /*
   renderStructures draws the Structures tab of a corp or alliance: Used in Kills, its structures seen on its kills, grayed once destroyed since,
-  and Destroyed, the structures it took part in destroying. A row's right click menu is its owner's, its system and killers have their own.
+  Destroyed, the structures it took part in destroying, and Lost, every structure it lost. A row's right click menu is its owner's, its system and killers have their own.
 */
 function renderStructures(structures) {
   const used = structures.used.map((structure) => {
@@ -3568,7 +3570,7 @@ function renderStructures(structures) {
       avatar.firstChild.append(killed);
     }
     row.append(avatar,
-      structureNameCell(structure.type, structure.system, [battery, via]), ownerCell, numberCell(structure.kills), deathCell);
+      structureNameCell(structure.type, structure.system, [structure.moon, battery, via]), ownerCell, numberCell(structure.kills), deathCell);
     // a row is every kill of one structure, so with several it opens the latest
     const structureItems = [{ label: structure.kills > 1 ? "Open latest killmail" : "Open this killmail", action: () => window.runtime.BrowserOpenURL(structure.zkillUrl) }];
     if (structure.destroyed) structureItems.push({ label: "Open its loss on zKillboard", action: () => window.runtime.BrowserOpenURL(structure.destroyed.zkillUrl) });
@@ -3590,12 +3592,26 @@ function renderStructures(structures) {
     const deathCell = document.createElement("td");
     deathCell.append(deathLine(loss.death));
     row.append(avatarCell(loss.type, { zkillUrl: loss.death.zkillUrl, dotlanUrl: loss.system.dotlanUrl }, loss.imageUrl),
-      structureNameCell(loss.type, loss.system, []), ownerCell, deathCell, numberCell(loss.pilots));
+      structureNameCell(loss.type, loss.system, [loss.moon]), ownerCell, deathCell, numberCell(loss.pilots));
     return withMenu(row, structureLossSections(loss, true));
   });
   el("structures-destroyed-body").replaceChildren(...destroyed);
   el("structures-destroyed-empty").hidden = destroyed.length > 0;
   el("structures-destroyed-count").textContent = `(${destroyed.length})`;
+
+  const lost = structures.lost.map((loss) => {
+    const row = document.createElement("tr");
+    const ownerCell = document.createElement("td");
+    ownerCell.append(ownerLine(loss.owner, loss.ownerAlliance));
+    const deathCell = document.createElement("td");
+    deathCell.append(deathLine(loss.death));
+    row.append(avatarCell(loss.type, { zkillUrl: loss.death.zkillUrl, dotlanUrl: loss.system.dotlanUrl }, loss.imageUrl),
+      structureNameCell(loss.type, loss.system, [loss.moon, loss.via ? `via ${loss.via}` : null]), ownerCell, deathCell);
+    return withMenu(row, structureLossSections(loss, true));
+  });
+  el("structures-lost-body").replaceChildren(...lost);
+  el("structures-lost-empty").hidden = lost.length > 0;
+  el("structures-lost-count").textContent = `(${lost.length})`;
   selectStructuresSubtab(structuresSubtab);
 }
 

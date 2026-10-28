@@ -51,6 +51,10 @@ func (c *CachedEveIDs) GetPlanetInfo(idNumber int) (*api.ESIPlanetInfo, error) {
 	return cachedCall[api.ESIPlanetInfo](c, idNumber, types.PLANET)
 }
 
+func (c *CachedEveIDs) GetMoonInfo(idNumber int) (*api.ESIMoon, error) {
+	return cachedCall[api.ESIMoon](c, idNumber, types.MOON)
+}
+
 func (c *CachedEveIDs) GetCategoryInfo(idNumber int) (*api.ESICategory, error) {
 	return cachedCall[api.ESICategory](c, idNumber, types.CATEGORY)
 }

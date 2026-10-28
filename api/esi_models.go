@@ -191,6 +191,13 @@ type ESIPlanetInfo struct {
 	TypeID   int    `json:"type_id"`
 }
 
+// ESIMoon is the universe/moons response
+type ESIMoon struct {
+	MoonID   int    `json:"moon_id"`
+	Name     string `json:"name"` // ie Jita IV - Moon 4
+	SystemID int    `json:"system_id"`
+}
+
 // ESICategory is the universe/categories response, ie 6 is Ship. zKillboard's cat: labels name a category by its id.
 type ESICategory struct {
 	CategoryID int    `json:"category_id"`

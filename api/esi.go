@@ -26,6 +26,7 @@ type ESIClient interface {
 	GetStargateInfo(idNumber int) (*ESIStargate, error)
 	GetStarInfo(idNumber int) (*ESIStar, error)
 	GetPlanetInfo(idNumber int) (*ESIPlanetInfo, error)
+	GetMoonInfo(idNumber int) (*ESIMoon, error)
 	GetCategoryInfo(idNumber int) (*ESICategory, error)
 	GetAllianceCorporations(allianceID int) (*ESIAllianceCorporations, error)
 	GetCorporationHistory(characterID int) (*ESICorporationHistory, error)
@@ -317,6 +318,15 @@ func (e ESIConnection) GetPlanetInfo(idNumber int) (*ESIPlanetInfo, error) {
 		return nil, err
 	}
 	return planet, nil
+}
+
+// GetMoonInfo takes a moon ID and returns its name
+func (e ESIConnection) GetMoonInfo(idNumber int) (*ESIMoon, error) {
+	moon := &ESIMoon{}
+	if err := e.getEsiResponseFromEndpointWithID(idNumber, moon, "universe/moons"); err != nil {
+		return nil, err
+	}
+	return moon, nil
 }
 
 // GetCategoryInfo takes an item category ID and returns its name

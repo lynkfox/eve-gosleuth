@@ -668,7 +668,7 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		a.setRoster(newRoster(targetID, entityType, collected.PilotsSeen, memberCount))
 		report.MemberList = true
 		comm.ReportProgress("Finding structures")
-		report.Structures = buildStructures(structures, collected.Killmails, &target)
+		report.Structures = buildStructures(a.clients.ESIClient, structures, collected.Killmails, &target)
 	case types.SYSTEM:
 		comm.ReportProgress("Ranking pilots and corporations")
 		report.Pilots = buildFleetmates(aggregate.GetTopPilots(pilotLimit, collected.PilotsSeen))
@@ -681,12 +681,12 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 			report.JSpace = comm.WormholeClass(system.Name, system.Region) != ""
 		}
 		if structures.last != nil {
-			loss := structureLoss(structures.last)
+			loss := structureLoss(a.clients.ESIClient, structures.last)
 			report.LastStructureLoss = &loss
 		}
 		report.PreviousStructureLosses = []StructureLoss{}
 		for _, km := range structures.previous {
-			report.PreviousStructureLosses = append(report.PreviousStructureLosses, structureLoss(km))
+			report.PreviousStructureLosses = append(report.PreviousStructureLosses, structureLoss(a.clients.ESIClient, km))
 		}
 	}
 
