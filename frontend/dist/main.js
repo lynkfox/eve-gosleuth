@@ -1700,7 +1700,7 @@ const FITS_FOLD_OVER = 12;
 
 /*
   renderFits fills the Fits tab of a pilot, corp, or alliance search: the target's fits, identical fits merged with a count, under a heading for each ship that folds.
-  Selecting one draws it in the fitting window on the right, with its losses to choose from. Copy EFT puts the chosen loss on the clipboard for the in-game Import from clipboard.
+  Selecting one draws it in the fitting window on the right, with its losses to page through. Copy EFT puts the chosen loss on the clipboard for the in-game Import from clipboard.
   The first fit listed is selected to start, and a redraw keeps the one chosen.
 */
 function renderFits(fits) {
@@ -1719,10 +1719,9 @@ function renderFits(fits) {
 
   const rows = new Map();
   const hulls = new Map();
-  // a fit picked from the list opens on its loss with the most implants, the newest of those
+  // a fit picked from the list opens on its first loss, the one with the most implants, the newest of those (buildFits)
   const select = (fit, killmailId) => {
-    const loss = fit.losses.find((each) => isFitLoss(each, killmailId))
-      || fit.losses.reduce((most, each) => (each.fit.implants || []).length > (most.fit.implants || []).length ? each : most);
+    const loss = fit.losses.find((each) => isFitLoss(each, killmailId)) || fit.losses[0];
     fitsShown.selected = loss.killmailId;
     for (const [shown, row] of rows) row.setAttribute("aria-selected", String(shown === fit));
     if (fitsShown.folded.delete(fit.shipName)) hulls.get(fit.shipName).unfold();
@@ -1757,11 +1756,19 @@ function renderFits(fits) {
   if (fits.length === 0) {
     // nothing of the last search's fit is left behind
     el("fit-view-title").textContent = "";
+    el("fit-view-loss").replaceChildren();
+    el("fit-view-loss").oncontextmenu = null;
     el("fit-view-note").hidden = true;
-    el("fit-losses").replaceChildren();
     el("fit-ring").replaceChildren();
-    el("fit-copy").disabled = true;
-    el("fit-copy").onclick = null;
+    el("fit-prev").hidden = true;
+    el("fit-next").hidden = true;
+    el("fit-page-count").textContent = "";
+    el("fit-view").onkeydown = null;
+    for (const button of [el("fit-copy"), el("fit-zkill")]) {
+      button.disabled = true;
+      button.onclick = null;
+      button.oncontextmenu = null;
+    }
   } else if (!fitsShown.select(fitsShown.selected)) {
     select(fits[0]);
   }
@@ -1853,14 +1860,15 @@ function fitTag(tag) {
 }
 
 // FIT_RACKS place each rack of slots on the fitting window's ring, as EVE's does: highs over the top, mids down the right, lows along the bottom, and rigs and subsystems inside on the left. Angles are clockwise from the right, in degrees.
+// The inner ring sits on the hull render's edge, its slots further apart than the outer ring's, so a T3 cruiser's rigs and subsystems keep a gap between them.
 const FIT_RACKS = [
   { key: "highs", label: "High", centre: -90, ring: "outer" },
   { key: "mids", label: "Mid", centre: 0, ring: "outer" },
   { key: "lows", label: "Low", centre: 90, ring: "outer" },
-  { key: "rigs", label: "Rig", centre: 155, ring: "inner" },
-  { key: "subsystems", label: "Subsystem", centre: 207, ring: "inner" },
+  { key: "rigs", label: "Rig", centre: 145, ring: "inner" },
+  { key: "subsystems", label: "Subsystem", centre: 215, ring: "inner" },
 ];
-const FIT_SLOT_STEP = { outer: 11, inner: 14.5, far: 9.5 };
+const FIT_SLOT_STEP = { outer: 11, inner: 16, far: 9.5 };
 
 /*
   FIT_ARCS curve the rest of the fit around the outside of the ring, one icon each, named on hover. Cargo is not shown.
@@ -1873,11 +1881,41 @@ const FIT_ARCS = [
 
 /*
   renderFitWindow draws a loss of a fit: the hull with its modules around it, loaded charges as a badge on their module, and an empty slot as a hollow socket.
-  Its losses are listed below to choose from, and its implants, boosters, drones and fighters curve around the outside (FIT_ARCS).
+  Arrows beside the ship's name (or ← →) page through its losses, wrapping round at either end, the one shown named under it, and its implants, boosters, drones and fighters curve around the outside (FIT_ARCS).
   The hull, each module and charge, and each of those has a right click menu to open it on EVE Ref.
 */
 function renderFitWindow(fit, loss, choose) {
   el("fit-view-title").textContent = fit.shipName;
+  const index = fit.losses.indexOf(loss);
+  const count = fit.losses.length;
+  const page = (step) => {
+    if (count > 1) choose(fit.losses[(index + step + count) % count].killmailId);
+  };
+  const paged = count > 1;
+  el("fit-prev").hidden = !paged;
+  el("fit-next").hidden = !paged;
+  el("fit-prev").onclick = () => page(-1);
+  el("fit-next").onclick = () => page(1);
+  el("fit-page-count").textContent = paged ? `${index + 1} of ${count}` : "";
+  el("fit-view").onkeydown = (event) => {
+    if (event.key === "ArrowLeft") page(-1);
+    if (event.key === "ArrowRight") page(1);
+  };
+
+  // the loss shown, and its menu: its killmail, and the capsule whose implants it shows
+  const sections = [
+    killmailSection(loss.url),
+    ...(loss.podUrl ? [{ heading: "Capsule", items: [{ label: "Open on zKillboard", action: () => window.runtime.BrowserOpenURL(loss.podUrl) }] }] : []),
+  ];
+  const shown = el("fit-view-loss");
+  shown.replaceChildren([loss.pilotName, spokenDate(loss.time), loss.systemName].filter(Boolean).join(" · "));
+  if (loss.podKillmailId) shown.append(" ", fitTag(FIT_IMPLANTS_TAG));
+  shown.oncontextmenu = (event) => openSectionsMenu(event, sections);
+  const zkill = el("fit-zkill");
+  zkill.disabled = false;
+  zkill.onclick = () => window.runtime.BrowserOpenURL(loss.url);
+  zkill.oncontextmenu = (event) => openSectionsMenu(event, sections);
+
   const note = el("fit-view-note");
   note.hidden = !loss.missingTypes;
   note.textContent = loss.missingTypes ? `${loss.missingTypes} item ${loss.missingTypes === 1 ? "type is" : "types are"} newer than GoSleuth's item data, so this fit may be missing pieces.` : "";
@@ -1885,23 +1923,6 @@ function renderFitWindow(fit, loss, choose) {
   el("fit-copy").onclick = () => window.runtime.ClipboardSetText(loss.eft)
     .then((copied) => tickerPush(copied ? "Fit copied" : "Could not copy the fit"))
     .catch(() => tickerPush("Could not copy the fit"));
-
-  el("fit-losses").replaceChildren(...fit.losses.map((each) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "fit-loss";
-    button.setAttribute("aria-selected", String(each === loss));
-    button.textContent = [each.pilotName, spokenDate(each.time), each.systemName].filter(Boolean).join(" · ");
-    if (each.podKillmailId) button.append(" ", fitTag(FIT_IMPLANTS_TAG));
-    button.addEventListener("click", () => choose(each.killmailId));
-    withMenu(button, [
-      killmailSection(each.url),
-      ...(each.podUrl ? [{ heading: "Capsule", items: [{ label: "Open on zKillboard", action: () => window.runtime.BrowserOpenURL(each.podUrl) }] }] : []),
-    ]);
-    const item = document.createElement("li");
-    item.append(button);
-    return item;
-  }));
 
   const render = document.createElement("img");
   render.className = "fit-hull-render";
@@ -2676,8 +2697,8 @@ const TAB_HELP = {
   "tab-fits": [
     "Fits by ship. Losses with the same modules are merged into one, whatever slots they were in.",
     "Non-combat ships (pods, shuttles, haulers, mining ships), structures, and losses with nothing fitted are left out.",
-    "Below the fit are its killmails. Click one to see its own layout, charges, and drones.",
-    "Right-click the hull, a module, a drone, or a killmail to open it on an external site.",
+    "A merged fit's losses page with the arrows by its name, or ← →, each showing its own layout, charges, and drones.",
+    "Right-click the hull, a module, a drone, or the zKillboard button (which has the capsule too) to open it on an external site.",
   ],
   "tab-capitals": [
     "Capital ships its pilots flew on these killmails, and who flew them. Click a pilot to search.",
@@ -2935,7 +2956,7 @@ const RATTER_KEY = {
   items: Object.entries(RAT_KINDS).map(([kind, [label, meaning]]) => ({ sample: label, className: `pi-tag rat-kind-${kind}`, meaning })),
 };
 
-// FIT_KEY is the Fits tab's tags, on a fit in the list and, for implants, on its loss under the window
+// FIT_KEY is the Fits tab's tags, on a fit in the list and, for implants, on the loss named under the window's title
 const FIT_KEY = {
   title: "Tags",
   items: FIT_TAGS.map((tag) => ({ sample: tag.letter, className: tag.className, meaning: tag.meaning })),

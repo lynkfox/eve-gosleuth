@@ -23,7 +23,7 @@ type FitGroup struct {
 	ShipEveRefURL string    `json:"shipEveRefUrl"`
 	Abyssal       bool      `json:"abyssal"`  // it has a mutated module, whose rolled stats are unknown
 	Implants      bool      `json:"implants"` // a loss of it has the implants of its capsule (see podsWithShips). Implants don't decide which fits merge.
-	Losses        []FitLoss `json:"losses"`   // newest first
+	Losses        []FitLoss `json:"losses"`   // most implants first, then newest
 }
 
 // FitLoss is one loss of a fit, with its own charges and cargo
@@ -72,6 +72,7 @@ type FitPart struct {
 
 /*
 	buildFits lists the target's losses with their fits, identical fits merged (see fitKey), by ship name, those with implants first, and then newest loss first.
+	A fit's own losses are the one with the most implants first, then newest, so the fitting window opens on its first.
 	Non-combat hulls in fit_ignored_hulls.json (capsules, shuttles, corvettes, haulers, mining ships, structures, deployables) are left out, as is any loss with nothing fitted.
 	A capsule lost with implants after a ship in the same battle gives that ship's loss its implants (see podsWithShips).
 
@@ -147,7 +148,12 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 
 	fits := make([]FitGroup, 0, len(groups))
 	for _, group := range groups {
-		slices.SortStableFunc(group.Losses, func(a, b FitLoss) int { return b.Time.Compare(a.Time) })
+		slices.SortStableFunc(group.Losses, func(a, b FitLoss) int {
+			if byImplants := cmp.Compare(len(b.Fit.Implants), len(a.Fit.Implants)); byImplants != 0 {
+				return byImplants
+			}
+			return b.Time.Compare(a.Time)
+		})
 		fits = append(fits, *group)
 	}
 	slices.SortStableFunc(fits, func(a, b FitGroup) int {
@@ -160,9 +166,20 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 			}
 			return 1
 		}
-		return b.Losses[0].Time.Compare(a.Losses[0].Time)
+		return newestLoss(b).Compare(newestLoss(a))
 	})
 	return fits
+}
+
+// newestLoss is when a fit was last lost, which its first loss need not be as those with implants come first
+func newestLoss(fit FitGroup) time.Time {
+	newest := fit.Losses[0].Time
+	for _, loss := range fit.Losses[1:] {
+		if loss.Time.After(newest) {
+			newest = loss.Time
+		}
+	}
+	return newest
 }
 
 /*

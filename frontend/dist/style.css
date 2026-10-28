@@ -1873,61 +1873,49 @@ body.debug-mode::after {
   overflow-y: auto;
 }
 
-/* the room left under the ring is split evenly between the fit's losses and this empty space */
-.fit-view::after {
-  content: "";
-  flex: 1 1 0;
-}
+.fit-view:focus { outline: none; }
 
 .fit-view-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
 }
 
-.fit-view-title { font-weight: 600; }
-
-/* the chosen fit's losses, each picking whose charges and cargo the window shows */
-.fit-losses {
+/* the ship's name between the arrows that page through its losses, and which page this is */
+.fit-view-pages {
   display: flex;
-  flex-wrap: wrap;
-  flex: 1 1 0;
-  align-content: flex-start;
-  gap: 4px;
-  min-height: 64px;
-  margin: 8px 0 0;
-  padding: 0;
-  overflow-y: auto;
-  list-style: none;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
-.fit-loss {
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: none;
+.fit-view-title { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.fit-page { padding: 0 8px; line-height: 1.4; }
+.fit-page-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fit-view-actions { display: flex; flex: none; gap: 8px; }
+
+/* the loss shown, under the ship's name: who lost it, when, and where */
+.fit-view-loss {
+  margin: 2px 0 4px;
   color: var(--muted);
   font-size: 12px;
-  cursor: pointer;
 }
-
-.fit-loss:hover { color: var(--text); }
-.fit-loss[aria-selected="true"] { border-color: var(--highlight); color: var(--text); }
 
 /*
   the fitting window's ring: the hull's render in the middle, each slot set on a circle around it by its --angle (clockwise from the right),
   turned out to its radius and turned back so the icon stays upright
 */
 .fit-ring {
-  --outer: 190px;
-  --inner: 150px;
-  --far: 236px; /* implants and drones, outside the ring's line */
+  --slot: 30px;
+  --render: 240px;
+  --outer: 172px;
+  --inner: 120px; /* rigs and subsystems, on the render's edge */
+  --far: 218px; /* implants and drones, outside the ring's line */
   position: relative;
   flex: none;
-  width: 520px;
-  height: 520px;
+  width: 480px;
+  height: 480px;
   margin: 0 auto;
 }
 
@@ -1943,8 +1931,8 @@ body.debug-mode::after {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 256px;
-  height: 256px;
+  width: var(--render);
+  height: var(--render);
   border-radius: 50%;
   transform: translate(-50%, -50%);
 }
@@ -1953,9 +1941,9 @@ body.debug-mode::after {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 34px;
-  height: 34px;
-  margin: -17px 0 0 -17px;
+  width: var(--slot);
+  height: var(--slot);
+  margin: calc(var(--slot) / -2) 0 0 calc(var(--slot) / -2);
   transform: rotate(var(--angle)) translate(var(--radius)) rotate(calc(-1 * var(--angle)));
 }
 
@@ -1963,15 +1951,15 @@ body.debug-mode::after {
 .fit-slot-inner { --radius: var(--inner); }
 .fit-slot-far { --radius: var(--far); }
 .fit-slot-empty { border: 1px dashed var(--muted); border-radius: 50%; opacity: 0.6; }
-.fit-module { width: 34px; height: 34px; border-radius: 4px; background: var(--panel-raised); }
+.fit-module { width: var(--slot); height: var(--slot); border-radius: 4px; background: var(--panel-raised); }
 
 /* a loaded charge, a badge on its module's corner */
 .fit-charge {
   position: absolute;
-  right: -5px;
-  bottom: -5px;
-  width: 18px;
-  height: 18px;
+  right: -4px;
+  bottom: -4px;
+  width: 16px;
+  height: 16px;
   border: 1px solid var(--border);
   border-radius: 50%;
   background: var(--panel);

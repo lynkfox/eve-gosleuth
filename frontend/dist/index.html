@@ -306,14 +306,22 @@
           <div id="panel-fits" class="tab-panel" role="tabpanel" aria-labelledby="tab-fits" hidden>
             <div id="fits-layout" class="fits">
               <ul id="fits-list" class="fits-list"></ul>
-              <section class="fit-view">
+              <section id="fit-view" class="fit-view" tabindex="-1">
                 <div class="fit-view-head">
-                  <span id="fit-view-title" class="fit-view-title"></span>
-                  <button id="fit-copy" class="secondary" type="button" disabled>Copy EFT</button>
+                  <div class="fit-view-pages">
+                    <button id="fit-prev" class="secondary fit-page" type="button" title="Previous loss" aria-label="Previous loss" hidden>‹</button>
+                    <span id="fit-view-title" class="fit-view-title"></span>
+                    <button id="fit-next" class="secondary fit-page" type="button" title="Next loss" aria-label="Next loss" hidden>›</button>
+                    <span id="fit-page-count" class="fit-page-count"></span>
+                  </div>
+                  <div class="fit-view-actions">
+                    <button id="fit-zkill" class="secondary" type="button" disabled>zKillboard</button>
+                    <button id="fit-copy" class="secondary" type="button" disabled>Copy EFT</button>
+                  </div>
                 </div>
+                <p id="fit-view-loss" class="fit-view-loss"></p>
                 <p id="fit-view-note" class="muted" hidden></p>
                 <div id="fit-ring" class="fit-ring"></div>
-                <ul id="fit-losses" class="fit-losses"></ul>
               </section>
             </div>
             <p id="fits-empty" class="muted" hidden>No losses with a fit on the collected killmails.</p>

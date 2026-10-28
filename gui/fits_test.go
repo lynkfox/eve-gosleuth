@@ -190,6 +190,11 @@ func TestBuildFitsGivesShipsTheirPodsImplants(t *testing.T) {
 		}
 	}
 	assert.Equal(t, map[int][]string{1: {"Ocular Filter"}, 10: {"Latest ship"}, 12: {"Long lived"}}, implants)
+	order := []int{}
+	for _, loss := range fits[0].Losses {
+		order = append(order, loss.KillmailID)
+	}
+	assert.Equal(t, []int{12, 10, 1, 9, 8, 5, 3}, order, "the losses with implants first, then newest")
 	assert.Equal(t, map[int]int{1: 2, 10: 11, 12: 13}, pods)
 	assert.True(t, fits[0].Implants)
 
@@ -206,4 +211,15 @@ func TestBuildFitsGivesShipsTheirPodsImplants(t *testing.T) {
 	fits = buildFits([]*retrieval.Killmail{ship(1, start, jita), pod(2, start.Add(30*time.Second), jita, "Ocular Filter"), refit}, target, battles)
 	assert.Len(t, fits, 2)
 	assert.Equal(t, []bool{true, false}, []bool{fits[0].Implants, fits[1].Implants}, "the fit with implants first, though older")
+
+	// two fits with implants list by their newest loss, not their first, which is the one with implants
+	refit = ship(21, start.Add(5*time.Hour), jita)
+	refit.Victim.Fit.Lows = []*retrieval.FittedModule{{Module: &retrieval.Item{ItemID: 1541, Name: "Power Diagnostic System II"}}}
+	fits = buildFits([]*retrieval.Killmail{
+		ship(1, start, jita), pod(2, start.Add(30*time.Second), jita, "Ocular Filter"), ship(3, start.Add(10*time.Hour), jita),
+		refit, pod(22, start.Add(5*time.Hour+30*time.Second), jita, "Ocular Filter"),
+	}, target, map[int]string{1: "a", 2: "a", 21: "b", 22: "b"})
+	assert.Len(t, fits, 2)
+	assert.Equal(t, []int{1, 3}, []int{fits[0].Losses[0].KillmailID, fits[0].Losses[1].KillmailID}, "lost last at 3, so listed before the refit lost at 21")
+	assert.Equal(t, 21, fits[1].Losses[0].KillmailID)
 }

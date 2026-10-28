@@ -99,12 +99,6 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
   5. Cargo as `Name xN`. Boosters go here too, since the in-game importer is fussier about a separate booster section.
 - Check several exports by importing them in-game before calling this done.
 
-### Next: tighten the fitting window (noted 2026-10-27)
-
-- **The loss chips need another home** now that the window is bigger. Proposal: page through a fit's losses across the top, in line with the ship name, with a subtitle holding what the chip shows now (pilot · date · system, and the C tag). The zKill link (and the capsule's) then needs to move somewhere else.
-- **Make the window a little smaller.** Tighten the spacing where possible, keeping in mind that hulls with many slots leave little room.
-- **T3 cruisers need more space between subsystems and rigs.** Both could overlap the hull render by about half, which would free room to pull the outer ring in.
-
 ## Phase 2b: finding and folding fits
 
 - **A filter box** above the fit list. It matches the hull, the pilot, the system, and any module, charge, drone or cargo name. Hull headings with no match left are hidden.
