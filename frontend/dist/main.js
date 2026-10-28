@@ -1690,9 +1690,13 @@ function renderCapitals(capitals) {
 // fitsShown is the Fits tab's list as drawn, kept so a redraw (ie the time zone changed) and Show fit keep the chosen fit and the folded hulls
 let fitsShown = noFitsShown();
 
-// noFitsShown is fitsShown before any Fits tab is drawn. byKillmail is each loss's fit, by the loss's and its capsule's killmail ids. filter lists only the fits the filter box and tag toggles match.
+/*
+  noFitsShown is fitsShown before any Fits tab is drawn. byKillmail is each loss's fit, by the loss's and its capsule's killmail ids.
+  filter lists only the fits the filter box matches, searchText is what it matches each fit against (fitSearchText), and filterOpened is the hulls a filter has
+  unfolded, each with whether it was folded before, so clearing the box folds them again; null while the box is empty.
+*/
 function noFitsShown() {
-  return { fits: null, selected: 0, folded: new Set(), select: null, byKillmail: new Map(), filter: null };
+  return { fits: null, selected: 0, folded: new Set(), select: null, byKillmail: new Map(), filter: null, searchText: new Map(), filterOpened: null };
 }
 
 // FITS_FOLD_OVER is how many fits the tab lists before it starts with every hull folded, but the chosen one's
@@ -1714,6 +1718,7 @@ function renderFits(fits) {
         fitsShown.byKillmail.set(loss.killmailId, fit);
         if (loss.podKillmailId) fitsShown.byKillmail.set(loss.podKillmailId, fit);
       }
+      fitsShown.searchText.set(fit, fitSearchText(fit));
     }
   }
   const rows = new Map();
@@ -1727,9 +1732,15 @@ function renderFits(fits) {
     renderFitWindow(fit, loss, (other) => select(fit, other));
     return rows.get(fit);
   };
+  // Show fit: a fit the filter hides is shown by clearing the filter
   fitsShown.select = (killmailId) => {
     const fit = fitsShown.byKillmail.get(killmailId);
-    return fit ? select(fit, killmailId) : null;
+    if (!fit) return null;
+    if (rows.get(fit).parentElement.hidden) {
+      el("fits-filter").value = "";
+      fitsShown.filter();
+    }
+    return select(fit, killmailId);
   };
 
   const ofHull = new Map();
@@ -1770,38 +1781,65 @@ function renderFits(fits) {
       button.onclick = null;
       button.oncontextmenu = null;
     }
-  } else if (!fitsShown.select(fitsShown.selected)) {
-    select(fits[0]);
+  } else {
+    // a redraw keeps the chosen fit, even one the filter hides
+    const kept = fitsShown.byKillmail.get(fitsShown.selected);
+    if (kept) select(kept, fitsShown.selected);
+    else select(fits[0]);
   }
 }
 
 /*
   filterFits hides the fits the filter box does not match, and the hull headings left with none.
-  Each word in the box must be in the hull's name or one of the fit's modules, so "rifter scram" finds Rifters with a warp scrambler. A fit's losses all have the same modules (buildFits), so its first loss's are read.
-  The pilots who lost it, and their corps and alliances, match too: those differ by loss, so every loss's are read.
-  The words after "tag:" or "tags:" are tags, by their letter or the start of their name, and a fit must have each, so "rifter tags: abyssal I" finds Rifters tagged both. An unknown tag matches nothing.
-  While filtering, the hulls with a match unfold.
+  Each word in the box must be in the fit's search text (fitSearchText), so "rifter scram" finds Rifters with a warp scrambler.
+  The words after "tag:" or "tags:" that name a tag, by its letter or the start of its name, are tags a fit must have, so "rifter tags: abyssal I" finds Rifters tagged both.
+  Any other word after them is an ordinary word, so typing on after clicking a tag narrows by name too.
+  While filtering, the hulls with a match unfold, once each so one folded again stays folded; clearing the box folds those that were folded before, but the chosen fit's.
 */
 function filterFits(fits, rows, hulls) {
-  const [named, tagged = ""] = el("fits-filter").value.toLowerCase().split(/\btags?:/);
+  const [named, ...tagged] = el("fits-filter").value.toLowerCase().split(/\btags?:/);
   const words = named.split(/\s+/).filter(Boolean);
-  const tags = tagged.split(/[\s,]+/).filter(Boolean).map((word) => fitTagNamed(word)?.key);
+  const tags = [];
+  for (const word of tagged.join(" ").split(/[\s,]+/).filter(Boolean)) {
+    const tag = fitTagNamed(word);
+    if (tag) tags.push(tag.key);
+    else words.push(word);
+  }
   const filtering = words.length > 0 || tags.length > 0;
   const matched = new Set();
   for (const fit of fits) {
-    const layout = fit.losses[0].fit;
-    const pilots = fit.losses.flatMap((loss) => [loss.pilotName, loss.corpName, loss.allianceName]);
-    // names are joined on a line break, which no word holds, so a word matches within one name
-    const names = [fit.shipName, ...FIT_RACKS.flatMap((rack) => (layout[rack.key] || []).map((slot) => slot?.module.name || "")), ...pilots].filter(Boolean).join("\n").toLowerCase();
-    const match = tags.every((tag) => fit[tag]) && words.every((word) => names.includes(word));
+    const text = fitsShown.searchText.get(fit);
+    const match = tags.every((tag) => fit[tag]) && words.every((word) => text.includes(word));
     rows.get(fit).parentElement.hidden = !match;
     if (match) matched.add(fit.shipName);
   }
+
+  if (filtering) fitsShown.filterOpened ??= new Map();
+  const chosen = fitsShown.byKillmail.get(fitsShown.selected)?.shipName;
   for (const [shipName, hull] of hulls) {
     hull.item.hidden = !matched.has(shipName);
-    if (filtering && matched.has(shipName) && fitsShown.folded.delete(shipName)) hull.unfold();
+    if (filtering && matched.has(shipName) && !fitsShown.filterOpened.has(shipName)) {
+      fitsShown.filterOpened.set(shipName, fitsShown.folded.delete(shipName));
+      hull.unfold();
+    } else if (!filtering && fitsShown.filterOpened?.get(shipName) && shipName !== chosen) {
+      fitsShown.folded.add(shipName);
+      hull.fold();
+    }
   }
+  if (!filtering) fitsShown.filterOpened = null;
   el("fits-no-match").hidden = fits.length === 0 || matched.size > 0;
+}
+
+/*
+  fitSearchText is what the filter box matches a fit against, lowercased: its hull, its modules, and the pilot, corp and alliance of each loss.
+  A fit's losses all have the same modules (buildFits), so its first loss's are read, but who lost it differs by loss.
+  Names are joined on a line break, which no word holds, so a word matches within one name.
+*/
+function fitSearchText(fit) {
+  const layout = fit.losses[0].fit;
+  const modules = FIT_RACKS.flatMap((rack) => (layout[rack.key] || []).map((slot) => slot?.module.name));
+  const owners = fit.losses.flatMap((loss) => [loss.pilotName, loss.corpName, loss.allianceName]);
+  return [fit.shipName, ...modules, ...owners].filter(Boolean).join("\n").toLowerCase();
 }
 
 // fitsHull is a hull's heading in the fit list, with its losses counted, and the list of its fits beneath that it folds away
@@ -1836,7 +1874,7 @@ function fitsHull(fit, ofHull) {
     show(folded);
   });
   item.append(heading, rows);
-  return { item, rows, unfold: () => show(false) };
+  return { item, rows, unfold: () => show(false), fold: () => show(true) };
 }
 
 // fitRow is one fit in the list: when and where it was last lost, how many times, and its tags beneath. Who flew it is in the fitting window, and the filter box matches it.
@@ -1902,21 +1940,9 @@ function fitTag(tag, clickable = false) {
   Unlike a tab's help it has no window of its own.
 */
 function filterHelp(intro, points) {
-  const help = document.createElement("div");
-  help.className = "filter-help";
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = "filter-help-toggle";
-  toggle.textContent = "?";
-  toggle.setAttribute("aria-label", "How to filter");
-  const popup = document.createElement("div");
-  popup.className = "tab-help-popup help-content";
-  popup.setAttribute("role", "tooltip");
   const lead = document.createElement("p");
   lead.textContent = intro;
-  popup.append(lead, ...helpContent(points, []));
-  help.append(toggle, popup);
-  return help;
+  return helpPopup("filter-help", "How to filter", [lead, ...helpContent(points, [])]).help;
 }
 
 // FITS_FILTER_HELP is the Fits filter box's ? popup
@@ -2855,25 +2881,37 @@ function formatKillmailTime(isoTime) {
     - meaning: what the color means
 */
 function tabHelp(points, sections) {
+  const { help, toggle } = helpPopup("tab-help", "About this tab", helpContent(points, sections));
+  toggle.title = "Click to keep this open in its own window";
+  toggle.setAttribute("aria-expanded", String(el("help-window").open));
+  toggle.addEventListener("click", () => toggleHelpWindow(toggle));
+  return help;
+}
+
+/*
+  helpPopup builds a round ? button with a popup shown on hover or keyboard focus, for tabHelp and filterHelp.
+
+  className: the wrapper's class, the button's being it with -toggle after, ie tab-help and tab-help-toggle
+  label: the button's name for screen readers
+  parts: the popup's contents
+*/
+function helpPopup(className, label, parts) {
   const help = document.createElement("div");
-  help.className = "tab-help";
+  help.className = className;
 
   const toggle = document.createElement("button");
   toggle.type = "button";
-  toggle.className = "tab-help-toggle";
+  toggle.className = `${className}-toggle`;
   toggle.textContent = "?";
-  toggle.title = "Click to keep this open in its own window";
-  toggle.setAttribute("aria-label", "About this tab");
-  toggle.setAttribute("aria-expanded", String(el("help-window").open));
-  toggle.addEventListener("click", () => toggleHelpWindow(toggle));
+  toggle.setAttribute("aria-label", label);
 
   const popup = document.createElement("div");
   popup.className = "tab-help-popup help-content";
   popup.setAttribute("role", "tooltip");
-  popup.append(...helpContent(points, sections));
+  popup.append(...parts);
 
   help.append(toggle, popup);
-  return help;
+  return { help, toggle };
 }
 
 // helpContent is a tab's help, the same in the ? popup and the help window: its bullet points, then a line, then its color key

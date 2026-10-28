@@ -61,14 +61,46 @@ func TestShutdown(t *testing.T) {
 		assert.Equal(t, 1, savedEntries(t, path))
 	})
 
+	t.Run("a search asked for once closing has begun is refused, so it can not undo the stop", func(t *testing.T) {
+		app, _ := newApp(t)
+		app.closing.Store(true)
+
+		_, err := app.SearchTarget("Luxxianna Seraph", "PILOT", 0)
+		assert.ErrorIs(t, err, errAppClosing)
+		_, err = app.CollectIntel(2121139046, "PILOT")
+		assert.ErrorIs(t, err, errAppClosing)
+		assert.False(t, app.stopRequested.Load(), "nothing was reset or started")
+	})
+
+	t.Run("a check of imported entities is waited for too", func(t *testing.T) {
+		app, path := newApp(t)
+		started := make(chan struct{})
+		go func() {
+			app.checkMu.Lock()
+			defer app.checkMu.Unlock()
+			close(started)
+			for !app.closing.Load() {
+				time.Sleep(time.Millisecond)
+			}
+			app.cache.Update(character.CharacterID, character)
+		}()
+		<-started
+
+		app.shutdown(context.Background())
+
+		assert.Equal(t, 1, savedEntries(t, path))
+	})
+
 	t.Run("a search that does not stop in time is left behind, and the cache saved without it", func(t *testing.T) {
 		wait := shutdownSearchWait
 		shutdownSearchWait = 50 * time.Millisecond
 		defer func() { shutdownSearchWait = wait }()
 		app, path := newApp(t)
 		app.cache.Update(character.CharacterID, character)
-		app.mu.Lock() // a search that never stops
+		app.mu.Lock()      // a search that never stops
+		app.checkMu.Lock() // nor does a check
 		defer app.mu.Unlock()
+		defer app.checkMu.Unlock()
 
 		start := time.Now()
 		app.shutdown(context.Background())

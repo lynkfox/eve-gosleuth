@@ -64,9 +64,9 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 **Left: the fit list**
 
 - A scrolling list of the target's losses with a fit, grouped by hull.
-- Each row shows the hull icon and name, the pilot (for corp and alliance searches), the date, and the system.
+- Each row shows the date and the system, with the fit's tags on a line beneath, under a heading for its hull. Who lost it is in the fitting window (pilot names left the rows 2026-10-28).
 - A count marks identical fits merged into one row. Two fits are identical when they have the same hull and the same modules in each slot group, whatever the charges or cargo.
-- Corp and alliance searches merge identical fits across pilots, grouped under the ship (decided 2026-10-27), and list the pilots who flew each.
+- Corp and alliance searches merge identical fits across pilots, grouped under the ship (decided 2026-10-27).
 
 **Right: the fitting window**
 

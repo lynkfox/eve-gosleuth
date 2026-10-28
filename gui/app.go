@@ -324,31 +324,34 @@ func (a *App) checkSDERelease() {
 	}
 }
 
-// shutdownSearchWait is how long closing the app waits for a running search to stop before saving the cache without it
+// shutdownSearchWait is how long closing the app waits for a running search, and then a check of imported entities, to stop before saving the cache without them
 var shutdownSearchWait = 5 * time.Second
+
+// errAppClosing refuses a search asked for after the app has started closing
+var errAppClosing = errors.New("The app is closing")
 
 /*
 shutdown is called when the app closes, saving anything newly cached and closing the cache database.
-A running search holds a.mu until it ends, which could be minutes, with the window already gone. So it is stopped as StopSearch does, and waited for only
-shutdownSearchWait; past that the cache is saved and closed anyway (it has its own locks, and a search writing to it after only keeps that for the session).
+A running search holds a.mu until it ends, which could be minutes, with the window already gone. So it is stopped as StopSearch does, no other starts (errAppClosing),
+and it and a check of imported entities are waited for only until shutdownSearchWait has passed; past that the cache is saved and closed anyway
+(it has its own locks, and whatever writes to it after only keeps that for the session).
 A save is one transaction, so even a process killed while saving keeps the cache as it last was.
 */
 func (a *App) shutdown(ctx context.Context) {
 	// a check of imported entities stops at its next call, the rest kept for the next start, and none starts
 	a.closing.Store(true)
 
-	locked := a.mu.TryLock()
-	if !locked {
+	deadline := time.Now().Add(shutdownSearchWait)
+	if !a.mu.TryLock() {
 		a.StopSearch()
-		locked = a.lockWithin(shutdownSearchWait)
+		if !lockBy(&a.mu, deadline) {
+			comm.Logger.Warn("The running search did not stop in time, saving the cache without it")
+		}
 	}
-	if locked {
-		defer a.mu.Unlock()
-		a.checkMu.Lock()
-		defer a.checkMu.Unlock()
-	} else {
-		comm.Logger.Warn("The running search did not stop in time, saving the cache without it")
+	if !lockBy(&a.checkMu, deadline) {
+		comm.Logger.Warn("The check of imported entities did not stop in time, saving the cache without it")
 	}
+	// neither lock is let go: the app is closing, and nothing may start after the cache is closed
 
 	// debug mode lasts until the app closes, so no one forgets it is on
 	if a.GetSettings().DebugMode {
@@ -367,15 +370,20 @@ func (a *App) closeCache() {
 	}
 }
 
-// lockWithin takes a.mu if it comes free within wait, reporting whether it did
-func (a *App) lockWithin(wait time.Duration) bool {
-	for deadline := time.Now().Add(wait); ; time.Sleep(20 * time.Millisecond) {
-		if a.mu.TryLock() {
-			return true
-		}
-		if time.Now().After(deadline) {
-			return false
-		}
+// lockBy takes mutex if it comes free before deadline, reporting whether it did. Past the deadline the wait carries on and takes it later, which is
+// only for shutdown: the app is closing, so the mutex is never let go.
+func lockBy(mutex *sync.Mutex, deadline time.Time) bool {
+	taken := make(chan struct{})
+	go func() {
+		defer comm.RecoverGoroutine("waiting for a lock at shutdown", nil)
+		mutex.Lock()
+		close(taken)
+	}()
+	select {
+	case <-taken:
+		return true
+	case <-time.After(time.Until(deadline)):
+		return false
 	}
 }
 
@@ -487,6 +495,11 @@ func (a *App) SearchTarget(name string, searchType string, id int) (result Targe
 	defer a.mu.Unlock()
 	defer a.finishDebugOnError(&err)
 	defer recoverAsError(&err)
+
+	// once the app is closing no search starts, so none can undo shutdown's stop
+	if a.closing.Load() {
+		return result, errAppClosing
+	}
 
 	// a new search starts unstopped, and the ESI is let through again once this part of it is done even if it was stopped
 	a.stopRequested.Store(false)
@@ -616,6 +629,10 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		})
 	}()
 	defer recoverAsError(&err)
+
+	if a.closing.Load() {
+		return report, errAppClosing
+	}
 
 	// stopped between finding the target and collecting its intel
 	if a.stopRequested.Load() {
