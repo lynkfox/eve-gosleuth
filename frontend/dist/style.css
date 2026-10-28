@@ -832,7 +832,8 @@ button.secondary {
 
 .tab-help { position: relative; }
 
-.tab-help-toggle {
+.tab-help-toggle,
+.filter-help-toggle {
   width: 22px;
   height: 22px;
   padding: 0;
@@ -1904,6 +1905,24 @@ body.debug-mode::after {
   overflow-y: auto;
 }
 
+/* the filter sits over the list, which scrolls beneath it */
+.fits-side { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.fits-filter-row { display: flex; flex: none; align-items: center; gap: 6px; }
+.fits-filter { min-width: 0; padding: 5px 10px; }
+
+/* a filter box's ? on its left, its popup opening rightward under it on hover or keyboard focus. Not a tab's help, so the help window leaves it alone. */
+.filter-help { position: relative; flex: none; }
+.filter-help .tab-help-popup { left: 0; right: auto; }
+.filter-help:hover .tab-help-popup,
+.filter-help:focus-within .tab-help-popup { display: block; }
+.filter-help:hover .filter-help-toggle,
+.filter-help:focus-within .filter-help-toggle { color: var(--text); }
+.filter-help p { margin: 0 0 6px; font-size: 13px; }
+
+/* a tag in the list or under the window's title lists only fits with it when clicked */
+.fit-tag-filter { cursor: pointer; }
+.fit-tag-filter:hover { filter: brightness(1.2); }
+
 /* a hull's heading folds its fits away, the caret turning with it */
 .fits-hull-head {
   display: flex;
@@ -1951,7 +1970,7 @@ body.debug-mode::after {
 .fit-row[aria-selected="true"] { border-color: var(--highlight); background: var(--panel-raised); }
 .fit-row-text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 .fit-row-text > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fit-row-when { color: var(--muted); font-size: 12px; }
+.fit-row-tags { display: flex; gap: 4px; margin-top: 2px; }
 .fit-row-count { color: var(--highlight); font-weight: 600; }
 /* a fit's one letter tags, filled rounded squares so they don't read as the ×N count: abyssal always red as it is a warning, implants in the theme's badge color */
 .fit-tag {

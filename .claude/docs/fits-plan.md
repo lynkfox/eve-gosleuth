@@ -104,12 +104,12 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 - A mutated (abyssal) module is left as an empty slot. A killmail names only its type, and pyfa and the game both drop it. Players know this.
 
 **To update:**
-- **Implants into cargo.** `Fit.EFT` leaves implants out. Write them into cargo as `Name x1`, as boosters already are, so the importer keeps them with the fit.
+- ~~**Implants into cargo.**~~ Done 2026-10-28: `Fit.EFT` writes implants into cargo as `Name x1`, as it does boosters, and a ship's export carries its capsule's implants.
 - **Fighters one squadron per line.** A Thanatos export wrote one stack per type, tubes and bay added together (`Templar II x36`). pyfa imported one full squadron (9/9) of each type, Templars, Firbolgs and Dragonflies, dropping the rest of each stack. pyfa's exporter writes one `Name xN` line per squadron, so split each fighter stack into squadron-sized lines. That needs each fighter's squadron size (dogma attribute `fighterSquadronMaxSize`) in the sdegen extract.
 
 ## Phase 2b: finding and folding fits
 
-- **A filter box** above the fit list. It matches the hull, the pilot, the system, and any module, charge, drone or cargo name. Hull headings with no match left are hidden.
+- **A filter box** above the fit list. Built 2026-10-28: each word must match the hull, a module, or a loss's pilot, corp or alliance name, and the words after "tag:"/"tags:" are tags a fit must have. A ? to the box's left explains it. Hull headings with no match left are hidden. Still open: the system, and charge, drone or cargo names.
 - **Merge fits whose modules differ only by name.** Since tiericide, many modules with different names have the same stats and meta level, such as the named T1 variants within one meta group. Two fits merge when each pair of differing modules shares the same group, meta group and meta level, and the same dogma attributes.
   - The equivalence comes from the `cmd/sdegen` extract: an `equivalent` id per module, or a list of equivalence classes, worked out at generation time. The app does no attribute comparison itself.
   - The merged row shows the most common name for each slot and says that variants were folded in. The fitting window shows the selected loss's own modules.
@@ -139,18 +139,17 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
   - little or no damage weighs for it
   - tackle adds a little but isn't needed
   - a cyno counts for nothing.
-- **Fleet Doctrine**, the one tag that reads the battle as well as the fit:
-  - a loss qualifies when its battle (`aggregate.CollectedData.BattleOfKillmail`) has at least 5 ships of its hull on the victim's side, and logi there too
-  - the victim's side is the target and its holdings in that battle, from their kills and losses there; the enemy flying the same hull doesn't count
-  - the hull count and the logi needed are in `fit_tag_rules.json`
-  - a merged fit gets the tag if any of its losses qualifies.
+- **Fleet Doctrine**, the one tag that reads more than the fit. A fit gets it if either rule holds (widened 2026-10-28):
+  - **In one battle:** a loss qualifies when its battle (`aggregate.CollectedData.BattleOfKillmail`) has at least 5 ships of its hull on the victim's side, and logi there too. The victim's side is the target and its holdings in that battle, from their kills and losses there; the enemy flying the same hull doesn't count. A merged fit gets the tag if any of its losses qualifies.
+  - **Across battles:** the same fit (one merged row, `fitKey`) was lost at least 5 times within one alliance, by at least 5 different pilots, in any battles. Losses count by the victim's alliance at the time, not their corp, so pilots of different corps in one alliance add up; the target's holdings count as one with it.
+  - Every number (the battle's hull count, the logi needed, the losses and pilots across battles) is in `fit_tag_rules.json`.
 - Other tags are read from the fit alone. zKill's `npc` and `solo` labels belong to single losses, so they don't make tags.
 
 ### Showing tags
 
 - **The fitting window** shows every tag of the fit, with the reasons on hover.
-- **The fit list** hides tags by default, so rows don't get cluttered.
-- **The list can be filtered by tag.** This may come after the window, but the data must allow it from the start.
+- **The fit list** (decided 2026-10-28): the fit's heaviest-weighted tag names its row, and the rest are the colored squares on the line beneath, as A and I are now. The key in the tab's help explains each square. Squares need not be one letter.
+- **The list is filtered by tag** in the filter box, by name or letter after "tag:"/"tags:" (`filterFits`, `fitTagNamed`), or by clicking a tag, so each new tag is filterable once it is in `FIT_TAGS` with a `name`.
 
 **Data crunching comes later.** A debug export writes every fit in the cache to JSONL, to be clustered offline for tuning the rule weights. The app still classifies by rules only.
 

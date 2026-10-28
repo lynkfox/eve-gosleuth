@@ -15,7 +15,7 @@ import (
 
 	- The header, then lows, mids, highs, rigs, subsystems and services, each slot on its own line. A group the hull has no slots for is left out.
 	- Drones then fighters, as Name xN.
-	- Cargo as Name xN, with the boosters in it, since the in-game importer is fussier about a separate booster section. Implants are not exported.
+	- Cargo as Name xN, with the boosters and implants in it, since the in-game importer is fussier about separate booster and implant sections.
 
 Parameters:
   - title: the fit's name in the header, see EFTTitle
@@ -67,13 +67,13 @@ func (f *Fit) EFT(title string) string {
 		sections = append(sections, strings.Join(minions, "\n\n"))
 	}
 
-	// copied, so a booster merged into a stack leaves the fit's own cargo alone
+	// copied, so a booster or implant merged into a stack leaves the fit's own cargo alone
 	cargo := make([]*FitCargo, len(f.Cargo))
 	for index, stack := range f.Cargo {
 		cargo[index] = &FitCargo{Item: stack.Item, Quantity: stack.Quantity}
 	}
-	for _, booster := range f.Boosters {
-		cargo = addFitCargo(cargo, booster, 1)
+	for _, item := range slices.Concat(f.Boosters, f.Implants) {
+		cargo = addFitCargo(cargo, item, 1)
 	}
 	if text := eftStacks(cargo); text != "" {
 		sections = append(sections, text)

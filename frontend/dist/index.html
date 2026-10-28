@@ -315,7 +315,14 @@
 
           <div id="panel-fits" class="tab-panel" role="tabpanel" aria-labelledby="tab-fits" hidden>
             <div id="fits-layout" class="fits">
-              <ul id="fits-list" class="fits-list"></ul>
+              <div class="fits-side">
+                <div class="fits-filter-row">
+                  <div id="fits-filter-help" class="filter-help"></div>
+                  <input id="fits-filter" class="fits-filter" type="search" placeholder="Filter fits" autocomplete="off" spellcheck="false" aria-label="Filter fits">
+                </div>
+                <ul id="fits-list" class="fits-list"></ul>
+                <p id="fits-no-match" class="muted" hidden>No fits match the filter.</p>
+              </div>
               <section id="fit-view" class="fit-view" tabindex="-1">
                 <div class="fit-view-head">
                   <div class="fit-view-pages">

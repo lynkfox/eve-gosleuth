@@ -32,7 +32,9 @@ type FitLoss struct {
 	KillmailID   int       `json:"killmailId"`
 	URL          string    `json:"url"` // the killmail on zKillboard
 	Time         time.Time `json:"time"`
-	PilotName    string    `json:"pilotName"` // the pilot, or the owning corp for a structure
+	PilotName    string    `json:"pilotName"`          // the pilot, or the owning corp for a structure
+	CorpName     string    `json:"corpName,omitempty"` // the victim's corp and alliance at the time, for the filter box
+	AllianceName string    `json:"allianceName,omitempty"`
 	SystemName   string    `json:"systemName"`
 	EFT          string    `json:"eft"`
 	MissingTypes int       `json:"missingTypes"` // item types not in fit_types.json, so the fit may be incomplete
@@ -110,7 +112,6 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 			KillmailID:   km.KillmailID,
 			URL:          api.ZkillKillmailURL(km.KillmailID),
 			Time:         km.KillmailTime,
-			EFT:          km.Victim.Fit.EFT(retrieval.EFTTitle(km)),
 			MissingTypes: len(km.Victim.Fit.MissingTypes),
 			Fit:          fitLayout(km.Victim.Fit),
 		}
@@ -120,14 +121,26 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 		case km.Victim.CorpAtKill != nil:
 			loss.PilotName = km.Victim.CorpAtKill.Name
 		}
+		if km.Victim.CorpAtKill != nil {
+			loss.CorpName = km.Victim.CorpAtKill.Name
+		}
+		if km.Victim.AllianceAtKill != nil {
+			loss.AllianceName = km.Victim.AllianceAtKill.Name
+		}
 		if km.System != nil {
 			loss.SystemName = km.System.Name
 		}
+		fit := km.Victim.Fit
 		if pod := podOf[km.KillmailID]; pod != nil {
 			loss.PodKillmailID = pod.KillmailID
 			loss.PodURL = api.ZkillKillmailURL(pod.KillmailID)
 			loss.Fit.Implants = bySlot(pod.Victim.Fit.Implants)
+			// a copy, so the export carries the capsule's implants without changing the killmail's own fit
+			withImplants := *fit
+			withImplants.Implants = pod.Victim.Fit.Implants
+			fit = &withImplants
 		}
+		loss.EFT = fit.EFT(retrieval.EFTTitle(km))
 
 		key := fitKey(km.Victim.Ship.ItemID, km.Victim.Fit)
 		group := byKey[key]

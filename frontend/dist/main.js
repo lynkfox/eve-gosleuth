@@ -1690,9 +1690,9 @@ function renderCapitals(capitals) {
 // fitsShown is the Fits tab's list as drawn, kept so a redraw (ie the time zone changed) and Show fit keep the chosen fit and the folded hulls
 let fitsShown = noFitsShown();
 
-// noFitsShown is fitsShown before any Fits tab is drawn. byKillmail is each loss's fit, by the loss's and its capsule's killmail ids.
+// noFitsShown is fitsShown before any Fits tab is drawn. byKillmail is each loss's fit, by the loss's and its capsule's killmail ids. filter lists only the fits the filter box and tag toggles match.
 function noFitsShown() {
-  return { fits: null, selected: 0, folded: new Set(), select: null, byKillmail: new Map() };
+  return { fits: null, selected: 0, folded: new Set(), select: null, byKillmail: new Map(), filter: null };
 }
 
 // FITS_FOLD_OVER is how many fits the tab lists before it starts with every hull folded, but the chosen one's
@@ -1706,6 +1706,8 @@ const FITS_FOLD_OVER = 12;
 function renderFits(fits) {
   if (fitsShown.fits !== fits) {
     fitsShown = { ...noFitsShown(), fits };
+    // a new search starts unfiltered
+    el("fits-filter").value = "";
     if (fits.length > FITS_FOLD_OVER) fits.forEach((fit) => fitsShown.folded.add(fit.shipName));
     for (const fit of fits) {
       for (const loss of fit.losses) {
@@ -1714,9 +1716,6 @@ function renderFits(fits) {
       }
     }
   }
-  // a corp or alliance's fits say who flew them, a pilot's do not
-  const manyPilots = new Set(fits.flatMap((fit) => fit.losses.map((loss) => loss.pilotName))).size > 1;
-
   const rows = new Map();
   const hulls = new Map();
   // a fit picked from the list opens on its first loss, the one with the most implants, the newest of those (buildFits)
@@ -1742,7 +1741,7 @@ function renderFits(fits) {
       hulls.set(fit.shipName, hull);
       items.push(hull.item);
     }
-    const row = fitRow(fit, manyPilots);
+    const row = fitRow(fit);
     row.addEventListener("click", () => select(fit));
     rows.set(fit, row);
     const item = document.createElement("li");
@@ -1750,6 +1749,8 @@ function renderFits(fits) {
     hulls.get(fit.shipName).rows.append(item);
   }
   el("fits-list").replaceChildren(...items);
+  fitsShown.filter = () => filterFits(fits, rows, hulls);
+  fitsShown.filter();
 
   el("fits-layout").hidden = fits.length === 0;
   el("fits-empty").hidden = fits.length > 0;
@@ -1772,6 +1773,35 @@ function renderFits(fits) {
   } else if (!fitsShown.select(fitsShown.selected)) {
     select(fits[0]);
   }
+}
+
+/*
+  filterFits hides the fits the filter box does not match, and the hull headings left with none.
+  Each word in the box must be in the hull's name or one of the fit's modules, so "rifter scram" finds Rifters with a warp scrambler. A fit's losses all have the same modules (buildFits), so its first loss's are read.
+  The pilots who lost it, and their corps and alliances, match too: those differ by loss, so every loss's are read.
+  The words after "tag:" or "tags:" are tags, by their letter or the start of their name, and a fit must have each, so "rifter tags: abyssal I" finds Rifters tagged both. An unknown tag matches nothing.
+  While filtering, the hulls with a match unfold.
+*/
+function filterFits(fits, rows, hulls) {
+  const [named, tagged = ""] = el("fits-filter").value.toLowerCase().split(/\btags?:/);
+  const words = named.split(/\s+/).filter(Boolean);
+  const tags = tagged.split(/[\s,]+/).filter(Boolean).map((word) => fitTagNamed(word)?.key);
+  const filtering = words.length > 0 || tags.length > 0;
+  const matched = new Set();
+  for (const fit of fits) {
+    const layout = fit.losses[0].fit;
+    const pilots = fit.losses.flatMap((loss) => [loss.pilotName, loss.corpName, loss.allianceName]);
+    // names are joined on a line break, which no word holds, so a word matches within one name
+    const names = [fit.shipName, ...FIT_RACKS.flatMap((rack) => (layout[rack.key] || []).map((slot) => slot?.module.name || "")), ...pilots].filter(Boolean).join("\n").toLowerCase();
+    const match = tags.every((tag) => fit[tag]) && words.every((word) => names.includes(word));
+    rows.get(fit).parentElement.hidden = !match;
+    if (match) matched.add(fit.shipName);
+  }
+  for (const [shipName, hull] of hulls) {
+    hull.item.hidden = !matched.has(shipName);
+    if (filtering && matched.has(shipName) && fitsShown.folded.delete(shipName)) hull.unfold();
+  }
+  el("fits-no-match").hidden = fits.length === 0 || matched.size > 0;
 }
 
 // fitsHull is a hull's heading in the fit list, with its losses counted, and the list of its fits beneath that it folds away
@@ -1809,31 +1839,27 @@ function fitsHull(fit, ofHull) {
   return { item, rows, unfold: () => show(false) };
 }
 
-// fitRow is one fit in the list: who flew it for a corp or alliance, when and where it was last lost, and how many times
-function fitRow(fit, manyPilots) {
+// fitRow is one fit in the list: when and where it was last lost, how many times, and its tags beneath. Who flew it is in the fitting window, and the filter box matches it.
+function fitRow(fit) {
   const row = document.createElement("button");
   row.type = "button";
   row.className = "fit-row";
   row.setAttribute("aria-selected", "false");
   const text = document.createElement("span");
   text.className = "fit-row-text";
-  if (manyPilots) {
-    const pilots = [...new Set(fit.losses.map((loss) => loss.pilotName))];
-    const who = document.createElement("span");
-    who.textContent = pilots.length > 2 ? `${pilots.slice(0, 2).join(", ")} +${pilots.length - 2}` : pilots.join(", ");
-    who.title = pilots.join("\n");
-    text.append(who);
-  }
   // a system that could not be looked up has no name, and is left out
   const systems = new Set(fit.losses.map((loss) => loss.systemName).filter(Boolean));
   const when = document.createElement("span");
-  when.className = "fit-row-when";
   when.textContent = [spokenDate(fit.lastLost), systems.size > 1 ? `${systems.size} systems` : [...systems][0]].filter(Boolean).join(" · ");
   text.append(when);
-  row.append(text);
-  for (const tag of FIT_TAGS) {
-    if (fit[tag.key]) row.append(fitTag(tag));
+  const tags = FIT_TAGS.filter((tag) => fit[tag.key]);
+  if (tags.length > 0) {
+    const line = document.createElement("span");
+    line.className = "fit-row-tags";
+    line.append(...tags.map((tag) => fitTag(tag, true)));
+    text.append(line);
   }
+  row.append(text);
   if (fit.losses.length > 1) {
     const count = document.createElement("span");
     count.className = "fit-row-count";
@@ -1844,19 +1870,64 @@ function fitRow(fit, manyPilots) {
   return row;
 }
 
-// FIT_TAGS mark a fit in the list as small filled badges, see FIT_KEY. Abyssal is red as it is a warning, so fixed; implants are in the theme's --badge color.
-const FIT_ABYSSAL_TAG = { key: "abyssal", letter: "A", className: "fit-tag fit-tag-abyssal", meaning: "Contains Abyssal Module" };
-const FIT_IMPLANTS_TAG = { key: "implants", letter: "C", className: "fit-tag fit-tag-implants", meaning: "Contains Implants from a related capsule killmail" };
+// FIT_TAGS mark a fit in the list as small filled badges, see FIT_KEY. Abyssal is red as it is a warning, so fixed; implants are in the theme's --badge color. The filter box finds a tag by its letter or name.
+const FIT_ABYSSAL_TAG = { key: "abyssal", letter: "A", name: "Abyssal", className: "fit-tag fit-tag-abyssal", meaning: "Contains Abyssal Module" };
+const FIT_IMPLANTS_TAG = { key: "implants", letter: "I", name: "Implants", className: "fit-tag fit-tag-implants", meaning: "Contains Implants from a related capsule killmail" };
 const FIT_TAGS = [FIT_ABYSSAL_TAG, FIT_IMPLANTS_TAG];
 
-// fitTag is a fit's one letter tag, named on hover
-function fitTag(tag) {
+// fitTagNamed is the tag a filter word names: the one with that letter, or else the first whose name starts with it
+function fitTagNamed(word) {
+  return FIT_TAGS.find((tag) => tag.letter.toLowerCase() === word) || FIT_TAGS.find((tag) => tag.name.toLowerCase().startsWith(word));
+}
+
+// fitTag is a fit's tag, named on hover by the name the filter box finds it by; the key gives its meaning. A clickable one lists only the fits with that tag, in place of the filter box's words.
+function fitTag(tag, clickable = false) {
   const mark = document.createElement("span");
   mark.className = tag.className;
   mark.textContent = tag.letter;
-  mark.title = tag.meaning;
+  mark.title = tag.name;
+  if (clickable) {
+    mark.classList.add("fit-tag-filter");
+    mark.addEventListener("click", (event) => {
+      event.stopPropagation(); // filters, without selecting the row it is on
+      el("fits-filter").value = `tags: ${tag.name.toLowerCase()}`;
+      fitsShown.filter?.();
+    });
+  }
   return mark;
 }
+
+/*
+  filterHelp builds a filter box's round ? button, whose popup shows on hover or keyboard focus: what the box matches, as bullet points under an intro.
+  Unlike a tab's help it has no window of its own.
+*/
+function filterHelp(intro, points) {
+  const help = document.createElement("div");
+  help.className = "filter-help";
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "filter-help-toggle";
+  toggle.textContent = "?";
+  toggle.setAttribute("aria-label", "How to filter");
+  const popup = document.createElement("div");
+  popup.className = "tab-help-popup help-content";
+  popup.setAttribute("role", "tooltip");
+  const lead = document.createElement("p");
+  lead.textContent = intro;
+  popup.append(lead, ...helpContent(points, []));
+  help.append(toggle, popup);
+  return help;
+}
+
+// FITS_FILTER_HELP is the Fits filter box's ? popup
+const FITS_FILTER_HELP = [
+  "Filter results by:",
+  [
+    "Hull, pilot, module, corp, or alliance name.",
+    'Several words and parts of words, ie "Rifter Web".',
+    'The key word "tag:" or "tags:" followed by a tag\'s name or its letter in the key, ie "tags: implants". Clicking a tag does the same.',
+  ],
+];
 
 // FIT_RACKS place each rack of slots on the fitting window's ring, as EVE's does: highs over the top, mids down the right, lows along the bottom, and rigs and subsystems inside on the left. Angles are clockwise from the right, in degrees.
 // The inner ring sits on the hull render's edge, its slots further apart than the outer ring's, so a T3 cruiser's rigs and subsystems keep a gap between them.
@@ -1898,7 +1969,8 @@ function renderFitWindow(fit, loss, choose) {
   el("fit-page-count").textContent = paged ? `${index + 1} of ${count}` : "";
   // anywhere on the tab, so a fit just picked from the list pages at once; a modified arrow is left to the WebView
   el("panel-fits").onkeydown = (event) => {
-    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    // the arrows move the filter box's caret, not the loss
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.target === el("fits-filter")) return;
     const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
     if (!step) return;
     event.preventDefault();
@@ -1912,7 +1984,7 @@ function renderFitWindow(fit, loss, choose) {
   ];
   const shown = el("fit-view-loss");
   shown.replaceChildren([loss.pilotName, spokenDate(loss.time), loss.systemName].filter(Boolean).join(" · "));
-  if (loss.podKillmailId) shown.append(" ", fitTag(FIT_IMPLANTS_TAG));
+  if (loss.podKillmailId) shown.append(" ", fitTag(FIT_IMPLANTS_TAG, true));
   shown.oncontextmenu = (event) => openSectionsMenu(event, sections);
   const zkill = el("fit-zkill");
   zkill.disabled = false;
@@ -4870,6 +4942,8 @@ el("limits-button").addEventListener("click", toggleLimitsMenu);
 el("myintel-button").addEventListener("click", openMyIntel);
 el("myintel-close").addEventListener("click", () => el("myintel").close());
 el("myintel-filter").addEventListener("input", renderMyIntel);
+el("fits-filter").addEventListener("input", () => fitsShown.filter?.());
+el("fits-filter-help").replaceWith(filterHelp(...FITS_FILTER_HELP));
 el("myintel-add").addEventListener("submit", addMyIntelCard);
 el("myintel-undo-button").addEventListener("click", undoMyIntelRemove);
 el("myintel-export-button").addEventListener("click", exportMyIntel);

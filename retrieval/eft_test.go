@@ -20,7 +20,7 @@ func TestFitEFT(t *testing.T) {
 		want string
 	}{
 		{
-			name: "a ship with empty slots, loaded charges, drones, and cargo with its booster",
+			name: "a ship with empty slots, loaded charges, drones, and cargo with its booster and implant",
 			fit:  func(cache *retrieval.CachedEveIDs) *retrieval.Fit { return cache.BuildFit(587, rifterItems()) },
 			want: `[Rifter, GoSleuth - Pilot - 1]
 
@@ -48,6 +48,7 @@ Hornet EC-300 x2
 
 Republic Fleet EMP S x200
 Nanite Repair Paste x50
+Zainou 'Gnome' Shield Upgrades SU-601 x1
 Synth Crash Booster x3`,
 		},
 		{

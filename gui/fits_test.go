@@ -46,6 +46,9 @@ func TestBuildFits(t *testing.T) {
 	loaded.Victim.Fit.Highs = []*retrieval.FittedModule{nil, {Module: &retrieval.Item{ItemID: 2873, Name: "200mm AutoCannon II"}, Charge: &retrieval.Item{ItemID: 12625, Name: "Barrage S"}}}
 	refit := loss(13, 587, "Rifter", day)
 	refit.Victim.Fit.Lows = []*retrieval.FittedModule{{Module: &retrieval.Item{ItemID: 1541, Name: "Power Diagnostic System II"}}}
+	hurricane := loss(3, 24690, "Hurricane", day)
+	hurricane.Victim.CorpAtKill = &retrieval.Corporation{Name: "Sleuth Corp"}
+	hurricane.Victim.AllianceAtKill = &retrieval.Alliance{Name: "Sleuth Alliance"}
 
 	fits := buildFits([]*retrieval.Killmail{
 		loss(1, 587, "Rifter", day),
@@ -55,7 +58,7 @@ func TestBuildFits(t *testing.T) {
 		loss(9, 648, "Badger", day),
 		loss(10, 35832, "Astrahus", day),
 		unfitted,
-		loss(3, 24690, "Hurricane", day),
+		hurricane,
 		loss(4, 587, "Rifter", day.Add(time.Hour)),
 		kill,
 		reloaded,
@@ -74,6 +77,7 @@ func TestBuildFits(t *testing.T) {
 	assert.Equal(t, [][]int{{3}, {4, 1}, {13}, {11, 12}}, groups, "identical fits merged newest first, by ship name then newest loss, without the kill, the unfitted loss, or the non-combat hulls")
 	assert.Contains(t, fits[0].Losses[0].EFT, "[Hurricane, GoSleuth - Luxxianna Seraph]")
 	assert.Equal(t, "Jita", fits[0].Losses[0].SystemName)
+	assert.Equal(t, []string{"Sleuth Corp", "Sleuth Alliance"}, []string{fits[0].Losses[0].CorpName, fits[0].Losses[0].AllianceName}, "the victim's corp and alliance, for the filter")
 
 	layout := fits[3].Losses[0].Fit
 	assert.Equal(t, "Damage Control II", layout.Lows[0].Module.Name)
@@ -201,9 +205,12 @@ func TestBuildFitsGivesShipsTheirPodsImplants(t *testing.T) {
 	// implants by slot: Ocular Filter - Basic (1) before Memory Augmentation - Basic (2) though listed after
 	slotted := pod(31, start.Add(7*time.Hour+time.Minute), jita, "")
 	slotted.Victim.Fit.Implants = []*retrieval.Item{{ItemID: 9941, Name: "Memory Augmentation - Basic"}, {ItemID: 9899, Name: "Ocular Filter - Basic"}}
-	fits = buildFits([]*retrieval.Killmail{ship(30, start.Add(7*time.Hour), jita), slotted}, target, map[int]string{30: "h", 31: "h"})
+	slottedShip := ship(30, start.Add(7*time.Hour), jita)
+	fits = buildFits([]*retrieval.Killmail{slottedShip, slotted}, target, map[int]string{30: "h", 31: "h"})
 	assert.Equal(t, "Ocular Filter - Basic", fits[0].Losses[0].Fit.Implants[0].Name)
 	assert.Equal(t, "Memory Augmentation - Basic", fits[0].Losses[0].Fit.Implants[1].Name)
+	assert.Contains(t, fits[0].Losses[0].EFT, "\n\n\nMemory Augmentation - Basic x1\nOcular Filter - Basic x1", "the capsule's implants are exported in the ship's cargo")
+	assert.Empty(t, slottedShip.Victim.Fit.Implants, "the ship's own fit is unchanged")
 
 	// a newer fit of the same hull without implants still lists after it
 	refit := ship(20, start.Add(6*time.Hour), jita)
