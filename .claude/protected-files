@@ -1,0 +1,4 @@
+# Files Claude may read but never change, one path per line, relative to the repo root.
+# Checked by .claude/hooks/protect-files.sh before every Edit, Write, NotebookEdit, and Bash call.
+# Matched without regard to case, as Windows paths are.
+Readme.md
