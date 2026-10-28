@@ -293,20 +293,26 @@ main {
   border-radius: 3px;
 }
 
+/* the target panel is one row: the target, who it belongs to beside it, then its holdings at the right */
+.target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 32px;
+}
+
 .target-header {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 12px 32px;
-  margin-bottom: 12px;
 }
 
-/* The target's corp and alliance (or CEO, executor) sit at the right of the header */
+/* The target's corp and alliance (or CEO, executor), beside it */
 .related-entities {
   display: flex;
   flex-wrap: wrap;
   gap: 12px 32px;
-  margin-left: auto;
 }
 
 /* An entity block: portrait with site link icons under it, beside a label and name */
@@ -318,10 +324,10 @@ main {
   min-width: 0;
 }
 
+/* the site links in a column, then the portrait */
 .entity-side {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
 }
 
@@ -400,15 +406,17 @@ main {
   letter-spacing: 0.08em;
 }
 
-/* the target's holding links, between its header and detail panels */
+/* put away by the pull bar, the first step shut for a target with holdings */
+.target.holdings-tucked .target-holdings { display: none; }
+
+/* the target's holding links, at the right end of its row, parted from it by a line */
 .target-holdings {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 12px;
-  padding: 8px 0;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  margin-left: auto;
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
 }
 
 .holding-row {
@@ -419,7 +427,7 @@ main {
 }
 
 .holding-label {
-  min-width: 6.5em;
+  min-width: 7.5em;
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
@@ -437,7 +445,6 @@ main {
 }
 
 .holding > img { width: 22px; height: 22px; border-radius: 3px; }
-.holding-type { color: var(--muted); font-size: 11px; }
 .holding-note { max-width: 18em; overflow: hidden; color: var(--muted); font-size: 12px; font-style: italic; text-overflow: ellipsis; white-space: nowrap; }
 
 .holding-action {
@@ -451,12 +458,6 @@ main {
 
 .holding-action:hover { color: var(--text); }
 .holding-add { padding: 2px 10px; font-size: 12px; }
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
 
 .field {
   padding: 8px 12px;
@@ -631,34 +632,116 @@ button.secondary {
 
 .intel > p { margin: 0; }
 
+/* the report's tabs down its left: At a glance, then the ones that can be dragged into another order. Collapsed, it shows only their icons. */
+.sidebar {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+  width: 190px;
+  margin-right: 16px;
+  padding-right: 8px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+
 .tabs {
   display: flex;
-  gap: 4px;
-  margin: -4px 0 16px;
-  border-bottom: 1px solid var(--border);
+  flex-direction: column;
+  gap: 2px;
 }
+
+.sidebar-toggle {
+  align-self: flex-end;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.sidebar-toggle:hover { color: var(--text); }
 
 .tab {
-  margin-bottom: -1px;
-  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  padding: 7px 10px;
   background: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0 var(--radius) var(--radius) 0;
   color: var(--muted);
   font-weight: 600;
+  text-align: left;
 }
 
-.tab:hover { color: var(--text); }
+.tab:hover { color: var(--text); background: var(--panel-raised); }
+
+.tab-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tab-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.sidebar .tab-count {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* the symbols are drawn where each tab's icon uses them, the sprite itself takes no room */
+.icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 
 /* a tab being dragged into a new place, and the edge of the tab it would drop beside */
 .tab.tab-dragging { opacity: 0.4; }
-.tab.tab-drop-before { box-shadow: inset 2px 0 0 var(--accent); }
-.tab.tab-drop-after { box-shadow: inset -2px 0 0 var(--accent); }
+.tab.tab-drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.tab.tab-drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
 
 .tab[aria-selected="true"] {
-  border-bottom-color: var(--highlight);
+  background: var(--panel-raised);
+  border-left-color: var(--highlight);
   color: var(--text);
 }
+
+/* collapsed: icons only, each count a small badge on its icon's corner */
+.sidebar-collapsed .sidebar { width: 48px; padding-right: 4px; }
+.sidebar-collapsed .sidebar-toggle { align-self: center; }
+.sidebar-collapsed .tab { justify-content: center; padding: 8px 0; }
+.sidebar-collapsed .tab-name { display: none; }
+.sidebar-collapsed .sidebar .tab-count {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  padding: 0 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 14px;
+}
+.sidebar-collapsed .sidebar .tab-count:empty { display: none; }
+
+/* the selected tab's name, with its color key and ? help to the right */
+.panel-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-title { margin: 0; font-size: 16px; }
 
 .tab-key {
   display: flex;
@@ -666,6 +749,63 @@ button.secondary {
   align-self: center;
   margin-left: auto;
 }
+
+/* At a glance: a card per tab, in a set order, every card the same size whatever it holds */
+/* the target's Profile, its two detail panels across the top of At a glance */
+.glance-profile {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.glance {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 12px;
+}
+
+.glance-card {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.glance-card header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+
+.glance-card h3 { flex: 1; margin: 0; color: var(--text); font-size: 14px; }
+.glance-open { color: var(--accent); font-size: 13px; }
+
+.glance-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.glance-rows li { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.glance-rows img { flex: none; width: 28px; height: 28px; border-radius: 4px; }
+.glance-text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.glance-name, .glance-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.glance-name { font-weight: 600; }
+.glance-detail { color: var(--muted); font-size: 12px; }
+.glance-value { flex: none; color: var(--muted); font-size: 13px; }
+.glance-kill { color: var(--kill); }
+.glance-loss { color: var(--error); }
+/* one line, ie Killmails' date span, cut short with an ellipsis if it still does not fit */
+.glance-note { margin: auto 0 0; padding-top: 8px; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Tab help: a round ? whose popup, shown on hover or keyboard focus, explains the tab in bullet points and then its colors */
 
@@ -1634,7 +1774,7 @@ body.debug-mode::after {
 .activity-note { margin-top: 8px; font-size: 0.8rem; }
 
 /* the Fits tab: the losses on the left, each scrolling on its own, and the chosen fit's EFT on the right */
-#intel-tabs > #panel-fits { overflow: hidden; }
+#tab-main > #panel-fits { overflow: hidden; }
 .fits {
   display: grid;
   grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
@@ -2201,9 +2341,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 main { flex: 1; width: 100%; min-height: 0; overflow-y: auto; }
 main > * { flex: none; }
 .intel { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 260px; }
-#intel-tabs { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-#intel-tabs > .tab-panel { flex: 1; min-height: 0; padding-right: 6px; overflow-y: auto; }
+#intel-tabs { display: flex; flex: 1; min-height: 0; }
+#tab-main { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+#tab-main > .tab-panel { flex: 1; min-height: 0; padding-right: 6px; overflow-y: auto; }
 /* a paged tab, ie Killmails, scrolls only its list, so its pager is always in reach under it */
-#intel-tabs > .paged-panel { display: flex; flex-direction: column; padding-right: 0; overflow: hidden; }
+#tab-main > .paged-panel { display: flex; flex-direction: column; padding-right: 0; overflow: hidden; }
 .paged-panel > .panel-scroll { flex: 1; min-height: 0; padding-right: 6px; overflow-y: auto; }
 .paged-panel > :not(.panel-scroll) { flex: none; }

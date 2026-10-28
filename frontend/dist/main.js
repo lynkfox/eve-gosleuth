@@ -255,7 +255,8 @@ function entityBlock(entity, isTarget) {
     side.append(portrait);
   }
 
-  side.append(siteLinks(entity.name, entity));
+  // the links stand in a column to the left of the portrait, keeping the target row short
+  side.prepend(siteLinks(entity.name, entity, true));
 
   const text = document.createElement("div");
   text.className = "entity-text";
@@ -434,6 +435,10 @@ function renderTarget(result) {
 
 // targetCollapsed is true while the pull bar has the target panel pulled shut
 let targetCollapsed = false;
+// holdingsTucked is true while the pull bar has the target's holdings put away, the first step shut for a target with any. It stays for the next search, as being shut does.
+let holdingsTucked = false;
+// targetHasHoldings is true while the target shown has holding links saved, at either end
+let targetHasHoldings = false;
 
 // PULL_DISTANCE is how far, in pixels, the pull bar is dragged up or down to shut or open the target panel
 const PULL_DISTANCE = 24;
@@ -449,11 +454,8 @@ function setTargetCollapsed(collapsed) {
   wrap.classList.toggle("collapsed", collapsed);
   clearTimeout(setTargetCollapsed.timer);
   setTargetCollapsed.timer = setTimeout(() => wrap.classList.remove("sliding"), TARGET_SLIDE_MS + 50);
+  describeTargetPull();
 
-  const bar = el("target-pull");
-  bar.setAttribute("aria-expanded", String(!collapsed));
-  bar.title = collapsed ? "Click or drag down to show the target panel" : "Click or drag up to hide the target panel";
-  bar.setAttribute("aria-label", collapsed ? "Show the target panel" : "Hide the target panel");
   const label = el("target-pull-label");
   label.replaceChildren();
   if (collapsed && shownTarget) {
@@ -468,8 +470,44 @@ function setTargetCollapsed(collapsed) {
   label.hidden = !collapsed || !shownTarget;
 }
 
+// setHoldingsTucked puts the target's holdings away, or shows them again. Without holdings saved there is nothing to put away, so the Add holding button stays.
+function setHoldingsTucked(tucked) {
+  holdingsTucked = tucked;
+  el("target").classList.toggle("holdings-tucked", tucked && targetHasHoldings);
+  describeTargetPull();
+}
+
+// holdingsShown is true while the target's holdings are saved and not put away, so the pull bar's next step shut tucks them
+function holdingsShown() {
+  return targetHasHoldings && !holdingsTucked;
+}
+
+// describeTargetPull names what the pull bar's next click or drag does
+function describeTargetPull() {
+  const bar = el("target-pull");
+  bar.setAttribute("aria-expanded", String(!targetCollapsed));
+  const action = targetCollapsed ? "show the target panel" : holdingsShown() ? "hide the holdings" : "hide the target panel";
+  bar.title = `Click to ${action}`;
+  bar.setAttribute("aria-label", action[0].toUpperCase() + action.slice(1));
+}
+
 /*
-  wireTargetPull lets the pull bar be clicked, or dragged up or down past PULL_DISTANCE, to shut or open the target panel.
+  stepTargetPanel moves the target panel one step shut, or all the way open from shut: with holdings shown, the first step puts them away,
+  the next shuts the panel. Opening it shows the holdings again too.
+*/
+function stepTargetPanel() {
+  if (targetCollapsed) {
+    setHoldingsTucked(false);
+    setTargetCollapsed(false);
+  } else if (holdingsShown()) {
+    setHoldingsTucked(true);
+  } else {
+    setTargetCollapsed(true);
+  }
+}
+
+/*
+  wireTargetPull lets the pull bar be clicked, or dragged up or down past PULL_DISTANCE, to step the target panel shut or open it (stepTargetPanel).
   A drag is not also taken as a click when it ends.
 */
 function wireTargetPull() {
@@ -485,7 +523,7 @@ function wireTargetPull() {
     const moved = event.clientY - pull.y;
     if (Math.abs(moved) > 4) pull.moved = true;
     if ((moved < -PULL_DISTANCE && !targetCollapsed) || (moved > PULL_DISTANCE && targetCollapsed)) {
-      setTargetCollapsed(!targetCollapsed);
+      stepTargetPanel();
       pull.y = event.clientY;
     }
   });
@@ -493,7 +531,7 @@ function wireTargetPull() {
   bar.addEventListener("click", () => {
     const dragged = pull && pull.moved;
     pull = null;
-    if (!dragged) setTargetCollapsed(!targetCollapsed);
+    if (!dragged) stepTargetPanel();
   });
 }
 
@@ -506,6 +544,9 @@ let shownTarget = null;
 */
 function renderHoldings(holdings) {
   const strip = el("target-holdings");
+  targetHasHoldings = Boolean(holdings && (holdings.holdings.length || holdings.heldFor.length));
+  // with none, nothing stays put away, so a first holding added shows at once
+  setHoldingsTucked(holdingsTucked && targetHasHoldings);
   if (!holdings) {
     strip.replaceChildren();
     strip.hidden = true;
@@ -539,7 +580,7 @@ function renderHoldings(holdings) {
 }
 
 /*
-  holdingChip is one end of a holding link: its logo, name (click to search it), type, site links, and note.
+  holdingChip is one end of a holding link: its logo, name (click to search it), and note. Its site links are in its right-click menu.
   isHolding is true for the target's own holdings, which can have their note edited. Either end can be removed.
 */
 function holdingChip(entity, isHolding) {
@@ -556,10 +597,7 @@ function holdingChip(entity, isHolding) {
   name.textContent = entity.name;
   name.title = "Search for this";
   name.addEventListener("click", () => offerSearch({ type: entity.type, name: entity.name, id: entity.id }));
-  const kind = document.createElement("span");
-  kind.className = "holding-type";
-  kind.textContent = searchTypeLabel(entity.type);
-  chip.append(logo, name, kind, siteLinks(entity.name, entity));
+  chip.append(logo, name);
 
   if (entity.note) {
     const note = document.createElement("span");
@@ -587,7 +625,7 @@ function holdingChip(entity, isHolding) {
   remove.setAttribute("aria-label", `Remove the holding link with ${entity.name}`);
   remove.addEventListener("click", () => removeHolding(entity, isHolding));
   chip.append(remove);
-  return chip;
+  return withMenu(chip, [entitySection(entity)]);
 }
 
 // openHoldingDialog opens the add holding popup for the shown target, or with editing set, the popup for that holding's note
@@ -633,7 +671,8 @@ async function removeHolding(entity, isHolding) {
   const target = shownTarget;
   if (!target) return;
   const [main, holding] = isHolding ? [target, entity] : [entity, target];
-  const removed = await runBackend(() => backend().RemoveHolding(main.type, main.id, holding.type, holding.id));
+  // RemoveHolding resolves to null when it works, as it returns only an error, so success is made true to tell it from a failure
+  const removed = await runBackend(() => backend().RemoveHolding(main.type, main.id, holding.type, holding.id).then(() => true));
   if (removed === null || shownTarget !== target) return;
   const holdings = await runBackend(() => backend().GetHoldings(target.id, target.type));
   if (holdings && shownTarget === target) {
@@ -1401,16 +1440,21 @@ function renderIntel(report) {
   intelReport = report;
   killmails = report.killmails || [];
   killmailPage = 0;
-  el("killmail-count").textContent = `(${killmails.length})`;
   renderIntelSections(report);
 
-  selectTab("tab-killmails");
+  selectTab("tab-glance");
   el("intel-loading").hidden = true;
   el("intel-tabs").hidden = false;
 }
 
 // renderIntelSections draws the killmail page and each tab of a report, keeping the page and tab the user is on
 function renderIntelSections(report) {
+  setTabCount("tab-killmails", killmails.length);
+  setTabCount("tab-pi", report.piPilots && report.piPilots.length);
+  setTabCount("tab-ratters", report.ratters && report.ratters.length);
+  setTabCount("tab-capitals", report.capitals && report.capitals.length);
+  setTabCount("tab-structures", report.structures && report.structures.used.length + report.structures.destroyed.length);
+  setTabCount("tab-fits", report.fits && report.fits.length);
   renderKillmailPage();
   renderActivity(report.killmails || []);
 
@@ -1475,6 +1519,13 @@ function renderIntelSections(report) {
   // the Members tab's rows come from GetMembers, started by the search
   el("tab-roster").hidden = !report.memberList;
   if (report.memberList) renderRosterPage();
+
+  renderGlance(report);
+}
+
+// setTabCount shows how many rows a tab has beside its name in the sidebar, or nothing for a count of 0 or none
+function setTabCount(tabId, count) {
+  el(tabId).querySelector(".tab-count").textContent = count ? count.toLocaleString("en-US") : "";
 }
 
 // ACTIVITY_DAYS are the histogram's rows, Monday first, as [name, Date.getDay() value]
@@ -1910,9 +1961,9 @@ function tabOrderFrom(saved) {
   return DEFAULT_TAB_ORDER.map((id) => (known.includes(id) ? known[next++] : id));
 }
 
-// arrangeTabs puts the tabs in an order, hidden ones included, before the help button at the end of the row
+// arrangeTabs puts the sidebar's tabs in an order, hidden ones included, below At a glance
 function arrangeTabs(order) {
-  for (const id of order) el("tab-list").insertBefore(el(id), el("tab-key"));
+  for (const id of order) el("tab-list").append(el(id));
 }
 
 // saveTabOrder saves the tabs' order as shown. If it can not be saved it still applies for this session.
@@ -1946,14 +1997,14 @@ function clearTabDropMarks() {
   for (const tab of el("tab-list").querySelectorAll(".tab")) tab.classList.remove("tab-drop-before", "tab-drop-after");
 }
 
-// dropsBefore reports whether a drag over a tab would put the dragged tab before it, from which half of the tab the pointer is over
+// dropsBefore reports whether a drag over a tab would put the dragged tab above it, from which half of the tab the pointer is over
 function dropsBefore(tab, event) {
   const box = tab.getBoundingClientRect();
-  return event.clientX < box.left + box.width / 2;
+  return event.clientY < box.top + box.height / 2;
 }
 
 /*
-  wireTabMoving lets a tab be dragged into a new place among the others, or moved one place with Alt and the left or right arrow.
+  wireTabMoving lets a tab be dragged into a new place among the others, or moved one place with Alt and the up or down arrow.
   Either way the new order is saved.
 */
 function wireTabMoving(tab) {
@@ -1988,18 +2039,277 @@ function wireTabMoving(tab) {
   });
 
   tab.addEventListener("keydown", (event) => {
-    if (!event.altKey || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
+    if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
     event.preventDefault();
     // past the next tab that is shown, hidden ones are skipped over
     const shown = [...el("tab-list").querySelectorAll(".tab")].filter((other) => !other.hidden);
     const at = shown.indexOf(tab);
-    const neighbour = shown[at + (event.key === "ArrowLeft" ? -1 : 1)];
+    const neighbour = shown[at + (event.key === "ArrowUp" ? -1 : 1)];
     if (!neighbour) return;
-    el("tab-list").insertBefore(tab, event.key === "ArrowLeft" ? neighbour : neighbour.nextSibling);
+    el("tab-list").insertBefore(tab, event.key === "ArrowUp" ? neighbour : neighbour.nextSibling);
     tab.focus();
     saveTabOrder();
   });
 }
+
+// sidebarCollapsed is whether the user shrank the sidebar to its icons, saved for the next run
+let sidebarCollapsed = false;
+
+// NARROW_WINDOW matches a window too narrow for the full sidebar, which then shows only its icons whatever was chosen
+const NARROW_WINDOW = window.matchMedia("(max-width: 760px)");
+
+// setSidebarCollapsed shrinks the sidebar to its icons, or shows it in full again
+function setSidebarCollapsed(collapsed) {
+  sidebarCollapsed = collapsed;
+  showSidebar();
+}
+
+// showSidebar lays the sidebar out as chosen, or as icons in a narrow window. Icons alone name their tab in a tooltip.
+function showSidebar() {
+  const collapsed = sidebarCollapsed || NARROW_WINDOW.matches;
+  el("intel-tabs").classList.toggle("sidebar-collapsed", collapsed);
+  const toggle = el("sidebar-toggle");
+  toggle.hidden = NARROW_WINDOW.matches;
+  toggle.textContent = collapsed ? "»" : "«";
+  toggle.setAttribute("aria-expanded", String(!collapsed));
+  const label = collapsed ? "Show the sidebar in full" : "Shrink the sidebar to its icons";
+  toggle.title = label;
+  toggle.setAttribute("aria-label", label);
+
+  for (const tab of document.querySelectorAll(".tab")) {
+    // a tab's own title, ie Allies?' note, is kept to show again in full
+    if (tab.dataset.title === undefined) tab.dataset.title = tab.title;
+    const name = tab.querySelector(".tab-name").textContent;
+    const count = tab.querySelector(".tab-count").textContent;
+    tab.title = collapsed ? [name + (count ? ` (${count})` : ""), tab.dataset.title].filter(Boolean).join(": ") : tab.dataset.title;
+  }
+}
+
+// GLANCE_ROWS is how many of a tab's top rows its At a glance card shows
+const GLANCE_ROWS = 2;
+
+// GLANCE_ORDER is At a glance's cards in their set order, the tabs' default order whatever order the sidebar is in, with a j-space system's last structure lost after Activity
+const GLANCE_ORDER = DEFAULT_TAB_ORDER.flatMap((id) => (id === "tab-activity" ? [id, "glance-structure-loss"] : [id]));
+
+// GLANCE_OPENS is the tab a card that is not a tab's own opens
+const GLANCE_OPENS = { "glance-structure-loss": "tab-activity" };
+
+/*
+  renderGlance fills At a glance: a card for each tab this search has, in a set order, with its top few rows and a link to open the full tab.
+  It reads only the report already fetched, so it costs no API calls. Members has no card, as its rows load page by page.
+*/
+function renderGlance(report) {
+  const cards = [];
+  for (const id of GLANCE_ORDER) {
+    const tabId = GLANCE_OPENS[id] || id;
+    if (el(tabId).hidden || !GLANCE_CARDS[id]) continue;
+    const card = GLANCE_CARDS[id](report);
+    if (card) cards.push(glanceCard(tabId, card));
+  }
+  el("glance-cards").replaceChildren(...cards);
+  showSidebar(); // the counts in the icons' tooltips
+}
+
+/*
+  glanceCard builds one tab's card: its icon and name, an Open link to the tab, its rows, and a note under them.
+
+  id: the id of the tab it opens, ie tab-systems
+  card: { rows, note, title, iconFrom }
+    - rows: [{ name, value, imageUrl, detail, className, menu }], name and value are text, detail is a muted line under the name, className colors the name,
+      menu is the row's right-click menu as withMenu takes it, the same as its row in the tab, or none
+    - note: a muted line under the rows, empty for none
+    - title, iconFrom: for a card that is not a tab's own, its title and the tab whose icon it shows. A tab's own card leaves them out.
+*/
+function glanceCard(id, card) {
+  const section = document.createElement("section");
+  section.className = "glance-card";
+
+  const header = document.createElement("header");
+  const icon = el(card.iconFrom || id).querySelector(".tab-icon").cloneNode(true);
+  const title = document.createElement("h3");
+  title.textContent = card.title || el(id).querySelector(".tab-name").textContent;
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "link-button glance-open";
+  open.textContent = "Open →";
+  open.addEventListener("click", () => selectTab(id));
+  header.append(icon, title, open);
+  section.append(header);
+
+  if (card.rows.length) {
+    const list = document.createElement("ul");
+    list.className = "glance-rows";
+    list.append(...card.rows.map((row) => {
+      const item = document.createElement("li");
+      if (row.imageUrl) {
+        const image = document.createElement("img");
+        image.src = row.imageUrl;
+        image.alt = "";
+        image.loading = "lazy";
+        item.append(image);
+      }
+      const text = document.createElement("div");
+      text.className = "glance-text";
+      const name = document.createElement("span");
+      name.className = `glance-name ${row.className || ""}`.trim();
+      name.textContent = row.name;
+      text.append(name);
+      if (row.detail) {
+        const detail = document.createElement("span");
+        detail.className = "glance-detail";
+        detail.textContent = row.detail;
+        text.append(detail);
+      }
+      const value = document.createElement("span");
+      value.className = "glance-value";
+      value.textContent = row.value;
+      item.append(text, value);
+      return row.menu ? withMenu(item, row.menu) : item;
+    }));
+    section.append(list);
+  }
+  if (card.note || !card.rows.length) {
+    const note = document.createElement("p");
+    note.className = "glance-note";
+    note.textContent = card.note || "Nothing found.";
+    note.title = note.textContent; // in full, if the line is cut short
+    section.append(note);
+  }
+  return section;
+}
+
+// glanceGroup is a pilot's or corp's corp and alliance as one muted line, ie Brave Newbies · Brave Collective
+function glanceGroup(corp, alliance) {
+  return [corp, alliance].filter(Boolean).map((ref) => ref.name).join(" · ");
+}
+
+// topBy is the first GLANCE_ROWS of a list, sorted by a count, most first, the list left as it was
+function topBy(list, count) {
+  return [...list].sort((a, b) => count(b) - count(a)).slice(0, GLANCE_ROWS);
+}
+
+// rankedPilots is the card of a top ten pilots tab, as they are ranked
+function rankedPilots(pilots) {
+  return {
+    rows: pilots.slice(0, GLANCE_ROWS).map((pilot) => ({ name: pilot.name, imageUrl: pilot.imageUrl, detail: glanceGroup(pilot.corporation, pilot.alliance), value: plural(pilot.killmailsShared, "killmail", "killmails"), menu: pilotSections(pilot) })),
+  };
+}
+
+// busiestHour is the hour of the day most of the times fall in, ie 19:00 EVE, in EVE or local time as chosen in Preferences. A tie goes to the earliest hour.
+function busiestHour(times) {
+  const hours = Array(24).fill(0);
+  for (const time of times) hours[timeParts(time).hour]++;
+  return `${pad2(hours.indexOf(Math.max(...hours)))}:00 ${preferences.timeZone === "local" ? "local" : "EVE"}`;
+}
+
+// lossPilots is the card of the PI Pilots or Ratters tab: the pilots who lost the most ships there, each with about the hour they most often lost one
+function lossPilots(pilots) {
+  return {
+    rows: topBy(pilots, (pilot) => pilot.losses.length).map((pilot) => ({ name: pilot.name, imageUrl: pilot.imageUrl, detail: glanceGroup(pilot.corporation, pilot.alliance), value: `~${busiestHour(pilot.losses.map((loss) => loss.time))}`, menu: pilotSections(pilot) })),
+    note: pilots.length > GLANCE_ROWS ? `${plural(pilots.length, "pilot", "pilots")} in all` : "",
+  };
+}
+
+/*
+  GLANCE_CARDS builds each tab's At a glance card from the report, { rows, note } as glanceCard takes, or null for none.
+  A tab missing here, ie Members, has no card.
+*/
+const GLANCE_CARDS = {
+  "tab-killmails": (report) => {
+    const kms = report.killmails || [];
+    if (!kms.length) return { rows: [], note: "No killmails found." };
+    const times = kms.map((km) => km.time).sort();
+    const note = killmailSpan(times[0], times[times.length - 1], true);
+    // a system has no side, its killmails are only destroyed value
+    if (!kms[0].outcome) {
+      const destroyed = kms.reduce((sum, km) => sum + km.totalValue, 0);
+      return { rows: [{ name: "Killmails", value: kms.length.toLocaleString("en-US") }, { name: "Destroyed", value: formatIsk(destroyed) }], note };
+    }
+    const kills = kms.filter((km) => km.outcome === "kill");
+    const losses = kms.filter((km) => km.outcome !== "kill");
+    const value = (list) => formatIsk(list.reduce((sum, km) => sum + km.totalValue, 0));
+    return {
+      rows: [
+        // the count and its isk on one line, keeping the card as short as the others
+        { name: "Kills", className: "glance-kill", value: `${kills.length.toLocaleString("en-US")} · ${value(kills)}` },
+        { name: "Losses", className: "glance-loss", value: `${losses.length.toLocaleString("en-US")} · ${value(losses)}` },
+      ],
+      note,
+    };
+  },
+  "tab-activity": (report) => {
+    const kms = report.killmails || [];
+    if (!kms.length) return null;
+    const days = Array(7).fill(0);
+    for (const km of kms) days[timeParts(km.time).weekday]++;
+    const busiestDay = ACTIVITY_DAYS.find(([, weekday]) => weekday === days.indexOf(Math.max(...days)))[0];
+    return {
+      rows: [
+        { name: "Busiest day", value: busiestDay },
+        { name: "Busiest hour", value: busiestHour(kms.map((km) => km.time)) },
+      ],
+    };
+  },
+  // a j-space system's newest structure lost, however long ago, as the Activity tab shows it
+  "glance-structure-loss": (report) => {
+    if (!report.jspace) return null;
+    const card = { title: "Last Structure Lost", iconFrom: "tab-structures", rows: [] };
+    const loss = report.lastStructureLoss;
+    if (!loss) return card;
+    const killer = loss.death.killerAlliance || loss.death.killerCorp;
+    card.rows.push({ name: loss.type, imageUrl: loss.imageUrl, detail: glanceGroup(loss.owner, loss.ownerAlliance), value: spokenDate(loss.death.time), menu: structureLossSections(loss, false) });
+    card.note = [killer && `Killed by ${killer.name}`, plural(loss.death.attackers, "attacker", "attackers")].filter(Boolean).join(" · ");
+    return card;
+  },
+  "tab-fleetmates": (report) => rankedPilots(report.fleetmates),
+  "tab-members": (report) => rankedPilots(report.members),
+  "tab-pilots": (report) => rankedPilots(report.pilots),
+  "tab-corps": (report) => ({
+    rows: report.corporations.slice(0, GLANCE_ROWS).map((corp) => ({
+      name: corp.name,
+      imageUrl: corp.imageUrl,
+      detail: glanceGroup(null, corp.alliance),
+      value: plural(corp.killmails, "killmail", "killmails"),
+      menu: [entitySection({ type: "CORPORATION", id: corp.id, name: corp.name, zkillUrl: corp.zkillUrl, evewhoUrl: corp.evewhoUrl }), ...groupSections(null, corp.alliance)],
+    })),
+  }),
+  "tab-systems": (report) => ({
+    rows: report.systems.slice(0, GLANCE_ROWS).map((system) => ({
+      name: system.name,
+      detail: [system.class || system.securityStatus.toFixed(1), system.region].filter(Boolean).join(" · "),
+      value: plural(system.killmails, "killmail", "killmails"),
+      menu: [systemSection(system)],
+    })),
+  }),
+  "tab-allies": (report) => ({
+    // built as the menu opens, as in the Allies tab
+    rows: report.allies.slice(0, GLANCE_ROWS).map((ally) => ({ name: ally.name, imageUrl: ally.imageUrl, detail: plural(ally.pilots, "pilot", "pilots"), value: plural(ally.killmails, "kill", "kills"), menu: () => allySections(ally) })),
+  }),
+  "tab-capitals": (report) => ({
+    rows: topBy(report.capitals, (capital) => capital.pilots.length).map((capital) => ({ name: capital.name, imageUrl: capital.imageUrl, value: plural(capital.pilots.length, "pilot", "pilots") })),
+  }),
+  "tab-structures": (report) => ({
+    rows: [
+      { name: "Used in kills", value: report.structures.used.length.toLocaleString("en-US") },
+      { name: "Destroyed", value: report.structures.destroyed.length.toLocaleString("en-US") },
+    ],
+  }),
+  "tab-fits": (report) => {
+    // the hulls lost most often, each with its losses
+    const hulls = new Map();
+    for (const fit of report.fits) {
+      const hull = hulls.get(fit.shipName) || { name: fit.shipName, imageUrl: fit.shipImageUrl, losses: 0 };
+      hull.losses++;
+      hulls.set(fit.shipName, hull);
+    }
+    return {
+      rows: topBy([...hulls.values()], (hull) => hull.losses).map((hull) => ({ name: hull.name, imageUrl: hull.imageUrl, value: plural(hull.losses, "fit", "fits") })),
+      note: hulls.size > GLANCE_ROWS ? `${plural(report.fits.length, "fit", "fits")} across ${plural(hulls.size, "hull", "hulls")}` : "",
+    };
+  },
+  "tab-pi": (report) => lossPilots(report.piPilots),
+  "tab-ratters": (report) => lossPilots(report.ratters),
+};
 
 // UNIQUE_DAYS_HELP explains the Unique Days column the ranked tabs share
 const UNIQUE_DAYS_HELP = "Unique Days: total days with killmails (days spanned across)";
@@ -2013,6 +2323,9 @@ const ROW_MENU_HELP = "Many things have a right-click menu with more options.";
   Each point fits in about two lines of the popup, around 90 characters, and a tab has as few as explain it.
 */
 const TAB_HELP = {
+  "tab-glance": [
+    "An overview of this search: the top few rows of each tab. Open goes to the full tab.",
+  ],
   "tab-killmails": [
     "This search's killmails, newest first. Click one to open it on zKillboard.",
     "How many, and how far back, is set in Preferences.",
@@ -2078,7 +2391,9 @@ function selectTab(tabId) {
   const points = typeof TAB_HELP[tabId] === "function" ? TAB_HELP[tabId](roster ? roster.type : "") : TAB_HELP[tabId];
   const help = points ? [...points, ROW_MENU_HELP] : null;
   const key = TAB_COLOR_KEYS[tabId];
-  shownHelp = help || key ? { title: el(tabId).firstChild.textContent.trim(), points: help || [], sections: key || [] } : null;
+  const title = el(tabId).querySelector(".tab-name").textContent;
+  el("panel-title").textContent = title;
+  shownHelp = help || key ? { title, points: help || [], sections: key || [] } : null;
   el("tab-key").replaceChildren(...(shownHelp ? [tabHelp(shownHelp.points, shownHelp.sections)] : []));
   if (el("help-window").open) renderHelpWindow();
 
@@ -3189,6 +3504,7 @@ async function rankAlliesAgain(showKilled = showingKilledAllies) {
   intelReport.killedAllies = update.killedAllies;
   intelReport.holdings = update.holdings;
   renderAllies(intelReport.allies, intelReport.ignoredAllies, intelReport.killedAllies, intelReport.holdings || []);
+  renderGlance(intelReport);
   if (showKilled !== wasShowing) tickerPush(showKilled ? "Showing the “Fair-Weather Friends” for this search" : "Hiding the “Fair-Weather Friends” again");
 }
 
@@ -3206,6 +3522,7 @@ async function saveIgnoredAllies(ignored, message) {
   }
   intelReport.ignoredAllies = update.ignoredAllies;
   renderAllies(intelReport.allies, intelReport.ignoredAllies, intelReport.killedAllies || 0, intelReport.holdings || []);
+  renderGlance(intelReport);
   tickerPush(message);
 }
 
@@ -3952,6 +4269,7 @@ let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailPages: 
 function applySettings(settings) {
   applyTheme(settings.theme);
   arrangeTabs(tabOrderFrom(settings.tabOrder || []));
+  setSidebarCollapsed(Boolean(settings.sidebarCollapsed));
   preferences = {
     includeZkillLabels: Boolean(settings.includeZkillLabels),
     maxKillmails: settings.maxKillmails || 20,
@@ -4265,10 +4583,14 @@ el("roster-prev").addEventListener("click", () => changeRosterPage(-1));
 wirePagerJumps(el("page-first"), el("page-last"), () => Math.ceil(killmails.length / KILLMAILS_PER_PAGE), showKillmailPage);
 wirePagerJumps(el("roster-first"), el("roster-last"), () => (roster ? rosterPageCount() : 1), showRosterPage);
 el("roster-next").addEventListener("click", () => changeRosterPage(1));
-for (const tab of document.querySelectorAll(".tab")) {
-  tab.addEventListener("click", () => selectTab(tab.id));
-  wireTabMoving(tab);
-}
+for (const tab of document.querySelectorAll(".tab")) tab.addEventListener("click", () => selectTab(tab.id));
+// At a glance stays first, only the tabs below it move
+for (const tab of el("tab-list").querySelectorAll(".tab")) wireTabMoving(tab);
+el("sidebar-toggle").addEventListener("click", () => {
+  setSidebarCollapsed(!sidebarCollapsed);
+  backend().SetSidebarCollapsed(sidebarCollapsed).catch((err) => setStatus(String(err), true));
+});
+NARROW_WINDOW.addEventListener("change", showSidebar);
 for (const subtab of document.querySelectorAll("#panel-structures .subtab")) {
   subtab.addEventListener("click", () => selectStructuresSubtab(subtab.id));
 }

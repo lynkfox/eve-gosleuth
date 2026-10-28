@@ -16,6 +16,7 @@ Recent searches live in the cache, not settings (retrieval/recent_searches.go): 
 
 - The search limits button beside the search bar (`#limits-button`, gui/search_limits.go) changes what searches collect (max, pages, newer than, cached, holdings) until the app closes: `SetSearchLimits` keeps them on `App.searchLimits` (under `settingsMu`, so it skips `a.mu`), `searchPreferences()` is the Preferences with them in place and is what `CollectIntel` and `holdingMain` read, and `SaveSearchLimits` makes them the defaults; the button is in the accent while it has its own.
 - The Collapse target on search preference (`Preferences.CollapseTarget`) pulls the target panel shut at each search.
+- The pull bar under the target panel steps it shut: for a target with holdings saved, the first click puts the holdings away and the next shuts the panel; without any, one click shuts it. A click from shut opens it all (`stepTargetPanel`).
 - As the app launches, `showCaveatWarning()` opens the killmail caveat warning (`#caveat-warning`) while `Preferences.ShowCaveatWarning` (on by default) is on; its Don't show this again box calls `DismissCaveatWarning`.
 
 ## Stopping a search
@@ -94,23 +95,27 @@ The full plan and the decisions behind it are in `docs/fits-plan.md`.
 
 ## Other GUI details
 
-- The window itself never scrolls (end of style.css): the header, target panel, and tab bar stay put and each `.tab-panel` scrolls on its own. A paged tab (`.paged-panel`, Killmails and Members) scrolls only its `.panel-scroll` list, keeping its pager in reach.
-- The tab order in `index.html` is the default; a saved order (`Settings.TabOrder` via `SetTabOrder`) fills the slots of the tabs it names (`tabOrderFrom` in main.js), so a new tab keeps its default place.
-- `api/esi_gui.go` builds `TargetDisplay` values (four title/value panels) per entity type via `TargetEntity.BuildDisplay`. `api.EntityImageURL` gives EVE image server portraits/logos.
+- The window itself never scrolls (end of style.css): the header, target panel, and sidebar stay put and each `.tab-panel` scrolls on its own. A paged tab (`.paged-panel`, Killmails and Members) scrolls only its `.panel-scroll` list, keeping its pager in reach.
+- The target panel is one row: the target, its related entities beside it, and its holdings at the right end. `api/esi_gui.go` builds its `TargetDisplay` per entity type via `TargetEntity.BuildDisplay`; the two detail panels it fills (`left-details-*`, `right-details-*`) are At a glance's Profile. `api.EntityImageURL` gives EVE image server portraits/logos.
 - Themes are defined in `frontend/dist/main.js` (`THEMES`); only colors without a meaning are themed, kill/loss, security, and wormhole class colors stay fixed.
 
-## Planned: sidebar tabs and At a glance
+## Sidebar and At a glance
 
-Not built yet. Decided 2026-10-27, after the window was widened 25% to 1375 px (content area 1200 px) because the app was getting crowded.
-
-- **Sidebar.** The tab bar becomes a vertical list on the left of the report.
-  - Each entry has an icon, its name, and a count where one makes sense (killmails, members, allies, structures, fits).
-  - Only the tabs a search type has are listed, as now.
-  - The saved tab order (`Settings.TabOrder`, drag to reorder) carries over as the list's order.
-  - Each tab's color key and `?` help move to the top of its panel.
-  - The panel takes the full height beside the list, and the tab bar row is gone.
-- **At a glance.** A new first entry in the sidebar, an overview of the search:
-  - A card per tab showing its top two or three rows (Top Members, Top Systems, Fits by hull, Allies?, Capitals, Structures, and for systems PI Pilots and Ratters).
-  - Each card has an "Open" link to its full tab.
-  - It is built only from report data already fetched during the search (no lazy calls).
+- **Sidebar.** The report's tabs run down its left (`#tab-sidebar`). Only the tabs a search type has are shown.
+  - Each tab has an icon, its name, and a count where the list is not a fixed top 10: Killmails, PI Pilots, Ratters, Capital Pilots, Structures, and Fits (`setTabCount`).
+  - The icons are `<symbol>`s in one sprite at the top of the report in `index.html`, drawn with `currentColor`. To change an icon, edit its symbol.
+  - The panel header above the panels shows the selected tab's name, color key, and `?` help (`selectTab`).
+- **Order.** At a glance is always first and can't be moved. The tabs below it (`#tab-list`) can be dragged, or moved with Alt+↑/↓.
+  - The order in `index.html` is the default. A saved order (`Settings.TabOrder` via `SetTabOrder`) fills the slots of the tabs it names (`tabOrderFrom`), so a new tab keeps its default place. Preferences can reset it.
+- **Collapsing.** The « button shrinks the sidebar to its icons, with counts as badges and names in tooltips.
+  - The choice is saved (`Settings.SidebarCollapsed` via `SetSidebarCollapsed`), so a first run starts expanded and later runs open the way it was left.
+  - A window under 760 px wide shows icons only whatever was chosen, without changing the saved choice.
+- **At a glance** (`renderGlance`) is the tab shown after each search. Across its top is the target's Profile: its details and its history, member corps, or stargates, filled by `renderTarget`. Profile is not a tab of its own.
+  - Below it is a card per tab the search has, each with its top two rows (`GLANCE_ROWS`, `GLANCE_CARDS`) and an Open link to the full tab.
+  - The cards keep a set order (`GLANCE_ORDER`, the tabs' default order), whatever order the sidebar is in, and are all the same size.
+  - A j-space system also gets a Last Structure Lost card after Activity, opening the Activity tab.
+  - PI Pilots and Ratters show about the hour each pilot most often loses a ship (`~19:00 EVE`), in EVE or local time as chosen.
+  - A row for a pilot, corp, system, ally, or structure loss has the same right-click menu as its row in the tab.
+  - It reads only the report already fetched, so it costs no API calls. It is redrawn when the allies or the time zone change.
+  - Members has no card, as its rows load page by page.
   - It could later be the base for the PDF report export on the Readme list.

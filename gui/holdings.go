@@ -136,6 +136,7 @@ Parameters:
 func (a *App) RemoveHolding(mainType string, mainID int, holdingType string, holdingID int) (err error) {
 	defer recoverAsError(&err)
 	a.cache.RemoveHoldingLink(mainType, mainID, holdingType, holdingID)
+	a.saveCacheQuietly()
 	return nil
 }
 

@@ -81,22 +81,12 @@
 
     <!-- the target panel, which the pull bar under it slides shut and open -->
     <div id="target-wrap" class="target-wrap" hidden>
+    <!-- one row: the target and who it belongs to, then its holdings at the right. Its details are At a glance's Profile. -->
     <section id="target" class="card target">
       <div id="target-entities" class="target-header"></div>
 
       <!-- a corp or alliance target's holding links, which the user sets by hand -->
       <div id="target-holdings" class="target-holdings" hidden></div>
-
-      <div class="grid">
-        <div class="field">
-          <h2 id="left-details-title"></h2>
-          <div id="left-details-value" class="details"></div>
-        </div>
-        <div class="field">
-          <h2 id="right-details-title"></h2>
-          <div id="right-details-value" class="details"></div>
-        </div>
-      </div>
     </section>
     </div>
 
@@ -113,192 +103,237 @@
     <section id="intel" class="card intel" hidden>
       <p id="intel-loading" class="muted">Pulling killmails from zKillboard and the ESI. This can take a while, progress is shown in the bar below.</p>
 
+      <!-- the sidebar's icons, one symbol per tab, drawn in the text color: edit a symbol here to change its tab's icon -->
+      <svg class="icon-sprite" aria-hidden="true">
+        <symbol id="icon-glance" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+        <symbol id="icon-killmails" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></symbol>
+        <symbol id="icon-activity" viewBox="0 0 24 24"><path d="M3 20h18M6 20v-6M10 20V8M14 20v-9M18 20V5"/></symbol>
+        <symbol id="icon-fleetmates" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2c3 .2 5.5 2.6 5.5 5.8"/></symbol>
+        <symbol id="icon-members" viewBox="0 0 24 24"><circle cx="12" cy="7" r="3"/><path d="M6 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="5" cy="9" r="2"/><circle cx="19" cy="9" r="2"/><path d="M2 18c0-2 1.3-3.5 3-3.8M22 18c0-2-1.3-3.5-3-3.8"/></symbol>
+        <symbol id="icon-pilots" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></symbol>
+        <symbol id="icon-corps" viewBox="0 0 24 24"><path d="M4 21V5l8-3v19M12 9h8v12M2 21h20M7 8h2M7 12h2M7 16h2M15 13h2M15 17h2"/></symbol>
+        <symbol id="icon-pi" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><ellipse cx="12" cy="12" rx="10.5" ry="3.5" transform="rotate(-20 12 12)"/></symbol>
+        <symbol id="icon-ratters" viewBox="0 0 24 24"><path d="M7 17c0-3.9 2.7-7 6.5-7 2.4 0 4.3 1.2 5.5 3l3 3.2-3.2.8H7z"/><path d="M13.5 10.2a2 2 0 1 1 3-1.2"/><circle cx="19" cy="14" r="0.4"/><path d="M10 17v2M16 17v2M7 16c-3 0-5 1-5.5 4"/></symbol>
+        <symbol id="icon-systems" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="8" r="2"/><circle cx="9" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M7 6.4l10 1.2M6 7.8l2.3 8.3M11 18h5M18.8 10l-.6 6"/></symbol>
+        <symbol id="icon-capitals" viewBox="0 0 24 24"><path d="M2 12h15l4-2.5L17 7H6L2 9.5z"/><path d="M7 7V4.5h5L14 7M2 9.5V12"/><path d="M13 18h5l2-1.2-2-1.3h-5z"/></symbol>
+        <symbol id="icon-roster" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4" cy="6" r="1.2"/><circle cx="4" cy="12" r="1.2"/><circle cx="4" cy="18" r="1.2"/></symbol>
+        <symbol id="icon-allies" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+        <symbol id="icon-structures" viewBox="0 0 24 24"><path d="M12 2v15M3 14l4-4h14l-4 4z"/><path d="M8.5 6.5L12 4.5l3.5 2"/></symbol>
+        <symbol id="icon-fits" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z"/></symbol>
+      </svg>
+
       <div id="intel-tabs" hidden>
-        <!-- the tabs can be dragged into another order, which is saved: the order here is the default -->
-        <div id="tab-list" class="tabs" role="tablist">
-          <button id="tab-killmails" class="tab" type="button" role="tab" aria-controls="panel-killmails" aria-selected="true">Killmails <span id="killmail-count" class="tab-count"></span></button>
-          <button id="tab-activity" class="tab" type="button" role="tab" aria-controls="panel-activity" aria-selected="false">Activity</button>
-          <button id="tab-fleetmates" class="tab" type="button" role="tab" aria-controls="panel-fleetmates" aria-selected="false">Top Fleetmates</button>
-          <button id="tab-members" class="tab" type="button" role="tab" aria-controls="panel-members" aria-selected="false">Top Members</button>
-          <button id="tab-pilots" class="tab" type="button" role="tab" aria-controls="panel-pilots" aria-selected="false">Top Pilots</button>
-          <button id="tab-corps" class="tab" type="button" role="tab" aria-controls="panel-corps" aria-selected="false">Top Corps</button>
-          <button id="tab-pi" class="tab" type="button" role="tab" aria-controls="panel-pi" aria-selected="false">PI Pilots</button>
-          <button id="tab-ratters" class="tab" type="button" role="tab" aria-controls="panel-ratters" aria-selected="false">Ratters</button>
-          <button id="tab-systems" class="tab" type="button" role="tab" aria-controls="panel-systems" aria-selected="false">Top Systems</button>
-          <button id="tab-capitals" class="tab" type="button" role="tab" aria-controls="panel-capitals" aria-selected="false">Capital Pilots</button>
-          <button id="tab-roster" class="tab" type="button" role="tab" aria-controls="panel-roster" aria-selected="false">Members</button>
-          <button id="tab-allies" class="tab" type="button" role="tab" aria-controls="panel-allies" aria-selected="false" title="Potential allies, not confirmed">Allies?</button>
-          <button id="tab-structures" class="tab" type="button" role="tab" aria-controls="panel-structures" aria-selected="false">Structures</button>
-          <button id="tab-fits" class="tab" type="button" role="tab" aria-controls="panel-fits" aria-selected="false">Fits</button>
-          <div id="tab-key" class="tab-key"></div>
-        </div>
-
-        <!-- a paged tab scrolls its list, its pager staying under it -->
-        <div id="panel-killmails" class="tab-panel paged-panel" role="tabpanel" aria-labelledby="tab-killmails">
-          <ol id="killmail-list" class="killmail-list panel-scroll"></ol>
-          <p id="killmails-empty" class="muted" hidden>No killmails found on zKillboard for this target.</p>
-          <nav id="killmail-pager" class="pager" hidden>
-            <button id="page-first" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
-            <button id="page-prev" class="secondary" type="button">Previous</button>
-            <span id="page-label"></span>
-            <button id="page-next" class="secondary" type="button">Next</button>
-            <button id="page-last" class="secondary page-jump" type="button" title="Last page" aria-label="Last page">»</button>
-          </nav>
-        </div>
-
-        <div id="panel-activity" class="tab-panel" role="tabpanel" aria-labelledby="tab-activity" hidden>
-          <!-- a j-space system's newest upwell structure or control tower lost, however long ago -->
-          <section id="structure-loss" class="structure-loss" hidden></section>
-          <p id="activity-span" class="activity-span"></p>
-          <div class="activity-scroll">
-            <div id="activity-grid" class="activity" role="table" aria-label="Killmails by day of the week and hour"></div>
+        <!-- the tabs down the left of the report. At a glance is always first, the others can be dragged into another order, which is saved: the order here is the default -->
+        <nav id="tab-sidebar" class="sidebar" role="tablist" aria-label="Report" aria-orientation="vertical">
+          <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-expanded="true" title="Shrink the sidebar to its icons" aria-label="Shrink the sidebar to its icons">«</button>
+          <button id="tab-glance" class="tab" type="button" role="tab" aria-controls="panel-glance" aria-selected="true"><svg class="tab-icon" aria-hidden="true"><use href="#icon-glance"/></svg><span class="tab-name">At a glance</span><span class="tab-count"></span></button>
+          <div id="tab-list" class="tabs" role="presentation">
+            <button id="tab-killmails" class="tab" type="button" role="tab" aria-controls="panel-killmails" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-killmails"/></svg><span class="tab-name">Killmails</span><span class="tab-count"></span></button>
+            <button id="tab-activity" class="tab" type="button" role="tab" aria-controls="panel-activity" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-activity"/></svg><span class="tab-name">Activity</span><span class="tab-count"></span></button>
+            <button id="tab-fleetmates" class="tab" type="button" role="tab" aria-controls="panel-fleetmates" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-fleetmates"/></svg><span class="tab-name">Top Fleetmates</span><span class="tab-count"></span></button>
+            <button id="tab-members" class="tab" type="button" role="tab" aria-controls="panel-members" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-members"/></svg><span class="tab-name">Top Members</span><span class="tab-count"></span></button>
+            <button id="tab-pilots" class="tab" type="button" role="tab" aria-controls="panel-pilots" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-pilots"/></svg><span class="tab-name">Top Pilots</span><span class="tab-count"></span></button>
+            <button id="tab-corps" class="tab" type="button" role="tab" aria-controls="panel-corps" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-corps"/></svg><span class="tab-name">Top Corps</span><span class="tab-count"></span></button>
+            <button id="tab-pi" class="tab" type="button" role="tab" aria-controls="panel-pi" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-pi"/></svg><span class="tab-name">PI Pilots</span><span class="tab-count"></span></button>
+            <button id="tab-ratters" class="tab" type="button" role="tab" aria-controls="panel-ratters" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-ratters"/></svg><span class="tab-name">Ratters</span><span class="tab-count"></span></button>
+            <button id="tab-systems" class="tab" type="button" role="tab" aria-controls="panel-systems" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-systems"/></svg><span class="tab-name">Top Systems</span><span class="tab-count"></span></button>
+            <button id="tab-capitals" class="tab" type="button" role="tab" aria-controls="panel-capitals" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-capitals"/></svg><span class="tab-name">Capital Pilots</span><span class="tab-count"></span></button>
+            <button id="tab-roster" class="tab" type="button" role="tab" aria-controls="panel-roster" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-roster"/></svg><span class="tab-name">Members</span><span class="tab-count"></span></button>
+            <button id="tab-allies" class="tab" type="button" role="tab" aria-controls="panel-allies" aria-selected="false" title="Potential allies, not confirmed"><svg class="tab-icon" aria-hidden="true"><use href="#icon-allies"/></svg><span class="tab-name">Allies?</span><span class="tab-count"></span></button>
+            <button id="tab-structures" class="tab" type="button" role="tab" aria-controls="panel-structures" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-structures"/></svg><span class="tab-name">Structures</span><span class="tab-count"></span></button>
+            <button id="tab-fits" class="tab" type="button" role="tab" aria-controls="panel-fits" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-fits"/></svg><span class="tab-name">Fits</span><span class="tab-count"></span></button>
           </div>
-          <p id="activity-note" class="muted activity-note"></p>
-          <p id="activity-empty" class="muted" hidden>No killmails to chart.</p>
-        </div>
+        </nav>
 
-        <div id="panel-fleetmates" class="tab-panel" role="tabpanel" aria-labelledby="tab-fleetmates" hidden>
-          <table>
-            <thead>
-              <tr><th></th><th>Pilot</th><th class="num">Killmails Shared</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
-            </thead>
-            <tbody id="fleetmates-body"></tbody>
-          </table>
-          <p id="fleetmates-empty" class="muted" hidden>No related pilots found on the collected killmails.</p>
-        </div>
-
-        <div id="panel-members" class="tab-panel" role="tabpanel" aria-labelledby="tab-members" hidden>
-          <table>
-            <thead>
-              <tr><th></th><th>Pilot</th><th class="num">Killmails</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
-            </thead>
-            <tbody id="members-body"></tbody>
-          </table>
-          <p id="members-empty" class="muted" hidden>No members found on the collected killmails.</p>
-        </div>
-
-        <div id="panel-allies" class="tab-panel" role="tabpanel" aria-labelledby="tab-allies" hidden>
-          <p class="row-detail allies-note">Potential allies only: groups seen on this target's kills, not confirmed relationships.</p>
-          <!-- a corp or alliance target's holdings, with the kills each shared with it -->
-          <p id="allies-holdings" class="allies-holdings" hidden>
-            <span class="row-detail">Holdings:</span>
-            <span id="allies-holdings-list"></span>
-          </p>
-          <table>
-            <thead>
-              <tr><th></th><th>Alliance or Corporation</th><th class="num" title="The target's kills they were on">Kills Together</th><th class="num">Pilots</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
-            </thead>
-            <tbody id="allies-body"></tbody>
-          </table>
-          <p id="allies-empty" class="muted" hidden>No alliances or corporations outside the target's alliance were on its kills in the collected killmails.</p>
-          <p id="allies-hint" class="row-detail allies-hint">Right-click an ally to add it to the target's holdings, ignore it for this target, or open it.</p>
-          <!-- what is left out of the allies: those the Hide killed allies preference hid, then those ignored for this target. The x on one brings it back. -->
-          <div id="allies-ignored" class="allies-ignored" hidden>
-            <span class="row-detail">Left out:</span>
-            <span id="allies-ignored-list" class="allies-ignored-list"></span>
+        <div id="tab-main" class="tab-main">
+          <!-- the selected tab's name, color key, and ? help -->
+          <div class="panel-header">
+            <h2 id="panel-title" class="panel-title"></h2>
+            <div id="tab-key" class="tab-key"></div>
           </div>
-        </div>
 
-        <div id="panel-structures" class="tab-panel" role="tabpanel" aria-labelledby="tab-structures" hidden>
-          <div class="subtabs" role="tablist" aria-label="Structures">
-            <button id="subtab-structures-used" class="subtab" type="button" role="tab" aria-controls="structures-used" aria-selected="true">Used in Kills <span id="structures-used-count" class="tab-count"></span></button>
-            <button id="subtab-structures-destroyed" class="subtab" type="button" role="tab" aria-controls="structures-destroyed" aria-selected="false">Destroyed <span id="structures-destroyed-count" class="tab-count"></span></button>
-          </div>
-          <div id="structures-used" role="tabpanel" aria-labelledby="subtab-structures-used">
-            <table>
-              <thead>
-                <tr><th></th><th>Structure</th><th>Owner</th><th class="num" title="Kills it was on">Kills</th><th>Status</th></tr>
-              </thead>
-              <tbody id="structures-used-body"></tbody>
-            </table>
-            <p id="structures-used-empty" class="muted" hidden>None of the target's structures were on its kills on zKillboard.</p>
-          </div>
-          <div id="structures-destroyed" role="tabpanel" aria-labelledby="subtab-structures-destroyed" hidden>
-            <table>
-              <thead>
-                <tr><th></th><th>Structure</th><th>Owner</th><th>Destroyed</th><th class="num" title="The target's pilots on the killmail">Pilots</th></tr>
-              </thead>
-              <tbody id="structures-destroyed-body"></tbody>
-            </table>
-            <p id="structures-destroyed-empty" class="muted" hidden>The target took part in destroying no structures on the collected killmails.</p>
-          </div>
-        </div>
-
-        <div id="panel-pilots" class="tab-panel" role="tabpanel" aria-labelledby="tab-pilots" hidden>
-          <table>
-            <thead>
-              <tr><th></th><th>Pilot</th><th class="num">Killmails</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
-            </thead>
-            <tbody id="pilots-body"></tbody>
-          </table>
-          <p id="pilots-empty" class="muted" hidden>No pilots found on the collected killmails.</p>
-        </div>
-
-        <div id="panel-corps" class="tab-panel" role="tabpanel" aria-labelledby="tab-corps" hidden>
-          <table>
-            <thead>
-              <tr><th></th><th>Corporation</th><th class="num">Killmails</th><th class="num">Kills</th><th class="num">Losses</th><th class="num">Pilots</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
-            </thead>
-            <tbody id="corps-body"></tbody>
-          </table>
-          <p id="corps-empty" class="muted" hidden>No corporations found on the collected killmails.</p>
-        </div>
-
-        <div id="panel-systems" class="tab-panel" role="tabpanel" aria-labelledby="tab-systems" hidden>
-          <table>
-            <thead>
-              <tr><th></th><th>System</th><th class="num">Killmails</th><th class="num">Kills</th><th class="num">Losses</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
-            </thead>
-            <tbody id="systems-body"></tbody>
-          </table>
-          <p id="systems-empty" class="muted" hidden>No systems found on the collected killmails.</p>
-        </div>
-
-        <div id="panel-pi" class="tab-panel" role="tabpanel" aria-labelledby="tab-pi" hidden>
-          <div id="pi-list" class="pi-pilots"></div>
-          <p id="pi-empty" class="muted" hidden>No hauler losses near this system's planets, and no ships lost with PI aboard, on the collected killmails.</p>
-        </div>
-
-        <div id="panel-ratters" class="tab-panel" role="tabpanel" aria-labelledby="tab-ratters" hidden>
-          <div id="ratters-list" class="pi-pilots"></div>
-          <p id="ratters-empty" class="muted" hidden>No ships lost with NPCs on the killmail in this system, on the collected killmails.</p>
-        </div>
-
-        <div id="panel-capitals" class="tab-panel" role="tabpanel" aria-labelledby="tab-capitals" hidden>
-          <div id="capitals-list" class="capitals"></div>
-          <p id="capitals-empty" class="muted" hidden>No members flying capitals on the collected killmails.</p>
-        </div>
-
-        <div id="panel-fits" class="tab-panel" role="tabpanel" aria-labelledby="tab-fits" hidden>
-          <div id="fits-layout" class="fits">
-            <ul id="fits-list" class="fits-list"></ul>
-            <section class="fit-view">
-              <div class="fit-view-head">
-                <span id="fit-view-title" class="fit-view-title"></span>
-                <button id="fit-copy" class="secondary" type="button" disabled>Copy EFT</button>
+          <div id="panel-glance" class="tab-panel" role="tabpanel" aria-labelledby="tab-glance">
+            <!-- the target's Profile, across the top: its details, ie birthday or security, and its history, member corps, or stargates. Filled by renderTarget. -->
+            <div class="glance-profile">
+              <div class="field">
+                <h2 id="left-details-title"></h2>
+                <div id="left-details-value" class="details"></div>
               </div>
-              <p id="fit-view-note" class="muted" hidden></p>
-              <pre id="fit-view-eft" class="fit-eft"></pre>
-            </section>
+              <div class="field">
+                <h2 id="right-details-title"></h2>
+                <div id="right-details-value" class="details"></div>
+              </div>
+            </div>
+            <div id="glance-cards" class="glance"></div>
           </div>
-          <p id="fits-empty" class="muted" hidden>No losses with a fit on the collected killmails.</p>
-        </div>
 
-        <div id="panel-roster" class="tab-panel paged-panel" role="tabpanel" aria-labelledby="tab-roster" hidden>
-          <div class="panel-scroll">
-            <table>
-              <thead id="roster-head"></thead>
-              <tbody id="roster-body"></tbody>
-            </table>
+          <!-- a paged tab scrolls its list, its pager staying under it -->
+          <div id="panel-killmails" class="tab-panel paged-panel" role="tabpanel" aria-labelledby="tab-killmails" hidden>
+            <ol id="killmail-list" class="killmail-list panel-scroll"></ol>
+            <p id="killmails-empty" class="muted" hidden>No killmails found on zKillboard for this target.</p>
+            <nav id="killmail-pager" class="pager" hidden>
+              <button id="page-first" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
+              <button id="page-prev" class="secondary" type="button">Previous</button>
+              <span id="page-label"></span>
+              <button id="page-next" class="secondary" type="button">Next</button>
+              <button id="page-last" class="secondary page-jump" type="button" title="Last page" aria-label="Last page">»</button>
+            </nav>
           </div>
-          <p id="roster-status" class="muted" hidden></p>
-          <nav id="roster-pager" class="pager" hidden>
-            <button id="roster-first" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
-            <button id="roster-prev" class="secondary" type="button">Previous</button>
-            <span id="roster-label"></span>
-            <button id="roster-next" class="secondary" type="button">Next</button>
-            <button id="roster-last" class="secondary page-jump" type="button" title="Last page" aria-label="Last page">»</button>
-          </nav>
+
+          <div id="panel-activity" class="tab-panel" role="tabpanel" aria-labelledby="tab-activity" hidden>
+            <!-- a j-space system's newest upwell structure or control tower lost, however long ago -->
+            <section id="structure-loss" class="structure-loss" hidden></section>
+            <p id="activity-span" class="activity-span"></p>
+            <div class="activity-scroll">
+              <div id="activity-grid" class="activity" role="table" aria-label="Killmails by day of the week and hour"></div>
+            </div>
+            <p id="activity-note" class="muted activity-note"></p>
+            <p id="activity-empty" class="muted" hidden>No killmails to chart.</p>
+          </div>
+
+          <div id="panel-fleetmates" class="tab-panel" role="tabpanel" aria-labelledby="tab-fleetmates" hidden>
+            <table>
+              <thead>
+                <tr><th></th><th>Pilot</th><th class="num">Killmails Shared</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
+              </thead>
+              <tbody id="fleetmates-body"></tbody>
+            </table>
+            <p id="fleetmates-empty" class="muted" hidden>No related pilots found on the collected killmails.</p>
+          </div>
+
+          <div id="panel-members" class="tab-panel" role="tabpanel" aria-labelledby="tab-members" hidden>
+            <table>
+              <thead>
+                <tr><th></th><th>Pilot</th><th class="num">Killmails</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
+              </thead>
+              <tbody id="members-body"></tbody>
+            </table>
+            <p id="members-empty" class="muted" hidden>No members found on the collected killmails.</p>
+          </div>
+
+          <div id="panel-allies" class="tab-panel" role="tabpanel" aria-labelledby="tab-allies" hidden>
+            <p class="row-detail allies-note">Potential allies only: groups seen on this target's kills, not confirmed relationships.</p>
+            <!-- a corp or alliance target's holdings, with the kills each shared with it -->
+            <p id="allies-holdings" class="allies-holdings" hidden>
+              <span class="row-detail">Holdings:</span>
+              <span id="allies-holdings-list"></span>
+            </p>
+            <table>
+              <thead>
+                <tr><th></th><th>Alliance or Corporation</th><th class="num" title="The target's kills they were on">Kills Together</th><th class="num">Pilots</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
+              </thead>
+              <tbody id="allies-body"></tbody>
+            </table>
+            <p id="allies-empty" class="muted" hidden>No alliances or corporations outside the target's alliance were on its kills in the collected killmails.</p>
+            <p id="allies-hint" class="row-detail allies-hint">Right-click an ally to add it to the target's holdings, ignore it for this target, or open it.</p>
+            <!-- what is left out of the allies: those the Hide killed allies preference hid, then those ignored for this target. The x on one brings it back. -->
+            <div id="allies-ignored" class="allies-ignored" hidden>
+              <span class="row-detail">Left out:</span>
+              <span id="allies-ignored-list" class="allies-ignored-list"></span>
+            </div>
+          </div>
+
+          <div id="panel-structures" class="tab-panel" role="tabpanel" aria-labelledby="tab-structures" hidden>
+            <div class="subtabs" role="tablist" aria-label="Structures">
+              <button id="subtab-structures-used" class="subtab" type="button" role="tab" aria-controls="structures-used" aria-selected="true">Used in Kills <span id="structures-used-count" class="tab-count"></span></button>
+              <button id="subtab-structures-destroyed" class="subtab" type="button" role="tab" aria-controls="structures-destroyed" aria-selected="false">Destroyed <span id="structures-destroyed-count" class="tab-count"></span></button>
+            </div>
+            <div id="structures-used" role="tabpanel" aria-labelledby="subtab-structures-used">
+              <table>
+                <thead>
+                  <tr><th></th><th>Structure</th><th>Owner</th><th class="num" title="Kills it was on">Kills</th><th>Status</th></tr>
+                </thead>
+                <tbody id="structures-used-body"></tbody>
+              </table>
+              <p id="structures-used-empty" class="muted" hidden>None of the target's structures were on its kills on zKillboard.</p>
+            </div>
+            <div id="structures-destroyed" role="tabpanel" aria-labelledby="subtab-structures-destroyed" hidden>
+              <table>
+                <thead>
+                  <tr><th></th><th>Structure</th><th>Owner</th><th>Destroyed</th><th class="num" title="The target's pilots on the killmail">Pilots</th></tr>
+                </thead>
+                <tbody id="structures-destroyed-body"></tbody>
+              </table>
+              <p id="structures-destroyed-empty" class="muted" hidden>The target took part in destroying no structures on the collected killmails.</p>
+            </div>
+          </div>
+
+          <div id="panel-pilots" class="tab-panel" role="tabpanel" aria-labelledby="tab-pilots" hidden>
+            <table>
+              <thead>
+                <tr><th></th><th>Pilot</th><th class="num">Killmails</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
+              </thead>
+              <tbody id="pilots-body"></tbody>
+            </table>
+            <p id="pilots-empty" class="muted" hidden>No pilots found on the collected killmails.</p>
+          </div>
+
+          <div id="panel-corps" class="tab-panel" role="tabpanel" aria-labelledby="tab-corps" hidden>
+            <table>
+              <thead>
+                <tr><th></th><th>Corporation</th><th class="num">Killmails</th><th class="num">Kills</th><th class="num">Losses</th><th class="num">Pilots</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
+              </thead>
+              <tbody id="corps-body"></tbody>
+            </table>
+            <p id="corps-empty" class="muted" hidden>No corporations found on the collected killmails.</p>
+          </div>
+
+          <div id="panel-systems" class="tab-panel" role="tabpanel" aria-labelledby="tab-systems" hidden>
+            <table>
+              <thead>
+                <tr><th></th><th>System</th><th class="num">Killmails</th><th class="num">Kills</th><th class="num">Losses</th><th class="num" title="Days with killmails, then in parentheses the days from the first killmail to the last">Unique Days</th></tr>
+              </thead>
+              <tbody id="systems-body"></tbody>
+            </table>
+            <p id="systems-empty" class="muted" hidden>No systems found on the collected killmails.</p>
+          </div>
+
+          <div id="panel-pi" class="tab-panel" role="tabpanel" aria-labelledby="tab-pi" hidden>
+            <div id="pi-list" class="pi-pilots"></div>
+            <p id="pi-empty" class="muted" hidden>No hauler losses near this system's planets, and no ships lost with PI aboard, on the collected killmails.</p>
+          </div>
+
+          <div id="panel-ratters" class="tab-panel" role="tabpanel" aria-labelledby="tab-ratters" hidden>
+            <div id="ratters-list" class="pi-pilots"></div>
+            <p id="ratters-empty" class="muted" hidden>No ships lost with NPCs on the killmail in this system, on the collected killmails.</p>
+          </div>
+
+          <div id="panel-capitals" class="tab-panel" role="tabpanel" aria-labelledby="tab-capitals" hidden>
+            <div id="capitals-list" class="capitals"></div>
+            <p id="capitals-empty" class="muted" hidden>No members flying capitals on the collected killmails.</p>
+          </div>
+
+          <div id="panel-fits" class="tab-panel" role="tabpanel" aria-labelledby="tab-fits" hidden>
+            <div id="fits-layout" class="fits">
+              <ul id="fits-list" class="fits-list"></ul>
+              <section class="fit-view">
+                <div class="fit-view-head">
+                  <span id="fit-view-title" class="fit-view-title"></span>
+                  <button id="fit-copy" class="secondary" type="button" disabled>Copy EFT</button>
+                </div>
+                <p id="fit-view-note" class="muted" hidden></p>
+                <pre id="fit-view-eft" class="fit-eft"></pre>
+              </section>
+            </div>
+            <p id="fits-empty" class="muted" hidden>No losses with a fit on the collected killmails.</p>
+          </div>
+
+          <div id="panel-roster" class="tab-panel paged-panel" role="tabpanel" aria-labelledby="tab-roster" hidden>
+            <div class="panel-scroll">
+              <table>
+                <thead id="roster-head"></thead>
+                <tbody id="roster-body"></tbody>
+              </table>
+            </div>
+            <p id="roster-status" class="muted" hidden></p>
+            <nav id="roster-pager" class="pager" hidden>
+              <button id="roster-first" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
+              <button id="roster-prev" class="secondary" type="button">Previous</button>
+              <span id="roster-label"></span>
+              <button id="roster-next" class="secondary" type="button">Next</button>
+              <button id="roster-last" class="secondary page-jump" type="button" title="Last page" aria-label="Last page">»</button>
+            </nav>
+          </div>
         </div>
       </div>
     </section>

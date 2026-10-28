@@ -161,6 +161,17 @@ func TestSettings(t *testing.T) {
 		assert.Nil(t, loadSettings(path).TabOrder)
 	})
 
+	t.Run("the sidebar starts in full and keeps being collapsed once it is", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "settings.json")
+		app := &App{settingsPath: path, settings: defaultSettings()}
+		assert.False(t, app.GetSettings().SidebarCollapsed)
+
+		assert.NoError(t, app.SetSidebarCollapsed(true))
+
+		assert.True(t, app.GetSettings().SidebarCollapsed)
+		assert.True(t, loadSettings(path).SidebarCollapsed)
+	})
+
 	t.Run("preferences become killmail limits", func(t *testing.T) {
 		now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 

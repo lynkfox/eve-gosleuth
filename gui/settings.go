@@ -27,6 +27,8 @@ type Settings struct {
 	Theme    string   `json:"theme"`              // the frontend theme key, empty for the default theme
 	CacheDir string   `json:"cacheDir,omitempty"` // the folder the user moved the cache to, empty for the default. Changed with ChooseCacheFolder, not the Save button.
 	TabOrder []string `json:"tabOrder,omitempty"` // the intel tabs' ids in the order the user dragged them into, empty for the default order. Changed with SetTabOrder.
+	// the report's tab sidebar was shrunk to its icons when the app last ran, false (shown in full) on a first run. Changed with SetSidebarCollapsed.
+	SidebarCollapsed bool `json:"sidebarCollapsed,omitempty"`
 	Preferences
 }
 
@@ -206,6 +208,22 @@ func (a *App) SetTabOrder(order []string) error {
 	valid := validTabOrder(order)
 	if err := a.updateSettings(func(settings *Settings) { settings.TabOrder = valid }); err != nil {
 		return errors.New("Could not save the tab order, it will reset when the app restarts")
+	}
+	return nil
+}
+
+/*
+	SetSidebarCollapsed saves whether the report's tab sidebar is shrunk to its icons, so the next run opens it the same way
+
+Parameters:
+  - collapsed: true when the sidebar shows only its icons
+
+Returns:
+  - error: a user readable message if it could not be saved. It still applies for this session.
+*/
+func (a *App) SetSidebarCollapsed(collapsed bool) error {
+	if err := a.updateSettings(func(settings *Settings) { settings.SidebarCollapsed = collapsed }); err != nil {
+		return errors.New("Could not save the sidebar's state, it will reset when the app restarts")
 	}
 	return nil
 }
