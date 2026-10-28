@@ -435,7 +435,7 @@ function renderTarget(result) {
 
 // targetCollapsed is true while the pull bar has the target panel pulled shut
 let targetCollapsed = false;
-// holdingsTucked is true while the pull bar has the target's holdings put away, the first step shut for a target with any. It stays for the next search, as being shut does.
+// holdingsTucked is true while the pull bar has the target's holdings put away, the first step shut for a target with any. It stays for the next search only if that target has holdings too.
 let holdingsTucked = false;
 // targetHasHoldings is true while the target shown has holding links saved, at either end
 let targetHasHoldings = false;
@@ -655,6 +655,8 @@ async function saveHolding() {
     const holdings = await backend().SaveHolding(target.id, target.type, target.name, el("holding-name").value, el("holding-type").value, el("holding-note").value);
     el("holding-dialog").close();
     if (shownTarget === target) {
+      // put away, the holding just saved would not show
+      holdingsTucked = false;
       renderHoldings(holdings);
       holdingsChanged();
     }
@@ -2054,6 +2056,8 @@ function wireTabMoving(tab) {
 
 // sidebarCollapsed is whether the user shrank the sidebar to its icons, saved for the next run
 let sidebarCollapsed = false;
+// sidebarSaving is the last save of sidebarCollapsed, the next waiting on it
+let sidebarSaving = Promise.resolve();
 
 // NARROW_WINDOW matches a window too narrow for the full sidebar, which then shows only its icons whatever was chosen
 const NARROW_WINDOW = window.matchMedia("(max-width: 760px)");
@@ -2270,7 +2274,7 @@ const GLANCE_CARDS = {
       imageUrl: corp.imageUrl,
       detail: glanceGroup(null, corp.alliance),
       value: plural(corp.killmails, "killmail", "killmails"),
-      menu: [entitySection({ type: "CORPORATION", id: corp.id, name: corp.name, zkillUrl: corp.zkillUrl, evewhoUrl: corp.evewhoUrl }), ...groupSections(null, corp.alliance)],
+      menu: corpSections(corp),
     })),
   }),
   "tab-systems": (report) => ({
@@ -2957,8 +2961,7 @@ function renderCorporations(corporations) {
     nameCell.append(name, detail);
 
     row.append(avatarCell(corporation.name, corporation, corporation.imageUrl), nameCell, numberCell(corporation.killmails), numberCell(corporation.kills), numberCell(corporation.losses), numberCell(corporation.pilots), uniqueDaysCell(corporation.uniqueDays, corporation.firstSeen, corporation.lastSeen));
-    const corp = { type: "CORPORATION", id: corporation.id, name: corporation.name, zkillUrl: corporation.zkillUrl, evewhoUrl: corporation.evewhoUrl };
-    return withMenu(row, [entitySection(corp), ...groupSections(null, corporation.alliance)]);
+    return withMenu(row, corpSections(corporation));
   });
 
   el("corps-body").replaceChildren(...rows);
@@ -3089,6 +3092,14 @@ function pilotSections(pilot) {
   return [
     entitySection({ type: "PILOT", id: pilot.id, name: pilot.name, zkillUrl: pilot.zkillUrl, evewhoUrl: pilot.evewhoUrl }),
     ...groupSections(pilot.corporation, pilot.alliance),
+  ];
+}
+
+// corpSections are a corp row's menu, ie in Top Corps: the corp, then its alliance
+function corpSections(corp) {
+  return [
+    entitySection({ type: "CORPORATION", id: corp.id, name: corp.name, zkillUrl: corp.zkillUrl, evewhoUrl: corp.evewhoUrl }),
+    ...groupSections(null, corp.alliance),
   ];
 }
 
@@ -4588,7 +4599,9 @@ for (const tab of document.querySelectorAll(".tab")) tab.addEventListener("click
 for (const tab of el("tab-list").querySelectorAll(".tab")) wireTabMoving(tab);
 el("sidebar-toggle").addEventListener("click", () => {
   setSidebarCollapsed(!sidebarCollapsed);
-  backend().SetSidebarCollapsed(sidebarCollapsed).catch((err) => setStatus(String(err), true));
+  // one save at a time, in the order clicked, so a quick double click can not save the older state last
+  const collapsed = sidebarCollapsed;
+  sidebarSaving = sidebarSaving.then(() => backend().SetSidebarCollapsed(collapsed)).catch((err) => setStatus(String(err), true));
 });
 NARROW_WINDOW.addEventListener("change", showSidebar);
 for (const subtab of document.querySelectorAll("#panel-structures .subtab")) {
