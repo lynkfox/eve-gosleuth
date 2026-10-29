@@ -108,9 +108,11 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 		}
 	}
 	podOf := podsWithShips(ships, pods, battleOf)
+	doctrineIn := aggregate.FleetDoctrineInBattle(killmails, target, battleOf)
 
 	groups := []*FitGroup{}
 	byKey := map[string]*FitGroup{}
+	lossesOf := map[*FitGroup][]*retrieval.Killmail{}
 	for _, km := range ships {
 		loss := FitLoss{
 			KillmailID:   km.KillmailID,
@@ -146,6 +148,9 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 		}
 		loss.EFT = fit.EFT(retrieval.EFTTitle(km))
 		loss.Tags = fit.TagsWith(retrieval.FitTagContext{NPCs: aggregate.PvENPCs(km.Attackers, esiClient)})
+		if doctrine, found := doctrineIn[km.KillmailID]; found {
+			loss.Tags = retrieval.MergeFitTags(loss.Tags, []retrieval.FitTag{doctrine})
+		}
 
 		key := fitKey(km.Victim.Ship.ItemID, km.Victim.Fit)
 		group := byKey[key]
@@ -161,12 +166,19 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 			groups = append(groups, group)
 		}
 		group.Losses = append(group.Losses, loss)
+		lossesOf[group] = append(lossesOf[group], km)
 		group.Implants = group.Implants || loss.PodKillmailID != 0
 		group.Abyssal = group.Abyssal || hasAbyssal(km.Victim.Fit)
 	}
 
 	fits := make([]FitGroup, 0, len(groups))
 	for _, group := range groups {
+		// lost again and again makes every loss of it a doctrine, its reasons after those of its battle
+		if repeated, found := aggregate.FleetDoctrineRepeated(lossesOf[group], target); found {
+			for index := range group.Losses {
+				group.Losses[index].Tags = withDoctrineReasons(group.Losses[index].Tags, repeated)
+			}
+		}
 		slices.SortStableFunc(group.Losses, func(a, b FitLoss) int {
 			if byImplants := cmp.Compare(len(b.Fit.Implants), len(a.Fit.Implants)); byImplants != 0 {
 				return byImplants
@@ -198,6 +210,17 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 		return b.LastLost.Compare(a.LastLost)
 	})
 	return fits
+}
+
+// withDoctrineReasons adds a Fleet Doctrine tag to a loss's tags, or its reasons to the one the loss has from its battle
+func withDoctrineReasons(tags []retrieval.FitTag, doctrine retrieval.FitTag) []retrieval.FitTag {
+	at := slices.IndexFunc(tags, func(tag retrieval.FitTag) bool { return tag.Name == doctrine.Name })
+	if at < 0 {
+		return retrieval.MergeFitTags(tags, []retrieval.FitTag{doctrine})
+	}
+	tags = slices.Clone(tags)
+	tags[at].Reasons = append(slices.Clone(tags[at].Reasons), doctrine.Reasons...)
+	return tags
 }
 
 /*

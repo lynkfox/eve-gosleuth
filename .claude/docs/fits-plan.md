@@ -116,7 +116,7 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 
 ## Phase 3: tags
 
-**Decided 2026-10-28.** **Status (2026-10-28): scoring built.** `comm.LoadFitTagRules` loads the rules (merged over by an edited copy like the other files), `retrieval.Fit.Tags()` scores them, and `gui.FitLoss.Tags` / `FitGroup.Tags` (its first loss's) carry them to the frontend. The Fits tab shows them (see features.md) and the user guide covers the file. The rats-on-the-killmail nudge toward Ratting built 2026-10-29. Not yet done: Fleet Doctrine, and tuning the weights against real fits.
+**Decided 2026-10-28.** **Status (2026-10-28): scoring built.** `comm.LoadFitTagRules` loads the rules (merged over by an edited copy like the other files), `retrieval.Fit.Tags()` scores them, and `gui.FitLoss.Tags` / `FitGroup.Tags` (its first loss's) carry them to the frontend. The Fits tab shows them (see features.md) and the user guide covers the file. Fleet Doctrine built 2026-10-29 (see features.md), as was the rats-on-the-killmail nudge toward Ratting. Not yet done: tuning the weights against real fits.
 
 Tags describe what a fit brings, for intel: what it shoots with, how it tanks, and what it is for.
 
@@ -155,6 +155,7 @@ Tags describe what a fit brings, for intel: what it shoots with, how it tanks, a
   - **In one battle:** a loss qualifies when its battle (`aggregate.CollectedData.BattleOfKillmail`) has at least 5 ships of its hull on the victim's side, and logi there too. The victim's side is the target and its holdings in that battle, from their kills and losses there; the enemy flying the same hull doesn't count. A merged fit gets the tag if any of its losses qualifies.
   - **Across battles:** the same fit (one merged row, `fitKey`) was lost at least 5 times within one alliance, by at least 5 different pilots, in any battles. Losses count by the victim's alliance at the time, not their corp, so pilots of different corps in one alliance add up; the target's holdings count as one with it.
   - Every number (the battle's hull count, the logi needed, the losses and pilots across battles) is in `fit_tag_rules.json`.
+  - The logi hulls are `logi_groups` and `logi_types` in `ships.json` (2026-10-29: T2 logi, logi frigates, force auxiliaries, and the eight T1 logi cruisers and frigates). The victim's side is the target and its holdings plus the victim's alliance, or corp outside one, so a pilot target's fleetmates count.
 - **Rats on the killmail** (2026-10-29): an `npcs` signal matches the NPC attackers on a loss's killmail (`Fit.TagsWith(FitTagContext)`), not the fit. Ratting counts them `once` at 1, the user's choice: a nudge that needs another PvE sign. Gate and station sentries (99), CONCORD (301), police (182), and faction navies (288) are `npc_not_rat_groups` in `ships.json`, matched by the ESI group of the NPC's ship as the extract has no NPCs; site sentries (383) stay rats. The Ratters tab skips them too.
 - Other tags are read from the fit alone. zKill's `npc` and `solo` labels belong to single losses, so they don't make tags.
 

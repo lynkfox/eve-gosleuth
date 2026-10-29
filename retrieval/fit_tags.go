@@ -25,9 +25,10 @@ type FitTag struct {
 // FitTagReason is one module, drone, hull, or other tag that gave a tag weight
 type FitTagReason struct {
 	Name   string  `json:"name"`
-	Count  int     `json:"count"`  // how many of it, 0 for another tag
-	Weight float64 `json:"weight"` // all of them together, negative for one counting against the tag
-	Bonus  float64 `json:"bonus"`  // the part of Weight the hull's bonus for it added, 0 for none
+	Count  int     `json:"count"`            // how many of it, 0 for another tag
+	Weight float64 `json:"weight"`           // all of them together, negative for one counting against the tag
+	Bonus  float64 `json:"bonus"`            // the part of Weight the hull's bonus for it added, 0 for none
+	Needed int     `json:"needed,omitempty"` // for a reason counted against a number rather than weighed, ie Fleet Doctrine's hulls in a battle: the Count it needed
 }
 
 // FitTagContext is what a loss's killmail tells about its fit beyond the fit itself
@@ -57,7 +58,7 @@ func (f *Fit) Tags() []FitTag {
 /*
 	TagsWith reads the fit's tags by the rules in fit_tag_rules.json: those whose weight reaches their threshold, with each of the rule's requires matched and none of its forbids, only the first listed of each exclusive set.
 	A rule's tag_weights are added once the other tags are settled, so they read only tags without tag_weights of their own.
-	The Fleet Doctrine tag is read from battles and other losses, not the fit, so it is never here.
+	The Fleet Doctrine tag is read from battles and other losses, not the fit, so it is never here (see aggregate.FleetDoctrine).
 
 Parameters:
   - context: what the loss's killmail adds, ie the rats on it, which only NPCs signals read

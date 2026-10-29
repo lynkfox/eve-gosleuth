@@ -22,6 +22,8 @@ var (
 	FitIgnoredCategories = newStaticValues() // FitIgnoredCategories, FitIgnoredGroups, and FitIgnoredTypes are the hulls whose losses are not shown as fits (FitHullIgnored)
 	FitIgnoredGroups     = newStaticValues()
 	FitIgnoredTypes      = newStaticValues()
+	LogiGroups           = newStaticValues() // LogiGroups and LogiTypes are the logistics hulls a fleet doctrine flies with: T2 logi, logi frigates, force auxiliaries, and the T1 logi cruisers and frigates
+	LogiTypes            = newStaticValues()
 	NPCNotRatGroups      = newStaticValues() // NPCs that don't mean PvE: gate and station sentry guns, CONCORD, police, and faction navies. Matched by the ESI's group of the NPC's ship, as fit_types.json has no NPCs.
 
 	UpwellStructureGroups = newStaticValues() // the upwell structures the Structures tab and a j-space system's last structure lost cover
@@ -57,6 +59,8 @@ func sectionedFiles() []sectionedFile {
 			"fit_ignored_categories": &FitIgnoredCategories,
 			"fit_ignored_groups":     &FitIgnoredGroups,
 			"fit_ignored_types":      &FitIgnoredTypes,
+			"logi_groups":            &LogiGroups,
+			"logi_types":             &LogiTypes,
 			"npc_not_rat_groups":     &NPCNotRatGroups,
 		}},
 		{"structures.json", map[string]**StaticValues{

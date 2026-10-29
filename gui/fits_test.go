@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -277,4 +278,63 @@ func TestBuildFitsGivesShipsTheirPodsImplants(t *testing.T) {
 	assert.Equal(t, []int{1, 3}, []int{fits[0].Losses[0].KillmailID, fits[0].Losses[1].KillmailID}, "lost last at 3, so listed before the refit lost at 21")
 	assert.Equal(t, 21, fits[1].Losses[0].KillmailID)
 	assert.Equal(t, start.Add(10*time.Hour), fits[0].LastLost, "its newest loss, not its first")
+}
+
+func TestBuildFitsFleetDoctrine(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+	assert.NoError(t, comm.InitStaticData(staticdata.Files))
+
+	const alliance = 99000001
+	target := &retrieval.IntelTarget{IDNumber: alliance, TypeOfEntity: types.ALLIANCE}
+	start := time.Date(2026, 10, 29, 20, 0, 0, 0, time.UTC)
+	ferox := &retrieval.Item{ItemID: 16227, Name: "Ferox"}
+	loss := func(id int, pilot int) *retrieval.Killmail {
+		return &retrieval.Killmail{
+			KillmailID:   id,
+			KillmailTime: start.Add(time.Duration(id) * time.Hour),
+			Victim: &retrieval.KillmailVictim{
+				Pilot:          &retrieval.Pilot{CharacterID: pilot},
+				AllianceAtKill: &retrieval.Alliance{AllianceID: alliance},
+				Ship:           ferox,
+				Fit:            &retrieval.Fit{Hull: ferox, Mids: []*retrieval.FittedModule{{Module: &retrieval.Item{ItemID: 3841, Name: "Large Shield Extender II"}}}},
+			},
+		}
+	}
+	// the first in a battle with four other Feroxes and an Osprey on its side
+	inBattle := loss(1, 1)
+	escort := &retrieval.Killmail{
+		KillmailID: 100, KillmailTime: start,
+		Victim: &retrieval.KillmailVictim{Pilot: &retrieval.Pilot{CharacterID: 900}, Ship: &retrieval.Item{ItemID: 587, Name: "Rifter"}},
+	}
+	for pilot, shipID := range map[int]int{11: 16227, 12: 16227, 13: 16227, 14: 16227, 15: 620} {
+		escort.Attackers = append(escort.Attackers, &retrieval.KillmailAttacker{
+			Pilot: &retrieval.Pilot{CharacterID: pilot}, Ship: &retrieval.Item{ItemID: shipID}, AllianceAtKill: &retrieval.Alliance{AllianceID: alliance},
+		})
+	}
+	battles := map[int]string{1: "b", 100: "b"}
+
+	t.Run("a loss in a doctrine fleet gives its fit the tag", func(t *testing.T) {
+		fits := buildFits([]*retrieval.Killmail{inBattle, escort, loss(2, 2)}, target, battles, nil)
+
+		assert.Equal(t, "Fleet Doctrine", fits[0].Tags[0].Name)
+		named := func(loss FitLoss) bool {
+			return slices.ContainsFunc(loss.Tags, func(tag retrieval.FitTag) bool { return tag.Name == "Fleet Doctrine" })
+		}
+		assert.Equal(t, []bool{false, true}, []bool{named(fits[0].Losses[0]), named(fits[0].Losses[1])}, "only the loss in that battle")
+	})
+
+	t.Run("lost again and again, every loss has it, after its battle's reasons", func(t *testing.T) {
+		fits := buildFits([]*retrieval.Killmail{inBattle, escort, loss(2, 2), loss(3, 3), loss(4, 4), loss(5, 5)}, target, battles, nil)
+
+		for _, each := range fits[0].Losses {
+			assert.Equal(t, "Fleet Doctrine", each.Tags[0].Name, "loss %d", each.KillmailID)
+		}
+		first := fits[0].Losses[len(fits[0].Losses)-1]
+		assert.Equal(t, 1, first.KillmailID)
+		reasons := []string{}
+		for _, reason := range first.Tags[0].Reasons {
+			reasons = append(reasons, reason.Name)
+		}
+		assert.Equal(t, []string{"Ferox in its battle", "Logi in its battle", "Losses of this fit in one alliance", "Pilots who lost it"}, reasons)
+	})
 }

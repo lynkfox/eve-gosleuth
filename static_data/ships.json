@@ -48,6 +48,21 @@
         "89648": "Venture Consortium Issue",
         "91174": "Perseverance"
     },
+    "logi_groups": {
+        "832": "Logistics",
+        "1527": "Logistics Frigate",
+        "1538": "Force Auxiliary"
+    },
+    "logi_types": {
+        "582": "Bantam",
+        "590": "Inquisitor",
+        "592": "Navitas",
+        "599": "Burst",
+        "620": "Osprey",
+        "625": "Augoror",
+        "631": "Scythe",
+        "634": "Exequror"
+    },
     "npc_not_rat_groups": {
         "99": "Sentry Gun",
         "182": "Police Drone",

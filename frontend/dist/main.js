@@ -1953,9 +1953,9 @@ function fitHasTag(fit, tag) {
   return fit.losses.some((loss) => (loss.tags || []).some((each) => each.name === tag.name));
 }
 
-// fitTagReasons is a tag's hover text: its name, and the modules that gave it weight
+// fitTagReasons is a tag's hover text: its name, and the modules that gave it weight, or for Fleet Doctrine the counts it reached
 function fitTagReasons(tag) {
-  const reasons = (tag.reasons || []).filter((reason) => reason.weight > 0).map((reason) => (reason.count > 1 ? `${reason.name} ×${reason.count}` : reason.name));
+  const reasons = (tag.reasons || []).filter((reason) => reason.weight > 0 || reason.needed).map((reason) => (reason.count > 1 ? `${reason.name} ×${reason.count}` : reason.name));
   return reasons.length ? `${tag.name}: ${reasons.join(", ")}` : tag.name;
 }
 
@@ -1968,6 +1968,7 @@ function fitTagWeight(weight, signed = false) {
 /*
   showFitTagTip fills the fitting window's tag tip with how a tag was reached and puts it under the tag: each module, drone, hull, or other tag with its count and the weight it gave,
   the part a hull bonus added on its own line beneath it so the rows still add up, then the total against the threshold, and the share of the racks against its own threshold for a tag with one (Firewaller).
+  A reason counted against a number rather than weighed (Fleet Doctrine's hulls, logi, losses, and pilots) shows its count against the number needed.
   One tip serves every tag, fixed to the page, so the window's scrolling can't clip it.
 */
 function showFitTagTip(chip, tag) {
@@ -1991,6 +1992,10 @@ function showFitTagTip(chip, tag) {
     table.append(line);
   };
   for (const reason of tag.reasons || []) {
+    if (reason.needed) {
+      row(reason.name, `${reason.count} of ${reason.needed} needed`);
+      continue;
+    }
     const counted = reason.count > 1 ? `${reason.name} ×${reason.count}` : reason.name;
     const bonus = reason.bonus || 0;
     row(reason.count === 0 ? `${counted} tag` : counted, fitTagWeight(reason.weight - bonus, true), reason.weight < 0 ? "fit-tag-tip-against" : "");

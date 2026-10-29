@@ -97,6 +97,8 @@ Each section is a list of `"id": "label"` entries.
 | `fit_ignored_categories` | categories | Losses not shown on the Fits tab, by category, group, or single type: capsules, shuttles, haulers, mining ships, structures, ... |
 | `fit_ignored_groups` | ship groups | |
 | `fit_ignored_types` | ship types | |
+| `logi_groups` | ship groups | Logistics hulls, which the Fits tab's Fleet Doctrine tag looks for in a battle: T2 logi, logi frigates, force auxiliaries |
+| `logi_types` | ship types | Logistics hulls outside those groups: the T1 logi cruisers and frigates |
 | `npc_not_rat_groups` | NPC groups | NPCs that don't mean the pilot was ratting: gate and station sentry guns, CONCORD, police, faction navies. The Ratters tab and the Fits tab's Ratting tag skip them. NPCs aren't in `fit_types.json`, so these are matched by the group the ESI gives the NPC's ship. |
 
 For example, to stop showing the Astero's losses on the Fits tab, and stop freighters counting as capitals:
@@ -233,7 +235,18 @@ At the top of the file:
 - `bonus_ignores`: bonus lines containing one of these words never count for `bonused_by`. A "bonus to Sensor Dampener resistance" is about what the hull resists, not what it fits.
 - `exclusive`: sets of tags of which only the first listed that the fit has applies. Built in, a fit is only one of Active, Passive, or Buffer, in that order: any repairer makes a tank active, however much buffer it has.
 
-`signals`, `requires`, and `forbids` are lists, so your copy of one replaces it whole. To change only a tag's threshold, give just that: `{"tags": {"Neut": {"threshold": 2}}}`. To remove a tag, set it to `null`. Fleet Doctrine is not read from the fit; its numbers are under `fleet_doctrine`.
+`signals`, `requires`, and `forbids` are lists, so your copy of one replaces it whole. To change only a tag's threshold, give just that: `{"tags": {"Neut": {"threshold": 2}}}`. To remove a tag, set it to `null`.
+
+Fleet Doctrine is not read from the fit, but from the battles and losses around it. Its numbers are under `fleet_doctrine`, and a fit gets the tag if either rule holds:
+
+| Field | Meaning |
+|---|---|
+| `battle_hulls` | In one battle, at least this many pilots on the loss's side flew its hull, the pilot who lost it included. Their side is the target and its holdings, and the pilot's own alliance (or corp, outside an alliance). 0 turns this rule off. |
+| `battle_logi` | ...and at least this many on that side flew logi, by `logi_groups` and `logi_types` in `ships.json` |
+| `repeat_losses` | Or the same fit was lost at least this many times within one alliance, the target and its holdings counting as one. 0 turns this rule off. |
+| `repeat_pilots` | ...by at least this many different pilots |
+
+Hovering the tag shows each count against the number it needed.
 
 ### `jspace_statics.json`
 
