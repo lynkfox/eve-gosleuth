@@ -116,7 +116,7 @@ func MergeFitTags(lists ...[]FitTag) []FitTag {
 	return merged
 }
 
-// sortFitTags orders tags by Priority, those without one last, then name
+// sortFitTags orders tags by Priority, those without one last, then those sharing one by how far past their threshold they are (passedBy), then name
 func sortFitTags(tags []FitTag) {
 	slices.SortFunc(tags, func(a, b FitTag) int {
 		if a.Priority != b.Priority {
@@ -125,8 +125,24 @@ func sortFitTags(tags []FitTag) {
 			}
 			return cmp.Compare(a.Priority, b.Priority)
 		}
+		if a.Priority != 0 {
+			if order := cmp.Compare(passedBy(b), passedBy(a)); order != 0 {
+				return order
+			}
+		}
 		return cmp.Compare(a.Name, b.Name)
 	})
+}
+
+// passedBy is how many times over a tag reaches its threshold, or its share threshold for one without a threshold, ie 2 for three points against Tackle's 1.5
+func passedBy(tag FitTag) float64 {
+	switch {
+	case tag.Threshold > 0:
+		return tag.Weight / tag.Threshold
+	case tag.ShareThreshold > 0:
+		return tag.Share / tag.ShareThreshold
+	}
+	return 0
 }
 
 // tagParts lists the fit's hull, and its modules, drones, and implants with the size of the rack each is a share of. Drones, fighters, implants, and the hull are a share of an average of the high, mid, and low racks.

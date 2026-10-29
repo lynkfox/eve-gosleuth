@@ -197,6 +197,14 @@ func TestFitTagRules(t *testing.T) {
 		assert.Nil(t, tagNamed(tagFit(t, thorax, nil, nil, nil, map[int]int{hobgoblin: 5, hammerhead: 5}).Tags(), "Swarm"), "0.5 for drones on a hull without the bonus")
 	})
 
+	t.Run("tags sharing a priority go by how far past their threshold they are", func(t *testing.T) {
+		ewar := retrieval.FitTag{Name: "EWAR", Priority: 5, Weight: 1.5, Threshold: 1.5}
+		tackle := retrieval.FitTag{Name: "Tackle", Priority: 5, Weight: 4.5, Threshold: 2}
+		firewall := retrieval.FitTag{Name: "Firewall", Priority: 5, Share: 1, ShareThreshold: 0.75}
+		armor := retrieval.FitTag{Name: "Armor", Priority: 9, Weight: 9, Threshold: 2}
+		assert.Equal(t, []string{"Tackle", "Firewall", "EWAR", "Armor"}, tagNames(retrieval.MergeFitTags([]retrieval.FitTag{armor, ewar, firewall, tackle})))
+	})
+
 	t.Run("only the first listed of an exclusive set applies, however heavy the rest", func(t *testing.T) {
 		assert.Equal(t, []string{"Passive"}, tagNames(tagFit(t, heron, nil, []int{shieldRecharger, largeShieldExtender, largeShieldExtender}, nil, nil).Tags()))
 		assert.Equal(t, []string{"Buffer"}, tagNames(tagFit(t, heron, nil, []int{largeShieldExtender, largeShieldExtender}, nil, nil).Tags()))

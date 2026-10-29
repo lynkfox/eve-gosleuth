@@ -205,7 +205,7 @@ A tag's fields:
 | Field | Meaning |
 |---|---|
 | `meaning` | What it means, shown in the tab's key |
-| `priority` | The order a fit shows its tags in, lowest first. A row shows its first role and the next three tags. Tags without one come after the rest. |
+| `priority` | The order a fit shows its tags in, lowest first. A row shows its first role and the next three tags. Tags without one come after the rest. Tags may share a priority: the one furthest past its threshold comes first, so three points beat a single dampener where Tackle and EWAR share one. |
 | `role` | `true` for a tag that can name a fit's row, as its first role by `priority` does |
 | `threshold` | The total weight it needs to apply |
 | `share_threshold` | The share of their racks its modules must fill: Firewaller's 0.75 needs smartbombs in three quarters of the high slots. This is on top of threshold above, though it can be its own thing. |
