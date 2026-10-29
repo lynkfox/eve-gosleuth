@@ -112,6 +112,7 @@ const (
 	hobgoblin              = 2456
 	largeAncillaryArmorRep = 33103
 	heavyCapBooster        = 3578
+	geri                   = 74141
 	hammerhead             = 2183
 	warrior                = 2486
 	hobgoblinSD            = 23715
@@ -399,6 +400,11 @@ func TestEmbeddedFitTagRules(t *testing.T) {
 	t.Run("a drone hull is drones without any on the killmail, drones alone on another hull are not", func(t *testing.T) {
 		assert.Contains(t, tagNames(tagFit(t, vexor, nil, nil, nil, nil).Tags()), "Drones")
 		assert.NotContains(t, tagNames(tagFit(t, thorax, nil, nil, nil, map[int]int{warrior: 10}).Tags()), "Drones", "ten in the bay count as one kind")
+	})
+
+	t.Run("a hull bonused only for web drones is not a drone hull", func(t *testing.T) {
+		assert.NotContains(t, tagNames(tagFit(t, geri, nil, nil, nil, nil).Tags()), "Drones")
+		assert.NotContains(t, tagNames(tagFit(t, geri, nil, nil, nil, map[int]int{hobgoblin: 2}).Tags()), "Close")
 	})
 
 	t.Run("support drones nudge a role, but never make one", func(t *testing.T) {

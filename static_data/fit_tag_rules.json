@@ -43,12 +43,12 @@
     {"note": "remote repair augmentor rigs", "types": [25900, 27068, 31073, 31075, 26298, 31077, 31079, 31081], "weight": 0.5},
     {"note": "logistic drones, once however many: a nudge, more on a hull bonused for them", "groups": [640], "once": true, "weight": 0.5, "bonused_by": ["Logistic Drone", "Logistics Drone"], "bonused_weight": 0.75}
   ]},
-  "ECM": {"meaning": "Jammers: two, or one on a hull bonused for them", "threshold": 1.5, "priority": 10, "role": true, "signals": [
+  "ECM": {"meaning": "Jammers: two, or one on a hull bonused for them, or one with ECM drones", "threshold": 1.5, "priority": 10, "role": true, "signals": [
     {"note": "ECM modules, more on a hull bonused for them", "groups": [201], "weight": 1, "bonused_by": ["ECM"], "bonused_weight": 1.5},
     {"note": "burst jammers", "groups": [80], "weight": 1},
     {"note": "ECM drones, once however many: a nudge, more on a hull bonused for them", "types": [23473, 23705, 23707, 92039, 92040, 92041], "once": true, "weight": 0.5, "bonused_by": ["ECM Drone"], "bonused_weight": 0.75}
   ]},
-  "EWAR": {"meaning": "Dampeners, weapon disruptors, or target painters: two, or one on a hull bonused for it", "threshold": 1.5, "priority": 10, "role": true, "signals": [
+  "EWAR": {"meaning": "Dampeners, weapon disruptors, or target painters: two, or one on a hull bonused for it, or one with drones of that kind", "threshold": 1.5, "priority": 10, "role": true, "signals": [
     {"note": "sensor dampeners, more on a hull bonused for them", "groups": [208], "weight": 1, "bonused_by": ["Sensor Dampener"], "bonused_weight": 1.5},
     {"note": "weapon disruptors, more on a hull bonused for them", "groups": [291], "weight": 1, "bonused_by": ["Weapon Disruptor"], "bonused_weight": 1.5},
     {"note": "target painters, more on a hull bonused for them", "groups": [379], "weight": 1, "bonused_by": ["Target Painter"], "bonused_weight": 1.5},
@@ -118,7 +118,7 @@
     {"note": "launcher rigs", "groups": [779], "weight": 0.5}
   ]},
   "Drones": {"meaning": "Combat drones: a hull bonused for them, or drones with a drone module", "hidden": true, "threshold": 1, "signals": [
-    {"note": "a hull bonused for drones, as those in space when it died are not on the killmail", "hull": true, "weight": 0, "bonused_by": ["Drone damage", "Drone hitpoints", "Combat Drone", "Sentry Drone", "Heavy Drone", "Drone tracking", "Drone optimal range", "Drone operation range", "Drone max velocity", "Drone microwarp velocity", "Drone velocity", "additional drone"], "bonused_weight": 1},
+    {"note": "a hull bonused for drones, as those in space when it died are not on the killmail", "hull": true, "weight": 0, "bonused_by": ["to Drone damage", "to Drone hitpoints", "Combat Drone", "Sentry Drone", "Heavy Drone", "to Drone tracking", "to Drone optimal range", "to Drone operation range", "to Drone max velocity", "to Drone microwarp velocity", "to Drone velocity", "additional drone"], "bonused_weight": 1},
     {"note": "combat drones, once however many", "groups": [100, 5239], "once": true, "weight": 0.5},
     {"note": "drone damage amplifiers", "groups": [645], "weight": 0.5},
     {"note": "drone navigation and tracking modules", "groups": [644, 646, 1292], "weight": 0.5},
@@ -141,12 +141,12 @@
     {"note": "pulse lasers, blasters, and autocannons", "markets": [558, 556, 559], "weight": 1},
     {"note": "rocket, heavy assault, and torpedo launchers", "groups": [507, 771, 508, 1673, 524], "weight": 1},
     {"note": "vorton projectors", "groups": [4060], "weight": 1},
-    {"note": "light, medium, heavy, and hybrid drones, once however many, more on a hull bonused for them", "markets": [837, 838, 839, 3880], "once": true, "weight": 0.5, "bonused_by": ["Drone damage", "Drone hitpoints", "Combat Drone", "Heavy Drone", "Light Drone", "Drone tracking", "Drone max velocity", "Drone microwarp velocity", "Drone velocity", "additional drone"], "bonused_weight": 2}
+    {"note": "light, medium, heavy, and hybrid drones, once however many, more on a hull bonused for them", "markets": [837, 838, 839, 3880], "once": true, "weight": 0.5, "bonused_by": ["to Drone damage", "to Drone hitpoints", "Combat Drone", "Heavy Drone", "Light Drone", "to Drone tracking", "to Drone max velocity", "to Drone microwarp velocity", "to Drone velocity", "additional drone"], "bonused_weight": 2}
   ]},
   "Long": {"meaning": "Long range weapons", "hidden": true, "threshold": 2, "signals": [
     {"note": "beam lasers, railguns, and artillery", "markets": [557, 555, 560], "weight": 1},
     {"note": "light, heavy, and cruise launchers", "groups": [509, 511, 510, 1245, 506, 1674], "weight": 1},
-    {"note": "sentry drones, once however many, more on a hull bonused for them", "markets": [911], "once": true, "weight": 0.5, "bonused_by": ["Drone damage", "Drone hitpoints", "Sentry Drone", "Drone optimal range", "Drone tracking", "additional drone"], "bonused_weight": 2}
+    {"note": "sentry drones, once however many, more on a hull bonused for them", "markets": [911], "once": true, "weight": 0.5, "bonused_by": ["to Drone damage", "to Drone hitpoints", "Sentry Drone", "to Drone optimal range", "to Drone tracking", "additional drone"], "bonused_weight": 2}
   ]},
   "Shield": {"meaning": "Shield tank", "threshold": 2, "priority": 14, "role": true, "signals": [
     {"note": "extenders, boosters, amplifiers, hardeners, rechargers", "groups": [38, 39, 40, 77, 295, 338, 1156, 1700], "weight": 1},
