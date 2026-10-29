@@ -11,12 +11,12 @@ import (
 // FitTag is a tag a fit has, read from its modules by the rules in fit_tag_rules.json
 type FitTag struct {
 	Name     string   `json:"name"`
-	Letter   string   `json:"letter"`
 	Meaning  string   `json:"meaning"`
-	NamesRow int      `json:"namesRow"` // its rank in naming the fit's row, lowest first, 0 never
-	Hidden   bool     `json:"hidden"`   // shows no square
-	Weight   float64  `json:"weight"`   // its signals' weights added up, which passed its threshold
-	Share    float64  `json:"share"`    // the same as a share of the racks its modules are in, which ranks it against other tags
+	Priority int      `json:"priority"` // the order the fit shows its tags in, lowest first, 0 after the rest
+	Role     bool     `json:"role"`     // it can name the fit's row
+	Hidden   bool     `json:"hidden"`   // never shown, only found by the filter
+	Weight   float64  `json:"weight"`   // its signals' weights added up
+	Share    float64  `json:"share"`    // the same as a share of the racks its modules are in, ie 1 for a full rack
 	Reasons  []string `json:"reasons"`  // what gave it weight, ie "Warp Scrambler II ×2"
 }
 
@@ -33,7 +33,7 @@ type tagPart struct {
 	The Fleet Doctrine tag is read from battles, not the fit, so it is never here.
 
 Returns:
-  - []FitTag: by rank in naming the row (those that never name it last), then the largest share of their racks, then name. Empty for a nil fit.
+  - []FitTag: by Priority (those without one last), then name. Empty for a nil fit.
 */
 func (f *Fit) Tags() []FitTag {
 	tags := []FitTag{}
@@ -53,14 +53,11 @@ func (f *Fit) Tags() []FitTag {
 	tags = keepHeaviestExclusive(tags, rules.Exclusive)
 
 	slices.SortFunc(tags, func(a, b FitTag) int {
-		if a.NamesRow != b.NamesRow {
-			if a.NamesRow == 0 || b.NamesRow == 0 {
-				return cmp.Compare(b.NamesRow, a.NamesRow) // 0 never names a row, so goes last
+		if a.Priority != b.Priority {
+			if a.Priority == 0 || b.Priority == 0 {
+				return cmp.Compare(b.Priority, a.Priority) // 0 goes after the rest
 			}
-			return cmp.Compare(a.NamesRow, b.NamesRow)
-		}
-		if byShare := cmp.Compare(b.Share, a.Share); byShare != 0 {
-			return byShare
+			return cmp.Compare(a.Priority, b.Priority)
 		}
 		return cmp.Compare(a.Name, b.Name)
 	})
@@ -104,7 +101,7 @@ func signalMatches(signal *comm.FitTagSignal, hull *comm.FitType, part tagPart) 
 
 // scoreTag adds up a tag's signals over the fit's parts, and reports whether it applies
 func scoreTag(name string, rule *comm.FitTagRule, hull *comm.FitType, parts []tagPart) (FitTag, bool) {
-	tag := FitTag{Name: name, Letter: rule.Letter, Meaning: rule.Meaning, NamesRow: rule.NamesRow, Hidden: rule.Hidden, Reasons: []string{}}
+	tag := FitTag{Name: name, Meaning: rule.Meaning, Priority: rule.Priority, Role: rule.Role, Hidden: rule.Hidden, Reasons: []string{}}
 
 	anyMatch := func(signal *comm.FitTagSignal) bool {
 		return slices.ContainsFunc(parts, func(part tagPart) bool { return signalMatches(signal, hull, part) })
@@ -156,7 +153,13 @@ func scoreTag(name string, rule *comm.FitTagRule, hull *comm.FitType, parts []ta
 		}
 		tag.Reasons = append(tag.Reasons, reason)
 	}
-	return tag, rule.Threshold > 0 && tag.Weight >= rule.Threshold
+	if rule.Threshold <= 0 && rule.ShareThreshold <= 0 {
+		return tag, false
+	}
+	byWeight := rule.Threshold <= 0 || tag.Weight >= rule.Threshold
+	// a rack's share adds up in floats, so a full one may fall a hair short of 1
+	byShare := rule.ShareThreshold <= 0 || tag.Share >= rule.ShareThreshold-1e-9
+	return tag, byWeight && byShare
 }
 
 // keepHeaviestExclusive leaves only the heaviest of each exclusive set's tags, a tie going to the one listed first

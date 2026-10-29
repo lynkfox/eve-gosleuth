@@ -138,15 +138,15 @@ The Fits tab's tags also read some fields from here: a type's `market` (its mark
 
 ### `fit_tag_rules.json`
 
-How the Fits tab tags each fit: Tackle, Webber, Neut, Logi, Cyno, Scanner, Shield, Active, and the rest. Each tag adds up weights from what is fitted, and applies once the total reaches its `threshold`.
+How the Fits tab tags each fit: Ratting, Logi, Links, Cyno, Neut, Tackle, Shield, Active, and the rest. Each tag adds up weights from what is fitted, and applies once the total reaches its `threshold`.
 
 ```json
 {
     "tags": {
         "Neut": {
-            "letter": "N",
             "meaning": "Energy neutralizers",
-            "names_row": 2,
+            "priority": 9,
+            "role": true,
             "threshold": 3,
             "signals": [
                 { "note": "neuts and nosferatus", "groups": [71, 68], "weight": 1,
@@ -161,14 +161,15 @@ A tag's fields:
 
 | Field | Meaning |
 |---|---|
-| `letter` | Its square in the fit list. It can be more than one letter. |
 | `meaning` | What it means, shown in the tab's key |
+| `priority` | The order a fit shows its tags in, lowest first. A row shows its first role and the next three tags. Tags without one come after the rest. |
+| `role` | `true` for a tag that can name a fit's row, as its first role by `priority` does |
 | `threshold` | The total weight it needs to apply |
+| `share_threshold` | The share of their racks its modules must fill: Firewall's 1 needs every high slot to be a smartbomb. A tag with both needs both. |
 | `signals` | What gives it weight (below) |
 | `requires` | Signals of which each must match something, or the tag doesn't apply. Their weights are ignored. |
 | `forbids` | Signals of which none may match. Logi forbids guns, so a ship spider tanking with one remote repairer isn't logi. |
-| `names_row` | Which tags may name a fit's row, lowest first: 1 always wins (a cyno), then 2 (roles), then 3 (weapons). Leave it out for a tag that never names a row. |
-| `hidden` | `true` to give it no square. It can still name a row, and the filter still finds it. |
+| `hidden` | `true` to never show it. The filter still finds it. The weapons, Close, and Long are hidden. |
 
 A signal matches each fitted module and drone (or the hull, with `"hull": true`) by any of `types`, `groups`, `categories`, or `markets`. A market group also matches everything listed below it, so Pulse Lasers (558) holds every size. Each match adds `weight`, so three neutralizers add 3, and each drone in a stack counts. A signal can also have:
 

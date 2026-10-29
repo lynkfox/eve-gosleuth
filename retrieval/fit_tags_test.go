@@ -16,21 +16,22 @@ const fitTagRulesFixture = `{
 "bonus_ignores": ["resistance"],
 "exclusive": {"tank style": ["Passive", "Buffer"]},
 "tags": {
-	"Neut": {"letter": "N", "names_row": 2, "threshold": 3, "signals": [
+	"Neut": {"priority": 2, "role": true, "threshold": 3, "signals": [
 		{"groups": [71, 68], "weight": 1, "bonused_by": ["Energy Neutralizer"], "bonused_weight": 1.5},
 		{"markets": [691], "hull_sizes": [2], "weight": 3}
 	]},
-	"Logi": {"letter": "L", "names_row": 2, "threshold": 1, "requires": [{"groups": [325]}], "forbids": [{"groups": [53, 74]}], "signals": [
+	"Logi": {"priority": 1, "role": true, "threshold": 1, "requires": [{"groups": [325]}], "forbids": [{"groups": [53, 74]}], "signals": [
 		{"groups": [325], "weight": 1}
 	]},
-	"Tackle": {"letter": "T", "names_row": 2, "threshold": 1, "signals": [
+	"Tackle": {"priority": 3, "role": true, "threshold": 1, "signals": [
 		{"groups": [52], "weight": 1, "max": 1},
 		{"hull": true, "types": [627], "weight": 0.5}
 	]},
-	"Drones": {"letter": "Dr", "names_row": 3, "hidden": true, "threshold": 1, "signals": [{"groups": [100], "weight": 0.2}]},
-	"Passive": {"letter": "Ps", "threshold": 1, "signals": [{"groups": [39], "weight": 1}]},
-	"Buffer": {"letter": "Bf", "threshold": 1, "signals": [{"groups": [38], "weight": 1}]},
-	"Fleet Doctrine": {"letter": "F", "fleet_doctrine": {"battle_hulls": 5}}
+	"Firewall": {"priority": 4, "role": true, "share_threshold": 1, "signals": [{"groups": [72], "weight": 1}]},
+	"Drones": {"hidden": true, "threshold": 1, "signals": [{"groups": [100], "weight": 0.2}]},
+	"Passive": {"priority": 5, "threshold": 1, "signals": [{"groups": [39], "weight": 1}]},
+	"Buffer": {"priority": 6, "threshold": 1, "signals": [{"groups": [38], "weight": 1}]},
+	"Fleet Doctrine": {"priority": 1, "role": true, "fleet_doctrine": {"battle_hulls": 5}}
 }}`
 
 // tagFit builds a fit of a hull with the given modules in each rack, padded with empty slots to the hull's counts, and drone stacks by type
@@ -105,6 +106,11 @@ const (
 	coreProbeLauncher     = 17938
 	scanRangefindingArray = 33180
 	dataAnalyzer          = 22175
+	largeSmartbomb        = 3995
+	bastionModule         = 33400
+	shieldCommandBurst    = 43555
+	paladin               = 28659
+	nighthawk             = 22470
 )
 
 func TestFitTagRules(t *testing.T) {
@@ -159,9 +165,15 @@ func TestFitTagRules(t *testing.T) {
 		assert.Equal(t, []string{"Buffer"}, tagNames(tagFit(t, heron, nil, []int{shieldRecharger, largeShieldExtender, largeShieldExtender}, nil, nil).Tags()))
 	})
 
-	t.Run("tags are ranked by names_row, those that never name a row last, and never include Fleet Doctrine", func(t *testing.T) {
+	t.Run("tags are in priority order, those without one last, and never include Fleet Doctrine", func(t *testing.T) {
 		tags := tagFit(t, thorax, nil, []int{warpScrambler, shieldRecharger}, nil, map[int]int{hobgoblin: 5}).Tags()
-		assert.Equal(t, []string{"Tackle", "Drones", "Passive"}, tagNames(tags))
+		assert.Equal(t, []string{"Tackle", "Passive", "Drones"}, tagNames(tags))
+	})
+
+	t.Run("a share threshold of 1 needs a full rack", func(t *testing.T) {
+		full := []int{largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb}
+		assert.Contains(t, tagNames(tagFit(t, bhaalgorn, full, nil, nil, nil).Tags()), "Firewall", "seven smartbombs in seven highs")
+		assert.NotContains(t, tagNames(tagFit(t, bhaalgorn, full[1:], nil, nil, nil).Tags()), "Firewall", "six, and an empty slot")
 	})
 
 	t.Run("a hull bonus line with an ignored phrase is not a bonus", func(t *testing.T) {
@@ -190,9 +202,28 @@ func TestEmbeddedFitTagRules(t *testing.T) {
 		assert.Contains(t, names, "Lasers", "weighed, though hidden")
 	})
 
-	t.Run("a cyno always names the row", func(t *testing.T) {
+	t.Run("a cyno outranks neut", func(t *testing.T) {
 		tags := tagFit(t, bhaalgorn, []int{heavyNeutralizer, heavyNeutralizer, heavyNosferatu, heavyNosferatu, cynoGenerator}, nil, nil, nil).Tags()
-		assert.Equal(t, "Cyno", tags[0].Name)
+		assert.Equal(t, []string{"Cyno", "Neut"}, tagNames(tags)[:2])
+	})
+
+	t.Run("a bastion with smartbombs is ratting", func(t *testing.T) {
+		tags := tagFit(t, paladin, []int{megaPulse, bastionModule, megaPulse, largeSmartbomb, largeSmartbomb, megaPulse, megaPulse}, nil, nil, nil).Tags()
+		assert.Equal(t, "Ratting", tags[0].Name)
+		assert.NotContains(t, tagNames(tagFit(t, paladin, []int{megaPulse, bastionModule, megaPulse, megaPulse}, nil, nil, nil).Tags()), "Ratting", "a bastion alone")
+	})
+
+	t.Run("command bursts are links", func(t *testing.T) {
+		assert.Equal(t, "Links", tagFit(t, nighthawk, []int{shieldCommandBurst}, nil, nil, nil).Tags()[0].Name)
+	})
+
+	t.Run("weapons and range are hidden, and can't name a row", func(t *testing.T) {
+		for _, tag := range tagFit(t, thorax, []int{dualRailgun, dualRailgun, dualRailgun}, nil, nil, nil).Tags() {
+			if tag.Name == "Hybrids" || tag.Name == "Long" {
+				assert.True(t, tag.Hidden, tag.Name)
+				assert.False(t, tag.Role, tag.Name)
+			}
+		}
 	})
 
 	t.Run("a remote repairer is logi only without guns", func(t *testing.T) {

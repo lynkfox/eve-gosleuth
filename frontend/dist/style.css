@@ -1970,13 +1970,13 @@ body.debug-mode::after {
 .fit-row[aria-selected="true"] { border-color: var(--highlight); background: var(--panel-raised); }
 .fit-row-text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 .fit-row-text > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fit-row-tags { display: flex; gap: 4px; margin-top: 2px; }
+.fit-row-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
 .fit-row-count { color: var(--highlight); font-weight: 600; }
-/* a fit's one letter tags, filled rounded squares so they don't read as the ×N count: abyssal always red as it is a warning, implants in the theme's badge color */
+/* a fit's tags, filled rounded squares so they don't read as the ×N count: abyssal always red as it is a warning, implants in the theme's badge color */
 .fit-tag {
   display: inline-block;
   min-width: 16px;
-  padding: 0 3px;
+  padding: 0 5px;
   border-radius: 4px;
   font-size: 11px;
   font-weight: 700;
@@ -1986,7 +1986,7 @@ body.debug-mode::after {
 
 .fit-tag-abyssal { background: var(--error); color: #0b0e13; }
 .fit-tag-implants { background: var(--badge); color: var(--badge-text); }
-/* a tag read by fit_tag_rules.json, outlined so it doesn't read as A or I */
+/* a tag read by fit_tag_rules.json, outlined so it doesn't read as Abyssal or Implants */
 .fit-tag-rule { box-shadow: inset 0 0 0 1px var(--highlight); color: var(--highlight); }
 .fit-row-name { color: var(--text); font-weight: 600; }
 .fit-view-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }

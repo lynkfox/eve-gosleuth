@@ -1794,7 +1794,7 @@ function renderFits(fits) {
 /*
   filterFits hides the fits the filter box does not match, and the hull headings left with none.
   Each word in the box must be in the fit's search text (fitSearchText), so "rifter scram" finds Rifters with a warp scrambler.
-  The words after "tag:" or "tags:" that name a tag, by its letter or the start of its name, are tags a fit must have, so "rifter tags: abyssal I" finds Rifters tagged both.
+  The words after "tag:" or "tags:" that name a tag, by the start of its name, are tags a fit must have, so "rifter tags: abyssal imp" finds Rifters tagged both.
   Any other word after them is an ordinary word, so typing on after clicking a tag narrows by name too.
   While filtering, the hulls with a match unfold, once each so one folded again stays folded; clearing the box folds those that were folded before, but the chosen fit's.
 */
@@ -1891,8 +1891,8 @@ function fitRow(fit) {
   const systems = new Set(fit.losses.map((loss) => loss.systemName).filter(Boolean));
   const when = document.createElement("span");
   when.textContent = [spokenDate(fit.lastLost), systems.size > 1 ? `${systems.size} systems` : [...systems][0]].filter(Boolean).join(" · ");
-  // the top role, or else weapon, names the row (retrieval.Fit.Tags ranks them)
-  const naming = (fit.tags || []).find((tag) => tag.namesRow > 0);
+  // the fit's first role by priority names the row (retrieval.Fit.Tags orders them)
+  const naming = (fit.tags || []).find((tag) => tag.role && !tag.hidden);
   if (naming) {
     const name = document.createElement("span");
     name.className = "fit-row-name";
@@ -1920,20 +1920,20 @@ function fitRow(fit) {
   return row;
 }
 
-// FIT_TAGS mark a fit in the list as small filled badges, see FIT_KEY. Abyssal is red as it is a warning, so fixed; implants are in the theme's --badge color. The filter box finds a tag by its letter or name.
-const FIT_ABYSSAL_TAG = { key: "abyssal", letter: "A", name: "Abyssal", className: "fit-tag fit-tag-abyssal", meaning: "Contains Abyssal Module" };
-const FIT_IMPLANTS_TAG = { key: "implants", letter: "I", name: "Implants", className: "fit-tag fit-tag-implants", meaning: "Contains Implants from a related capsule killmail" };
+// FIT_TAGS mark a fit in the list as small filled badges, see FIT_KEY. Abyssal is red as it is a warning, so fixed; implants are in the theme's --badge color. The filter box finds a tag by its name.
+const FIT_ABYSSAL_TAG = { key: "abyssal", name: "Abyssal", className: "fit-tag fit-tag-abyssal", meaning: "Contains Abyssal Module" };
+const FIT_IMPLANTS_TAG = { key: "implants", name: "Implants", className: "fit-tag fit-tag-implants", meaning: "Contains Implants from a related capsule killmail" };
 const FIT_TAGS = [FIT_ABYSSAL_TAG, FIT_IMPLANTS_TAG];
 
-// FIT_ROW_TAGS is how many of a fit's tags from fit_tag_rules.json its row shows beneath the one naming it, the top ranked; the fitting window shows them all
+// FIT_ROW_TAGS is how many of a fit's tags from fit_tag_rules.json its row shows beneath the one naming it, the first by priority; the fitting window shows them all
 const FIT_ROW_TAGS = 3;
 
-// fitRuleTag is a tag read by fit_tag_rules.json (retrieval.FitTag) as the fit list shows it, outlined in the theme's highlight so it doesn't read as A or I
+// fitRuleTag is a tag read by fit_tag_rules.json (retrieval.FitTag) as the fit list shows it, outlined in the theme's highlight so it doesn't read as Abyssal or Implants
 function fitRuleTag(tag) {
-  return { name: tag.name, letter: tag.letter, meaning: tag.meaning, className: "fit-tag fit-tag-rule", rule: true };
+  return { name: tag.name, meaning: tag.meaning, className: "fit-tag fit-tag-rule", rule: true };
 }
 
-// fitRuleTags are the tags any loss of the search's fits has, hidden ones too so the filter finds them, by rank and then name, for the filter box and the key
+// fitRuleTags are the tags any loss of the search's fits has, hidden ones too so the filter finds them, by priority and then name, for the filter box and the key
 function fitRuleTags(fits) {
   const byName = new Map();
   for (const fit of fits) {
@@ -1941,11 +1941,11 @@ function fitRuleTags(fits) {
       for (const tag of loss.tags || []) if (!byName.has(tag.name)) byName.set(tag.name, tag);
     }
   }
-  const rank = (tag) => tag.namesRow || Infinity;
+  const rank = (tag) => tag.priority || Infinity;
   return [...byName.values()].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)).map((tag) => ({ ...fitRuleTag(tag), hidden: tag.hidden }));
 }
 
-// fitHasTag reports whether a fit has a tag: A and I by their flag, a rule's tag if any of its losses has it, as drones can differ between them
+// fitHasTag reports whether a fit has a tag: Abyssal and Implants by their flag, a rule's tag if any of its losses has it, as drones can differ between them
 function fitHasTag(fit, tag) {
   if (!tag.rule) return Boolean(fit[tag.key]);
   return fit.losses.some((loss) => (loss.tags || []).some((each) => each.name === tag.name));
@@ -1956,17 +1956,17 @@ function fitTagReasons(tag) {
   return tag.reasons?.length ? `${tag.name}: ${tag.reasons.join(", ")}` : tag.name;
 }
 
-// fitTagNamed is the tag a filter word names: the one with that letter, or else the first whose name starts with it, A and I before the rules' tags
+// fitTagNamed is the tag a filter word names: the one with that name, or else the first whose name starts with it, Abyssal and Implants before the rules' tags
 function fitTagNamed(word) {
   const all = [...FIT_TAGS, ...fitsShown.ruleTags];
-  return all.find((tag) => tag.letter.toLowerCase() === word) || all.find((tag) => tag.name.toLowerCase().startsWith(word));
+  return all.find((tag) => tag.name.toLowerCase() === word) || all.find((tag) => tag.name.toLowerCase().startsWith(word));
 }
 
 // fitTag is a fit's tag, named on hover by the name the filter box finds it by; the key gives its meaning. A clickable one lists only the fits with that tag, in place of the filter box's words.
 function fitTag(tag, clickable = false) {
   const mark = document.createElement("span");
   mark.className = tag.className;
-  mark.textContent = tag.letter;
+  mark.textContent = tag.name;
   mark.title = tag.name;
   if (clickable) {
     mark.classList.add("fit-tag-filter");
@@ -1995,7 +1995,7 @@ const FITS_FILTER_HELP = [
   [
     "Hull, pilot, module, corp, or alliance name.",
     'Several words and parts of words, ie "Rifter Web".',
-    'The key word "tag:" or "tags:" followed by a tag\'s name or its letter in the key, ie "tags: neut" or "tags: implants". Clicking a tag does the same. Weapons are tags too, ie "tags: lasers", though they show no square.',
+    'The key word "tag:" or "tags:" followed by tag names or their starts, ie "tags: neut" or "tags: imp". Clicking a tag does the same. Weapons and their range are tags too, ie "tags: lasers" or "tags: long", though they are never shown.',
   ],
 ];
 
@@ -2058,7 +2058,7 @@ function renderFitWindow(fit, loss, choose) {
   shown.oncontextmenu = (event) => openSectionsMenu(event, sections);
   // every tag of this loss by name, with what gave it weight on hover
   el("fit-view-tags").replaceChildren(...(loss.tags || []).filter((tag) => !tag.hidden).map((tag) => {
-    const chip = fitTag({ ...fitRuleTag(tag), letter: tag.name }, true);
+    const chip = fitTag(fitRuleTag(tag), true);
     chip.title = fitTagReasons(tag);
     return chip;
   }));
@@ -3127,7 +3127,7 @@ const FIT_KEY = {
   // the rules' tags this search found, so the key changes with each search
   get items() {
     const shown = [...fitsShown.ruleTags.filter((tag) => !tag.hidden), ...FIT_TAGS];
-    return shown.map((tag) => ({ sample: tag.letter, className: tag.className, meaning: tag.rule ? `${tag.name}: ${tag.meaning}` : tag.meaning }));
+    return shown.map((tag) => ({ sample: tag.name, className: tag.className, meaning: tag.meaning }));
   },
 };
 

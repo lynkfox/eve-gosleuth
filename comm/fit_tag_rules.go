@@ -59,17 +59,18 @@ func (s *FitTagSignal) FitsHull(hull *FitType) bool {
 	return hull != nil && slices.Contains(s.HullSizes, hull.RigSize)
 }
 
-// FitTagRule is how a tag is read from a fit: it applies once its signals' weights reach Threshold, with each of Requires matched and none of Forbids
+// FitTagRule is how a tag is read from a fit: it applies once its signals' weights reach Threshold and their share of the racks ShareThreshold (each that is set), with each of Requires matched and none of Forbids
 type FitTagRule struct {
-	Letter   string `json:"letter"`    // its square in the fit list
-	Meaning  string `json:"meaning"`   // what it means, for the key
-	NamesRow int    `json:"names_row"` // its rank in naming a fit's row, lowest first: 1 a cyno, 2 roles, 3 weapons. 0 never names a row.
-	Hidden   bool   `json:"hidden"`    // weighed, and may name a row, but shows no square
+	Meaning  string `json:"meaning"`  // what it means, for the key
+	Priority int    `json:"priority"` // the order a fit shows its tags in, lowest first, 0 after the rest
+	Role     bool   `json:"role"`     // it can name a fit's row: the first of the fit's roles by Priority does
+	Hidden   bool   `json:"hidden"`   // never shown, only found by the filter, ie the weapons
 
-	Threshold float64        `json:"threshold"`
-	Requires  []FitTagSignal `json:"requires"`
-	Forbids   []FitTagSignal `json:"forbids"`
-	Signals   []FitTagSignal `json:"signals"`
+	Threshold      float64        `json:"threshold"`
+	ShareThreshold float64        `json:"share_threshold"` // ie 1 for a full rack of the signals' modules
+	Requires       []FitTagSignal `json:"requires"`
+	Forbids        []FitTagSignal `json:"forbids"`
+	Signals        []FitTagSignal `json:"signals"`
 
 	FleetDoctrine *FleetDoctrineRule `json:"fleet_doctrine"` // set on the one tag read from battles and other losses rather than the fit
 }

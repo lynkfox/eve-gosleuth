@@ -17,7 +17,8 @@ func TestLoadFitTagRules(t *testing.T) {
 		assert.NoError(t, comm.InitStaticData(staticdata.Files))
 		cyno := comm.FitTagRules().Tags["Cyno"]
 		if assert.NotNil(t, cyno) {
-			assert.Equal(t, 1, cyno.NamesRow, "a cyno always names the row")
+			assert.True(t, cyno.Role)
+			assert.Positive(t, cyno.Priority)
 		}
 		assert.Equal(t, []string{"Passive", "Active", "Buffer"}, comm.FitTagRules().Exclusive["tank style"])
 	})
