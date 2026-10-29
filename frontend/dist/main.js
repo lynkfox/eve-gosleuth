@@ -2253,6 +2253,19 @@ function compactHp(value) {
   return Math.round(amount).toLocaleString("en-US");
 }
 
+// fitStatTiles lays out [label, value] pairs as small tiles, the label muted over the value, wrapping to the strip's width
+function fitStatTiles(pairs) {
+  const tiles = document.createElement("div");
+  tiles.className = "fit-stat-tiles";
+  for (const [label, value] of pairs) {
+    const tile = document.createElement("div");
+    tile.className = "fit-stat-tile";
+    tile.append(fitStatsSpan("fit-stat-label", label), fitStatsSpan("fit-stat-value", value));
+    tiles.append(tile);
+  }
+  return tiles;
+}
+
 // fitStatsSpan is a span of text with a class
 function fitStatsSpan(className, text) {
   const span = document.createElement("span");
@@ -2315,6 +2328,8 @@ function fitStatsBody(stats) {
   // a row per layer: its HP, then each damage type's resist as a bar and a number. Under FIT_RESIST_HOLE the number is bold in the error color so a hole stands out
   const grid = document.createElement("div");
   grid.className = "fit-resists";
+  // a title over each damage type's column
+  grid.append(fitStatsSpan("", ""), fitStatsSpan("", ""), ...FIT_DAMAGE_TYPES.map((type) => fitStatsSpan("fit-resist-title", type.name)));
   for (const [label, layer] of [["Shield", stats.shield], ["Armor", stats.armor], ["Hull", stats.hull]]) {
     const resonance = (layer && layer.resonance) || [1, 1, 1, 1];
     grid.append(fitStatsSpan("fit-resist-layer", label), fitStatsSpan("fit-resist-hp", compactHp(layer && layer.hp)));
@@ -2335,35 +2350,29 @@ function fitStatsBody(stats) {
   }
   parts.push(grid);
 
-  // the summary: EHP, what it repairs itself, what it gives others, and its sensor
-  const items = [];
-  const rate = (label, value) => `${label} ${Math.round(value).toLocaleString("en-US")}/s`;
-  items.push(`EHP ${compactHp(stats.ehp)}`);
+  // the summary as tiles: EHP, what it repairs itself, what it gives others, and its sensor
+  const tiles = [["EHP", compactHp(stats.ehp)]];
+  const rate = (value, unit = "HP/s") => `${Math.round(value).toLocaleString("en-US")} ${unit}`;
   const local = stats.local_rep || {};
   for (const [key, label] of [["shield", "Shield rep"], ["armor", "Armor rep"], ["hull", "Hull rep"]]) {
-    if (fitStat(local[key]) > 0) items.push(rate(label, local[key]));
+    if (fitStat(local[key]) > 0) tiles.push([label, rate(local[key])]);
   }
-  if (fitStat(stats.passive_regen) > 0) items.push(rate("Shield regen", stats.passive_regen));
+  if (fitStat(stats.passive_regen) > 0) tiles.push(["Shield regen", rate(stats.passive_regen)]);
   const remote = stats.remote_rep || {};
   for (const [key, label] of [["shield", "Remote shield"], ["armor", "Remote armor"], ["hull", "Remote hull"]]) {
-    if (fitStat(remote[key]) > 0) items.push(rate(label, remote[key]));
+    if (fitStat(remote[key]) > 0) tiles.push([label, rate(remote[key])]);
   }
-  if (fitStat(remote.capacitor) > 0) items.push(`Remote cap ${fitStat(remote.capacitor).toFixed(1)} GJ/s`);
-  if (stats.sensor && fitStat(stats.sensor.strength) > 0) items.push(`${stats.sensor.type || "Sensor"} ${Math.round(stats.sensor.strength)}`);
-  const summary = document.createElement("p");
-  summary.className = "fit-summary";
-  summary.append(...items.map((text) => fitStatsSpan("", text)));
-  parts.push(summary);
+  if (fitStat(remote.capacitor) > 0) tiles.push(["Remote cap", rate(remote.capacitor, "GJ/s")]);
+  if (stats.sensor && fitStat(stats.sensor.strength) > 0) tiles.push([stats.sensor.type || "Sensor", String(Math.round(stats.sensor.strength))]);
+  parts.push(fitStatTiles(tiles));
 
-  // ewar resistance: only what the hull resists at all, as the % of it that is resisted
+  // ewar resistance: only what the hull resists at all, as the % of it that is resisted, rounded first so a hair under 1 isn't shown as 0%
   const resisted = Object.entries(stats.ewar_resist || {})
-    .filter(([, value]) => fitStat(value) !== 1)
-    .map(([key, value]) => `${FIT_EWAR_LABELS[key] || key} ${Math.round((1 - fitStat(value)) * 100)}%`);
+    .map(([key, value]) => [FIT_EWAR_LABELS[key] || key, Math.round((1 - fitStat(value)) * 100)])
+    .filter(([, percent]) => percent !== 0)
+    .map(([label, percent]) => [label, `${percent}%`]);
   if (resisted.length) {
-    const ewar = document.createElement("p");
-    ewar.className = "fit-ewar";
-    ewar.append(fitStatsSpan("muted", "Resists "), ...resisted.map((text) => fitStatsSpan("", text)));
-    parts.push(ewar);
+    parts.push(fitStatsSpan("fit-stats-heading", "EWAR resistance"), fitStatTiles(resisted));
   }
 
   if (stats.assumptions && stats.assumptions.length) parts.push(fitStatsSpan("fit-assumptions muted", stats.assumptions.join(" · ")));

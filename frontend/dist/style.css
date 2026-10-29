@@ -2672,12 +2672,14 @@ main > * { flex: none; }
 */
 .fit-stats {
   display: flex;
+  flex: none; /* never shrunk to fit the scrolling window, which clipped its last line */
   flex-direction: column;
   gap: 6px;
   min-width: 0;
   overflow: hidden;
   max-width: 100%;
   margin: 8px 0;
+  padding-right: 12px; /* clear of the window's scroll bar */
   font-size: 12px;
 }
 
@@ -2697,19 +2699,36 @@ main > * { flex: none; }
 
 .fit-resists {
   display: grid;
-  grid-template-columns: auto auto repeat(4, minmax(0, 1fr));
+  grid-template-columns: auto auto repeat(4, minmax(48px, 1fr));
   gap: 3px 8px;
   align-items: center;
 }
 .fit-resist-layer { font-weight: 600; }
 .fit-resist-hp { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
-.fit-resist { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.fit-resist-bar { display: block; height: 5px; border-radius: 2px; background: var(--panel-raised); overflow: hidden; }
-.fit-resist-bar > span { display: block; height: 100%; }
-.fit-resist-num { min-width: 0; overflow: hidden; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+/* each resist is its own bar, filled to the resist in its damage type's color, faded so the number on top reads clearly */
+.fit-resist {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 18px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--panel-raised);
+}
+.fit-resist-bar { position: absolute; inset: 0; }
+.fit-resist-bar > span { display: block; height: 100%; opacity: 0.35; }
+.fit-resist-num { position: relative; min-width: 0; overflow: hidden; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* a resist under 40% (FIT_RESIST_HOLE) is a hole: bold, in the error color */
 .fit-resist-hole .fit-resist-num { color: var(--error); font-weight: 700; }
 
-.fit-summary, .fit-ewar { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0; }
-.fit-summary > span:first-child { font-weight: 600; }
+.fit-resist-title { color: var(--muted); font-size: 11px; text-align: center; }
+
+/* the summary and ewar resistance as tiles, a muted label over its value, as many to a row as fit */
+.fit-stat-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 4px; }
+.fit-stat-tile { display: flex; flex-direction: column; min-width: 0; padding: 3px 8px; border-radius: 4px; background: var(--panel-raised); }
+.fit-stat-label { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.fit-stat-value { font-size: 14px; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.fit-stats-heading { margin-top: 2px; color: var(--muted); font-size: 11px; }
 .fit-assumptions { font-size: 11px; }

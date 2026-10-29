@@ -176,7 +176,7 @@ func TestLocalRep(t *testing.T) {
 	assert.InDelta(t, 100.0, stats.LocalRep.Shield, 1e-9)
 	assert.InDelta(t, 120.0, stats.LocalRep.Armor, 1e-9)
 	assert.InDelta(t, 50.0, stats.LocalRep.Hull, 1e-9)
-	assert.Contains(t, stats.Assumptions, "Every module active")
+	assert.NotContains(t, stats.Assumptions, "Every module active", "every module active goes without saying")
 
 	// the ancillary armor repairer: x3 with paste, x1 without
 	withPaste := s4compute(t, fitting.Input{Hull: s4hullType, Modules: []fitting.Module{s4module(s4ancArmorT, s4pasteType)}})
@@ -212,14 +212,14 @@ func TestRemoteRep(t *testing.T) {
 	assert.InDelta(t, 30.0, stats.RemoteRep.Hull, 1e-9)
 	assert.InDelta(t, 200.0, stats.RemoteRep.Capacitor, 1e-9)
 	assert.Zero(t, stats.LocalRep)
-	assert.Len(t, stats.Assumptions, 1)
+	assert.Empty(t, stats.Assumptions)
 
 	unloaded := s4compute(t, fitting.Input{Hull: s4hullType, Modules: []fitting.Module{s4module(s4remAncArmorT, 0)}})
 	assert.InDelta(t, 50.0, unloaded.RemoteRep.Armor, 1e-9)
 
 	mutadaptive := s4compute(t, fitting.Input{Hull: s4hullType, Modules: []fitting.Module{s4module(s4remMutT, 0)}})
 	assert.InDelta(t, 50.0, mutadaptive.RemoteRep.Armor, 1e-9)
-	assert.Len(t, mutadaptive.Assumptions, 2)
+	assert.Len(t, mutadaptive.Assumptions, 1)
 }
 
 // TestSensor checks the strongest sensor is named, and that a tie is Multispectral
@@ -247,4 +247,17 @@ func TestUnknownReported(t *testing.T) {
 	assert.Equal(t, []int{99999}, stats.Unknown)
 	_, err := fitting.Compute(fitting.Input{Hull: 424242})
 	assert.ErrorIs(t, err, fitting.ErrUnknownHull)
+}
+
+// TestNotFinite checks a stat that overflows, which only a broken dogma.json can cause, gives an error rather than numbers json can't carry
+func TestNotFinite(t *testing.T) {
+	specs := s4baseSpecs()
+	// a huge shield over near-zero resonances: its EHP overflows
+	specs[s4hullType].attrs["shieldCapacity"] = 1e300
+	for _, name := range []string{"shieldEmDamageResonance", "shieldThermalDamageResonance", "shieldKineticDamageResonance", "shieldExplosiveDamageResonance"} {
+		specs[s4hullType].attrs[name] = 1e-300
+	}
+	s4loadTestDogma(t, specs)
+	_, err := fitting.Compute(fitting.Input{Hull: s4hullType})
+	assert.ErrorIs(t, err, fitting.ErrNotFinite)
 }

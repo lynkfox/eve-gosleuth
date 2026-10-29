@@ -36,6 +36,8 @@ type repairKind struct {
 	paste  bool // multiplied by chargedArmorDamageMultiplier when a charge is loaded
 }
 
+// These tables name dogma's own effects and attributes, which say how to read the data rather than being game data, so they stay in code (and an edited dogma.json can't rename them).
+
 // the local repair effects by SDE name. The ancillary shield booster is the same as a plain one: its charge only feeds it.
 var localRepairEffects = map[string]repairKind{
 	"shieldBoosting":       {"shield", "shieldBonus", false},
@@ -74,7 +76,7 @@ func computeStats(fit *Fit) *Stats {
 	stats.Hull = readLayer(fit, hullAttributes)
 	stats.EHP = stats.Shield.EHP + stats.Armor.EHP + stats.Hull.EHP
 
-	anyActive, mutadaptive := false, false
+	mutadaptive := false
 	for _, module := range fit.Modules {
 		if module == nil || module.Type == nil {
 			continue
@@ -83,9 +85,6 @@ func computeStats(fit *Fit) *Stats {
 			effect := comm.DogmaEffectOf(effectID)
 			if effect == nil || !fit.Applies(module, effect) {
 				continue
-			}
-			if effect.Category == 1 || effect.Category == 2 { // active, or a target effect such as a remote repairer, which is active too
-				anyActive = true
 			}
 			if kind, ok := localRepairEffects[effect.Name]; ok {
 				addRepair(fit, &stats.LocalRep, module, effect, kind)
@@ -110,9 +109,6 @@ func computeStats(fit *Fit) *Stats {
 		}
 	}
 
-	if anyActive {
-		stats.Assumptions = append(stats.Assumptions, "Every module active")
-	}
 	if len(reactiveArmorHardeners(fit)) > 0 {
 		stats.Assumptions = append(stats.Assumptions, "Reactive Armor Hardener adapted to uniform damage")
 	}
