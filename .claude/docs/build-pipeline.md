@@ -17,7 +17,7 @@ Initial design notes for building, releasing, and keeping static data current. O
 1. **Now (manual):** when a patch adds hulls or modules, run `go run ./cmd/sdegen` and commit the new JSON. A user who can't wait for a release can drop the new file into the `static_data` folder beside the exe, which `staticdata.Overrides()` merges over the built-in one.
 2. **With CI:** a scheduled GitHub Action reads `https://developers.eveonline.com/static-data/tranquility/latest.jsonl`. When its build number differs from `sde_build` in `fit_types.json`, it runs `cmd/sdegen` and opens a PR. Because the extract is one type per line in id order, that diff is easy to review.
 3. **With the auto-updater:** when the app's `sde_build` is behind the latest release's, it downloads only the release's `fit_types.json` (not the SDE or the parser) into the override folder.
-4. **Phase 4 (dogma engine):** the extract grows to hold effects and modifiers. It is still generated in CI and shipped as data.
+4. **Phase 4 (dogma engine):** `cmd/sdegen` also writes `static_data/dogma.json` (attributes, effects with their modifiers, each type's dogma, and the hull bonus skill table, about 1 MB), from the same SDE build. It is generated in CI and shipped as data beside `fit_types.json`, and the auto-updater fetches both.
 
 ## To design later
 

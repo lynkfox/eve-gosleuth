@@ -52,7 +52,7 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 
 ## Phase 2: Fits tab, fitting window, and EFT export
 
-**Status (2026-10-27): built,** as described in `.claude/docs/features.md` under Fits. Not yet done: importing several exports in-game. Where the phase 4 numbers go in the window is still open.
+**Status (2026-10-27): built,** as described in `.claude/docs/features.md` under Fits. Not yet done: importing several exports in-game. The phase 4 numbers go in a strip under the ring (decided 2026-10-29).
 
 ### Which searches
 
@@ -79,7 +79,7 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 - Drones, fighters, and the kept cargo are listed below or beside the ring.
 - The ring is positioned with CSS trig, so no new libraries. Names are set with `textContent`.
 - An **Export EFT** button sits in the window's header (see EFT export).
-- Leave room in the window for the phase 4 numbers (resists, EHP, repair, ewar). Where they show is still undecided.
+- The phase 4 numbers (resists, EHP, repair, ewar) go in a strip under the ring (decided 2026-10-29).
 
 ### Getting to a fit from elsewhere
 
@@ -169,30 +169,100 @@ Tags describe what a fit brings, for intel: what it shoots with, how it tanks, a
 
 ## Phase 4: dogma engine (resists, EHP, repair, ewar resistance)
 
-- **Approach:** a `fitting` package containing a real dogma engine, not per-stat formulas. It needs:
-  - item, location, location-group and required-skill modifiers
-  - the nine operations, from preAssign to postAssign
-  - stacking penalties, `e^-(n/2.67)²`, applied only to attributes not marked stackable
-  - all skills at V
-- **Data:** extend the `cmd/sdegen` extract with the attributes, effects and `modifierInfo` the engine needs (decided 2026-10-27: SDE extract, not the ESI).
-- **Known traps:**
-  - Some CCP effects have no `modifierInfo` (Pyfa hand-codes hundreds of them). Each needs a written case.
-  - A mutated module's rolled stats are not on the killmail, so they can't be known. Such fits are already flagged ABYSS in the list (the extract's `abyssal` flag).
-  - The Reactive Armor Hardener starts at an even split.
-  - Killmails don't record whether modules were online or active, so assume all are online and active.
-  - No heat and no fleet boosts.
-  - Implants count only if they are on the killmail. This may become a toggle.
-- **Outputs:**
-  - resists per layer, with the holes highlighted
+**Planned 2026-10-29.** Two research passes went into it: one over the SDE (build 3660036) and one over Pyfa's engine (`eos`, v2.69.3, commit d2722a4c). Their notes are kept with this plan's history. Pyfa is GPLv3 and this project is MIT, so Pyfa is read for reference and used to produce test numbers, and none of its code is copied.
+
+### What the research settled
+
+- **A generic engine, not hand-written effects.** 3,210 of the SDE's 3,427 effects carry `modifierInfo`. Pyfa ignores that and writes every effect by hand: 2,426 classes in a 44k-line `effects.py`. We read `modifierInfo` instead, and write only what it can't express.
+- **What needs hand-written code is small:**
+  - local reps: shield boosting (4), armor repair (27), hull repair (26)
+  - ancillary reps: armor (5275), whose paste multiplier is the SDE's `chargedArmorDamageMultiplier` (1886) and not Pyfa's hard-coded 3, and shield (4936), which gets no charge multiplier
+  - the Reactive Armor Hardener (4928)
+  - remote reps for logi: shield 6186, armor 6188, hull 6185, ancillary 6651/6652, mutadaptive 7166, and capacitor 6184
+  
+  Damage Control, Assault Damage Control, Bastion, Siege, Triage, the tactical destroyer modes and the T3 subsystems all work from `modifierInfo`.
+- **Hull bonuses scale with skill level, and the SDE doesn't say which do.** A hull's bonus attribute (ie `shipBonusMF`, 587) has to be multiplied by the level of its skill, and a role bonus is not. Pyfa hard-codes the skill in 1,378 places. Attribute names carry the skill, so `shipBonus<race><class><n>`, `eliteBonus<class>` and `subsystemBonus<race><kind>` (414 attributes) can be read by `cmd/sdegen` into a bonus-attribute-to-skill table in the extract. `typeBonus.jsonl` trait values back it up, and sdegen reports the ones it can't place, for its own config. A dev check compares the table with the `skill=` arguments in Pyfa's `effects.py`.
+- **Skills are ordinary dogma.** Each skill scales its own bonus by `skillLevel` (280) with an `itemID` modifier. All V means attribute 280 is 5 on every skill. That needs the 512 skills (category 16) and the character type (1373) in the extract.
+- **Size is no concern.** An extract trimmed to the attributes our outputs depend on is about 0.8 MB (100 KB gzipped). That covers 7,904 types and 1,141 effects, with modifiers on `targetID` dropped. Adding the 2,144 unpublished types in the kept categories brings it to 1 MB. Those include expired boosters, retired modules, and the 18 tactical destroyer modes (group 1306, needed).
+
+### Engine rules
+
+- **The nine operations, in dogma order:** preAssign (-1), preMul (0), preDiv (1), modAdd (2), modSub (3), postMul (4), postDiv (5), postPercent (6), postAssign (7). Pyfa skips preDiv, postDiv and postAssign, and does a preMul after adds. We implement all nine, so where a golden number differs for that reason, the test records the reason rather than copying the error.
+- **Lazy, dependency-ordered evaluation.** An attribute is computed when first read, from its sources' own computed values, and cached for the fit. This replaces Pyfa's early/normal/late run order. Assault Damage Control works without special code: its active effect assigns the module's own resonances, and its online effect then applies them to the ship. The same goes for Triage changing a remote rep's amount before the rep is read.
+- **Caps:** an attribute with `maxAttributeID` is capped by that attribute, so resonances never go above 1.
+- **Stacking penalty:** `1 + (m-1)·e^-(i/2.67)²`, with i from 0. Bonuses and maluses form separate chains, each sorted by the size of `|m-1|`, largest first. A modifier is penalized when all of these hold:
+  - its attribute is `stackable: false`
+  - its operation multiplies (pre/post Mul, Div, or Percent)
+  - its source is not a hull, skill, implant, booster or subsystem
+  
+  A chain is per attribute and per stage, so pre-stage modifiers (Damage Control, Reactive Armor Hardener, Bastion) penalize each other but not the post-stage hardeners. The golden fits decide whether charges are exempt too.
+- **Module state:** a module's effects apply by category: passive (0) always, online (4) online or higher, active (1) when active, overload (5) never (no heat). Effect 16 `online` is category 1 but marks being online. Killmails don't record state, so every module is active, Assault Damage Control included, and the window says so.
+- **Domains:** `shipID`, `charID`, `itemID`, `otherID` (a charge and its module), and `structureID`. `targetID`, `target` and `EffectStopper` are skipped, since nothing is projected.
+- **What counts:**
+  - implants only if they're on the killmail, ie those from the capsule lost with the ship (`podsWithShips`)
+  - boosters in cargo don't count
+  - no fleet boosts and no heat
+  - a mutated module counts at its base type's stats, and the window says so, as its rolls are not on the killmail
+- **Ships first.** Upwell structures (security-scaled rigs, services) come after ships work.
+
+### Decisions (2026-10-29)
+
+- **The numbers go in a strip under the ring,** between it and the drones and cargo:
+  - a four-column resist grid per layer, with the holes highlighted
   - omni EHP
-  - active rep per second, with paste for ancillary repairers
-  - peak passive shield regen
-  - remote rep output for logi
-  - sensor strength and type, plus any `*Resistance` ewar attributes the hull has
-- **How they are shown:** to be decided, within the room phase 2 leaves in the fitting window.
-- **Reference:** Pyfa's engine, `eos` (https://github.com/pyfa-org/Pyfa/tree/master/eos), computes all of Pyfa's stats. Scan it before building this phase for how modifiers are applied, its stacking penalty groups, and the effects it hand-codes (`eos/effects.py`).
-- **Proving it's right:** golden tests, a set of reference fits whose expected numbers come from Pyfa, with the Pyfa version recorded. They cover T3s, command ships, Marauders, capitals and logi. The tests fail if any number drifts beyond rounding.
+  - local rep/s (with paste for ancillary repairers) and peak passive regen
+  - remote rep/s for logi
+  - sensor type and strength
+  - the hull's EWAR resistances
+  - a line naming what was assumed (all modules active, the Reactive Armor Hardener settled against uniform damage, the mode)
+- **The Reactive Armor Hardener is simulated against uniform damage,** as Pyfa does it, up to 50 cycles, moving `resistanceShiftAmount` from the weakest-hit type each cycle. A repeating loop is averaged and rounded to 3 places. It applies in the pre stage, so it penalizes against Damage Control.
+- **Tactical destroyers get a mode switch.** All three modes are computed during the search (the Stats travel per mode), and the strip has Defense/Sharpshooter/Propulsion buttons that start on Defense.
+- **Golden numbers come from a headless Pyfa,** run by an agent in the scratchpad: build its `eve.db`, import each EFT with `service.port.eft.importEft`, and read `fit.ehp`, `fit.tank`, `fit.getRemoteReps()` and `fit.scanStrength`. If wx blocks that, the user enters the fits in the Pyfa GUI instead. About 30 fits cover:
+  - T3 cruisers and tactical destroyers in each mode
+  - command ships, Marauders in Bastion, dreads in Siege, and a FAX in Triage
+  - T2 logi and a logi frigate
+  - Damage Control and Assault Damage Control stacked with hardeners, the Reactive Armor Hardener, and ancillary reps with and without paste
+  - a passive shield fit and a hull tank
+  - a fit with implants
+  
+  Each file records the Pyfa version and the build of Pyfa's own data, since it may lag our SDE. The tests fail when a number drifts beyond rounding, unless the file names a known difference.
+
+### Contract (written first, by me)
+
+- **`comm/dogma.go`:** `DogmaFile` is the loaded `static_data/dogma.json`, holding `sde_build` and:
+  - `attributes`: id → default, stackable, highIsGood, maxAttributeID
+  - `effects`: id → category, duration/discharge attribute ids, and modifiers (domain, func, modified, modifying, operation, group, skill)
+  - `types`: id → attributes and effect ids, with its default effect
+  - `bonus_skills`: bonus attribute id → skill type id
+  
+  It is loaded by `comm.InitStaticData` as the other files are, and an override replaces a type or effect whole. A placeholder file covers a Rifter and one module for the engine's tests. If `sde_build` differs from `fit_types.json`'s, the app logs a warning.
+- **`fitting` package (new):**
+  - `Input`: the hull, `[]Module{Type, Charge, Slot}`, implants, and a T3D `Mode`
+  - `Compute(Input) (*Stats, error)`
+  - `Modes(hull) []int`
+  - `Stats`: the layers (HP and four resonances each), omni EHP, local rep/s, passive regen, remote rep/s, sensor, EWAR resistances, `Assumptions`, and `Unknown` (types not in the extract)
+  
+  It doesn't import `retrieval`. A small adapter turns a `retrieval.Fit` into an `Input`. The interface between the engine core and the hand-written effects is `engine.Attr(item, attrID) float64` plus a table of hand-coded effects keyed by effect id. Every exported name is stubbed so it compiles before any agent starts.
+- **`gui.FitLoss.Stats`:** `[]ModeStats` (one entry with no mode, or three for a T3D), filled during the search like `Tags`, never lazily.
+
+### Agent split (Sonnet, each in its own files, no commits)
+
+| Wave | Agent | Files | Work |
+|---|---|---|---|
+| 1 | **Extract** | `cmd/sdegen/dogma*.go`, `static_data/dogma.json` | Attributes, effects, and type dogma, trimmed back from the output attributes. Skills, the character type, group 1306, and unpublished types in the kept categories. The `bonus_skills` table, with the Pyfa dev check, and its leftovers reported. |
+| 1 | **Engine core** | `fitting/engine*.go` + tests | Lazy attributes, the nine stages, caps, penalty chains, domains and funcs, state gating, all-V skills, bonus scaling. Tested on hand-made dogma data. |
+| 1 | **Golden** | scratchpad Pyfa, `fitting/testdata/golden/` | The headless Pyfa harness and about 30 EFT + JSON pairs. |
+| 1→2 | **Effects & outputs** | `fitting/effects.go`, `fitting/rah.go`, `fitting/stats.go` + tests | The hand-coded effects, the Reactive Armor Hardener simulation, and the output formulas: EHP `HP / Σ(¼·resonance)`, peak regen `2.5 × capacity / recharge s`, rep `amount / cycle s`, sensor (largest strength, a tie is Multispectral). Codes against the contract's engine interface, and runs its tests once the engine core lands. |
+| 3 | me | adapter, golden test runner, `gui/fits.go`, `main.js`, docs | Wire it into the search, fix whatever the golden tests turn up, the strip and the mode switch, CLI output, `features.md`, help text, and `docs/static-data-overrides.md` for `dogma.json`. |
+
+I relay any finding that affects another agent with SendMessage, and run the real thing (the CLI on real killmails, the GUI build) before calling it done.
+
+### Later, not in this phase
+
+- Tags read from the numbers, ie Buffer or Active by EHP and rep/s rather than module counts.
+- Capacitor stability, DPS, speed, and structures.
+- A toggle to leave the implants out.
 
 ## Open decisions
 
-- Where the phase 4 numbers show.
+- None at present. (Where the phase 4 numbers show: a strip under the ring, decided 2026-10-29.)
