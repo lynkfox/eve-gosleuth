@@ -109,6 +109,7 @@ const (
 	dataAnalyzer          = 22175
 	largeSmartbomb        = 3995
 	steelPlates           = 20353
+	largeArmorRepairer    = 3540
 	bastionModule         = 33400
 	shieldCommandBurst    = 43555
 	paladin               = 28659
@@ -164,9 +165,9 @@ func TestFitTagRules(t *testing.T) {
 		}
 	})
 
-	t.Run("only the heaviest of an exclusive set applies, a tie going to the first listed", func(t *testing.T) {
-		assert.Equal(t, []string{"Passive"}, tagNames(tagFit(t, heron, nil, []int{shieldRecharger, largeShieldExtender}, nil, nil).Tags()))
-		assert.Equal(t, []string{"Buffer"}, tagNames(tagFit(t, heron, nil, []int{shieldRecharger, largeShieldExtender, largeShieldExtender}, nil, nil).Tags()))
+	t.Run("only the first listed of an exclusive set applies, however heavy the rest", func(t *testing.T) {
+		assert.Equal(t, []string{"Passive"}, tagNames(tagFit(t, heron, nil, []int{shieldRecharger, largeShieldExtender, largeShieldExtender}, nil, nil).Tags()))
+		assert.Equal(t, []string{"Buffer"}, tagNames(tagFit(t, heron, nil, []int{largeShieldExtender, largeShieldExtender}, nil, nil).Tags()))
 	})
 
 	t.Run("tags are in priority order, those without one last, and never include Fleet Doctrine", func(t *testing.T) {
@@ -224,6 +225,18 @@ func TestEmbeddedFitTagRules(t *testing.T) {
 		assert.NotContains(t, tagNames(tagFit(t, paladin, []int{megaPulse, bastionModule, megaPulse, megaPulse}, nil, nil, nil).Tags()), "Ratting", "a bastion alone")
 		plated := tagFit(t, paladin, []int{megaPulse, bastionModule, megaPulse, largeSmartbomb, largeSmartbomb, megaPulse, megaPulse}, nil, []int{steelPlates, steelPlates}, nil).Tags()
 		assert.NotContains(t, tagNames(plated), "Ratting", "a buffer tank counts hard against it")
+	})
+
+	t.Run("any repairer makes the tank active, whatever its buffer", func(t *testing.T) {
+		tags := tagNames(tagFit(t, bhaalgorn, nil, nil, []int{steelPlates, steelPlates, steelPlates, largeArmorRepairer}, nil).Tags())
+		assert.Contains(t, tags, "Active")
+		assert.NotContains(t, tags, "Buffer")
+	})
+
+	t.Run("smartbombs in most of the highs are a firewaller", func(t *testing.T) {
+		bombs := []int{largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb}
+		assert.Contains(t, tagNames(tagFit(t, bhaalgorn, bombs, nil, nil, nil).Tags()), "Firewaller", "six of seven")
+		assert.NotContains(t, tagNames(tagFit(t, bhaalgorn, bombs[1:], nil, nil, nil).Tags()), "Firewaller", "five of seven")
 	})
 
 	t.Run("command bursts are links", func(t *testing.T) {

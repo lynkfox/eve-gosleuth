@@ -165,7 +165,7 @@ A tag's fields:
 | `priority` | The order a fit shows its tags in, lowest first. A row shows its first role and the next three tags. Tags without one come after the rest. |
 | `role` | `true` for a tag that can name a fit's row, as its first role by `priority` does |
 | `threshold` | The total weight it needs to apply |
-| `share_threshold` | The share of their racks its modules must fill: Firewaller's 1 needs every high slot to be a smartbomb. A tag with both needs both. |
+| `share_threshold` | The share of their racks its modules must fill: Firewaller's 0.75 needs smartbombs in three quarters of the high slots. A tag with both needs both. |
 | `signals` | What gives it weight (below) |
 | `requires` | Signals of which each must match something, or the tag doesn't apply. Their weights are ignored. |
 | `forbids` | Signals of which none may match. Logi forbids guns, so a ship spider tanking with one remote repairer isn't logi. |
@@ -185,7 +185,7 @@ Weights may be negative: Bait counts each gun against itself. As a guide, a weig
 
 At the top of the file:
 - `bonus_ignores`: bonus lines containing one of these words never count for `bonused_by`. A "bonus to Sensor Dampener resistance" is about what the hull resists, not what it fits.
-- `exclusive`: sets of tags of which only the heaviest applies, a tie going to the one listed first. Built in, a fit is only one of Passive, Active, or Buffer.
+- `exclusive`: sets of tags of which only the first listed that the fit has applies. Built in, a fit is only one of Active, Passive, or Buffer, in that order: any repairer makes a tank active, however much buffer it has.
 
 `signals`, `requires`, and `forbids` are lists, so your copy of one replaces it whole. To change only a tag's threshold, give just that: `{"tags": {"Neut": {"threshold": 2}}}`. To remove a tag, set it to `null`. Fleet Doctrine is not read from the fit; its numbers are under `fleet_doctrine`.
 

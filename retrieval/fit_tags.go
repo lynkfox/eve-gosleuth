@@ -38,7 +38,7 @@ type tagPart struct {
 }
 
 /*
-	Tags reads the fit's tags by the rules in fit_tag_rules.json: those whose weight reaches their threshold, with each of the rule's requires matched and none of its forbids, only the heaviest of each exclusive set.
+	Tags reads the fit's tags by the rules in fit_tag_rules.json: those whose weight reaches their threshold, with each of the rule's requires matched and none of its forbids, only the first listed of each exclusive set.
 	A rule's tag_weights are added once the other tags are settled, so they read only tags without tag_weights of their own.
 	The Fleet Doctrine tag is read from battles, not the fit, so it is never here.
 
@@ -67,7 +67,7 @@ func (f *Fit) Tags() []FitTag {
 			tags = append(tags, tag)
 		}
 	}
-	tags = keepHeaviestExclusive(tags, rules.Exclusive)
+	tags = keepFirstExclusive(tags, rules.Exclusive)
 
 	settled := len(tags)
 	for name, tag := range weighedByTags {
@@ -210,16 +210,14 @@ func tagPasses(tag FitTag) bool {
 	return byWeight && byShare
 }
 
-// keepHeaviestExclusive leaves only the heaviest of each exclusive set's tags, a tie going to the one listed first
-func keepHeaviestExclusive(tags []FitTag, exclusive map[string][]string) []FitTag {
+// keepFirstExclusive leaves only the first listed of each exclusive set's tags the fit has, ie Active over Buffer however much buffer it has
+func keepFirstExclusive(tags []FitTag, exclusive map[string][]string) []FitTag {
 	for _, set := range exclusive {
 		keep := ""
-		best := 0.0
 		for _, name := range set {
-			for _, tag := range tags {
-				if tag.Name == name && (keep == "" || tag.Weight > best) {
-					keep, best = name, tag.Weight
-				}
+			if slices.ContainsFunc(tags, func(tag FitTag) bool { return tag.Name == name }) {
+				keep = name
+				break
 			}
 		}
 		tags = slices.DeleteFunc(tags, func(tag FitTag) bool { return slices.Contains(set, tag.Name) && tag.Name != keep })

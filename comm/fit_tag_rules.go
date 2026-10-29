@@ -88,7 +88,7 @@ type FleetDoctrineRule struct {
 // FitTagRulesFile is the layout of fit_tag_rules.json
 type FitTagRulesFile struct {
 	BonusIgnores []string               `json:"bonus_ignores"` // a hull bonus line containing one of these never makes a signal bonused, ie "resistance"
-	Exclusive    map[string][]string    `json:"exclusive"`     // sets of tags of which only the heaviest applies, a tie going to the first listed
+	Exclusive    map[string][]string    `json:"exclusive"`     // sets of tags of which only the first listed the fit has applies
 	Tags         map[string]*FitTagRule `json:"tags"`          // by tag name
 }
 

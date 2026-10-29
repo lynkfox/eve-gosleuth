@@ -1,8 +1,8 @@
 {
 "bonus_ignores": ["resistance", "impedance", "immune to", "do not apply"],
-"exclusive": {"tank style": ["Passive", "Active", "Buffer"]},
+"exclusive": {"tank style": ["Active", "Passive", "Buffer"]},
 "tags": {
-  "Tackle": {"meaning": "Points, webs, or a tackle hull", "threshold": 2, "priority": 14, "role": true, "signals": [
+  "Tackle": {"meaning": "Points, webs, or a tackle hull", "threshold": 2, "priority": 13, "role": true, "signals": [
     {"note": "warp scramblers and disruptors, more on a hull bonused for them", "groups": [52], "weight": 1, "bonused_by": ["Warp Scrambler", "Warp Disruptor"], "bonused_weight": 1.5},
     {"note": "stasis webifiers", "groups": [65], "weight": 0.5},
     {"note": "stasis grapplers", "groups": [1672], "weight": 0.5},
@@ -26,7 +26,7 @@
   "Links": {"meaning": "Command bursts", "threshold": 1, "priority": 4, "role": true, "signals": [
     {"note": "command bursts", "groups": [1770], "weight": 1}
   ]},
-  "Firewaller": {"meaning": "A full rack of smartbombs", "share_threshold": 1, "priority": 13, "role": true, "signals": [
+  "Firewaller": {"meaning": "Smartbombs in most of the high slots", "share_threshold": 0.75, "priority": 12, "role": true, "signals": [
     {"note": "smartbombs", "groups": [72], "weight": 1}
   ]},
   "Logi": {"meaning": "Remote repairs and no weapons", "threshold": 1, "priority": 3, "role": true, "requires": [
@@ -38,16 +38,16 @@
     {"note": "remote capacitor transmitters", "groups": [67], "weight": 0.5},
     {"note": "remote repair augmentor rigs", "types": [25900, 27068, 31073, 31075, 26298, 31077, 31079, 31081], "weight": 0.5}
   ]},
-  "ECM": {"meaning": "Jammers", "threshold": 2, "priority": 12, "role": true, "signals": [
+  "ECM": {"meaning": "Jammers", "threshold": 2, "priority": 11, "role": true, "signals": [
     {"note": "ECM modules, more on a hull bonused for them", "groups": [201], "weight": 1, "bonused_by": ["ECM"], "bonused_weight": 1.5},
     {"note": "burst jammers", "groups": [80], "weight": 1}
   ]},
-  "EWAR": {"meaning": "Dampeners, weapon disruptors, or target painters", "threshold": 2, "priority": 11, "role": true, "signals": [
+  "EWAR": {"meaning": "Dampeners, weapon disruptors, or target painters", "threshold": 2, "priority": 10, "role": true, "signals": [
     {"note": "sensor dampeners, more on a hull bonused for them", "groups": [208], "weight": 1, "bonused_by": ["Sensor Dampener"], "bonused_weight": 1.5},
     {"note": "weapon disruptors, more on a hull bonused for them", "groups": [291], "weight": 1, "bonused_by": ["Weapon Disruptor"], "bonused_weight": 1.5},
     {"note": "target painters, more on a hull bonused for them", "groups": [379], "weight": 1, "bonused_by": ["Target Painter"], "bonused_weight": 1.5}
   ]},
-  "Neut": {"meaning": "Three neutralizers or nosferatus, fewer on a hull bonused for them, or a heavy neutralizer on a cruiser", "threshold": 3, "priority": 10, "role": true, "signals": [
+  "Neut": {"meaning": "Three neutralizers or nosferatus, fewer on a hull bonused for them, or a heavy neutralizer on a cruiser", "threshold": 3, "priority": 9, "role": true, "signals": [
     {"note": "energy neutralizers and nosferatus, more on a hull bonused for them", "groups": [71, 68], "weight": 1, "bonused_by": ["Energy Neutralizer", "Energy Nosferatu"], "bonused_weight": 1.5},
     {"note": "heavy energy neutralizers on a medium hull", "markets": [691], "hull_sizes": [2], "weight": 3}
   ]},
@@ -116,7 +116,7 @@
     {"note": "light and heavy fighters", "groups": [1652, 1653, 4777, 4779], "weight": 0.1},
     {"note": "fighter support units", "groups": [407], "weight": 0.5}
   ]},
-  "Vorton": {"meaning": "Vorton projectors", "hidden": true, "threshold": 2, "signals": [
+  "Vorton": {"meaning": "A vorton projector, one to a ship", "hidden": true, "threshold": 1, "signals": [
     {"note": "vorton projectors", "groups": [4060], "weight": 1},
     {"note": "vorton tuning systems", "groups": [4067], "weight": 0.5}
   ]},
@@ -148,7 +148,9 @@
     {"note": "reinforced bulkheads and hull repairers", "groups": [78, 63], "weight": 1},
     {"note": "transverse bulkhead rigs", "types": [33890, 33894, 33898, 33902, 33892, 33896, 33900, 33904], "weight": 0.5}
   ]},
-  "Active": {"meaning": "Repairs itself", "threshold": 1, "priority": 21, "role": true, "signals": [
+  "Active": {"meaning": "Repairs itself: any repairer makes the tank active, whatever buffer it has", "threshold": 1, "priority": 21, "role": true, "requires": [
+    {"note": "a shield booster or armor or hull repairer", "groups": [40, 1156, 62, 1199, 63], "weight": 0}
+  ], "signals": [
     {"note": "shield boosters and ancillary shield boosters", "groups": [40, 1156], "weight": 1},
     {"note": "armor repairers and ancillary armor repairers", "groups": [62, 1199], "weight": 1},
     {"note": "hull repairers", "groups": [63], "weight": 1},
@@ -163,7 +165,7 @@
     {"note": "shield rechargers, power relays, and flux coils", "groups": [39, 57, 770], "weight": 1},
     {"note": "core defense field purger rigs", "types": [26084, 31800, 31802, 31804, 26450, 31810, 31812, 31814], "weight": 1}
   ]},
-  "Nano": {"meaning": "Speed fit", "threshold": 2, "priority": 9, "role": true, "requires": [
+  "Nano": {"meaning": "Speed fit", "threshold": 2, "priority": 14, "role": true, "requires": [
     {"note": "a propulsion module", "groups": [46], "weight": 0}
   ], "signals": [
     {"note": "overdrive injectors", "groups": [764], "weight": 1},

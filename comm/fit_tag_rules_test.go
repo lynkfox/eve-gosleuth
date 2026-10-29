@@ -20,7 +20,7 @@ func TestLoadFitTagRules(t *testing.T) {
 			assert.True(t, cyno.Role)
 			assert.Positive(t, cyno.Priority)
 		}
-		assert.Equal(t, []string{"Passive", "Active", "Buffer"}, comm.FitTagRules().Exclusive["tank style"])
+		assert.Equal(t, []string{"Active", "Passive", "Buffer"}, comm.FitTagRules().Exclusive["tank style"])
 	})
 
 	t.Run("an edited copy's null tag removes it, and the rest merge over the built in rules", func(t *testing.T) {
