@@ -155,13 +155,13 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 				ShipImageURL:  api.TypeImageURL(km.Victim.Ship.ItemID),
 				ShipRenderURL: api.TypeRenderURLAt(km.Victim.Ship.ItemID, 512),
 				ShipEveRefURL: api.EveRefTypeURL(km.Victim.Ship.ItemID),
-				Abyssal:       hasAbyssal(km.Victim.Fit),
 			}
 			byKey[key] = group
 			groups = append(groups, group)
 		}
 		group.Losses = append(group.Losses, loss)
 		group.Implants = group.Implants || loss.PodKillmailID != 0
+		group.Abyssal = group.Abyssal || hasAbyssal(km.Victim.Fit)
 	}
 
 	fits := make([]FitGroup, 0, len(groups))
@@ -249,13 +249,18 @@ func podsWithShips(ships []*retrieval.Killmail, pods []*retrieval.Killmail, batt
 }
 
 // fitKey is what makes two fits identical: the hull and the module types in each rack, in any order. Charges, drones, and cargo do not count, as they are too easily used up or forgotten by the time the ship dies.
+// A module in one of fit_merged_groups counts as its group, so a fit's ECM flavors, picked for the enemy's sensors, don't split it.
 func fitKey(shipID int, fit *retrieval.Fit) string {
 	parts := []string{fmt.Sprint(shipID)}
 	for _, rack := range [][]*retrieval.FittedModule{fit.Highs, fit.Mids, fit.Lows, fit.Rigs, fit.Subsystems, fit.Services} {
 		ids := []int{}
 		for _, fitted := range rack {
 			if fitted != nil && fitted.Module != nil {
-				ids = append(ids, fitted.Module.ItemID)
+				id := fitted.Module.ItemID
+				if comm.FitMergedGroups.ContainsGroupOf(id) {
+					id = -comm.TypeGroup(id) // negative so it can't clash with a type id
+				}
+				ids = append(ids, id)
 			}
 		}
 		slices.Sort(ids)
@@ -264,7 +269,7 @@ func fitKey(shipID int, fit *retrieval.Fit) string {
 	return strings.Join(parts, "|")
 }
 
-// hasAbyssal is whether a fit has a mutated module. As the key holds the module types, every loss of a fit has one or none does.
+// hasAbyssal is whether a fit has a mutated module. A merged fit is Abyssal if any of its losses is, as a merged group's flavors may differ.
 func hasAbyssal(fit *retrieval.Fit) bool {
 	for _, rack := range [][]*retrieval.FittedModule{fit.Highs, fit.Mids, fit.Lows, fit.Rigs, fit.Subsystems, fit.Services} {
 		for _, fitted := range rack {

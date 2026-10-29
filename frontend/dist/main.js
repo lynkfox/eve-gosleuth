@@ -1968,7 +1968,7 @@ function fitTagWeight(weight, signed = false) {
 
 /*
   showFitTagTip fills the fitting window's tag tip with how a tag was reached and puts it under the tag: each module, drone, hull, or other tag with its count and the weight it gave,
-  then the total against the threshold, and the share of the racks against its own threshold for a tag with one (Firewaller).
+  the part a hull bonus added on its own line beneath it so the rows still add up, then the total against the threshold, and the share of the racks against its own threshold for a tag with one (Firewaller).
   One tip serves every tag, fixed to the page, so the window's scrolling can't clip it.
 */
 function showFitTagTip(chip, tag) {
@@ -1993,7 +1993,9 @@ function showFitTagTip(chip, tag) {
   };
   for (const reason of tag.reasons || []) {
     const counted = reason.count > 1 ? `${reason.name} ×${reason.count}` : reason.name;
-    row(reason.count === 0 ? `${counted} tag` : counted, fitTagWeight(reason.weight, true), reason.weight < 0 ? "fit-tag-tip-against" : "");
+    const bonus = reason.bonus || 0;
+    row(reason.count === 0 ? `${counted} tag` : counted, fitTagWeight(reason.weight - bonus, true), reason.weight < 0 ? "fit-tag-tip-against" : "");
+    if (bonus) row("↳ hull bonus", fitTagWeight(bonus, true), bonus < 0 ? "fit-tag-tip-bonus fit-tag-tip-against" : "fit-tag-tip-bonus");
   }
   if (tag.threshold > 0) row("Total", `${fitTagWeight(tag.weight)} of ${fitTagWeight(tag.threshold)} needed`, "fit-tag-tip-total");
   if (tag.shareThreshold > 0) row("Share of its racks", `${Math.round(tag.share * 100)}% of ${Math.round(tag.shareThreshold * 100)}% needed`, "fit-tag-tip-total");
@@ -2035,11 +2037,16 @@ function fitTag(tag, clickable = false) {
     mark.classList.add("fit-tag-filter");
     mark.addEventListener("click", (event) => {
       event.stopPropagation(); // filters, without selecting the row it is on
-      el("fits-filter").value = `tags: ${tag.name.toLowerCase()}`;
-      fitsShown.filter?.();
+      filterFitsByTag(tag);
     });
   }
   return mark;
+}
+
+// filterFitsByTag lists only the fits with a tag, in place of the filter box's words
+function filterFitsByTag(tag) {
+  el("fits-filter").value = `tags: ${tag.name.toLowerCase()}`;
+  fitsShown.filter?.();
 }
 
 /*
@@ -3058,6 +3065,18 @@ function helpContent(points, sections) {
       const sample = document.createElement("dt");
       sample.className = item.className;
       sample.textContent = item.sample;
+      if (item.onClick) {
+        sample.classList.add("fit-tag-filter");
+        sample.tabIndex = 0;
+        sample.title = item.clickTitle || "";
+        sample.addEventListener("click", item.onClick);
+        sample.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            item.onClick();
+          }
+        });
+      }
       const meaning = document.createElement("dd");
       meaning.textContent = item.meaning;
       list.append(sample, meaning);
@@ -3199,7 +3218,10 @@ const FIT_KEY = {
   // the rules' tags this search found, so the key changes with each search
   get items() {
     const shown = [...fitsShown.ruleTags.filter((tag) => !tag.hidden), ...FIT_TAGS];
-    return shown.map((tag) => ({ sample: tag.name, className: tag.className, meaning: tag.meaning }));
+    return shown.map((tag) => ({
+      sample: tag.name, className: tag.className, meaning: tag.meaning,
+      onClick: () => filterFitsByTag(tag), clickTitle: `List only the fits tagged ${tag.name}`,
+    }));
   },
 };
 

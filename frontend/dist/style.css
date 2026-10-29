@@ -2010,6 +2010,11 @@ body.debug-mode::after {
 .fit-key-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .fit-key-head h3 { margin: 0; font-size: 14px; }
 .fit-key-body h3 { margin-top: 0; }
+/* each tag over its meaning, a line between one tag and the next */
+.fit-key-body dl { grid-template-columns: 1fr; gap: 0; }
+.fit-key-body dd { margin-top: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.fit-key-body dd:last-child { padding-bottom: 0; border-bottom: none; }
+.fit-key-body dt + dd + dt { margin-top: 8px; }
 
 /* how a fit's tag was reached, under the tag on hover: one row a module, then the total against the threshold. Fixed to the page so the fitting window's scrolling can't clip it. */
 .fit-tag-tip {
@@ -2031,6 +2036,7 @@ body.debug-mode::after {
 .fit-tag-tip td { padding: 1px 0; vertical-align: top; }
 .fit-tag-tip td:last-child { padding-left: 12px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .fit-tag-tip-against td:last-child { color: var(--error); }
+.fit-tag-tip-bonus td { padding-left: 10px; color: var(--muted); }
 .fit-tag-tip-total td { padding-top: 4px; border-top: 1px solid var(--border); font-weight: 600; }
 /* in the help's color key the tag is a grid cell, which would stretch it over its meaning's lines */
 .help-content dt.fit-tag { align-self: center; justify-self: start; }

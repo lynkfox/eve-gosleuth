@@ -130,7 +130,7 @@ func TestFitTagRules(t *testing.T) {
 		neut := tagNamed(tags, "Neut")
 		if assert.NotNil(t, neut, "1.5 each on a Bhaalgorn reaches 3") {
 			assert.Equal(t, 3.0, neut.Weight)
-			assert.Equal(t, []retrieval.FitTagReason{{Name: "Heavy Energy Neutralizer II", Count: 1, Weight: 1.5}, {Name: "Heavy Energy Nosferatu II", Count: 1, Weight: 1.5}}, neut.Reasons)
+			assert.Equal(t, []retrieval.FitTagReason{{Name: "Heavy Energy Neutralizer II", Count: 1, Weight: 1.5, Bonus: 0.5}, {Name: "Heavy Energy Nosferatu II", Count: 1, Weight: 1.5, Bonus: 0.5}}, neut.Reasons, "with the part the hull's bonus added")
 			assert.Equal(t, 3.0, neut.Threshold)
 		}
 		assert.Nil(t, tagNamed(tagFit(t, thorax, []int{mediumNeutralizer, mediumNeutralizer}, nil, nil, nil).Tags(), "Neut"), "1 each on a hull without the bonus")

@@ -153,7 +153,7 @@ func TestLoadStaticData(t *testing.T) {
 	})
 
 	t.Run("a file no source has is an error, and the others still load", func(t *testing.T) {
-		builtIn := fstest.MapFS{"items.json": {Data: []byte(`{"pi_material_groups": {"1042": "Basic Commodities - Tier 1"}, "smartbomb_groups": {}}`)}}
+		builtIn := fstest.MapFS{"items.json": {Data: []byte(`{"pi_material_groups": {"1042": "Basic Commodities - Tier 1"}, "smartbomb_groups": {}, "fit_merged_groups": {}}`)}}
 
 		assert.Error(t, comm.InitStaticData(builtIn))
 		assert.True(t, comm.PIMaterialGroups.ContainsName("Basic Commodities - Tier 1"))

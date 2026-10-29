@@ -141,6 +141,41 @@ func TestBuildFitsMergesWhateverTheOrder(t *testing.T) {
 	assert.Contains(t, tagNames(fits[1].Tags), "Drones", "the fit has every tag of its losses")
 }
 
+func TestBuildFitsMergesECMFlavors(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+	assert.NoError(t, comm.InitStaticData(staticdata.Files))
+
+	target := &retrieval.IntelTarget{IDNumber: 10, TypeOfEntity: types.PILOT}
+	loss := func(id int, mids ...*retrieval.Item) *retrieval.Killmail {
+		fitted := []*retrieval.FittedModule{}
+		for _, module := range mids {
+			fitted = append(fitted, &retrieval.FittedModule{Module: module})
+		}
+		return &retrieval.Killmail{
+			KillmailID:   id,
+			KillmailTime: time.Date(2026, 10, 27, 0, 0, id, 0, time.UTC),
+			Victim: &retrieval.KillmailVictim{
+				Pilot: &retrieval.Pilot{CharacterID: 10, Name: "Luxxianna Seraph"},
+				Ship:  &retrieval.Item{ItemID: 11957, Name: "Falcon"},
+				Fit:   &retrieval.Fit{Hull: &retrieval.Item{ItemID: 11957, Name: "Falcon"}, Mids: fitted},
+			},
+		}
+	}
+	ladar, radar := &retrieval.Item{ItemID: 2559, Name: "Ladar ECM II"}, &retrieval.Item{ItemID: 2575, Name: "Radar ECM II"}
+	multispectral := &retrieval.Item{ItemID: 2567, Name: "Multispectral ECM II"}
+	scram := &retrieval.Item{ItemID: 448, Name: "Warp Scrambler II"}
+
+	fits := buildFits([]*retrieval.Killmail{
+		loss(1, ladar, ladar, scram),
+		loss(2, radar, multispectral, scram),
+		loss(3, ladar, scram, scram),
+	}, target, nil)
+
+	assert.Len(t, fits, 2, "any two ECM and a scram are one fit, whatever their flavors; two scrams and one ECM another")
+	assert.Len(t, fits[1].Losses, 2, "the newer fit, two scrams, comes first")
+	assert.Equal(t, "Radar ECM II", fits[1].Losses[0].Fit.Mids[0].Module.Name, "each loss keeps its own flavors")
+}
+
 func TestBuildFitsGivesShipsTheirPodsImplants(t *testing.T) {
 	comm.InitLogger(logrus.InfoLevel)
 	assert.NoError(t, comm.InitStaticData(staticdata.Files))

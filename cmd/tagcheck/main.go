@@ -140,7 +140,11 @@ func printFit(label string, fit *retrieval.Fit) {
 			if reason.Count > 1 {
 				count = fmt.Sprintf(" ×%d", reason.Count)
 			}
-			reasons = append(reasons, fmt.Sprintf("%s%s %+g", reason.Name, count, math.Round(reason.Weight*100)/100))
+			bonus := ""
+			if reason.Bonus != 0 {
+				bonus = fmt.Sprintf(" (hull bonus %+g)", math.Round(reason.Bonus*100)/100)
+			}
+			reasons = append(reasons, fmt.Sprintf("%s%s %+g%s", reason.Name, count, math.Round(reason.Weight*100)/100, bonus))
 		}
 		fmt.Printf("   %s %-12s priority %2d  weight %5.2f of %g  share %4.2f  <- %s\n", mark, tag.Name, tag.Priority, tag.Weight, tag.Threshold, tag.Share, strings.Join(reasons, ", "))
 	}

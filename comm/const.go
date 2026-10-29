@@ -30,6 +30,7 @@ var (
 
 	PIMaterialGroups = newStaticValues() // Planetary Industry resources and commodities
 	SmartbombGroups  = newStaticValues() // smartbomb modules, the weapon a player on a ratting loss may have only bombed it with
+	FitMergedGroups  = newStaticValues() // module groups whose types count as one module when merging fits, ie every ECM flavor
 )
 
 // staticFile is a static data file and the function that loads it
@@ -65,6 +66,7 @@ func sectionedFiles() []sectionedFile {
 		{"items.json", map[string]**StaticValues{
 			"pi_material_groups": &PIMaterialGroups,
 			"smartbomb_groups":   &SmartbombGroups,
+			"fit_merged_groups":  &FitMergedGroups,
 		}},
 	}
 }

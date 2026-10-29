@@ -10,5 +10,8 @@
     },
     "smartbomb_groups": {
         "72": "Smart Bomb"
+    },
+    "fit_merged_groups": {
+        "201": "ECM"
     }
 }

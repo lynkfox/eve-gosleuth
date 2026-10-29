@@ -27,6 +27,7 @@ type FitTagReason struct {
 	Name   string  `json:"name"`
 	Count  int     `json:"count"`  // how many of it, 0 for another tag
 	Weight float64 `json:"weight"` // all of them together, negative for one counting against the tag
+	Bonus  float64 `json:"bonus"`  // the part of Weight the hull's bonus for it added, 0 for none
 }
 
 // tagPart is one thing on a fit a signal can match: a module, a drone stack, or the hull
@@ -179,9 +180,9 @@ func scoreTag(name string, rule *comm.FitTagRule, hull *comm.FitType, parts []ta
 
 	for index := range rule.Signals {
 		signal := &rule.Signals[index]
-		each := signal.Weight
+		each, bonus := signal.Weight, 0.0
 		if len(signal.BonusedBy) > 0 && comm.HullBonused(hull, signal.BonusedBy) {
-			each = signal.BonusedWeight
+			each, bonus = signal.BonusedWeight, signal.BonusedWeight-signal.Weight
 		}
 		weight, share := 0.0, 0.0
 		reasons := []FitTagReason{}
@@ -191,12 +192,13 @@ func scoreTag(name string, rule *comm.FitTagRule, hull *comm.FitType, parts []ta
 			}
 			weight += each * float64(part.quantity)
 			share += each * float64(part.quantity) / part.rack
-			reasons = addReason(reasons, FitTagReason{Name: part.item.Name, Count: part.quantity, Weight: each * float64(part.quantity)})
+			reasons = addReason(reasons, FitTagReason{Name: part.item.Name, Count: part.quantity, Weight: each * float64(part.quantity), Bonus: bonus * float64(part.quantity)})
 		}
 		if signal.Max > 0 && weight > signal.Max {
 			// each match keeps its part of the capped weight, so the reasons still add up
 			for index := range reasons {
 				reasons[index].Weight *= signal.Max / weight
+				reasons[index].Bonus *= signal.Max / weight
 			}
 			share *= signal.Max / weight
 			weight = signal.Max
@@ -207,6 +209,7 @@ func scoreTag(name string, rule *comm.FitTagRule, hull *comm.FitType, parts []ta
 			// a module two signals count is one reason, its count once
 			if at := slices.IndexFunc(tag.Reasons, func(each FitTagReason) bool { return each.Name == reason.Name }); at >= 0 {
 				tag.Reasons[at].Weight += reason.Weight
+				tag.Reasons[at].Bonus += reason.Bonus
 				tag.Reasons[at].Count = max(tag.Reasons[at].Count, reason.Count)
 			} else {
 				tag.Reasons = append(tag.Reasons, reason)
@@ -221,6 +224,7 @@ func addReason(reasons []FitTagReason, reason FitTagReason) []FitTagReason {
 	if at := slices.IndexFunc(reasons, func(each FitTagReason) bool { return each.Name == reason.Name }); at >= 0 {
 		reasons[at].Count += reason.Count
 		reasons[at].Weight += reason.Weight
+		reasons[at].Bonus += reason.Bonus
 		return reasons
 	}
 	return append(reasons, reason)

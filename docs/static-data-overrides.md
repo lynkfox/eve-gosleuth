@@ -117,6 +117,7 @@ All sections hold groups.
 |---|---|
 | `pi_material_groups` | PI materials, which mark a loss as a PI hauler's on the PI Pilots tab |
 | `smartbomb_groups` | Smartbombs, which the Ratters tab treats as "only bombed it" |
+| `fit_merged_groups` | Modules whose types count as one when the Fits tab merges identical fits: built in, ECM, so fits that differ only in their jammers' flavors are one fit |
 
 ### `fit_types.json`
 
@@ -178,7 +179,7 @@ A signal matches each fitted module and drone (or the hull, with `"hull": true`)
 |---|---|
 | `max` | The most this signal adds in all |
 | `hull_sizes` | Counts only on hulls of these sizes, as in `rig_size` above |
-| `bonused_by`, `bonused_weight` | On a hull with a bonus naming one of these words, each match adds `bonused_weight` instead. Matching ignores upper and lower case. |
+| `bonused_by`, `bonused_weight` | On a hull with a bonus naming one of these words, each match adds `bonused_weight` instead. Matching ignores upper and lower case. Hovering the tag in the fitting window shows the extra on its own "hull bonus" line. |
 | `note` | Your description. GoSleuth doesn't read it. |
 
 Weights may be negative: Bait counts each gun against itself. As a guide, a weight of 1 is about one slot given over to the tag's job. Hovering a tag in the fitting window shows what gave it weight, each module's share, and the total against its threshold, which is the quickest way to see why a tag did or didn't apply.
