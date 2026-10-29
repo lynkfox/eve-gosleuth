@@ -2098,7 +2098,7 @@ body.debug-mode::after {
   position: relative;
   flex: none;
   width: 480px;
-  height: 480px;
+  height: 400px; /* the high slots reach 187px from the centre and the far arcs less, so no more is needed above or below */
   margin: 0 auto;
 }
 
@@ -2676,8 +2676,7 @@ main > * { flex: none; }
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  overflow: hidden;
-  max-width: 100%;
+  max-width: 100%; /* not overflow hidden: the Details panel opens over the strip */
   margin: 8px 0;
   padding-right: 12px; /* clear of the window's scroll bar */
   font-size: 12px;
@@ -2699,7 +2698,7 @@ main > * { flex: none; }
 
 .fit-resists {
   display: grid;
-  grid-template-columns: auto auto repeat(4, minmax(48px, 1fr));
+  grid-template-columns: minmax(104px, auto) auto auto repeat(4, minmax(48px, 1fr));
   gap: 3px 8px;
   align-items: center;
 }
@@ -2720,15 +2719,48 @@ main > * { flex: none; }
 .fit-resist-bar { position: absolute; inset: 0; }
 .fit-resist-bar > span { display: block; height: 100%; opacity: 0.35; }
 .fit-resist-num { position: relative; min-width: 0; overflow: hidden; font-variant-numeric: tabular-nums; white-space: nowrap; }
-/* a resist under 40% (FIT_RESIST_HOLE) is a hole: bold, in the error color */
+/* a layer's lowest resist is its hole: bold, in the error color */
 .fit-resist-hole .fit-resist-num { color: var(--error); font-weight: 700; }
 
 .fit-resist-title { color: var(--muted); font-size: 11px; text-align: center; }
 
-/* the summary and ewar resistance as tiles, a muted label over its value, as many to a row as fit */
-.fit-stat-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 4px; }
-.fit-stat-tile { display: flex; flex-direction: column; min-width: 0; padding: 3px 8px; border-radius: 4px; background: var(--panel-raised); }
+/* the total EHP and sensor boxes, in the first column under the Details button, together as tall as the three layer rows */
+.fit-stats-boxes { display: grid; grid-row: 2 / span 3; grid-column: 1; grid-template-rows: 1fr 1fr; gap: 4px; }
+.fit-stat-box { position: relative; display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 3px 10px; overflow: hidden; border-radius: 4px; background: var(--panel-raised); }
+.fit-stat-box > :not(.fit-stat-tint) { position: relative; }
+/* the sensor box's tint by sensor type, faded like the resist bars */
+.fit-stat-tint { position: absolute; inset: 0; opacity: 0.35; }
 .fit-stat-label { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .fit-stat-value { font-size: 14px; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
-.fit-stats-heading { margin-top: 2px; color: var(--muted); font-size: 11px; }
+.fit-stat-line { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+/* the Details button in line with the column titles, its panel opening down over the strip on hover or while the button has focus (a click) */
+.fit-details { position: relative; }
+.fit-details-button {
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 400;
+}
+.fit-details-button:hover { background: var(--panel-raised); }
+.fit-details-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 210px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 35%);
+}
+.fit-details:hover .fit-details-panel, .fit-details:focus-within .fit-details-panel { display: flex; }
+.fit-details-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.fit-details-divider { height: 1px; margin: 2px 0; background: var(--border); }
 .fit-assumptions { font-size: 11px; }

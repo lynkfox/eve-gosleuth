@@ -2223,9 +2223,6 @@ const FIT_DAMAGE_TYPES = [
   { name: "Explosive", color: "#e0963a" },
 ];
 
-// FIT_RESIST_HOLE is the resist % under which a layer's damage type is a hole worth a warning, ie the 40% a fitted tank is usually built to pass
-const FIT_RESIST_HOLE = 40;
-
 // FIT_EWAR_LABELS are the hull's ewar resistance attributes by the name the engine gives them, for the stats strip
 const FIT_EWAR_LABELS = {
   ECMResistance: "ECM",
@@ -2251,19 +2248,6 @@ function compactHp(value) {
   if (amount >= 1e6) return `${(amount / 1e6).toFixed(2)}M`;
   if (amount >= 1e4) return `${(amount / 1e3).toFixed(1)}k`;
   return Math.round(amount).toLocaleString("en-US");
-}
-
-// fitStatTiles lays out [label, value] pairs as small tiles, the label muted over the value, wrapping to the strip's width
-function fitStatTiles(pairs) {
-  const tiles = document.createElement("div");
-  tiles.className = "fit-stat-tiles";
-  for (const [label, value] of pairs) {
-    const tile = document.createElement("div");
-    tile.className = "fit-stat-tile";
-    tile.append(fitStatsSpan("fit-stat-label", label), fitStatsSpan("fit-stat-value", value));
-    tiles.append(tile);
-  }
-  return tiles;
 }
 
 // fitStatsSpan is a span of text with a class
@@ -2315,28 +2299,53 @@ function renderFitStats(fit, loss) {
       }
       parts.push(switcher);
     }
-    parts.push(...fitStatsBody(stats));
+    parts.push(...fitStatsBody(stats, loss));
     strip.replaceChildren(...parts);
   };
   draw();
 }
 
-// fitStatsBody is the strip's content for one stats entry: the resist grid, the summary line, ewar resistance, and what was assumed
-function fitStatsBody(stats) {
-  const parts = [];
+// FIT_SENSOR_COLORS tint the sensor box by its type, faded like the resist bars: fixed, as each means a race's sensors
+const FIT_SENSOR_COLORS = { Radar: "#e0c341", Gravimetric: "#4a90d9", Magnetometric: "#4caf6a", Ladar: "#d9534f" };
 
-  // a row per layer: its HP, then each damage type's resist as a bar and a number. Under FIT_RESIST_HOLE the number is bold in the error color so a hole stands out
+/*
+  fitStatsBody is the strip's content for one stats entry, one grid: the Details button in line with the column titles, the total EHP and sensor boxes under it as tall as the three layer rows, and the rows themselves; then what was assumed.
+*/
+function fitStatsBody(stats, loss) {
+  const parts = [];
   const grid = document.createElement("div");
   grid.className = "fit-resists";
-  // a title over each damage type's column
-  grid.append(fitStatsSpan("", ""), fitStatsSpan("", ""), ...FIT_DAMAGE_TYPES.map((type) => fitStatsSpan("fit-resist-title", type.name)));
+  grid.append(fitStatDetails(stats, loss) || fitStatsSpan("", ""), fitStatsSpan("", ""), fitStatsSpan("fit-resist-title", "EHP"), ...FIT_DAMAGE_TYPES.map((type) => fitStatsSpan("fit-resist-title", type.name)));
+
+  // the total EHP, and how hard it is to jam: its sensor strength, tinted by sensor type, and any ECM resistance of the hull
+  const sensor = stats.sensor || {};
+  const ecm = Math.round((1 - fitStat((stats.ewar_resist || {}).ECMResistance ?? 1)) * 100);
+  const jam = [`${sensor.type || "Sensor"} ${Math.round(fitStat(sensor.strength))}`];
+  if (ecm !== 0) jam.push(`${ecm}% ECM resist`);
+  const sensorBox = fitStatBox("Against ECM", jam);
+  if (FIT_SENSOR_COLORS[sensor.type]) {
+    const tint = document.createElement("span");
+    tint.className = "fit-stat-tint";
+    tint.style.background = FIT_SENSOR_COLORS[sensor.type];
+    sensorBox.prepend(tint);
+  }
+  const boxes = document.createElement("div");
+  boxes.className = "fit-stats-boxes";
+  boxes.append(fitStatBox("Total EHP", [compactHp(stats.ehp)]), sensorBox);
+  grid.append(boxes);
+
+  // a row per layer: its EHP (its raw HP on hover), then each damage type's resist as a bar with the number on it. The layer's lowest resist is its hole, in the error color, unless all four are equal
   for (const [label, layer] of [["Shield", stats.shield], ["Armor", stats.armor], ["Hull", stats.hull]]) {
-    const resonance = (layer && layer.resonance) || [1, 1, 1, 1];
-    grid.append(fitStatsSpan("fit-resist-layer", label), fitStatsSpan("fit-resist-hp", compactHp(layer && layer.hp)));
+    const resists = ((layer && layer.resonance) || [1, 1, 1, 1]).map((resonance) => Math.max(0, Math.min(100, (1 - fitStat(resonance)) * 100)));
+    const lowest = Math.min(...resists);
+    const hasHole = resists.some((resist) => resist.toFixed(1) !== lowest.toFixed(1));
+    const ehp = fitStatsSpan("fit-resist-hp", compactHp(layer && layer.ehp));
+    ehp.title = `${compactHp(layer && layer.hp)} HP before resists`;
+    grid.append(fitStatsSpan("fit-resist-layer", label), ehp);
     FIT_DAMAGE_TYPES.forEach((type, index) => {
-      const resist = Math.max(0, Math.min(100, (1 - fitStat(resonance[index])) * 100));
+      const resist = resists[index];
       const cell = document.createElement("span");
-      cell.className = `fit-resist${resist < FIT_RESIST_HOLE ? " fit-resist-hole" : ""}`;
+      cell.className = `fit-resist${hasHole && resist.toFixed(1) === lowest.toFixed(1) ? " fit-resist-hole" : ""}`;
       cell.title = `${label} ${type.name} resist`;
       const bar = document.createElement("span");
       bar.className = "fit-resist-bar";
@@ -2350,33 +2359,69 @@ function fitStatsBody(stats) {
   }
   parts.push(grid);
 
-  // the summary as tiles: EHP, what it repairs itself, what it gives others, and its sensor
-  const tiles = [["EHP", compactHp(stats.ehp)]];
-  const rate = (value, unit = "HP/s") => `${Math.round(value).toLocaleString("en-US")} ${unit}`;
-  const local = stats.local_rep || {};
-  for (const [key, label] of [["shield", "Shield rep"], ["armor", "Armor rep"], ["hull", "Hull rep"]]) {
-    if (fitStat(local[key]) > 0) tiles.push([label, rate(local[key])]);
-  }
-  if (fitStat(stats.passive_regen) > 0) tiles.push(["Shield regen", rate(stats.passive_regen)]);
-  const remote = stats.remote_rep || {};
-  for (const [key, label] of [["shield", "Remote shield"], ["armor", "Remote armor"], ["hull", "Remote hull"]]) {
-    if (fitStat(remote[key]) > 0) tiles.push([label, rate(remote[key])]);
-  }
-  if (fitStat(remote.capacitor) > 0) tiles.push(["Remote cap", rate(remote.capacitor, "GJ/s")]);
-  if (stats.sensor && fitStat(stats.sensor.strength) > 0) tiles.push([stats.sensor.type || "Sensor", String(Math.round(stats.sensor.strength))]);
-  parts.push(fitStatTiles(tiles));
-
-  // ewar resistance: only what the hull resists at all, as the % of it that is resisted, rounded first so a hair under 1 isn't shown as 0%
-  const resisted = Object.entries(stats.ewar_resist || {})
-    .map(([key, value]) => [FIT_EWAR_LABELS[key] || key, Math.round((1 - fitStat(value)) * 100)])
-    .filter(([, percent]) => percent !== 0)
-    .map(([label, percent]) => [label, `${percent}%`]);
-  if (resisted.length) {
-    parts.push(fitStatsSpan("fit-stats-heading", "EWAR resistance"), fitStatTiles(resisted));
-  }
-
   if (stats.assumptions && stats.assumptions.length) parts.push(fitStatsSpan("fit-assumptions muted", stats.assumptions.join(" · ")));
   return parts;
+}
+
+// fitStatBox is one of the boxes beside the resist grid: a muted label over its lines
+function fitStatBox(label, lines) {
+  const box = document.createElement("div");
+  box.className = "fit-stat-box";
+  box.append(fitStatsSpan("fit-stat-label", label), ...lines.map((line, index) => fitStatsSpan(index === 0 ? "fit-stat-value" : "fit-stat-line", line)));
+  return box;
+}
+
+/*
+  fitStatDetails is the Details button whose panel, opening down over the strip on hover or click, has the stats the strip doesn't show:
+  its self repair on an active tank, its shield regen on a passive one (the fit's Passive tag), its neut pressure, the repair and capacitor it gives as logi, and the hull's ewar resistances (ECM is in the sensor box).
+  null when there are none.
+*/
+function fitStatDetails(stats, loss) {
+  const rate = (value, unit = "HP/s") => `${Math.round(fitStat(value)).toLocaleString("en-US")} ${unit}`;
+  const rows = [];
+  const local = stats.local_rep || {};
+  for (const [key, label] of [["shield", "Shield boost"], ["armor", "Armor repair"], ["hull", "Hull repair"]]) {
+    if (fitStat(local[key]) > 0) rows.push([label, rate(local[key])]);
+  }
+  const passive = (loss.tags || []).some((tag) => tag.name === "Passive");
+  if (passive && fitStat(stats.passive_regen) > 0) rows.push(["Shield regen (peak)", rate(stats.passive_regen)]);
+  if (fitStat(stats.neut) > 0) rows.push(["Neut pressure", rate(stats.neut, "GJ/s")]);
+  const remote = stats.remote_rep || {};
+  for (const [key, label] of [["shield", "Remote shield"], ["armor", "Remote armor"], ["hull", "Remote hull"]]) {
+    if (fitStat(remote[key]) > 0) rows.push([label, rate(remote[key])]);
+  }
+  if (fitStat(remote.capacitor) > 0) rows.push(["Remote cap", rate(remote.capacitor, "GJ/s")]);
+
+  // the ewar resistances the hull has at all, as the % resisted, rounded first so a hair under 1 isn't shown as 0%
+  const resisted = Object.entries(stats.ewar_resist || {})
+    .filter(([key]) => key !== "ECMResistance")
+    .map(([key, value]) => [FIT_EWAR_LABELS[key] || key, Math.round((1 - fitStat(value)) * 100)])
+    .filter(([, percent]) => percent !== 0)
+    .map(([label, percent]) => [`${label} resist`, `${percent}%`]);
+  if (rows.length && resisted.length) rows.push(null); // a divider
+  rows.push(...resisted);
+  if (!rows.length) return null;
+
+  const wrap = document.createElement("span");
+  wrap.className = "fit-details";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "fit-details-button";
+  button.textContent = "Details ▾";
+  const panel = document.createElement("span");
+  panel.className = "fit-details-panel";
+  for (const pair of rows) {
+    const row = document.createElement("span");
+    if (!pair) {
+      row.className = "fit-details-divider";
+    } else {
+      row.className = "fit-details-row";
+      row.append(fitStatsSpan("fit-stat-label", pair[0]), fitStatsSpan("fit-stat-value", pair[1]));
+    }
+    panel.append(row);
+  }
+  wrap.append(button, panel);
+  return wrap;
 }
 
 // fitIcon is an item type's icon in the fitting window
@@ -3112,7 +3157,7 @@ const TAB_HELP = {
     "A merged fit's losses page with the arrows by its name, or ← →, each showing its own layout, charges, and drones.",
     "Right-click the hull, a module, a drone, or the zKillboard button (which has the capsule too) to open it on an external site.",
     "Tag key, beside the filter, explains each tag this search found. Hover a tag in the fitting window to see what earned it.",
-    "Under the ship, its stats from a dogma engine: all skills V, every module active, no heat or boosts. A tactical destroyer has a switch between its modes.",
+    "Under the ship, its stats from a dogma engine: all skills V, every module active, no heat or boosts. Each layer's EHP is against even damage, and its weakest resist is red. Details ▾ gives its repair, passive regen, neut pressure, logi output, and ewar resistances. A tactical destroyer has a switch between its modes.",
   ],
   "tab-capitals": [
     "Capital ships its pilots flew on these killmails, and who flew them. Click a pilot to search.",
