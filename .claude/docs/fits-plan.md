@@ -269,11 +269,11 @@ I relay any finding that affects another agent with SendMessage, and run the rea
 - **Known differences** (in the golden files): the Damnation and Vulture, as Pyfa applies a fit's own command bursts to itself; and a Reactive Armor Hardener with a Damage Control and a hardener settles 0.13% from Pyfa on thermal, not yet explained.
 - Regenerating: the harness is in `fitting/testdata/golden/harness/` (`SETUP.md` there: a Pyfa checkout, a venv, and Pyfa's `db_update.py`, none committed). Regenerating keeps the known differences.
 
-### Next: own boosts, with a button (user's call 2026-10-29)
+### Next: own boosts, always on (user's call 2026-10-29)
 
-- A command ship's bursts reach itself in game, and Pyfa counts them. The user wants **a button in the fitting window to turn the fit's own boosts on and off**.
+- A command ship's bursts reach itself in game, and Pyfa counts them. **They always count, with no toggle** (the user first asked for an on/off button, then dropped it the same afternoon, as "every module active" is assumed anyway). Instead **a warning label in the strip says the stats include its own links**, shown only on a fit with an active command burst.
 - The SDE gives bursts no modifiers, but `dbuffCollections.jsonl` defines each warfare buff (what it modifies, how, and which aggregate mode), and a burst charge names its buffs with `warfareBuff1ID`..`4ID` and their values. So bursts can likely be data-driven: sdegen extracts the buff collections, and the engine applies a fit's own active bursts' buffs to its ship when the button is on, keeping the strongest of each buff as the game does.
-- The stats then travel twice (with and without boosts), or per mode and boost for a tactical destroyer, and the Damnation and Vulture golden fits lose their known difference.
+- The stats travel once (per mode for a tactical destroyer), and the Damnation and Vulture golden fits lose their known difference.
 
 ### Later, not in this phase
 
