@@ -98,8 +98,9 @@ func ratLoss(km *retrieval.Killmail, esiClient api.ESIClient) (RatLoss, bool) {
 	loss := RatLoss{Killmail: km, Kind: RatsOnly, Rats: []RatCount{}}
 	rats := map[int]*RatCount{}
 	for _, attacker := range km.Attackers {
-		if isRat(attacker) {
-			if attacker.Ship == nil {
+		if IsRat(attacker) {
+			// sentry guns and police shoot players who aren't ratting, so are neither a rat nor a player
+			if attacker.Ship == nil || !ratShip(attacker.Ship, esiClient) {
 				continue
 			}
 			rat, found := rats[attacker.Ship.ItemID]
@@ -134,12 +135,65 @@ func ratLoss(km *retrieval.Killmail, esiClient api.ESIClient) (RatLoss, bool) {
 	return loss, true
 }
 
-// isRat reports whether an attacker is an NPC: no character, and in an NPC corporation or none. Structures have no character either, but belong to a player corp.
-func isRat(attacker *retrieval.KillmailAttacker) bool {
+/*
+	IsRat reports whether an attacker is an NPC: no character, and in an NPC corporation or none. Structures have no character either, but belong to a player corp.
+	Gate sentries, CONCORD, and police are NPCs too, see IsPvENPC.
+
+Parameters:
+  - attacker: one of a killmail's attackers
+
+Returns:
+  - bool: true for an NPC
+*/
+func IsRat(attacker *retrieval.KillmailAttacker) bool {
 	if attacker.Pilot != nil && !attacker.Pilot.NPC {
 		return false
 	}
 	return attacker.CorpAtKill == nil || api.IsNPCCorporation(attacker.CorpAtKill.CorporationID)
+}
+
+/*
+	IsPvENPC reports whether an attacker is an NPC met in PvE: a rat (IsRat) whose ship is not in ships.json's npc_not_rat_groups, so not a gate or station sentry gun, CONCORD, police, or a faction navy
+
+Parameters:
+  - attacker: one of a killmail's attackers
+  - esiClient: looks up the NPC ship's group, which fit_types.json does not have
+
+Returns:
+  - bool: true for a rat
+*/
+func IsPvENPC(attacker *retrieval.KillmailAttacker, esiClient api.ESIClient) bool {
+	return IsRat(attacker) && (attacker.Ship == nil || ratShip(attacker.Ship, esiClient))
+}
+
+/*
+	PvENPCs counts the attackers that are NPCs met in PvE (IsPvENPC), which the Ratting tag reads
+
+Parameters:
+  - attackers: a killmail's attackers
+  - esiClient: looks up the NPC ships' groups
+
+Returns:
+  - int: how many
+*/
+func PvENPCs(attackers []*retrieval.KillmailAttacker, esiClient api.ESIClient) int {
+	count := 0
+	for _, attacker := range attackers {
+		if IsPvENPC(attacker, esiClient) {
+			count++
+		}
+	}
+	return count
+}
+
+// ratShip reports whether an NPC's ship is a rat's, not one in npc_not_rat_groups. A ship the ESI can't look up counts as a rat's, as most NPCs are.
+func ratShip(ship *retrieval.Item, esiClient api.ESIClient) bool {
+	info, err := esiClient.GetItemInfo(ship.ItemID)
+	if err != nil || info == nil {
+		comm.Logger.WithError(err).Warnf("Unable to look up NPC ship type %d, it is counted as a rat", ship.ItemID)
+		return true
+	}
+	return !comm.NPCNotRatGroups.ContainsIDNumber(info.GroupID)
 }
 
 // isSmartbomb reports whether a player attacker's weapon is a smartbomb

@@ -64,7 +64,7 @@ func TestBuildFits(t *testing.T) {
 		reloaded,
 		loaded,
 		refit,
-	}, target, nil)
+	}, target, nil, nil)
 
 	groups := [][]int{}
 	for _, fit := range fits {
@@ -120,7 +120,7 @@ func TestBuildFitsMergesWhateverTheOrder(t *testing.T) {
 		loss(2, []*retrieval.FittedModule{mwd, nil, scram, battery}, hammerheads, nil),
 		loss(3, []*retrieval.FittedModule{battery, mwd, scram}, nil, paste),
 		loss(4, []*retrieval.FittedModule{abyssalScram, battery, mwd}, nil, nil),
-	}, target, nil)
+	}, target, nil, nil)
 
 	assert.Len(t, fits, 2, "the same mids in any order, with or without drones or cargo, are one fit; the abyssal scram another")
 	assert.Len(t, fits[0].Losses, 1)
@@ -169,7 +169,7 @@ func TestBuildFitsMergesECMFlavors(t *testing.T) {
 		loss(1, ladar, ladar, scram),
 		loss(2, radar, multispectral, scram),
 		loss(3, ladar, scram, scram),
-	}, target, nil)
+	}, target, nil, nil)
 
 	assert.Len(t, fits, 2, "any two ECM and a scram are one fit, whatever their flavors; two scrams and one ECM another")
 	assert.Len(t, fits[1].Losses, 2, "the newer fit, two scrams, comes first")
@@ -227,7 +227,7 @@ func TestBuildFitsGivesShipsTheirPodsImplants(t *testing.T) {
 		pod(11, start.Add(4*time.Hour+2*time.Minute), jita, "Latest ship"), // the later of two ships
 		ship(12, start.Add(5*time.Hour), jita),
 		pod(13, start.Add(5*time.Hour+40*time.Minute), amarr, "Long lived"), // the battle moved on, the capsule with it
-	}, target, battles)
+	}, target, battles, nil)
 
 	assert.Len(t, fits, 1, "the capsules are not fits of their own")
 	implants := map[int][]string{}
@@ -253,7 +253,7 @@ func TestBuildFitsGivesShipsTheirPodsImplants(t *testing.T) {
 	slotted := pod(31, start.Add(7*time.Hour+time.Minute), jita, "")
 	slotted.Victim.Fit.Implants = []*retrieval.Item{{ItemID: 9941, Name: "Memory Augmentation - Basic"}, {ItemID: 9899, Name: "Ocular Filter - Basic"}}
 	slottedShip := ship(30, start.Add(7*time.Hour), jita)
-	fits = buildFits([]*retrieval.Killmail{slottedShip, slotted}, target, map[int]string{30: "h", 31: "h"})
+	fits = buildFits([]*retrieval.Killmail{slottedShip, slotted}, target, map[int]string{30: "h", 31: "h"}, nil)
 	assert.Equal(t, "Ocular Filter - Basic", fits[0].Losses[0].Fit.Implants[0].Name)
 	assert.Equal(t, "Memory Augmentation - Basic", fits[0].Losses[0].Fit.Implants[1].Name)
 	assert.Contains(t, fits[0].Losses[0].EFT, "\n\n\nMemory Augmentation - Basic x1\nOcular Filter - Basic x1", "the capsule's implants are exported in the ship's cargo")
@@ -262,7 +262,7 @@ func TestBuildFitsGivesShipsTheirPodsImplants(t *testing.T) {
 	// a newer fit of the same hull without implants still lists after it
 	refit := ship(20, start.Add(6*time.Hour), jita)
 	refit.Victim.Fit.Lows = []*retrieval.FittedModule{{Module: &retrieval.Item{ItemID: 1541, Name: "Power Diagnostic System II"}}}
-	fits = buildFits([]*retrieval.Killmail{ship(1, start, jita), pod(2, start.Add(30*time.Second), jita, "Ocular Filter"), refit}, target, battles)
+	fits = buildFits([]*retrieval.Killmail{ship(1, start, jita), pod(2, start.Add(30*time.Second), jita, "Ocular Filter"), refit}, target, battles, nil)
 	assert.Len(t, fits, 2)
 	assert.Equal(t, []bool{true, false}, []bool{fits[0].Implants, fits[1].Implants}, "the fit with implants first, though older")
 
@@ -272,7 +272,7 @@ func TestBuildFitsGivesShipsTheirPodsImplants(t *testing.T) {
 	fits = buildFits([]*retrieval.Killmail{
 		ship(1, start, jita), pod(2, start.Add(30*time.Second), jita, "Ocular Filter"), ship(3, start.Add(10*time.Hour), jita),
 		refit, pod(22, start.Add(5*time.Hour+30*time.Second), jita, "Ocular Filter"),
-	}, target, map[int]string{1: "a", 2: "a", 21: "b", 22: "b"})
+	}, target, map[int]string{1: "a", 2: "a", 21: "b", 22: "b"}, nil)
 	assert.Len(t, fits, 2)
 	assert.Equal(t, []int{1, 3}, []int{fits[0].Losses[0].KillmailID, fits[0].Losses[1].KillmailID}, "lost last at 3, so listed before the refit lost at 21")
 	assert.Equal(t, 21, fits[1].Losses[0].KillmailID)

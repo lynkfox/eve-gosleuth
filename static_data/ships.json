@@ -47,5 +47,11 @@
         "89647": "Pioneer Consortium Issue",
         "89648": "Venture Consortium Issue",
         "91174": "Perseverance"
+    },
+    "npc_not_rat_groups": {
+        "99": "Sentry Gun",
+        "182": "Police Drone",
+        "288": "Faction Drone",
+        "301": "Concord Drone"
     }
 }

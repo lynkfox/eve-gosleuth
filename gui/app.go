@@ -755,7 +755,7 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		a.lastAllies = &alliesSource{target: target, killmails: collected.Killmails}
 		report.Allies, report.IgnoredAllies, report.KilledAllies = a.rankAllies(a.lastAllies)
 		report.Holdings = a.holdingActivity(a.lastAllies)
-		report.Fits = buildFits(collected.Killmails, &target, collected.BattleOfKillmail())
+		report.Fits = buildFits(collected.Killmails, &target, collected.BattleOfKillmail(), a.clients.ESIClient)
 		comm.ReportProgress("Ranking systems")
 		report.Systems = buildSystemSummaries(aggregate.GetMostVisitedSystems(systemLimit, collected.SystemsVisted), collected.Killmails, &target)
 	}

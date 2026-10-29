@@ -30,29 +30,51 @@ type FitTagReason struct {
 	Bonus  float64 `json:"bonus"`  // the part of Weight the hull's bonus for it added, 0 for none
 }
 
+// FitTagContext is what a loss's killmail tells about its fit beyond the fit itself
+type FitTagContext struct {
+	NPCs int // the NPCs met in PvE on the killmail, see aggregate.PvENPCs
+}
+
 // tagPart is one thing on a fit a signal can match: a module, a drone stack, or the hull
 type tagPart struct {
 	item     *Item
 	fitType  *comm.FitType
 	quantity int
 	rack     float64 // the slots in its rack, which its weight is a share of
+	npcs     bool    // the NPCs on the killmail, which only an NPCs signal matches
 }
 
 /*
-	Tags reads the fit's tags by the rules in fit_tag_rules.json: those whose weight reaches their threshold, with each of the rule's requires matched and none of its forbids, only the first listed of each exclusive set.
-	A rule's tag_weights are added once the other tags are settled, so they read only tags without tag_weights of their own.
-	The Fleet Doctrine tag is read from battles, not the fit, so it is never here.
+	Tags reads the fit's tags by the rules in fit_tag_rules.json, from the fit alone, see TagsWith
 
 Returns:
   - []FitTag: by Priority (those without one last), then name. Empty for a nil fit.
 */
 func (f *Fit) Tags() []FitTag {
+	return f.TagsWith(FitTagContext{})
+}
+
+/*
+	TagsWith reads the fit's tags by the rules in fit_tag_rules.json: those whose weight reaches their threshold, with each of the rule's requires matched and none of its forbids, only the first listed of each exclusive set.
+	A rule's tag_weights are added once the other tags are settled, so they read only tags without tag_weights of their own.
+	The Fleet Doctrine tag is read from battles and other losses, not the fit, so it is never here.
+
+Parameters:
+  - context: what the loss's killmail adds, ie the rats on it, which only NPCs signals read
+
+Returns:
+  - []FitTag: by Priority (those without one last), then name. Empty for a nil fit.
+*/
+func (f *Fit) TagsWith(context FitTagContext) []FitTag {
 	tags := []FitTag{}
 	if f == nil {
 		return tags
 	}
 	rules := comm.FitTagRules()
 	hull, parts := f.tagParts()
+	if context.NPCs > 0 {
+		parts = append(parts, tagPart{item: &Item{Name: "NPCs on the killmail"}, quantity: context.NPCs, rack: averageRack(f), npcs: true})
+	}
 	// a T3 cruiser's bonuses are on its subsystems
 	bonusers := []*comm.FitType{hull}
 	for _, slot := range f.Subsystems {
@@ -155,7 +177,7 @@ func (f *Fit) tagParts() (*comm.FitType, []tagPart) {
 	if f.Hull != nil {
 		hull = comm.FitTypeOf(f.Hull.ItemID)
 	}
-	averageRack := max(float64(len(f.Highs)+len(f.Mids)+len(f.Lows))/3, 1)
+	averageRack := averageRack(f)
 
 	parts := []tagPart{}
 	if hull != nil {
@@ -183,8 +205,16 @@ func (f *Fit) tagParts() (*comm.FitType, []tagPart) {
 	return hull, parts
 }
 
-// signalMatches reports whether a signal counts a part: the hull for a hull signal, otherwise a module, drone, or implant, on a hull of the signal's sizes. A hull signal naming no types matches any hull of its sizes.
+// averageRack is the average of the fit's high, mid, and low racks, which the hull, drones, fighters, implants, and NPCs are a share of
+func averageRack(f *Fit) float64 {
+	return max(float64(len(f.Highs)+len(f.Mids)+len(f.Lows))/3, 1)
+}
+
+// signalMatches reports whether a signal counts a part: the hull for a hull signal, the killmail's NPCs for an NPCs signal, otherwise a module, drone, or implant, on a hull of the signal's sizes. A hull signal naming no types matches any hull of its sizes.
 func signalMatches(signal *comm.FitTagSignal, hull *comm.FitType, part tagPart) bool {
+	if signal.NPCs || part.npcs {
+		return signal.NPCs && part.npcs && signal.FitsHull(hull)
+	}
 	isHull := part.fitType == hull
 	if signal.Hull != isHull || !signal.FitsHull(hull) {
 		return false

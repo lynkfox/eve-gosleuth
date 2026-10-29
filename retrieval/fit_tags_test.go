@@ -31,7 +31,7 @@ const fitTagRulesFixture = `{
 	"Drones": {"hidden": true, "threshold": 1, "signals": [{"groups": [100], "weight": 0.2}]},
 	"Passive": {"priority": 5, "threshold": 1, "signals": [{"groups": [39], "weight": 1}]},
 	"Buffer": {"priority": 6, "threshold": 1, "signals": [{"groups": [38], "weight": 1}]},
-	"Ratting": {"priority": 7, "role": true, "threshold": 1, "tag_weights": {"Buffer": -5}, "signals": [{"groups": [65], "weight": 2}]},
+	"Ratting": {"priority": 7, "role": true, "threshold": 1, "tag_weights": {"Buffer": -5}, "signals": [{"groups": [65], "weight": 2}, {"npcs": true, "once": true, "weight": 1}]},
 	"Capped": {"hidden": true, "threshold": 1, "signals": [
 		{"groups": [71, 68], "weight": 1, "max": 3, "bonused_by": ["Energy Neutralizer"], "bonused_weight": 2}
 	]},
@@ -140,6 +140,8 @@ const (
 	trimarkPump            = 31055
 	polarizedBlaster       = 34282
 	sensorDampener         = 1969
+	mediumArmorRepairer    = 3530
+	droneLinkAugmentor     = 23527
 )
 
 func TestFitTagRules(t *testing.T) {
@@ -260,6 +262,16 @@ func TestFitTagRules(t *testing.T) {
 		assert.True(t, comm.HullBonused([]*comm.FitType{nil, {Bonuses: []string{"bonus to Energy Neutralizer drain amount"}}}, []string{"Energy Neutralizer"}), "a subsystem's bonus, the hull unknown")
 	})
 
+	t.Run("an npcs signal counts the killmail's rats, not anything fitted", func(t *testing.T) {
+		fit := tagFit(t, thorax, nil, nil, nil, nil)
+		assert.NotContains(t, tagNames(fit.Tags()), "Ratting", "no context, no rats")
+
+		ratting := tagNamed(fit.TagsWith(retrieval.FitTagContext{NPCs: 3}), "Ratting")
+		if assert.NotNil(t, ratting) {
+			assert.Equal(t, []retrieval.FitTagReason{{Name: "NPCs on the killmail", Count: 3, Weight: 1}}, ratting.Reasons, "once, however many")
+		}
+	})
+
 	t.Run("a nil fit has no tags", func(t *testing.T) {
 		var fit *retrieval.Fit
 		assert.Empty(t, fit.Tags())
@@ -305,6 +317,15 @@ func TestEmbeddedFitTagRules(t *testing.T) {
 		highs := []int{megaPulse, bastionModule, megaPulse, megaPulse}
 		assert.Equal(t, "Ratting", tagFit(t, paladin, highs, nil, []int{largeArmorRepairer}, nil).Tags()[0].Name)
 		assert.NotContains(t, tagNames(tagFit(t, paladin, highs, []int{warpScrambler}, []int{largeArmorRepairer}, nil).Tags()), "Ratting", "a point makes it PvP")
+	})
+
+	t.Run("rats on the killmail are a nudge toward ratting, not enough alone", func(t *testing.T) {
+		rats := retrieval.FitTagContext{NPCs: 4}
+		repaired := tagFit(t, vexor, nil, nil, []int{mediumArmorRepairer}, map[int]int{hobgoblin: 5})
+		assert.NotContains(t, tagNames(repaired.TagsWith(rats)), "Ratting", "rats and an active tank")
+		linked := tagFit(t, vexor, nil, nil, []int{mediumArmorRepairer, droneLinkAugmentor}, map[int]int{hobgoblin: 5})
+		assert.NotContains(t, tagNames(linked.Tags()), "Ratting", "a drone link and an active tank without the rats")
+		assert.Equal(t, "Ratting", linked.TagsWith(rats)[0].Name, "with the rats")
 	})
 
 	t.Run("any repairer makes the tank active, whatever its buffer", func(t *testing.T) {

@@ -97,6 +97,7 @@ Each section is a list of `"id": "label"` entries.
 | `fit_ignored_categories` | categories | Losses not shown on the Fits tab, by category, group, or single type: capsules, shuttles, haulers, mining ships, structures, ... |
 | `fit_ignored_groups` | ship groups | |
 | `fit_ignored_types` | ship types | |
+| `npc_not_rat_groups` | NPC groups | NPCs that don't mean the pilot was ratting: gate and station sentry guns, CONCORD, police, faction navies. The Ratters tab and the Fits tab's Ratting tag skip them. NPCs aren't in `fit_types.json`, so these are matched by the group the ESI gives the NPC's ship. |
 
 For example, to stop showing the Astero's losses on the Fits tab, and stop freighters counting as capitals:
 
@@ -212,7 +213,7 @@ A tag's fields:
 | `signals` | What gives it weight (below) |
 | `requires` | Signals of which each must match something, or the tag doesn't apply. Their weights are ignored. |
 | `forbids` | Signals of which none may match. Logi forbids guns, so a ship spider tanking with one remote repairer isn't logi. |
-| `tag_weights` | Weight added for other tags the fit has, ie `{"Buffer": -5, "Passive": -5}` on Ratting, as a buffer or passive tank is rarely a ratting fit. Only tags without `tag_weights` of their own count. |
+| `tag_weights` | Weight added for other tags the fit has, ie `{"Buffer": -5, "Passive": -1}` on Ratting, as a buffer tank is rarely a ratting fit, and a passive one a little less often. Only tags without `tag_weights` of their own count. |
 | `hidden` | `true` to never show it. The filter still finds it. The weapons, Close, and Long are hidden. |
 
 A signal matches each fitted module, drone, and implant (or the hull, with `"hull": true`) by any of `types`, `groups`, `categories`, or `markets`. A ship has implants only when its pilot's capsule was lost with it, so by default they are only a small nudge (0.1 each, at most 0.5 a signal). A hull signal with none of those four matches any hull of its `hull_sizes`: Nano and Cloaky forbid `{"hull": true, "hull_sizes": [4]}`, so a capital is never either. A market group also matches everything listed below it, so Pulse Lasers (558) holds every size. Each match adds `weight`, so three neutralizers add 3. Drones are the exception: the killmail lists only those left in the bay, not those in space when the ship died, so the built in drone signals use `once` and count a kind of drone being there, not how many. A hull bonused for drones is what makes the Drones tag, and support drones (ewar, neut, web, logistic) are a small nudge toward their role, like implants, never enough on their own. A signal can also have:
@@ -221,6 +222,7 @@ A signal matches each fitted module, drone, and implant (or the hull, with `"hul
 |---|---|
 | `max` | The most this signal adds in all |
 | `once` | `true` to add the weight of one match, however many it finds: ten Warriors in the bay count as one. |
+| `npcs` | `true` to match the rats on the loss's killmail instead of anything fitted: NPC attackers, leaving out those in `npc_not_rat_groups` of `ships.json`. Built in, Ratting counts them `once` at 1, a nudge that needs another PvE sign, such as an active tank with a drone link augmentor. |
 | `hull_sizes` | Counts only on hulls of these sizes, as in `rig_size` above |
 | `bonused_by`, `bonused_weight` | On a hull with a bonus naming one of these words, each match adds `bonused_weight` instead. A hull signal with a `weight` of 0 and no types counts only on a hull bonused for it, as the Drones tag does. A T3 cruiser's fitted subsystems count as its hull here. Matching ignores upper and lower case. Hovering the tag in the fitting window shows the extra on its own "hull bonus" line. |
 | `note` | Your description. GoSleuth doesn't read it. |

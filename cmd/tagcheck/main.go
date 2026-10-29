@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lynkfox/go_eve_sleuth/aggregate"
 	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
@@ -46,8 +47,28 @@ func main() {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", arg, err)
 			continue
 		}
-		printFit(arg, cache.BuildFit(killmail.Victim.ShipTypeID, killmail.Victim.Items))
+		npcs := aggregate.PvENPCs(attackers(killmail), cache)
+		printFit(arg, cache.BuildFit(killmail.Victim.ShipTypeID, killmail.Victim.Items), npcs)
 	}
+}
+
+// attackers are a killmail's attackers with only the ids aggregate.IsPvENPC reads, so no names are looked up
+func attackers(killmail *api.ESIKillmail) []*retrieval.KillmailAttacker {
+	listed := []*retrieval.KillmailAttacker{}
+	for _, attacker := range killmail.Attackers {
+		each := &retrieval.KillmailAttacker{}
+		if attacker.CharacterID != nil {
+			each.Pilot = &retrieval.Pilot{CharacterID: *attacker.CharacterID}
+		}
+		if attacker.CorporationID != nil {
+			each.CorpAtKill = &retrieval.Corporation{CorporationID: *attacker.CorporationID}
+		}
+		if attacker.ShipTypeID != 0 {
+			each.Ship = &retrieval.Item{ItemID: attacker.ShipTypeID}
+		}
+		listed = append(listed, each)
+	}
+	return listed
 }
 
 // readKillmail reads a saved ESI killmail, or looks up an id or link's hash on zKillboard and reads it from the ESI
@@ -100,9 +121,10 @@ func zkillHash(id int) (string, error) {
 	return entries[0].Zkb.Hash, nil
 }
 
-// printFit prints the fit's racks and bays, then its tags in the order the app shows them, marking the one that names the row
-func printFit(label string, fit *retrieval.Fit) {
-	fmt.Printf("== %s  %s\n", label, fit.Hull.Name)
+// printFit prints the fit's racks and bays, then its tags in the order the app shows them, marking the one that names the row.
+// npcs are the rats on its killmail, which count toward Ratting. Fleet Doctrine needs the battle, so is never shown.
+func printFit(label string, fit *retrieval.Fit, npcs int) {
+	fmt.Printf("== %s  %s  (%d rats on the killmail)\n", label, fit.Hull.Name, npcs)
 	for _, rack := range []struct {
 		name  string
 		slots []*retrieval.FittedModule
@@ -126,7 +148,7 @@ func printFit(label string, fit *retrieval.Fit) {
 	}
 
 	named := false
-	for _, tag := range fit.Tags() {
+	for _, tag := range fit.TagsWith(retrieval.FitTagContext{NPCs: npcs}) {
 		mark := "      "
 		switch {
 		case tag.Hidden:

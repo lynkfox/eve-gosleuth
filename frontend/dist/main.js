@@ -2914,7 +2914,7 @@ const TAB_HELP = {
     "Right-click a pilot to search them, their corp, or alliance, or a loss to open it on an external site.",
   ],
   "tab-ratters": [
-    "Ships lost here with NPCs on the killmail. Hover a loss to see who was on it.",
+    "Ships lost here with rats on the killmail, not gate guns, CONCORD, or police. Hover a loss to see who was on it.",
     "Right-click a pilot to search them, their corp, or alliance, or a loss to open it on an external site.",
   ],
   "tab-structures": [

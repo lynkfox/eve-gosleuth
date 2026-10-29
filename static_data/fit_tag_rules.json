@@ -72,7 +72,8 @@
   "Cyno": {"meaning": "Fits a cynosural field generator", "threshold": 1, "priority": 7, "role": true, "signals": [
     {"note": "cynosural, covert cynosural, and industrial cynosural field generators", "types": [21096, 52694, 28646], "weight": 1}
   ]},
-  "Ratting": {"meaning": "Fit for PvE: salvaging, tractoring, drone range, or a marauder in bastion, and no point, ancillary repairer, cap booster, or buffer tank", "tag_weights": {"Buffer": -5, "Passive": -5, "Active": 0.5}, "threshold": 2, "priority": 3, "role": true, "signals": [
+  "Ratting": {"meaning": "Fit for PvE: salvaging, tractoring, drone range, a marauder in bastion, or lost with rats on the killmail, and no point, ancillary repairer, cap booster, or buffer tank", "tag_weights": {"Buffer": -5, "Passive": -1, "Active": 0.5}, "threshold": 2, "priority": 3, "role": true, "signals": [
+    {"note": "rats on the killmail, once however many: not gate or station sentries, CONCORD, police, or faction navies (npc_not_rat_groups in ships.json)", "npcs": true, "once": true, "weight": 1},
     {"note": "bastion modules, which with an active tank and no point make it PvE", "types": [33400, 93999, 94008, 94009, 94010], "weight": 1.5},
     {"note": "a marauder hull, mostly flown for PvE: with a bastion and nothing against it, that is enough", "hull": true, "groups": [900], "weight": 0.5},
     {"note": "smartbombs, which with a bastion module make it PvE", "groups": [72], "max": 1, "weight": 0.5},

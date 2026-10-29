@@ -9,6 +9,7 @@ import (
 )
 
 // FitTagSignal is one thing that gives a tag weight: modules, drones, and implants (or the hull, with Hull) matching any of its types, groups, categories, or market groups. A hull signal with none of those matches any hull of its HullSizes.
+// An NPCs signal matches the rats on the killmail instead, each one an NPC.
 type FitTagSignal struct {
 	Note       string `json:"note"` // for people reading the file, not used
 	Types      []int  `json:"types"`
@@ -16,6 +17,7 @@ type FitTagSignal struct {
 	Categories []int  `json:"categories"`
 	Markets    []int  `json:"markets"` // a market group or any group above the type's (InMarketGroup)
 	Hull       bool   `json:"hull"`    // matches the hull instead of what is fitted to it
+	NPCs       bool   `json:"npcs"`    // matches the NPCs met in PvE on the loss's killmail instead, ie rats, not gate sentries or CONCORD
 	HullSizes  []int  `json:"hull_sizes"`
 
 	Weight        float64  `json:"weight"`         // added for each match

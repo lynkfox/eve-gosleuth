@@ -86,11 +86,12 @@ Parameters:
   - killmails: the search's expanded killmails
   - target: the pilot, corp, or alliance searched
   - battleOf: each killmail in a battle to its battle's id, see aggregate.CollectedData.BattleOfKillmail
+  - esiClient: looks up the NPC ships on each loss, whose rats count toward Ratting (aggregate.PvENPCs)
 
 Returns:
   - []FitGroup: the fits, empty if there are none
 */
-func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, battleOf map[int]string) []FitGroup {
+func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, battleOf map[int]string, esiClient api.ESIClient) []FitGroup {
 	ships, pods := []*retrieval.Killmail{}, []*retrieval.Killmail{}
 	for _, km := range killmails {
 		if km.Victim == nil || km.Victim.Fit == nil || km.Victim.Ship == nil || !aggregate.IsTargetLoss(target, km) {
@@ -144,7 +145,7 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 			fit = &withImplants
 		}
 		loss.EFT = fit.EFT(retrieval.EFTTitle(km))
-		loss.Tags = fit.Tags()
+		loss.Tags = fit.TagsWith(retrieval.FitTagContext{NPCs: aggregate.PvENPCs(km.Attackers, esiClient)})
 
 		key := fitKey(km.Victim.Ship.ItemID, km.Victim.Fit)
 		group := byKey[key]

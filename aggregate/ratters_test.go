@@ -106,6 +106,25 @@ func TestGetRatters(t *testing.T) {
 		assert.Equal(t, []int{1, 8}, []int{ratters[0].Losses[0].Killmail.KillmailID, ratters[0].Losses[1].Killmail.KillmailID})
 	})
 
+	t.Run("gate sentries and CONCORD are not rats", func(t *testing.T) {
+		const sentryGun, concord = 3740, 3880
+		withPolice := ItemGroupESIClient{items: map[int]api.ESIItem{
+			sentryGun: {ItemId: sentryGun, Name: "Minmatar Sentry Gun I", GroupID: 99},
+			concord:   {ItemId: concord, Name: "CONCORD Police Battleship", GroupID: 301},
+			blaster:   esi.items[blaster],
+		}}
+		ganker := loss(9, amy, 0, rat(concord, "CONCORD Police Battleship"), rat(sentryGun, "Minmatar Sentry Gun I"))
+		ratted := loss(10, bob, 0, rat(concord, "CONCORD Police Battleship"), rat(23, "Sansha's Ravager"), player(blaster))
+
+		ratters := aggregate.GetRatters([]*retrieval.Killmail{ganker, ratted}, withPolice)
+
+		assert.Len(t, ratters, 1, "a loss to CONCORD and sentries alone is no ratter's")
+		assert.Equal(t, []aggregate.RatCount{{Ship: &retrieval.Item{ItemID: 23, Name: "Sansha's Ravager"}, Count: 1}}, ratters[0].Losses[0].Rats)
+		assert.Equal(t, 1, ratters[0].Losses[0].Players, "CONCORD is not a player either")
+		assert.Equal(t, 0, aggregate.PvENPCs(ganker.Attackers, withPolice))
+		assert.Equal(t, 1, aggregate.PvENPCs(ratted.Attackers, withPolice))
+	})
+
 	t.Run("no losses with NPCs is an empty list", func(t *testing.T) {
 		assert.Equal(t, []aggregate.Ratter{}, aggregate.GetRatters(killmails[3:5], esi))
 	})
