@@ -77,7 +77,7 @@ type FitTagRule struct {
 	Meaning  string `json:"meaning"`  // what it means, for the key
 	Priority int    `json:"priority"` // the order a fit shows its tags in, lowest first, 0 after the rest
 	Role     bool   `json:"role"`     // it can name a fit's row: the first of the fit's roles by Priority does
-	Hidden   bool   `json:"hidden"`   // never shown, only found by the filter, ie the weapons
+	Hidden   bool   `json:"hidden"`   // left off the fit list and the key, shown last and muted in the fitting window, ie the weapons
 
 	Threshold      float64        `json:"threshold"`
 	ShareThreshold float64        `json:"share_threshold"` // ie 1 for a full rack of the signals' modules

@@ -1989,6 +1989,7 @@ body.debug-mode::after {
 .fit-tag-implants { background: var(--badge); color: var(--badge-text); }
 /* a tag read by fit_tag_rules.json, outlined so it doesn't read as Abyssal or Implants */
 .fit-tag-rule { box-shadow: inset 0 0 0 1px var(--highlight); color: var(--highlight); }
+.fit-tag-hidden { box-shadow: inset 0 0 0 1px var(--muted); color: var(--muted); }
 .fit-row-name { color: var(--text); font-weight: 600; }
 .fit-view-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
 .fit-view-tags:empty { display: none; }

@@ -13,7 +13,7 @@ type FitTag struct {
 	Meaning  string `json:"meaning"`
 	Priority int    `json:"priority"` // the order the fit shows its tags in, lowest first, 0 after the rest
 	Role     bool   `json:"role"`     // it can name the fit's row
-	Hidden   bool   `json:"hidden"`   // never shown, only found by the filter
+	Hidden   bool   `json:"hidden"`   // left off the fit list and the key, shown last and muted in the fitting window
 
 	Weight         float64        `json:"weight"`         // its signals' weights added up
 	Threshold      float64        `json:"threshold"`      // the weight it needed, 0 if it has none

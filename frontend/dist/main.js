@@ -1933,9 +1933,9 @@ const FIT_TAGS = [FIT_ABYSSAL_TAG, FIT_IMPLANTS_TAG];
 // FIT_ROW_TAGS is how many of a fit's tags from fit_tag_rules.json its row shows, the first by priority, the one naming it included; the fitting window shows them all
 const FIT_ROW_TAGS = 3;
 
-// fitRuleTag is a tag read by fit_tag_rules.json (retrieval.FitTag) as the fit list shows it, outlined in the theme's highlight so it doesn't read as Abyssal or Implants
+// fitRuleTag is a tag read by fit_tag_rules.json (retrieval.FitTag) as the fit list shows it, outlined in the theme's highlight so it doesn't read as Abyssal or Implants. A hidden one (the weapons, Close, Long) is outlined in the muted color instead.
 function fitRuleTag(tag) {
-  return { name: tag.name, meaning: tag.meaning, className: "fit-tag fit-tag-rule", rule: true };
+  return { name: tag.name, meaning: tag.meaning, className: tag.hidden ? "fit-tag fit-tag-rule fit-tag-hidden" : "fit-tag fit-tag-rule", rule: true };
 }
 
 // fitRuleTags are the tags any loss of the search's fits has, hidden ones too so the filter finds them, by priority and then name, for the filter box and the key
@@ -2143,9 +2143,10 @@ function renderFitWindow(fit, loss, choose) {
   shown.replaceChildren([loss.pilotName, spokenDate(loss.time), loss.systemName].filter(Boolean).join(" · "));
   if (loss.podKillmailId) shown.append(" ", fitTag(FIT_IMPLANTS_TAG, true));
   shown.oncontextmenu = (event) => openSectionsMenu(event, sections);
-  // every tag of this loss by name, with how it was reached on hover or focus (showFitTagTip)
+  // every tag of this loss by name, with how it was reached on hover or focus (showFitTagTip), the hidden ones last and muted, as the list never shows them
   hideFitTagTip();
-  el("fit-view-tags").replaceChildren(...(loss.tags || []).filter((tag) => !tag.hidden).map((tag) => {
+  const tags = loss.tags || [];
+  el("fit-view-tags").replaceChildren(...[...tags.filter((tag) => !tag.hidden), ...tags.filter((tag) => tag.hidden)].map((tag) => {
     const chip = fitTag(fitRuleTag(tag), true);
     chip.removeAttribute("title");
     chip.tabIndex = 0;
