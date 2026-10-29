@@ -11,6 +11,7 @@ import (
 	"github.com/lynkfox/go_eve_sleuth/aggregate"
 	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm"
+	"github.com/lynkfox/go_eve_sleuth/fitting"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
 )
 
@@ -46,6 +47,15 @@ type FitLoss struct {
 	// the capsule the pilot lost with implants later in the battle, see podsWithShips. Its implants are the fit's.
 	PodKillmailID int    `json:"podKillmailId,omitempty"`
 	PodURL        string `json:"podUrl,omitempty"`
+
+	// what the dogma engine works out for it (see fitStats): one entry, or one per mode for a tactical destroyer, Defense first. Empty for a structure, or a hull dogma.json doesn't have.
+	Stats []FitStats `json:"stats,omitempty"`
+}
+
+// FitStats are a fit's numbers in one tactical destroyer mode, or its only numbers for any other hull
+type FitStats struct {
+	Mode string `json:"mode,omitempty"` // ie Defense, empty for a hull without modes
+	*fitting.Stats
 }
 
 // FitLayout is a fit as the fitting window draws it. A nil slot is an empty one.
@@ -147,6 +157,9 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 			fit = &withImplants
 		}
 		loss.EFT = fit.EFT(retrieval.EFTTitle(km))
+		if !aggregate.IsStructure(km.Victim.Ship) { // a structure's numbers wait on security-scaled rigs and services
+			loss.Stats = fitStats(fit, hasAbyssal(fit))
+		}
 		loss.Tags = fit.TagsWith(retrieval.FitTagContext{NPCs: aggregate.PvENPCs(km.Attackers, esiClient)})
 		if doctrine, found := doctrineIn[km.KillmailID]; found {
 			loss.Tags = retrieval.MergeFitTags(loss.Tags, []retrieval.FitTag{doctrine})

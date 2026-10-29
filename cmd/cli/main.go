@@ -8,6 +8,7 @@ import (
 	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
+	"github.com/lynkfox/go_eve_sleuth/fitting"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
 	staticdata "github.com/lynkfox/go_eve_sleuth/static_data"
 	"github.com/sirupsen/logrus"
@@ -47,10 +48,14 @@ func main() {
 	collected_data := aggregate.CollateAllKillmailData(killmails, &target.Clients.ESIClient,
 		loaded_cache)
 
-	// each of the target's losses as EFT, to check the fits read from the killmails
+	// each of the target's losses as EFT, with the dogma engine's numbers, to check the fits read from the killmails
 	for _, killmail := range collected_data.Killmails {
 		if aggregate.IsTargetLoss(&target, killmail) && killmail.Victim.Fit != nil {
 			fmt.Printf("\n%s\n%s\n", strings.Repeat("-", 40), killmail.Victim.Fit.EFT(retrieval.EFTTitle(killmail)))
+			if stats, err := fitting.Compute(killmail.Victim.Fit.FittingInput()); err == nil {
+				fmt.Printf("EHP %.0f (shield %.0f, armor %.0f, hull %.0f) | rep shield %.1f armor %.1f hull %.1f /s | regen %.1f/s | %s %.1f\n",
+					stats.EHP, stats.Shield.EHP, stats.Armor.EHP, stats.Hull.EHP, stats.LocalRep.Shield, stats.LocalRep.Armor, stats.LocalRep.Hull, stats.PassiveRegen, stats.Sensor.Type, stats.Sensor.Strength)
+			}
 		}
 	}
 

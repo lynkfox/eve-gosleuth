@@ -2665,3 +2665,51 @@ main > * { flex: none; }
 #tab-main > .paged-panel { display: flex; flex-direction: column; padding-right: 0; overflow: hidden; }
 .paged-panel > .panel-scroll { flex: 1; min-height: 0; padding-right: 6px; overflow-y: auto; }
 .paged-panel > :not(.panel-scroll) { flex: none; }
+
+/*
+  the fitting window's stats strip, under the ring. It is as wide as the pane and no wider: the grid's columns can shrink (minmax 0) and the summary wraps.
+  Damage type colors are set on the bars in main.js and are fixed, not themed.
+*/
+.fit-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  max-width: 100%;
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+.fit-mode-switch { display: inline-flex; align-self: flex-start; max-width: 100%; }
+.fit-mode {
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.fit-mode + .fit-mode { margin-left: -1px; }
+.fit-mode:first-child { border-radius: 4px 0 0 4px; }
+.fit-mode:last-child { border-radius: 0 4px 4px 0; }
+.fit-mode[aria-pressed="true"] { border-color: var(--accent); background: var(--panel-raised); color: var(--text); }
+
+.fit-resists {
+  display: grid;
+  grid-template-columns: auto auto repeat(4, minmax(0, 1fr));
+  gap: 3px 8px;
+  align-items: center;
+}
+.fit-resist-layer { font-weight: 600; }
+.fit-resist-hp { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.fit-resist { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.fit-resist-bar { display: block; height: 5px; border-radius: 2px; background: var(--panel-raised); overflow: hidden; }
+.fit-resist-bar > span { display: block; height: 100%; }
+.fit-resist-num { min-width: 0; overflow: hidden; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+/* a resist under 40% (FIT_RESIST_HOLE) is a hole: bold, in the error color */
+.fit-resist-hole .fit-resist-num { color: var(--error); font-weight: 700; }
+
+.fit-summary, .fit-ewar { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0; }
+.fit-summary > span:first-child { font-weight: 600; }
+.fit-assumptions { font-size: 11px; }

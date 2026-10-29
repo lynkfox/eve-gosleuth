@@ -73,7 +73,7 @@ The result keeps every PI group except 1032, with 1042 renamed. `smartbomb_group
 ## Rules for writing the files
 
 - **Files must be valid JSON.** Every id is in double quotes (`"34328"`, not `34328`), a comma goes between entries but never after the last one, and comments are not allowed. If you aren't sure about a file, paste it into any online JSON validator.
-- **If GoSleuth can't use your file, it is ignored completely** and the built-in data is used. That happens when the file is not a single valid JSON object, or when it would leave the data broken: a section removed, `fit_types.json` left with no types, or a wormhole system given a static that isn't in the `wormholes` list. GoSleuth does not show a message when this happens. If your change doesn't seem to take effect, check the file first, then [export the data](#seeing-the-data-in-full) to see whether your change is in it.
+- **If GoSleuth can't use your file, it is ignored completely** and the built-in data is used. That happens when the file is not a single valid JSON object, or when it would leave the data broken: a section removed, `fit_types.json` or `dogma.json` left with no types, or a wormhole system given a static that isn't in the `wormholes` list. GoSleuth does not show a message when this happens. If your change doesn't seem to take effect, check the file first, then [export the data](#seeing-the-data-in-full) to see whether your change is in it.
 - **Ids are what count.** In the id lists, the text after each id is a readable label. GoSleuth only uses it in progress messages.
 - **Use groups where you can.** A group covers every ship or item in it, including ones CCP adds later. Use single types only for exceptions, such as `capital_types` or `hauler_exclusions`.
 
@@ -181,6 +181,23 @@ To show its fits, a new hull also needs its slots: `high_slots`, `mid_slots`, `l
 To fix one field of an existing type, give only that field: `{"types": {"587": {"group": 25}}}`.
 
 The Fits tab's tags also read some fields from here: a type's `market` (its market group), and a hull's `rig_size` (1 small, 2 medium, 3 large, 4 capital) and `bonuses` (its role and skill bonuses as text).
+
+### `dogma.json`
+
+The game's rules for each type's attributes and effects, which the fitting window's numbers (resists, EHP, repair, sensors, ewar resistance) are worked out from. Like `fit_types.json`, it is built from CCP's game data by `cmd/sdegen`, from the same release, and shouldn't need editing. When CCP changes a module, the new numbers come with an updated file, which you can drop into the `static_data` folder whole.
+
+It has these sections, each keyed by id:
+
+| Section | What it holds |
+|---|---|
+| `types` | Each type's `group`, `category`, `attributes` (attribute id to value), and `effects` (effect ids) |
+| `attributes` | Each attribute's `name`, its `default` value, whether it is `stackable` (false means stacking penalties apply), and the `max` attribute that caps it |
+| `effects` | Each effect's `name`, `category` (0 always on, 4 online, 1 active), and its `modifiers` |
+| `bonus_skills` | Hull bonuses the game doesn't scale by skill level itself, to the skill that scales them |
+| `unpenalized` | Effects whose bonus to an attribute is never stacking penalized, though the attribute is: Bastion's hull resists |
+| `modes` | Each tactical destroyer's modes |
+
+To fix one value, give only that value, ie a module's armor repair amount (attribute 84): `{"types": {"3530": {"attributes": {"84": 400}}}}`.
 
 ### `fit_tag_rules.json`
 
@@ -311,7 +328,7 @@ Leave every other entry in your copy as it is. Your whole file then looks like t
 
 ## Updated game data from a GoSleuth release
 
-When a GoSleuth release has a newer `fit_types.json` but you don't want to update the app, you can drop the release's whole file into the `static_data` folder. A complete file works the same way as a partial one: every entry in it replaces or adds to the built-in data.
+When a GoSleuth release has a newer `fit_types.json` or `dogma.json` but you don't want to update the app, you can drop the release's whole file into the `static_data` folder. Take both together, as they come from the same release of CCP's data. A complete file works the same way as a partial one: every entry in it replaces or adds to the built-in data.
 
 ## Reporting a problem
 
