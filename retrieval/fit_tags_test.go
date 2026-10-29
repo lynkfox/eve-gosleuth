@@ -93,50 +93,52 @@ func tagNamed(tags []retrieval.FitTag, name string) *retrieval.FitTag {
 }
 
 const (
-	bhaalgorn             = 17920
-	thorax                = 627
-	exequror              = 634
-	vexor                 = 626
-	heron                 = 605
-	stratios              = 33470
-	heavyNeutralizer      = 12271
-	heavyNosferatu        = 12263
-	mediumNeutralizer     = 12267
-	megaPulse             = 3057
-	dualRailgun           = 3114
-	mediumRemoteArmorRep  = 26913
-	warpScrambler         = 448
-	stasisWebifier        = 527
-	shieldRecharger       = 394
-	largeShieldExtender   = 3841
-	hobgoblin             = 2456
-	hammerhead            = 2183
-	warrior               = 2486
-	hobgoblinSD           = 23715
-	acolyteEV             = 23659
-	cynoGenerator         = 21096
-	coreProbeLauncher     = 17938
-	scanRangefindingArray = 33180
-	dataAnalyzer          = 22175
-	largeSmartbomb        = 3995
-	steelPlates           = 20353
-	largeArmorRepairer    = 3540
-	bastionModule         = 33400
-	shieldCommandBurst    = 43555
-	paladin               = 28659
-	nighthawk             = 22470
-	kronos                = 28661
-	lachesis              = 11971
-	archon                = 23757
-	legion                = 29986
-	parasiticCore         = 45624
-	cloakingDevice        = 11370
-	capitalMWD            = 41253
-	nanofiber             = 2605
-	armorCommandBurst     = 43552
-	trimarkPump           = 31055
-	polarizedBlaster      = 34282
-	sensorDampener        = 1969
+	bhaalgorn              = 17920
+	thorax                 = 627
+	exequror               = 634
+	vexor                  = 626
+	heron                  = 605
+	stratios               = 33470
+	heavyNeutralizer       = 12271
+	heavyNosferatu         = 12263
+	mediumNeutralizer      = 12267
+	megaPulse              = 3057
+	dualRailgun            = 3114
+	mediumRemoteArmorRep   = 26913
+	warpScrambler          = 448
+	stasisWebifier         = 527
+	shieldRecharger        = 394
+	largeShieldExtender    = 3841
+	hobgoblin              = 2456
+	largeAncillaryArmorRep = 33103
+	heavyCapBooster        = 3578
+	hammerhead             = 2183
+	warrior                = 2486
+	hobgoblinSD            = 23715
+	acolyteEV              = 23659
+	cynoGenerator          = 21096
+	coreProbeLauncher      = 17938
+	scanRangefindingArray  = 33180
+	dataAnalyzer           = 22175
+	largeSmartbomb         = 3995
+	steelPlates            = 20353
+	largeArmorRepairer     = 3540
+	bastionModule          = 33400
+	shieldCommandBurst     = 43555
+	paladin                = 28659
+	nighthawk              = 22470
+	kronos                 = 28661
+	lachesis               = 11971
+	archon                 = 23757
+	legion                 = 29986
+	parasiticCore          = 45624
+	cloakingDevice         = 11370
+	capitalMWD             = 41253
+	nanofiber              = 2605
+	armorCommandBurst      = 43552
+	trimarkPump            = 31055
+	polarizedBlaster       = 34282
+	sensorDampener         = 1969
 )
 
 func TestFitTagRules(t *testing.T) {
@@ -277,9 +279,16 @@ func TestEmbeddedFitTagRules(t *testing.T) {
 	t.Run("a bastion with smartbombs is ratting", func(t *testing.T) {
 		tags := tagFit(t, paladin, []int{megaPulse, bastionModule, megaPulse, largeSmartbomb, largeSmartbomb, megaPulse, megaPulse}, nil, nil, nil).Tags()
 		assert.Equal(t, "Ratting", tags[0].Name)
-		assert.NotContains(t, tagNames(tagFit(t, paladin, []int{megaPulse, bastionModule, megaPulse, megaPulse}, nil, nil, nil).Tags()), "Ratting", "a bastion alone")
 		plated := tagFit(t, paladin, []int{megaPulse, bastionModule, megaPulse, largeSmartbomb, largeSmartbomb, megaPulse, megaPulse}, nil, []int{steelPlates, steelPlates}, nil).Tags()
 		assert.NotContains(t, tagNames(plated), "Ratting", "a buffer tank counts hard against it")
+	})
+
+	t.Run("a marauder in bastion is ratting, unless it fits for PvP", func(t *testing.T) {
+		highs := []int{megaPulse, bastionModule, megaPulse, megaPulse}
+		assert.Equal(t, "Ratting", tagFit(t, paladin, highs, nil, nil, nil).Tags()[0].Name)
+		assert.NotContains(t, tagNames(tagFit(t, paladin, highs, nil, []int{largeAncillaryArmorRep}, nil).Tags()), "Ratting", "an ancillary repairer")
+		assert.NotContains(t, tagNames(tagFit(t, paladin, highs, []int{heavyCapBooster}, nil, nil).Tags()), "Ratting", "a cap booster")
+		assert.NotContains(t, tagNames(tagFit(t, paladin, []int{megaPulse, megaPulse, megaPulse}, nil, nil, nil).Tags()), "Ratting", "the hull alone")
 	})
 
 	t.Run("a bastion with an active tank and no point is ratting", func(t *testing.T) {
