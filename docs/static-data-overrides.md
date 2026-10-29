@@ -98,6 +98,19 @@ Each section is a list of `"id": "label"` entries.
 | `fit_ignored_groups` | ship groups | |
 | `fit_ignored_types` | ship types | |
 
+For example, to stop showing the Astero's losses on the Fits tab, and stop freighters counting as capitals:
+
+```json
+{
+    "fit_ignored_types": {
+        "33468": "Astero"
+    },
+    "capital_groups": {
+        "513": null
+    }
+}
+```
+
 ### `structures.json`
 
 All sections hold groups.
@@ -109,6 +122,19 @@ All sections hold groups.
 | `pos_battery_groups` | Control tower guns and ewar batteries, which appear on kills in place of their tower |
 | `minor_structure_groups` | Structures with no guns, such as Metenox moon drills and customs offices: listed among structures destroyed, never as a system's last structure lost |
 
+For example, to let a Metenox moon drill count as a wormhole system's last structure lost, move its group from the minor structures to the upwell ones:
+
+```json
+{
+    "minor_structure_groups": {
+        "4744": null
+    },
+    "upwell_structure_groups": {
+        "4744": "Upwell Moon Drill"
+    }
+}
+```
+
 ### `items.json`
 
 All sections hold groups.
@@ -119,9 +145,23 @@ All sections hold groups.
 | `smartbomb_groups` | Smartbombs, which the Ratters tab treats as "only bombed it" |
 | `fit_merged_groups` | Modules whose types count as one when the Fits tab merges identical fits: built in, ECM, so fits that differ only in their jammers' flavors are one fit |
 
+For example, to also merge fits that differ only in which shield hardeners they use (EM, Thermal, Kinetic, Explosive, or Multispectrum):
+
+```json
+{
+    "fit_merged_groups": {
+        "77": "Shield Hardener"
+    }
+}
+```
+
 ### `fit_types.json`
 
 Every ship, module, charge, drone, implant, structure, and control tower, by type id, made from CCP's game data. The structure and capital checks above look up a ship's group here, so **a ship CCP has just added counts as a capital, structure, or anything else only once it is in this file.** Add it like this:
+
+This file is built by parsing the SDE and generally doesn't need to be modified until something new is released and no update is forthcoming. 
+
+In the event the project seems to be abandoned, there are dev tools in the `cmd/sdegen` of the repo that can be used to regenerate this file, which can either be placed wholesale into the static_data override folder or a diff generated and create just the necessary updates.
 
 ```json
 {
@@ -166,14 +206,14 @@ A tag's fields:
 | `priority` | The order a fit shows its tags in, lowest first. A row shows its first role and the next three tags. Tags without one come after the rest. |
 | `role` | `true` for a tag that can name a fit's row, as its first role by `priority` does |
 | `threshold` | The total weight it needs to apply |
-| `share_threshold` | The share of their racks its modules must fill: Firewaller's 0.75 needs smartbombs in three quarters of the high slots. A tag with both needs both. |
+| `share_threshold` | The share of their racks its modules must fill: Firewaller's 0.75 needs smartbombs in three quarters of the high slots. This is on top of threshold above, though it can be its own thing. |
 | `signals` | What gives it weight (below) |
 | `requires` | Signals of which each must match something, or the tag doesn't apply. Their weights are ignored. |
 | `forbids` | Signals of which none may match. Logi forbids guns, so a ship spider tanking with one remote repairer isn't logi. |
 | `tag_weights` | Weight added for other tags the fit has, ie `{"Buffer": -5, "Passive": -5}` on Ratting, as a buffer or passive tank is rarely a ratting fit. Only tags without `tag_weights` of their own count. |
 | `hidden` | `true` to never show it. The filter still finds it. The weapons, Close, and Long are hidden. |
 
-A signal matches each fitted module, drone, and implant (or the hull, with `"hull": true`) by any of `types`, `groups`, `categories`, or `markets`. A ship has implants only when its pilot's capsule was lost with it, so built in they are only a small nudge (0.1 each, at most 0.5 a signal). A hull signal with none of those four matches any hull of its `hull_sizes`: Nano and Cloaky forbid `{"hull": true, "hull_sizes": [4]}`, so a capital is never either. A market group also matches everything listed below it, so Pulse Lasers (558) holds every size. Each match adds `weight`, so three neutralizers add 3, and each drone in a stack counts. A signal can also have:
+A signal matches each fitted module, drone, and implant (or the hull, with `"hull": true`) by any of `types`, `groups`, `categories`, or `markets`. A ship has implants only when its pilot's capsule was lost with it, so by default they are only a small nudge (0.1 each, at most 0.5 a signal). A hull signal with none of those four matches any hull of its `hull_sizes`: Nano and Cloaky forbid `{"hull": true, "hull_sizes": [4]}`, so a capital is never either. A market group also matches everything listed below it, so Pulse Lasers (558) holds every size. Each match adds `weight`, so three neutralizers add 3, and each drone in a stack counts. A signal can also have:
 
 | Field | Meaning |
 |---|---|
@@ -182,7 +222,7 @@ A signal matches each fitted module, drone, and implant (or the hull, with `"hul
 | `bonused_by`, `bonused_weight` | On a hull with a bonus naming one of these words, each match adds `bonused_weight` instead. A T3 cruiser's fitted subsystems count as its hull here. Matching ignores upper and lower case. Hovering the tag in the fitting window shows the extra on its own "hull bonus" line. |
 | `note` | Your description. GoSleuth doesn't read it. |
 
-Weights may be negative: Bait counts each gun against itself. As a guide, a weight of 1 is about one slot given over to the tag's job. Hovering a tag in the fitting window shows what gave it weight, each module's share, and the total against its threshold, which is the quickest way to see why a tag did or didn't apply.
+Weights may be negative: e.g. Bait counts each gun against itself. As a guide, a weight of 1 is about one slot given over to the tag's job. Hovering a tag in the fitting window shows what gave it weight, each module's share, and the total against its threshold, which is the quickest way to see why a tag did or didn't apply.
 
 At the top of the file:
 - `bonus_ignores`: bonus lines containing one of these words never count for `bonused_by`. A "bonus to Sensor Dampener resistance" is about what the hull resists, not what it fits.
@@ -203,7 +243,7 @@ At the top of the file:
 }
 ```
 
-`wormholes` describes each wormhole type once, and `systems` gives each wormhole system's statics by code. A system's list is replaced whole, so give all of its statics. Every code a system lists must be in `wormholes`, whether built in or added by you. The `origin` of a system's statics sets the class GoSleuth shows for it.
+`wormholes` describes each wormhole type once, and `systems` gives each wormhole system's statics by code. A system's list is replaced whole, so give all of its statics. Every code a system lists must be in `wormholes`, whether built in or added by you. The `origin` of a system's statics sets the class GoSleuth shows for it. A user should rarely need to override this, but can be useful if new wormhole types or balancing is made.
 
 ### `space_classes.json`
 
@@ -212,9 +252,44 @@ At the top of the file:
 | `wormhole_region_classes` | The first letter of a wormhole region's name (`E` of `E-R00024`) to the class of every system in it. Used when a system's statics don't settle its class. |
 | `region_space_labels` | Whole regions with their own kind of space, such as `"Pochven": "Triglavian"` |
 
+For example, to label Pochven's systems "Pochven" in place of "Triglavian":
+
+```json
+{
+    "region_space_labels": {
+        "Pochven": "Pochven"
+    }
+}
+```
+
 ### `inventory_flags.json`
 
-Where each item on a killmail sat (high slot, cargo, drone bay, ...), as `slots`, a list of flag ranges. **`slots` is a list, so your copy replaces it whole:** copy the complete built-in list and edit that.
+Where each item on a killmail sat (high slot, cargo, drone bay, ...), as `slots`, a list of flag ranges. **`slots` is a list, so your copy replaces it whole:** copy the complete built-in list from an [export](#seeing-the-data-in-full) and edit that.
+
+Each entry gives a `slot` to the killmail flags from `first_flag` to `last_flag`. For example, to leave what was in the cargo hold out of the Fits tab's EFT text, find the cargo hold's entry in your copy:
+
+```json
+{"slot": "cargo", "first_flag": 5, "last_flag": 5, "name": "Cargo hold"},
+```
+
+and change its `slot` to `ignored`:
+
+```json
+{"slot": "ignored", "first_flag": 5, "last_flag": 5, "name": "Cargo hold"},
+```
+
+Leave every other entry in your copy as it is. Your whole file then looks like this, with the rest of the exported list where the comment is:
+
+```
+{
+  "slots": [
+    {"slot": "ignored", "first_flag": 0, "last_flag": 0, "name": "Inside a container"},
+    {"slot": "ignored", "first_flag": 4, "last_flag": 4, "name": "Hangar"},
+    {"slot": "ignored", "first_flag": 5, "last_flag": 5, "name": "Cargo hold"},
+    ... the rest of the list, unchanged ...
+  ]
+}
+```
 
 ## Updated game data from a GoSleuth release
 
@@ -222,4 +297,4 @@ When a GoSleuth release has a newer `fit_types.json` but you don't want to updat
 
 ## Reporting a problem
 
-If GoSleuth behaves oddly while you have files in `static_data`, say so in your report. If you send the debug zip (Preferences → Advanced → Debug mode), it lists the files in your `static_data` folder.
+If GoSleuth behaves oddly while you have files in `static_data`, say so in your report. If you send the debug zip (Preferences → Advanced → Debug mode), it contains copies of the files in your `static_data` folder.
