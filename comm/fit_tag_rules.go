@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// FitTagSignal is one thing that gives a tag weight: modules and drones (or the hull, with Hull) matching any of its types, groups, categories, or market groups
+// FitTagSignal is one thing that gives a tag weight: modules, drones, and implants (or the hull, with Hull) matching any of its types, groups, categories, or market groups. A hull signal with none of those matches any hull of its HullSizes.
 type FitTagSignal struct {
 	Note       string `json:"note"` // for people reading the file, not used
 	Types      []int  `json:"types"`
@@ -41,6 +41,11 @@ func (s *FitTagSignal) Matches(fitType *FitType) bool {
 		return true
 	}
 	return slices.ContainsFunc(s.Markets, func(market int) bool { return InMarketGroup(fitType, market) })
+}
+
+// AnyType reports whether the signal names no types, groups, categories, or market groups, so a hull signal matches every hull of its sizes, ie a capital
+func (s *FitTagSignal) AnyType() bool {
+	return len(s.Types) == 0 && len(s.Groups) == 0 && len(s.Categories) == 0 && len(s.Markets) == 0
 }
 
 /*
@@ -139,20 +144,25 @@ func FitTagRules() *FitTagRulesFile {
 }
 
 /*
-	HullBonused reports whether a hull has a bonus line naming any of the words, ignoring case and the lines with a BonusIgnores phrase
+	HullBonused reports whether a hull, or a subsystem fitted to it, has a bonus line naming any of the words, ignoring case and the lines with a BonusIgnores phrase
 
 Parameters:
-  - hull: the hull's type, nil for one fit_types.json does not have
+  - bonusers: the hull's type and its fitted subsystems' types, any nil for one fit_types.json does not have
   - words: ie "Energy Neutralizer"
 
 Returns:
-  - bool: true if a bonus line contains one of the words. false for a nil hull or no words.
+  - bool: true if a bonus line of any of them contains one of the words. false for no words.
 */
-func HullBonused(hull *FitType, words []string) bool {
-	if hull == nil || len(words) == 0 {
+func HullBonused(bonusers []*FitType, words []string) bool {
+	if len(words) == 0 {
 		return false
 	}
-	for _, line := range hull.Bonuses {
+	return slices.ContainsFunc(bonusers, func(bonuser *FitType) bool { return bonuser != nil && bonusLinesName(bonuser.Bonuses, words) })
+}
+
+// bonusLinesName reports whether a bonus line names any of the words, ignoring case and the lines with a BonusIgnores phrase
+func bonusLinesName(lines []string, words []string) bool {
+	for _, line := range lines {
 		line = strings.ToLower(line)
 		ignored := slices.ContainsFunc(fitTagRules.BonusIgnores, func(phrase string) bool { return strings.Contains(line, strings.ToLower(phrase)) })
 		if ignored {

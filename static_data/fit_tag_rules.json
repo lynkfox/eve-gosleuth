@@ -17,16 +17,16 @@
     {"note": "stasis webifiers, more on a hull bonused for them", "groups": [65], "weight": 1, "bonused_by": ["Stasis Webifier"], "bonused_weight": 1.5},
     {"note": "stasis grapplers", "groups": [1672], "weight": 1}
   ]},
-  "Roller": {"meaning": "Rolls wormholes: a Higgs anchor, zero-point entanglers, or two propulsion modules on a big hull", "threshold": 2, "priority": 8, "role": true, "signals": [
+  "Roller": {"meaning": "Rolls wormholes: a Higgs anchor, zero-point entanglers, or two propulsion modules on a big hull", "threshold": 2, "priority": 5, "role": true, "signals": [
     {"note": "Higgs anchor rigs, of every size", "groups": [1308], "weight": 2},
     {"note": "zero-point mass entanglers", "groups": [2008], "weight": 1},
     {"note": "propulsion modules on a battleship or capital, two for a 100MN or capital MWD and AB", "groups": [46], "hull_sizes": [3, 4], "weight": 1}
   ]},
-  "Bubbler": {"meaning": "Launches or projects warp disruption bubbles", "threshold": 1, "priority": 6, "role": true, "signals": [
+  "Bubbler": {"meaning": "Launches or projects warp disruption bubbles", "threshold": 1, "priority": 7, "role": true, "signals": [
     {"note": "interdiction sphere launchers", "groups": [589], "weight": 1},
     {"note": "HIC warp disruption field generators", "groups": [899], "weight": 1}
   ]},
-  "Links": {"meaning": "Command bursts", "threshold": 1, "priority": 5, "role": true, "signals": [
+  "Links": {"meaning": "Command bursts", "threshold": 1, "priority": 6, "role": true, "signals": [
     {"note": "command bursts", "groups": [1770], "weight": 1}
   ]},
   "Firewaller": {"meaning": "Smartbombs in most of the high slots", "share_threshold": 0.75, "priority": 13, "role": true, "signals": [
@@ -54,7 +54,9 @@
     {"note": "energy neutralizers and nosferatus, more on a hull bonused for them", "groups": [71, 68], "weight": 1, "bonused_by": ["Energy Neutralizer", "Energy Nosferatu"], "bonused_weight": 1.5},
     {"note": "heavy energy neutralizers on a medium hull", "markets": [691], "hull_sizes": [2], "weight": 3}
   ]},
-  "Cloaky": {"meaning": "Fits a cloak", "threshold": 1, "priority": 18, "role": true, "signals": [
+  "Cloaky": {"meaning": "Fits a cloak, never on a capital", "threshold": 1, "priority": 18, "role": true, "forbids": [
+    {"note": "a capital hull", "hull": true, "hull_sizes": [4], "weight": 0}
+  ], "signals": [
     {"note": "cloaking devices", "groups": [330], "weight": 1}
   ]},
   "Scanner": {"meaning": "A scanning array with probes, or a relic or data analyzer", "threshold": 3, "priority": 17, "role": true, "signals": [
@@ -62,7 +64,7 @@
     {"note": "scan rangefinding, pinpointing, and acquisition arrays", "groups": [1223, 1238], "weight": 2},
     {"note": "relic and data analyzers", "groups": [538], "weight": 3}
   ]},
-  "Cyno": {"meaning": "Fits a cynosural field generator; always names the row", "threshold": 1, "priority": 7, "role": true, "signals": [
+  "Cyno": {"meaning": "Fits a cynosural field generator", "threshold": 1, "priority": 8, "role": true, "signals": [
     {"note": "cynosural, covert cynosural, and industrial cynosural field generators", "types": [21096, 52694, 28646], "weight": 1}
   ]},
   "Ratting": {"meaning": "Fit for PvE: salvaging, tractoring, drone range, or a bastion with smartbombs, and no point or buffer tank", "tag_weights": {"Buffer": -5, "Passive": -5}, "threshold": 2, "priority": 3, "role": true, "signals": [
@@ -141,11 +143,13 @@
   "Shield": {"meaning": "Shield tank", "threshold": 2, "priority": 19, "role": true, "signals": [
     {"note": "extenders, boosters, amplifiers, hardeners, rechargers", "groups": [38, 39, 40, 77, 295, 338, 1156, 1700], "weight": 1},
     {"note": "shield power relays and flux coils", "groups": [57, 770], "weight": 0.5},
-    {"note": "shield rigs", "groups": [774], "weight": 0.5}
+    {"note": "shield rigs", "groups": [774], "weight": 0.5},
+    {"note": "Crystal and Nirvana implants, from the capsule lost with it: a nudge, at most 0.5", "types": [20121, 20157, 20158, 20159, 20160, 20161, 22107, 22108, 22109, 22110, 22111, 22112, 33923, 33924, 33925, 33926, 33927, 33928, 53704, 53705, 53706, 53707, 53708, 53709, 53710, 53711, 53712, 53713, 53714, 53715, 53839, 53853, 53854, 53855, 53856, 53857], "weight": 0.1, "max": 0.5}
   ]},
   "Armor": {"meaning": "Armor tank", "threshold": 2, "priority": 20, "role": true, "signals": [
     {"note": "plates, repairers, hardeners, membranes, coatings", "groups": [62, 98, 326, 328, 329, 1150, 1199, 1699], "weight": 1},
-    {"note": "armor rigs", "groups": [773], "weight": 0.5}
+    {"note": "armor rigs", "groups": [773], "weight": 0.5},
+    {"note": "Amulet and Asklepian implants, from the capsule lost with it: a nudge, at most 0.5", "types": [20499, 20501, 20503, 20505, 20507, 20509, 22119, 22120, 22121, 22122, 22123, 22124, 33953, 33954, 33955, 33956, 33957, 33958, 42145, 42146, 42200, 42201, 42202, 42203, 42204, 42205, 42206, 42207, 42208, 42209, 42210, 42211, 42212, 42213, 42214, 42215], "weight": 0.1, "max": 0.5}
   ]},
   "Hull": {"meaning": "Hull tank", "threshold": 2, "priority": 21, "role": true, "signals": [
     {"note": "reinforced bulkheads and hull repairers", "groups": [78, 63], "weight": 1},
@@ -168,12 +172,15 @@
     {"note": "shield rechargers, power relays, and flux coils", "groups": [39, 57, 770], "weight": 1},
     {"note": "core defense field purger rigs", "types": [26084, 31800, 31802, 31804, 26450, 31810, 31812, 31814], "weight": 1}
   ]},
-  "Nano": {"meaning": "Speed fit", "threshold": 2, "priority": 15, "role": true, "requires": [
+  "Nano": {"meaning": "Speed fit, never on a capital", "threshold": 2, "priority": 15, "role": true, "requires": [
     {"note": "a propulsion module", "groups": [46], "weight": 0}
+  ], "forbids": [
+    {"note": "a capital hull", "hull": true, "hull_sizes": [4], "weight": 0}
   ], "signals": [
     {"note": "overdrive injectors", "groups": [764], "weight": 1},
     {"note": "nanofiber internal structures", "groups": [763], "weight": 1},
-    {"note": "polycarbon engine housing rigs", "types": [26070, 31177, 31179, 31181, 26312, 31183, 31185, 31187], "weight": 1}
+    {"note": "polycarbon engine housing rigs", "types": [26070, 31177, 31179, 31181, 26312, 31183, 31185, 31187], "weight": 1},
+    {"note": "Snake implants, from the capsule lost with it: a nudge, at most 0.5", "types": [19540, 19551, 19553, 19554, 19555, 19556, 22125, 22126, 22127, 22128, 22129, 22130, 33959, 33960, 33961, 33962, 33963, 33964], "weight": 0.1, "max": 0.5}
   ]},
   "Fleet Doctrine": {"meaning": "Flown in numbers, with logi, or lost again and again", "fleet_doctrine": {"battle_hulls": 5, "battle_logi": 1, "repeat_losses": 5, "repeat_pilots": 5}, "priority": 2, "role": true}
 }

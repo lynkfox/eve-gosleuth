@@ -173,13 +173,13 @@ A tag's fields:
 | `tag_weights` | Weight added for other tags the fit has, ie `{"Buffer": -5, "Passive": -5}` on Ratting, as a buffer or passive tank is rarely a ratting fit. Only tags without `tag_weights` of their own count. |
 | `hidden` | `true` to never show it. The filter still finds it. The weapons, Close, and Long are hidden. |
 
-A signal matches each fitted module and drone (or the hull, with `"hull": true`) by any of `types`, `groups`, `categories`, or `markets`. A market group also matches everything listed below it, so Pulse Lasers (558) holds every size. Each match adds `weight`, so three neutralizers add 3, and each drone in a stack counts. A signal can also have:
+A signal matches each fitted module, drone, and implant (or the hull, with `"hull": true`) by any of `types`, `groups`, `categories`, or `markets`. A ship has implants only when its pilot's capsule was lost with it, so built in they are only a small nudge (0.1 each, at most 0.5 a signal). A hull signal with none of those four matches any hull of its `hull_sizes`: Nano and Cloaky forbid `{"hull": true, "hull_sizes": [4]}`, so a capital is never either. A market group also matches everything listed below it, so Pulse Lasers (558) holds every size. Each match adds `weight`, so three neutralizers add 3, and each drone in a stack counts. A signal can also have:
 
 | Field | Meaning |
 |---|---|
 | `max` | The most this signal adds in all |
 | `hull_sizes` | Counts only on hulls of these sizes, as in `rig_size` above |
-| `bonused_by`, `bonused_weight` | On a hull with a bonus naming one of these words, each match adds `bonused_weight` instead. Matching ignores upper and lower case. Hovering the tag in the fitting window shows the extra on its own "hull bonus" line. |
+| `bonused_by`, `bonused_weight` | On a hull with a bonus naming one of these words, each match adds `bonused_weight` instead. A T3 cruiser's fitted subsystems count as its hull here. Matching ignores upper and lower case. Hovering the tag in the fitting window shows the extra on its own "hull bonus" line. |
 | `note` | Your description. GoSleuth doesn't read it. |
 
 Weights may be negative: Bait counts each gun against itself. As a guide, a weight of 1 is about one slot given over to the tag's job. Hovering a tag in the fitting window shows what gave it weight, each module's share, and the total against its threshold, which is the quickest way to see why a tag did or didn't apply.

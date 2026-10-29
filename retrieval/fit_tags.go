@@ -53,13 +53,20 @@ func (f *Fit) Tags() []FitTag {
 	}
 	rules := comm.FitTagRules()
 	hull, parts := f.tagParts()
+	// a T3 cruiser's bonuses are on its subsystems
+	bonusers := []*comm.FitType{hull}
+	for _, slot := range f.Subsystems {
+		if slot != nil && slot.Module != nil {
+			bonusers = append(bonusers, comm.FitTypeOf(slot.Module.ItemID))
+		}
+	}
 
 	weighedByTags := map[string]FitTag{} // scored by their signals, waiting on the other tags
 	for name, rule := range rules.Tags {
 		if rule.FleetDoctrine != nil {
 			continue
 		}
-		tag, possible := scoreTag(name, rule, hull, parts)
+		tag, possible := scoreTag(name, rule, hull, bonusers, parts)
 		switch {
 		case !possible:
 		case len(rule.TagWeights) > 0:
@@ -122,7 +129,7 @@ func sortFitTags(tags []FitTag) {
 	})
 }
 
-// tagParts lists the fit's hull, and its modules and drones with the size of the rack each is a share of. Drones, fighters, and the hull are a share of an average of the high, mid, and low racks.
+// tagParts lists the fit's hull, and its modules, drones, and implants with the size of the rack each is a share of. Drones, fighters, implants, and the hull are a share of an average of the high, mid, and low racks.
 func (f *Fit) tagParts() (*comm.FitType, []tagPart) {
 	var hull *comm.FitType
 	if f.Hull != nil {
@@ -148,17 +155,25 @@ func (f *Fit) tagParts() (*comm.FitType, []tagPart) {
 			}
 		}
 	}
+	for _, implant := range f.Implants {
+		if implant != nil {
+			parts = append(parts, tagPart{item: implant, fitType: comm.FitTypeOf(implant.ItemID), quantity: 1, rack: averageRack})
+		}
+	}
 	return hull, parts
 }
 
-// signalMatches reports whether a signal counts a part: the hull for a hull signal, otherwise a module or drone, on a hull of the signal's sizes
+// signalMatches reports whether a signal counts a part: the hull for a hull signal, otherwise a module, drone, or implant, on a hull of the signal's sizes. A hull signal naming no types matches any hull of its sizes.
 func signalMatches(signal *comm.FitTagSignal, hull *comm.FitType, part tagPart) bool {
 	isHull := part.fitType == hull
-	return signal.Hull == isHull && signal.FitsHull(hull) && signal.Matches(part.fitType)
+	if signal.Hull != isHull || !signal.FitsHull(hull) {
+		return false
+	}
+	return signal.Matches(part.fitType) || (isHull && hull != nil && signal.AnyType())
 }
 
-// scoreTag adds up a tag's signals over the fit's parts, and reports false if its requires or forbids rule it out
-func scoreTag(name string, rule *comm.FitTagRule, hull *comm.FitType, parts []tagPart) (FitTag, bool) {
+// scoreTag adds up a tag's signals over the fit's parts, and reports false if its requires or forbids rule it out. bonusers are the hull and its subsystems, whose bonus lines make a signal bonused.
+func scoreTag(name string, rule *comm.FitTagRule, hull *comm.FitType, bonusers []*comm.FitType, parts []tagPart) (FitTag, bool) {
 	tag := FitTag{
 		Name: name, Meaning: rule.Meaning, Priority: rule.Priority, Role: rule.Role, Hidden: rule.Hidden,
 		Threshold: rule.Threshold, ShareThreshold: rule.ShareThreshold, Reasons: []FitTagReason{},
@@ -181,7 +196,7 @@ func scoreTag(name string, rule *comm.FitTagRule, hull *comm.FitType, parts []ta
 	for index := range rule.Signals {
 		signal := &rule.Signals[index]
 		each, bonus := signal.Weight, 0.0
-		if len(signal.BonusedBy) > 0 && comm.HullBonused(hull, signal.BonusedBy) {
+		if len(signal.BonusedBy) > 0 && comm.HullBonused(bonusers, signal.BonusedBy) {
 			each, bonus = signal.BonusedWeight, signal.BonusedWeight-signal.Weight
 		}
 		weight, share := 0.0, 0.0

@@ -4669,20 +4669,24 @@ function formatDuration(milliseconds) {
   THEMES are the Theme menu presets, after EVE's UI themes plus Triglavian and Synthwave. Each is its two theme colors and its accent, the button color, as shown in the menu.
   The default ("") keeps the colors in style.css, the others derive their dark backgrounds from the first color. All are dark.
   Colors with a meaning (kill, loss, security, wormhole class) are not themed.
+  A theme with an icon shows it in place of the app icon at the top left (BRAND_ICON); see ATTRIBUTION.md for where each came from.
 */
 const THEMES = [
   { key: "", name: "GoSleuth (default)", swatches: ["#263040", "#7d8899", "#e0a526"] },
-  { key: "amarr", name: "Amarr", swatches: ["#a68a64", "#f3e08c", "#f0884a"] },
-  { key: "caldari", name: "Caldari", swatches: ["#8ecbe6", "#3ec8c2", "#4aa8e0"] },
-  { key: "carbon", name: "Carbon", swatches: ["#d0d0d0", "#ececec", "#a3a8b0"] },
-  { key: "gallente", name: "Gallente", swatches: ["#4fb592", "#6fb9a7", "#3fae7a"] },
-  { key: "minmatar", name: "Minmatar", swatches: ["#c4573a", "#a0472f", "#d0452f"] },
-  { key: "ore", name: "ORE", swatches: ["#d8aa22", "#3e8c8f", "#d98468"] },
-  { key: "photon", name: "Photon", swatches: ["#4aa3b8", "#5cabc0", "#f0884a"] },
-  { key: "sisters", name: "Sisters of EVE", swatches: ["#e04a4a", "#9fe3e3", "#e8eaee"] },
-  { key: "triglavian", name: "Triglavian", swatches: ["#8c1d24", "#d6403a", "#e0453c"] },
-  { key: "synthwave", name: "Synthwave", swatches: ["#b967ff", "#01cdfe", "#ff71ce"] },
+  { key: "amarr", name: "Amarr", swatches: ["#a68a64", "#f3e08c", "#f0884a"], icon: "icons/amarr.png" },
+  { key: "caldari", name: "Caldari", swatches: ["#8ecbe6", "#3ec8c2", "#4aa8e0"], icon: "icons/caldari.png" },
+  { key: "carbon", name: "Carbon", swatches: ["#d0d0d0", "#ececec", "#a3a8b0"], icon: "icons/carbon.png" },
+  { key: "gallente", name: "Gallente", swatches: ["#4fb592", "#6fb9a7", "#3fae7a"], icon: "icons/gallente.png" },
+  { key: "minmatar", name: "Minmatar", swatches: ["#c4573a", "#a0472f", "#d0452f"], icon: "icons/minmatar.png" },
+  { key: "ore", name: "ORE", swatches: ["#d8aa22", "#3e8c8f", "#d98468"], icon: "icons/ore.png" },
+  { key: "photon", name: "Photon", swatches: ["#4aa3b8", "#5cabc0", "#f0884a"], icon: "icons/photon.svg" },
+  { key: "sisters", name: "Sisters of EVE", swatches: ["#e04a4a", "#9fe3e3", "#e8eaee"], icon: "icons/sisters.png" },
+  { key: "triglavian", name: "Triglavian", swatches: ["#8c1d24", "#d6403a", "#e0453c"], icon: "icons/triglavian.png" },
+  { key: "synthwave", name: "Synthwave", swatches: ["#b967ff", "#01cdfe", "#ff71ce"], icon: "icons/synthwave.png" },
 ];
+
+// BRAND_ICON is the app icon at the top left, for the themes without one of their own
+const BRAND_ICON = "icons/gosleuth.png";
 
 // THEMED_PROPERTIES are the css variables a theme sets, cleared again for the default theme
 const THEMED_PROPERTIES = ["--bg", "--panel", "--panel-raised", "--border", "--muted", "--accent", "--accent-text", "--highlight", "--badge", "--badge-text"];
@@ -4748,6 +4752,7 @@ function applyTheme(key) {
   } else {
     Object.entries(themeColors(theme.swatches)).forEach(([property, value]) => root.style.setProperty(property, value));
   }
+  document.querySelector(".brand-icon").src = theme.icon || BRAND_ICON;
 
   for (const option of el("theme-list").children) {
     option.setAttribute("aria-checked", String(option.dataset.theme === currentTheme));

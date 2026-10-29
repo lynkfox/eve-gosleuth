@@ -2,11 +2,20 @@
 
 GoSleuth's own code is under the MIT License (see `LICENSE`). The materials below are not, and stay under their owners' terms.
 
-## App icon
+## App and theme icons
 
-The app icon (`build/appicon.png`) is the "Bear" icon by **Mayor Icons** from Flaticon, used under the Flaticon free license, which requires this attribution:
+Every theme but the default shows its own icon in place of the app icon at the top left (`frontend/dist/icons/`).
 
-[Bear icon](https://www.flaticon.com/free-icon/bear_17199791) created by [Mayor Icons](https://www.flaticon.com/authors/mayor-icons) - [Flaticon](https://www.flaticon.com/)
+The app icon (`build/appicon.png`) and the Synthwave theme's icon (`synthwave.png`) are "Bear" icons by **Mayor Icons** from Flaticon, used under the Flaticon free license, which requires this attribution:
+
+[Bear icon](https://www.flaticon.com/free-icon/bear_17199791) and [Bear icon](https://www.flaticon.com/free-icon/bear_9289405) created by [Mayor Icons](https://www.flaticon.com/authors/mayor-icons) - [Flaticon](https://www.flaticon.com/)
+
+The Carbon theme's icon (`carbon.png`) is the logo of Fenris Creations' [Carbon engine](https://fenris.com/carbon), downloaded from its GitHub organization ([github.com/carbonengine](https://github.com/carbonengine)), with its black cube made white for the dark themes. It is a trademark of Fenris Creations.
+
+The rest:
+
+- Photon (`photon.svg`): the first E of the EVE Online logo, from the same drawing as the About window's (below), as Photon is the game's default UI.
+- Amarr, Caldari, Gallente, Minmatar, ORE, Sisters of EVE, and Triglavian (`amarr.png` and so on): those factions' logos, downloaded from Fenris Creations' image server (`images.evetech.net/corporations/{faction id}/logo`), trademarks of Fenris Creations.
 
 ## EVE Online and Fenris Creations
 

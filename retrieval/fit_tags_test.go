@@ -116,6 +116,14 @@ const (
 	nighthawk             = 22470
 	kronos                = 28661
 	lachesis              = 11971
+	archon                = 23757
+	legion                = 29986
+	parasiticCore         = 45624
+	cloakingDevice        = 11370
+	capitalMWD            = 41253
+	nanofiber             = 2605
+	armorCommandBurst     = 43552
+	trimarkPump           = 31055
 	polarizedBlaster      = 34282
 	sensorDampener        = 1969
 )
@@ -193,8 +201,9 @@ func TestFitTagRules(t *testing.T) {
 	})
 
 	t.Run("a hull bonus line with an ignored phrase is not a bonus", func(t *testing.T) {
-		assert.False(t, comm.HullBonused(&comm.FitType{Bonuses: []string{"bonus to Energy Neutralizer resistance"}}, []string{"Energy Neutralizer"}))
-		assert.True(t, comm.HullBonused(&comm.FitType{Bonuses: []string{"bonus to Energy Neutralizer drain amount"}}, []string{"energy neutralizer"}), "ignoring case")
+		assert.False(t, comm.HullBonused([]*comm.FitType{{Bonuses: []string{"bonus to Energy Neutralizer resistance"}}}, []string{"Energy Neutralizer"}))
+		assert.True(t, comm.HullBonused([]*comm.FitType{{Bonuses: []string{"bonus to Energy Neutralizer drain amount"}}}, []string{"energy neutralizer"}), "ignoring case")
+		assert.True(t, comm.HullBonused([]*comm.FitType{nil, {Bonuses: []string{"bonus to Energy Neutralizer drain amount"}}}, []string{"Energy Neutralizer"}), "a subsystem's bonus, the hull unknown")
 	})
 
 	t.Run("a nil fit has no tags", func(t *testing.T) {
@@ -276,5 +285,48 @@ func TestEmbeddedFitTagRules(t *testing.T) {
 		assert.Contains(t, tagNames(tagFit(t, stratios, []int{coreProbeLauncher}, []int{scanRangefindingArray}, nil, nil).Tags()), "Scanner")
 		assert.Contains(t, tagNames(tagFit(t, stratios, nil, []int{dataAnalyzer}, nil, nil).Tags()), "Scanner")
 		assert.NotContains(t, tagNames(tagFit(t, stratios, []int{coreProbeLauncher}, nil, nil, nil).Tags()), "Scanner", "probes alone, ie combat probing")
+	})
+
+	t.Run("a capital is never nano or cloaky", func(t *testing.T) {
+		tags := tagNames(tagFit(t, archon, []int{cloakingDevice}, []int{capitalMWD}, []int{nanofiber, nanofiber}, nil).Tags())
+		assert.NotContains(t, tags, "Nano")
+		assert.NotContains(t, tags, "Cloaky")
+		assert.Contains(t, tagNames(tagFit(t, thorax, []int{cloakingDevice}, nil, nil, nil).Tags()), "Cloaky", "a cruiser still is")
+	})
+
+	t.Run("a roller outranks links", func(t *testing.T) {
+		assert.Equal(t, "Roller", tagFit(t, archon, []int{armorCommandBurst}, []int{capitalMWD, capitalMWD}, nil, nil).Tags()[0].Name)
+	})
+
+	t.Run("a subsystem's bonus counts as the hull's", func(t *testing.T) {
+		neuts := func(core bool) *retrieval.FitTag {
+			fit := tagFit(t, legion, []int{mediumNeutralizer, mediumNeutralizer}, nil, nil, nil)
+			if core {
+				fit.Subsystems = []*retrieval.FittedModule{{Module: &retrieval.Item{ItemID: parasiticCore, Name: "Legion Core - Energy Parasitic Complex"}}}
+			}
+			return tagNamed(fit.Tags(), "Neut")
+		}
+		if neut := neuts(true); assert.NotNil(t, neut, "1.5 each with the neut bonused core") {
+			assert.Equal(t, 1.0, neut.Reasons[0].Bonus)
+		}
+		assert.Nil(t, neuts(false), "1 each without it")
+	})
+
+	t.Run("implants nudge a tag, but never make one", func(t *testing.T) {
+		amulets := []*retrieval.Item{}
+		for _, id := range []int{20499, 20501, 20507, 20503, 20505} {
+			amulets = append(amulets, &retrieval.Item{ItemID: id, Name: comm.FitTypeOf(id).Name})
+		}
+		armored := func(implants []*retrieval.Item, plates ...int) []retrieval.FitTag {
+			fit := tagFit(t, thorax, nil, nil, plates, nil)
+			fit.Rigs[0] = &retrieval.FittedModule{Module: &retrieval.Item{ItemID: trimarkPump, Name: "Medium Trimark Armor Pump I"}}
+			fit.Implants = implants
+			return fit.Tags()
+		}
+		assert.NotContains(t, tagNames(armored(nil, steelPlates)), "Armor", "a plate and a rig make 1.5")
+		assert.Contains(t, tagNames(armored(amulets, steelPlates)), "Armor", "and five Amulets the last 0.5")
+		if armor := tagNamed(armored(append(amulets, amulets...), steelPlates), "Armor"); assert.NotNil(t, armor) {
+			assert.Equal(t, 2.0, armor.Weight, "ten implants still add only 0.5")
+		}
 	})
 }
