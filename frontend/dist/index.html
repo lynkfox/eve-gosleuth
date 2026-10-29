@@ -145,6 +145,15 @@
           </div>
         </nav>
 
+        <!-- the Fits tab's tag key, opened by its Tag key button: the sidebar shrinks to its icons while it is open -->
+        <aside id="fit-key-panel" class="fit-key-panel" aria-label="Tag key" hidden>
+          <div class="fit-key-head">
+            <h3>Tag key</h3>
+            <button id="fit-key-close" class="secondary" type="button" title="Close the tag key" aria-label="Close the tag key">×</button>
+          </div>
+          <div id="fit-key-body" class="help-content fit-key-body"></div>
+        </aside>
+
         <div id="tab-main" class="tab-main">
           <!-- the selected tab's name, color key, and ? help -->
           <div class="panel-header">
@@ -319,6 +328,7 @@
                 <div class="fits-filter-row">
                   <div id="fits-filter-help" class="filter-help"></div>
                   <input id="fits-filter" class="fits-filter" type="search" placeholder="Filter fits" autocomplete="off" spellcheck="false" aria-label="Filter fits">
+                  <button id="fit-key-open" class="secondary" type="button" aria-expanded="false" aria-controls="fit-key-panel">Tag key</button>
                 </div>
                 <ul id="fits-list" class="fits-list"></ul>
                 <p id="fits-no-match" class="muted" hidden>No fits match the filter.</p>

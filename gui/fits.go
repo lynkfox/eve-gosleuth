@@ -26,7 +26,7 @@ type FitGroup struct {
 	Losses        []FitLoss `json:"losses"`   // most implants first, then newest
 	LastLost      time.Time `json:"lastLost"` // its newest loss, which need not be its first
 
-	Tags []retrieval.FitTag `json:"tags"` // its first loss's, see FitLoss.Tags
+	Tags []retrieval.FitTag `json:"tags"` // every tag any of its losses has (see FitLoss.Tags), so its row shows why the filter matched it
 }
 
 // FitLoss is one loss of a fit, with its own charges and cargo
@@ -172,7 +172,11 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 			}
 			return b.Time.Compare(a.Time)
 		})
-		group.Tags = group.Losses[0].Tags
+		lossTags := make([][]retrieval.FitTag, 0, len(group.Losses))
+		for _, loss := range group.Losses {
+			lossTags = append(lossTags, loss.Tags)
+		}
+		group.Tags = retrieval.MergeFitTags(lossTags...)
 		for _, loss := range group.Losses {
 			if loss.Time.After(group.LastLost) {
 				group.LastLost = loss.Time

@@ -1721,6 +1721,7 @@ function renderFits(fits) {
       fitsShown.searchText.set(fit, fitSearchText(fit));
     }
     fitsShown.ruleTags = fitRuleTags(fits);
+    if (fitKeyCollapsedBefore !== null) fillFitKey();
   }
   const rows = new Map();
   const hulls = new Map();
@@ -1795,7 +1796,7 @@ function renderFits(fits) {
 /*
   filterFits hides the fits the filter box does not match, and the hull headings left with none.
   Each word in the box must be in the fit's search text (fitSearchText), so "rifter scram" finds Rifters with a warp scrambler.
-  The words after "tag:" or "tags:" that name a tag, by the start of its name, are tags a fit must have, so "rifter tags: abyssal imp" finds Rifters tagged both.
+  The words after "tag:" or "tags:" that name a tag, by its name or a start of three letters or more that fits only it (fitTagNamed), are tags a fit must have, so "rifter tags: abyssal imp" finds Rifters tagged both.
   Any other word after them is an ordinary word, so typing on after clicking a tag narrows by name too.
   While filtering, the hulls with a match unfold, once each so one folded again stays folded; clearing the box folds those that were folded before, but the chosen fit's.
 */
@@ -1902,7 +1903,8 @@ function fitRow(fit) {
     when.prepend(name, " · ");
   }
   text.append(when);
-  const shown = (fit.tags || []).filter((tag) => !tag.hidden && tag !== naming).slice(0, FIT_ROW_TAGS).map(fitRuleTag);
+  // the naming tag is among them too, so the tag a fit is named for is always where its tags are
+  const shown = (fit.tags || []).filter((tag) => !tag.hidden).slice(0, FIT_ROW_TAGS).map(fitRuleTag);
   const tags = [...shown, ...FIT_TAGS.filter((tag) => fit[tag.key])];
   if (tags.length > 0) {
     const line = document.createElement("span");
@@ -1926,7 +1928,7 @@ const FIT_ABYSSAL_TAG = { key: "abyssal", name: "Abyssal", className: "fit-tag f
 const FIT_IMPLANTS_TAG = { key: "implants", name: "Implants", className: "fit-tag fit-tag-implants", meaning: "Contains Implants from a related capsule killmail" };
 const FIT_TAGS = [FIT_ABYSSAL_TAG, FIT_IMPLANTS_TAG];
 
-// FIT_ROW_TAGS is how many of a fit's tags from fit_tag_rules.json its row shows beneath the one naming it, the first by priority; the fitting window shows them all
+// FIT_ROW_TAGS is how many of a fit's tags from fit_tag_rules.json its row shows, the first by priority, the one naming it included; the fitting window shows them all
 const FIT_ROW_TAGS = 3;
 
 // fitRuleTag is a tag read by fit_tag_rules.json (retrieval.FitTag) as the fit list shows it, outlined in the theme's highlight so it doesn't read as Abyssal or Implants
@@ -1998,21 +2000,29 @@ function showFitTagTip(chip, tag) {
 
   tip.replaceChildren(title, meaning, table);
   tip.hidden = false;
-  // under the tag, kept inside the window's edges
+  // under the tag, or over it when there is no room below, kept inside the window's edges
   const at = chip.getBoundingClientRect();
   const width = tip.offsetWidth;
+  const height = tip.offsetHeight;
   tip.style.left = `${Math.max(8, Math.min(at.left, window.innerWidth - width - 8))}px`;
-  tip.style.top = `${at.bottom + 6}px`;
+  const below = at.bottom + 6;
+  tip.style.top = `${below + height > window.innerHeight - 8 ? Math.max(8, at.top - height - 6) : below}px`;
 }
 
 function hideFitTagTip() {
   el("fit-tag-tip").hidden = true;
 }
 
-// fitTagNamed is the tag a filter word names: the one with that name, or else the first whose name starts with it, Abyssal and Implants before the rules' tags
+// FIT_TAG_PREFIX is the fewest letters of a tag's name the filter takes for the tag, so a short word after "tags:", ie part of a pilot's name, stays a word
+const FIT_TAG_PREFIX = 3;
+
+// fitTagNamed is the tag a filter word names: the one with that name, or else the only one whose name starts with it, if it is FIT_TAG_PREFIX letters or more. null for any other word.
 function fitTagNamed(word) {
   const all = [...FIT_TAGS, ...fitsShown.ruleTags];
-  return all.find((tag) => tag.name.toLowerCase() === word) || all.find((tag) => tag.name.toLowerCase().startsWith(word));
+  const named = all.find((tag) => tag.name.toLowerCase() === word);
+  if (named || word.length < FIT_TAG_PREFIX) return named || null;
+  const started = all.filter((tag) => tag.name.toLowerCase().startsWith(word));
+  return started.length === 1 ? started[0] : null;
 }
 
 // fitTag is a fit's tag, named on hover by the name the filter box finds it by; the key gives its meaning. A clickable one lists only the fits with that tag, in place of the filter box's words.
@@ -2048,7 +2058,8 @@ const FITS_FILTER_HELP = [
   [
     "Hull, pilot, module, corp, or alliance name.",
     'Several words and parts of words, ie "Rifter Web".',
-    'The key word "tag:" or "tags:" followed by tag names or their starts, ie "tags: neut" or "tags: imp". Clicking a tag does the same. Weapons and their range are tags too, ie "tags: lasers" or "tags: long", though they are never shown.',
+    'The key word "tag:" or "tags:" followed by tag names, or their first three letters or more, ie "tags: neut" or "tags: imp". Clicking a tag does the same. Weapons and their range are tags too, ie "tags: lasers" or "tags: long", though they are never shown.',
+    "Any other word after the tags is matched as a name.",
   ],
 ];
 
@@ -2911,6 +2922,7 @@ const TAB_HELP = {
     "Non-combat ships (pods, shuttles, haulers, mining ships), structures, and losses with nothing fitted are left out.",
     "A merged fit's losses page with the arrows by its name, or ← →, each showing its own layout, charges, and drones.",
     "Right-click the hull, a module, a drone, or the zKillboard button (which has the capsule too) to open it on an external site.",
+    "Tag key, beside the filter, explains each tag this search found. Hover a tag in the fitting window to see what earned it.",
   ],
   "tab-capitals": [
     "Capital ships its pilots flew on these killmails, and who flew them. Click a pilot to search.",
@@ -2927,6 +2939,7 @@ const TAB_HELP = {
 };
 
 function selectTab(tabId) {
+  if (tabId !== "tab-fits") closeFitKey();
   const points = typeof TAB_HELP[tabId] === "function" ? TAB_HELP[tabId](roster ? roster.type : "") : TAB_HELP[tabId];
   const key = TAB_COLOR_KEYS[tabId];
   const title = el(tabId).querySelector(".tab-name").textContent;
@@ -3190,9 +3203,36 @@ const FIT_KEY = {
   },
 };
 
+// fitKeyCollapsedBefore is whether the sidebar was shrunk to its icons before the tag key opened, restored when it closes; null while it is shut
+let fitKeyCollapsedBefore = null;
+
+// openFitKey opens the Fits tab's tag key on the left, shrinking the sidebar to its icons for the room, without saving that as the sidebar's choice
+function openFitKey() {
+  if (fitKeyCollapsedBefore === null) fitKeyCollapsedBefore = sidebarCollapsed;
+  sidebarCollapsed = true;
+  showSidebar();
+  fillFitKey();
+  el("fit-key-panel").hidden = false;
+  el("fit-key-open").setAttribute("aria-expanded", "true");
+}
+
+// fillFitKey writes the tags this search found into the open tag key
+function fillFitKey() {
+  el("fit-key-body").replaceChildren(...helpContent([], [FIT_KEY]));
+}
+
+// closeFitKey shuts the tag key and gives the sidebar back as it was
+function closeFitKey() {
+  if (fitKeyCollapsedBefore === null) return;
+  el("fit-key-panel").hidden = true;
+  el("fit-key-open").setAttribute("aria-expanded", "false");
+  sidebarCollapsed = fitKeyCollapsedBefore;
+  fitKeyCollapsedBefore = null;
+  showSidebar();
+}
+
 // TAB_COLOR_KEYS is the color key shown for each tab, tabs without colored data have none
 const TAB_COLOR_KEYS = {
-  "tab-fits": [FIT_KEY],
   "tab-ratters": [RATTER_KEY],
   "tab-structures": [STRUCTURE_STATE_KEY],
   "tab-killmails": [OUTCOME_KEY, SECURITY_KEY, WORMHOLE_CLASS_KEY],
@@ -5252,12 +5292,21 @@ for (const tab of document.querySelectorAll(".tab")) tab.addEventListener("click
 // At a glance stays first, only the tabs below it move
 for (const tab of el("tab-list").querySelectorAll(".tab")) wireTabMoving(tab);
 el("sidebar-toggle").addEventListener("click", () => {
+  // while the tag key is open the sidebar is shrunk for it, so the toggle shuts the key and gives the sidebar back
+  if (fitKeyCollapsedBefore !== null) {
+    closeFitKey();
+    return;
+  }
   setSidebarCollapsed(!sidebarCollapsed);
   // one save at a time, in the order clicked, so a quick double click can not save the older state last
   const collapsed = sidebarCollapsed;
   sidebarSaving = sidebarSaving.then(() => backend().SetSidebarCollapsed(collapsed)).catch((err) => setStatus(String(err), true));
 });
 NARROW_WINDOW.addEventListener("change", showSidebar);
+el("fit-key-open").addEventListener("click", () => (fitKeyCollapsedBefore === null ? openFitKey() : closeFitKey()));
+el("fit-key-close").addEventListener("click", closeFitKey);
+// the tag tip is fixed to the page, so any scroll would leave it behind its tag
+document.addEventListener("scroll", hideFitTagTip, true);
 for (const subtab of document.querySelectorAll("#panel-structures .subtab")) {
   subtab.addEventListener("click", () => selectStructuresSubtab(subtab.id));
 }

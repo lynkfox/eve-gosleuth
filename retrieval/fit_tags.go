@@ -82,6 +82,34 @@ func (f *Fit) Tags() []FitTag {
 		}
 	}
 
+	sortFitTags(tags)
+	return tags
+}
+
+/*
+	MergeFitTags combines the tags of several fits, ie a merged fit's losses, whose drones can differ: each tag once, the first list's copy where it has one
+
+Parameters:
+  - lists: each fit's tags
+
+Returns:
+  - []FitTag: every tag any of them has, by Priority (those without one last), then name
+*/
+func MergeFitTags(lists ...[]FitTag) []FitTag {
+	merged := []FitTag{}
+	for _, tags := range lists {
+		for _, tag := range tags {
+			if !slices.ContainsFunc(merged, func(each FitTag) bool { return each.Name == tag.Name }) {
+				merged = append(merged, tag)
+			}
+		}
+	}
+	sortFitTags(merged)
+	return merged
+}
+
+// sortFitTags orders tags by Priority, those without one last, then name
+func sortFitTags(tags []FitTag) {
 	slices.SortFunc(tags, func(a, b FitTag) int {
 		if a.Priority != b.Priority {
 			if a.Priority == 0 || b.Priority == 0 {
@@ -91,7 +119,6 @@ func (f *Fit) Tags() []FitTag {
 		}
 		return cmp.Compare(a.Name, b.Name)
 	})
-	return tags
 }
 
 // tagParts lists the fit's hull, and its modules and drones with the size of the rack each is a share of. Drones, fighters, and the hull are a share of an average of the high, mid, and low racks.

@@ -1908,7 +1908,7 @@ body.debug-mode::after {
 /* the filter sits over the list, which scrolls beneath it */
 .fits-side { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
 .fits-filter-row { display: flex; flex: none; align-items: center; gap: 6px; }
-.fits-filter { min-width: 0; padding: 5px 10px; }
+.fits-filter { flex: 1; min-width: 0; padding: 5px 10px; }
 
 /* a filter box's ? on its left, its popup opening rightward under it on hover or keyboard focus. Not a tab's help, so the help window leaves it alone. */
 .filter-help { position: relative; flex: none; }
@@ -1991,6 +1991,22 @@ body.debug-mode::after {
 .fit-row-name { color: var(--text); font-weight: 600; }
 .fit-view-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
 .fit-view-tags:empty { display: none; }
+
+/* the Fits tab's tag key, on the left beside the shrunk sidebar while open */
+.fit-key-panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 260px;
+  margin-right: 16px;
+  padding-right: 8px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+.fit-key-panel[hidden] { display: none; }
+.fit-key-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.fit-key-head h3 { margin: 0; font-size: 14px; }
+.fit-key-body h3 { margin-top: 0; }
 
 /* how a fit's tag was reached, under the tag on hover: one row a module, then the total against the threshold. Fixed to the page so the fitting window's scrolling can't clip it. */
 .fit-tag-tip {

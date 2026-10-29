@@ -87,6 +87,9 @@ func zkillHash(id int) (string, error) {
 		return "", err
 	}
 	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("zKillboard answered %s, try again shortly", response.Status)
+	}
 	entries := []api.ZkbResponse{}
 	if err := json.NewDecoder(response.Body).Decode(&entries); err != nil {
 		return "", fmt.Errorf("reading zKillboard: %w", err)

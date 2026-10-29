@@ -137,7 +137,8 @@ func TestBuildFitsMergesWhateverTheOrder(t *testing.T) {
 	}
 	assert.Equal(t, 2, fits[1].Losses[1].KillmailID)
 	assert.Contains(t, tagNames(fits[1].Losses[1].Tags), "Drones", "each loss has its own tags, from its own drones")
-	assert.NotContains(t, tagNames(fits[1].Tags), "Drones", "the fit's are its first loss's, which had none")
+	assert.NotContains(t, tagNames(fits[1].Losses[0].Tags), "Drones", "the first loss had none")
+	assert.Contains(t, tagNames(fits[1].Tags), "Drones", "the fit has every tag of its losses")
 }
 
 func TestBuildFitsGivesShipsTheirPodsImplants(t *testing.T) {
