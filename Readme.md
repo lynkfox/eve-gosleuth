@@ -49,28 +49,32 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
 # Things to do
 
 * Pre-Release
-
- * Fits 
-  * Tags (Nano, Armor Fleet, Armor Kitchen Sink, Roller, ect) (planned currently, but not implimented)
-  * Get expected resist holes, ewar resistance
  * first time user tour
   * overlay that darkens screen, highlights buttons with descriptions
   * generates sample search (fake the search?) and shows off the various tabs.
 
 * If i feel like it pre-release?
- * Side tools: Station ID age checker
- * addition to the debugger to have an option for a live streaming of debug logs in a side window
  * Report data to be saved as a PDF for distribution.
+ * Jspace Home Systems / Nullsec Staging 
+ * Battles that the group has fought (we're already tracking, so just a display update)
+  * needs warnings/reminders that its an estimation and may be wrong
 
 * Release
  * GitActions workflows to build and release
  * Auto Update-er and Update changelong Splash screen
 
 * Future plans
- * Add a window that can be popped out on its own that can contain running live kill trackers - Per system, Per Entity, Per Types (such as all citadels).
-  * have an option to pull the kills since the tracker was last open
+ * wails v3 upgrade for multiple windows (side tools)
+  * Side Tools
+    * Killtrackers, based on any of the searchable targets in seperate windows
+     * ability to pull killtrackers data since last open
+    * ZKill search reports - Set up several search parameters that can be quickly run as a report
+     * Ie: every structure kill in jspace since the report was last run
+     * or: every structure kill involving a, b, and c, in jspace in the last day
+     * ect
+    * Station ID checker, for date station was anchored (ala trifftools)
+    * Live logging debug logs for more advanced users
  * Ability to use killmail dumps to bypass zkill calls, SDE dumps as well
   * sde dumps is kinda already there as a dev side tool for deployment updates. Debatable if ship with app or just rely on the override system
- * Battles that the group has fought (we're already tracking, so just a display update)
-  * needs warnings/reminders that its an estimation and may be wrong
+ * API/MCP for command level calls
 
