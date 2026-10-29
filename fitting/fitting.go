@@ -40,6 +40,7 @@ type Stats struct {
 	LocalRep     Repair  `json:"local_rep"`     // HP per second from its own repairers while all cycle, ancillary ones with paste if loaded
 	PassiveRegen float64 `json:"passive_regen"` // peak shield HP per second from its recharge
 	RemoteRep    Repair  `json:"remote_rep"`    // HP (and GJ of capacitor) per second it gives others
+	Neut         float64 `json:"neut"`          // GJ of capacitor per second its neutralizers and nosferatus take from a target, before the target's resistance
 
 	Sensor     Sensor             `json:"sensor"`
 	EwarResist map[string]float64 `json:"ewar_resist"` // keyed by the hull's ewar resistance attribute name, ie ECMResistance: the fraction of the ewar that still lands, so 1 is no resistance

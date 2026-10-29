@@ -48,7 +48,8 @@ var outputAttributes = []int{
 	68,   // shieldBonus: shield boosted per cycle
 	84,   // armorDamageAmount: armor repaired per cycle
 	83,   // structureDamageAmount: hull repaired per cycle
-	90,   // powerTransferAmount: capacitor transmitted per cycle
+	90,   // powerTransferAmount: capacitor transmitted per cycle, or drained by a nosferatu
+	97,   // energyNeutralizerAmount: capacitor neutralized per cycle
 	1886, // chargedArmorDamageMultiplier: an ancillary armor repairer loaded with paste
 
 	208, 209, 210, 211, // radar, ladar, magnetometric, gravimetric sensor strength
@@ -78,6 +79,7 @@ var codeEffects = []int{
 	4, 26, 27, 4936, 5275, // shield, hull, armor, ancillary shield, and ancillary armor repair
 	4928,                                     // Reactive Armor Hardener
 	6184, 6185, 6186, 6188, 6651, 6652, 7166, // remote capacitor, hull, shield, armor, ancillary armor, ancillary shield, and mutadaptive armor repair
+	6187, 6197, // energy neutralizers and nosferatus, for neut pressure
 	16,                           // online
 	11, 12, 13, 2663, 3772, 6306, // low, high, mid, rig, subsystem, and service slots
 }

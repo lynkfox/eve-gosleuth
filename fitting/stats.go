@@ -60,6 +60,12 @@ var remoteRepairEffects = map[string]repairKind{
 
 const mutadaptiveEffect = "ShipModuleRemoteArmorMutadaptiveRepairer"
 
+// the neutralizer and nosferatu effects by SDE name, with the module attribute holding the capacitor each takes per cycle
+var neutEffects = map[string]string{
+	"energyNeutralizerFalloff": "energyNeutralizerAmount",
+	"energyNosferatuFalloff":   "powerTransferAmount",
+}
+
 /*
 	computeStats reads a fit's stats from the engine: resists and EHP per layer, local and remote repair, passive regen, sensors, and ewar resistance
 
@@ -92,6 +98,11 @@ func computeStats(fit *Fit) *Stats {
 			if kind, ok := remoteRepairEffects[effect.Name]; ok {
 				addRepair(fit, &stats.RemoteRep, module, effect, kind)
 				mutadaptive = mutadaptive || effect.Name == mutadaptiveEffect
+			}
+			if amount, ok := neutEffects[effect.Name]; ok {
+				if cycle := fit.Attr(module, effect.Duration) / 1000; effect.Duration != 0 && cycle > 0 {
+					stats.Neut += fit.AttrNamed(module, amount) / cycle
+				}
 			}
 		}
 	}

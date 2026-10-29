@@ -19,7 +19,7 @@ var s4testAttributeNames = []string{
 	"emDamageResonance", "thermalDamageResonance", "kineticDamageResonance", "explosiveDamageResonance",
 	"shieldBonus", "armorDamageAmount", "structureDamageAmount", "powerTransferAmount", "chargedArmorDamageMultiplier", "resistanceShiftAmount",
 	"scanRadarStrength", "scanLadarStrength", "scanMagnetometricStrength", "scanGravimetricStrength",
-	"ECMResistance", "remoteRepairImpedance",
+	"ECMResistance", "remoteRepairImpedance", "energyNeutralizerAmount",
 }
 
 // attr is a test attribute's id, from its name
@@ -38,6 +38,7 @@ var s4testEffectNames = map[string]struct{ id, category int }{
 	"shipModuleAncillaryRemoteArmorRepairer": {6651, 2}, "shipModuleAncillaryRemoteShieldBooster": {6652, 2},
 	"ShipModuleRemoteArmorMutadaptiveRepairer": {7166, 2}, "shipModuleRemoteCapacitorTransmitter": {6184, 2},
 	"adaptiveArmorHardener": {4928, 1}, "online": {16, 4},
+	"energyNeutralizerFalloff": {6187, 2}, "energyNosferatuFalloff": {6197, 2},
 }
 
 // ids of the made-up types
@@ -59,6 +60,8 @@ const (
 	s4remAncArmorT   = 6003
 	s4remMutT        = 6004
 	s4remCapT        = 6005
+	s4neutT          = 7000
+	s4nosT           = 7001
 	s4oddHullType    = 1001
 	s4tieHullType    = 1002
 	s4bareHullType   = 1003
@@ -149,6 +152,8 @@ func s4baseSpecs() map[int]s4typeSpec {
 		s4remAncArmorT:   {attrs: map[string]float64{"armorDamageAmount": 200, "duration": 4000, "chargedArmorDamageMultiplier": 3}, effects: []string{"shipModuleAncillaryRemoteArmorRepairer"}},
 		s4remMutT:        {attrs: map[string]float64{"armorDamageAmount": 250, "duration": 5000}, effects: []string{"ShipModuleRemoteArmorMutadaptiveRepairer"}},
 		s4remCapT:        {attrs: map[string]float64{"powerTransferAmount": 800, "duration": 4000}, effects: []string{"shipModuleRemoteCapacitorTransmitter"}},
+		s4neutT:          {attrs: map[string]float64{"energyNeutralizerAmount": 600, "duration": 12000}, effects: []string{"energyNeutralizerFalloff"}},
+		s4nosT:           {attrs: map[string]float64{"powerTransferAmount": 60, "duration": 6000}, effects: []string{"energyNosferatuFalloff"}},
 	}
 }
 
@@ -260,4 +265,12 @@ func TestNotFinite(t *testing.T) {
 	s4loadTestDogma(t, specs)
 	_, err := fitting.Compute(fitting.Input{Hull: s4hullType})
 	assert.ErrorIs(t, err, fitting.ErrNotFinite)
+}
+
+// TestNeut checks neutralizers and nosferatus add up to the capacitor they take each second, and nothing else counts
+func TestNeut(t *testing.T) {
+	s4loadTestDogma(t, s4baseSpecs())
+	stats := s4compute(t, fitting.Input{Hull: s4hullType, Modules: []fitting.Module{s4module(s4neutT, 0), s4module(s4neutT, 0), s4module(s4nosT, 0)}})
+	assert.InDelta(t, 2*600/12.0+60/6.0, stats.Neut, 1e-9)
+	assert.Zero(t, s4compute(t, fitting.Input{Hull: s4hullType, Modules: []fitting.Module{s4module(s4remCapT, 0)}}).Neut, "a capacitor transmitter gives, it doesn't neut")
 }
