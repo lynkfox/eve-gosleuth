@@ -207,6 +207,15 @@ func TestFitTagRules(t *testing.T) {
 		assert.Equal(t, []string{"Tackle", "Firewall", "EWAR", "Armor"}, tagNames(retrieval.MergeFitTags([]retrieval.FitTag{armor, ewar, firewall, tackle})))
 	})
 
+	t.Run("merged losses keep each tag's copy furthest past its threshold, in either order", func(t *testing.T) {
+		lightEWAR := []retrieval.FitTag{{Name: "EWAR", Priority: 5, Weight: 1.5, Threshold: 1.5}, {Name: "Tackle", Priority: 5, Weight: 2, Threshold: 2}}
+		heavyEWAR := []retrieval.FitTag{{Name: "EWAR", Priority: 5, Weight: 4.5, Threshold: 1.5}}
+		for _, merged := range [][]retrieval.FitTag{retrieval.MergeFitTags(lightEWAR, heavyEWAR), retrieval.MergeFitTags(heavyEWAR, lightEWAR)} {
+			assert.Equal(t, []string{"EWAR", "Tackle"}, tagNames(merged))
+			assert.Equal(t, 4.5, merged[0].Weight)
+		}
+	})
+
 	t.Run("only the first listed of an exclusive set applies, however heavy the rest", func(t *testing.T) {
 		assert.Equal(t, []string{"Passive"}, tagNames(tagFit(t, heron, nil, []int{shieldRecharger, largeShieldExtender, largeShieldExtender}, nil, nil).Tags()))
 		assert.Equal(t, []string{"Buffer"}, tagNames(tagFit(t, heron, nil, []int{largeShieldExtender, largeShieldExtender}, nil, nil).Tags()))

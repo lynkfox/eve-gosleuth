@@ -95,20 +95,24 @@ func (f *Fit) Tags() []FitTag {
 }
 
 /*
-	MergeFitTags combines the tags of several fits, ie a merged fit's losses, whose drones can differ: each tag once, the first list's copy where it has one
+	MergeFitTags combines the tags of several fits, ie a merged fit's losses, whose drones can differ: each tag once, the copy furthest past its threshold (the first list's of equals), so the order of the lists can't change which tag names the fit
 
 Parameters:
   - lists: each fit's tags
 
 Returns:
-  - []FitTag: every tag any of them has, by Priority (those without one last), then name
+  - []FitTag: every tag any of them has, by Priority (those without one last), those sharing one by how far past their threshold they are, then name
 */
 func MergeFitTags(lists ...[]FitTag) []FitTag {
 	merged := []FitTag{}
 	for _, tags := range lists {
 		for _, tag := range tags {
-			if !slices.ContainsFunc(merged, func(each FitTag) bool { return each.Name == tag.Name }) {
+			at := slices.IndexFunc(merged, func(each FitTag) bool { return each.Name == tag.Name })
+			switch {
+			case at < 0:
 				merged = append(merged, tag)
+			case passedBy(tag) > passedBy(merged[at]):
+				merged[at] = tag
 			}
 		}
 	}
