@@ -1947,7 +1947,10 @@ body.debug-mode::after {
 }
 
 .fits-hull-head[aria-expanded="true"]::before { transform: rotate(90deg); }
-.fits-hull-head:hover { background: var(--panel-raised); }
+/* a faint wash on the hull heading, so each hull reads as its own block among the fits */
+.fits-hull-head { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.fits-hull-head:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
+.fits-hull + .fits-hull { margin-top: 4px; }
 .fits-hull-head img { width: 28px; height: 28px; border-radius: 4px; }
 .fits-hull-name { flex: 1; min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .fits-hull-count { color: var(--muted); font-size: 12px; white-space: nowrap; }
@@ -1963,17 +1966,21 @@ body.debug-mode::after {
   border-radius: var(--radius);
   background: none;
   color: var(--text);
+  font-weight: 400; /* not the bold every button has, so a fit doesn't read as its hull's heading */
   text-align: left;
   cursor: pointer;
 }
 
+/* a bullet on each fit, level with its first line, under its hull's ▸ */
+.fit-row::before { content: "•"; align-self: flex-start; color: var(--muted); }
 .fit-row:hover { background: var(--panel-raised); }
 .fit-row[aria-selected="true"] { border-color: var(--highlight); background: var(--panel-raised); }
 .fit-row-text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 .fit-row-text > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fit-row-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
-.fit-row-count { color: var(--highlight); font-weight: 600; }
-/* a fit's tags, filled rounded squares so they don't read as the ×N count: abyssal always red as it is a warning, implants in the theme's badge color */
+/* the ×N count is quiet grey, so it never reads as one of the tags tinted in the highlight */
+.fit-row-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* a fit's tags, rounded squares: abyssal always red as it is a warning, implants in the theme's badge color */
 .fit-tag {
   display: inline-block;
   min-width: 16px;
@@ -1987,10 +1994,10 @@ body.debug-mode::after {
 
 .fit-tag-abyssal { background: var(--error); color: #0b0e13; }
 .fit-tag-implants { background: var(--badge); color: var(--badge-text); }
-/* a tag read by fit_tag_rules.json, outlined so it doesn't read as Abyssal or Implants */
-.fit-tag-rule { box-shadow: inset 0 0 0 1px var(--highlight); color: var(--highlight); }
-.fit-tag-hidden { box-shadow: inset 0 0 0 1px var(--muted); color: var(--muted); }
-.fit-row-name { color: var(--text); font-weight: 600; }
+/* a tag read by fit_tag_rules.json, a soft tint of the highlight so it doesn't read as the solid Abyssal or Implants */
+.fit-tag-rule { background: color-mix(in srgb, var(--highlight) 16%, transparent); color: var(--highlight); font-weight: 600; }
+.fit-tag-hidden { background: none; box-shadow: inset 0 0 0 1px var(--border); color: var(--muted); }
+.fit-row-name { color: var(--text); }
 .fit-view-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
 .fit-view-tags:empty { display: none; }
 

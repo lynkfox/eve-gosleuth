@@ -1933,7 +1933,7 @@ const FIT_TAGS = [FIT_ABYSSAL_TAG, FIT_IMPLANTS_TAG];
 // FIT_ROW_TAGS is how many of a fit's tags from fit_tag_rules.json its row shows, the first by priority, the one naming it included; the fitting window shows them all
 const FIT_ROW_TAGS = 3;
 
-// fitRuleTag is a tag read by fit_tag_rules.json (retrieval.FitTag) as the fit list shows it, outlined in the theme's highlight so it doesn't read as Abyssal or Implants. A hidden one (the weapons, Close, Long) is outlined in the muted color instead.
+// fitRuleTag is a tag read by fit_tag_rules.json (retrieval.FitTag) as the fit list shows it, tinted in the theme's highlight so it doesn't read as the solid Abyssal or Implants. A hidden one (the weapons, Close, Long) is a muted outline instead.
 function fitRuleTag(tag) {
   return { name: tag.name, meaning: tag.meaning, className: tag.hidden ? "fit-tag fit-tag-rule fit-tag-hidden" : "fit-tag fit-tag-rule", rule: true };
 }
