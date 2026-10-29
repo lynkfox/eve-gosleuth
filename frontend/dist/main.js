@@ -3213,6 +3213,7 @@ function openFitKey() {
   showSidebar();
   fillFitKey();
   el("fit-key-panel").hidden = false;
+  el("intel-tabs").classList.add("fit-key-open");
   el("fit-key-open").setAttribute("aria-expanded", "true");
 }
 
@@ -3225,6 +3226,7 @@ function fillFitKey() {
 function closeFitKey() {
   if (fitKeyCollapsedBefore === null) return;
   el("fit-key-panel").hidden = true;
+  el("intel-tabs").classList.remove("fit-key-open");
   el("fit-key-open").setAttribute("aria-expanded", "false");
   sidebarCollapsed = fitKeyCollapsedBefore;
   fitKeyCollapsedBefore = null;

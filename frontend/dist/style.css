@@ -198,11 +198,12 @@ button:disabled {
   cursor: default;
 }
 
+/* as wide as the default window (1375, main.go) leaves room for, so the Fits tab's ring fits beside its list and the open tag key without scrolling sideways */
 main {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 1200px;
+  max-width: 1320px;
   margin: 0 auto;
   padding: 24px;
 }
@@ -2004,6 +2005,8 @@ body.debug-mode::after {
   border-right: 1px solid var(--border);
 }
 .fit-key-panel[hidden] { display: none; }
+/* the fit list gives up some width while the key is open, so the ring keeps its room */
+.fit-key-open .fits { grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); }
 .fit-key-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .fit-key-head h3 { margin: 0; font-size: 14px; }
 .fit-key-body h3 { margin-top: 0; }
