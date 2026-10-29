@@ -1,4 +1,4 @@
-// Package fitting is a dogma engine: it works out a fit's stats (resists, EHP, repair, sensors, ewar resistance) from static_data/dogma.json, with every skill at V, every module active, no heat and no fleet boosts
+// Package fitting is a dogma engine: it works out a fit's stats (resists, EHP, repair, sensors, ewar resistance) from static_data/dogma.json, with every skill at V, every module active, its own command bursts on itself, no heat and no other fleet boosts
 package fitting
 
 import (
@@ -40,7 +40,8 @@ type Stats struct {
 	LocalRep     Repair  `json:"local_rep"`     // HP per second from its own repairers while all cycle, ancillary ones with paste if loaded
 	PassiveRegen float64 `json:"passive_regen"` // peak shield HP per second from its recharge
 	RemoteRep    Repair  `json:"remote_rep"`    // HP (and GJ of capacitor) per second it gives others
-	Neut         float64 `json:"neut"`          // GJ of capacitor per second its neutralizers and nosferatus take from a target, before the target's resistance
+	Neut         float64 `json:"neut"`
+	Boosted      bool    `json:"boosted,omitempty"` // its own command bursts' buffs are in the numbers, as they reach the ship that runs them          // GJ of capacitor per second its neutralizers and nosferatus take from a target, before the target's resistance
 
 	Sensor     Sensor             `json:"sensor"`
 	EwarResist map[string]float64 `json:"ewar_resist"` // keyed by the hull's ewar resistance attribute name, ie ECMResistance: the fraction of the ewar that still lands, so 1 is no resistance
@@ -92,8 +93,10 @@ func Compute(in Input) (stats *Stats, err error) {
 	if err != nil {
 		return nil, err
 	}
-	fit.AddHand(handCodedModifiers(fit)...)
+	bursts := burstModifiers(fit)
+	fit.AddHand(append(handCodedModifiers(fit), bursts...)...)
 	stats = computeStats(fit)
+	stats.Boosted = len(bursts) > 0
 	if !stats.finite() {
 		return nil, fmt.Errorf("%w for hull %d", ErrNotFinite, in.Hull)
 	}

@@ -169,7 +169,7 @@ Tags describe what a fit brings, for intel: what it shoots with, how it tanks, a
 
 ## Phase 4: dogma engine (resists, EHP, repair, ewar resistance)
 
-**Status (2026-10-29): built,** the same afternoon it was planned, by the agent split below (extract, engine core, effects & outputs, golden; then the strip). `go test ./fitting` checks 37 Pyfa fits; 34 match within 0.1% and 3 are known differences (below). Its behaviour is in `features.md` under Fits.
+**Status (2026-10-29): built,** the same afternoon it was planned, by the agent split below (extract, engine core, effects & outputs, golden; then the strip). `go test ./fitting` checks 37 Pyfa fits; 36 match within 0.1% and 1 is a known difference (below). Its behaviour is in `features.md` under Fits.
 
 **Planned 2026-10-29.** Two research passes went into it: one over the SDE (build 3660036) and one over Pyfa's engine (`eos`, v2.69.3, commit d2722a4c). Their notes are kept with this plan's history. Pyfa is GPLv3 and this project is MIT, so Pyfa is read for reference and used to produce test numbers, and none of its code is copied.
 
@@ -266,10 +266,14 @@ I relay any finding that affects another agent with SendMessage, and run the rea
 - Implant sets: a set's bonus reaches the other implants through the character's location, which the engine first left implants out of.
 - **Bastion's hull resists aren't stacking penalized** against a Damage Control, as Pyfa has it (user's call: follow Pyfa). That is the `unpenalized` list in `dogma.json`, written by sdegen's `unpenalized`, read by `comm.DogmaUnpenalized`.
 - The harness wrote a Herald with a placeholder hull id; that fit was dropped.
-- **Known differences** (in the golden files): the Damnation and Vulture, as Pyfa applies a fit's own command bursts to itself; and a Reactive Armor Hardener with a Damage Control and a hardener settles 0.13% from Pyfa on thermal, not yet explained.
+- **Known differences** (in the golden files): the Damnation and Vulture until own boosts were built (cleared the same day); and a Reactive Armor Hardener with a Damage Control and a hardener settles 0.13% from Pyfa on thermal, not yet explained.
 - Regenerating: the harness is in `fitting/testdata/golden/harness/` (`SETUP.md` there: a Pyfa checkout, a venv, and Pyfa's `db_update.py`, none committed). Regenerating keeps the known differences.
 
-### Next: own boosts, always on (user's call 2026-10-29)
+### Own boosts, always on (user's call 2026-10-29; built the same afternoon)
+
+- **Built:** sdegen keeps `dbuffCollections.jsonl` as `buffs` in `dogma.json` (aggregate, operation, and item, location, location-group, and location-skill targets), the burst effects (6732–6736, the titan generator 6753), and the buff id, value, and multiplier attributes, so a charge's effect (6737) and the skills and hulls that strengthen bursts work through the engine. `fitting/bursts.go` reads each active burst's buffs off the module, keeps the strongest of each by its aggregate, and adds the buff's modifiers as hand modifiers from that burst, stacking penalized like any module's (as Pyfa does). `Stats.Boosted` drives the strip's warning. The Damnation and Vulture golden fits now match Pyfa with no known difference.
+
+What was planned:
 
 - A command ship's bursts reach itself in game, and Pyfa counts them. **They always count, with no toggle** (the user first asked for an on/off button, then dropped it the same afternoon, as "every module active" is assumed anyway). Instead **a warning label in the strip says the stats include its own links**, shown only on a fit with an active command burst.
 - The SDE gives bursts no modifiers, but `dbuffCollections.jsonl` defines each warfare buff (what it modifies, how, and which aggregate mode), and a burst charge names its buffs with `warfareBuff1ID`..`4ID` and their values. So bursts can likely be data-driven: sdegen extracts the buff collections, and the engine applies a fit's own active bursts' buffs to its ship when the button is on, keeping the strongest of each buff as the game does.

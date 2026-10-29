@@ -2313,6 +2313,8 @@ const FIT_SENSOR_COLORS = { Radar: "#e0c341", Gravimetric: "#4a90d9", Magnetomet
 */
 function fitStatsBody(stats, loss) {
   const parts = [];
+  // its own links are in the numbers, as in game they reach the ship that runs them: worth a warning, as its fleet may not have had them
+  if (stats.boosted) parts.push(fitStatsSpan("fit-stats-warning", "⚠ Includes its own command bursts"));
   const grid = document.createElement("div");
   grid.className = "fit-resists";
   grid.append(fitStatDetails(stats, loss) || fitStatsSpan("", ""), fitStatsSpan("", ""), fitStatsSpan("fit-resist-title", "EHP"), ...FIT_DAMAGE_TYPES.map((type) => fitStatsSpan("fit-resist-title", type.name)));
@@ -3157,7 +3159,7 @@ const TAB_HELP = {
     "A merged fit's losses page with the arrows by its name, or ← →, each showing its own layout, charges, and drones.",
     "Right-click the hull, a module, a drone, or the zKillboard button (which has the capsule too) to open it on an external site.",
     "Tag key, beside the filter, explains each tag this search found. Hover a tag in the fitting window to see what earned it.",
-    "Under the ship, its stats from a dogma engine: all skills V, every module active, no heat or boosts. Each layer's EHP is against even damage, and its weakest resist is red. Details ▾ gives its repair, passive regen, neut pressure, logi output, and ewar resistances. A tactical destroyer has a switch between its modes.",
+    "Under the ship, its stats from a dogma engine: all skills V, every module active, no heat or boosts. Each layer's EHP is against even damage, and its weakest resist is red. Details ▾ gives its repair, passive regen, neut pressure, logi output, and ewar resistances. A ship running command bursts gets their bonuses itself, with a warning. A tactical destroyer has a switch between its modes.",
   ],
   "tab-capitals": [
     "Capital ships its pilots flew on these killmails, and who flew them. Click a pilot to search.",

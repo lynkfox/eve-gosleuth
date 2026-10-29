@@ -2762,5 +2762,7 @@ main > * { flex: none; }
 }
 .fit-details:hover .fit-details-panel, .fit-details:focus-within .fit-details-panel { display: flex; }
 .fit-details-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+/* the warning that a fit's own command bursts are in its numbers: amber, a fixed color as it means a warning */
+.fit-stats-warning { align-self: flex-start; padding: 1px 8px; border-radius: 4px; background: rgb(224 160 48 / 18%); color: #e0a030; font-size: 11px; font-weight: 600; }
 .fit-details-divider { height: 1px; margin: 2px 0; background: var(--border); }
 .fit-assumptions { font-size: 11px; }

@@ -119,19 +119,5 @@
       "stasisWebifierResistance": 1.0,
       "energyWarfareResistance": 1.0
     }
-  },
-  "known_differences": [
-    {
-      "field": "shield",
-      "reason": "Pyfa applies the fit's own command bursts to itself; ours waits on the boosts toggle (planned)"
-    },
-    {
-      "field": "ehp",
-      "reason": "Pyfa applies the fit's own command bursts to itself; ours waits on the boosts toggle (planned)"
-    },
-    {
-      "field": "local_rep",
-      "reason": "Pyfa applies the fit's own command bursts to itself; ours waits on the boosts toggle (planned)"
-    }
-  ]
+  }
 }
