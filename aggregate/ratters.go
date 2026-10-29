@@ -3,6 +3,7 @@ package aggregate
 import (
 	"cmp"
 	"slices"
+	"sync"
 
 	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm"
@@ -186,11 +187,19 @@ func PvENPCs(attackers []*retrieval.KillmailAttacker, esiClient api.ESIClient) i
 	return count
 }
 
-// ratShip reports whether an NPC's ship is a rat's, not one in npc_not_rat_groups. A ship the ESI can't look up counts as a rat's, as most NPCs are.
+// unknownNPCShips are the NPC ship types already warned of as not looked up, so a rate limited search warns once a type, not once an attacker
+var unknownNPCShips sync.Map
+
+// ratShip reports whether an NPC's ship is a rat's, not one in npc_not_rat_groups. A ship the ESI can't look up, or with no client to ask, counts as a rat's, as most NPCs are.
 func ratShip(ship *retrieval.Item, esiClient api.ESIClient) bool {
+	if esiClient == nil {
+		return true
+	}
 	info, err := esiClient.GetItemInfo(ship.ItemID)
 	if err != nil || info == nil {
-		comm.Logger.WithError(err).Warnf("Unable to look up NPC ship type %d, it is counted as a rat", ship.ItemID)
+		if _, warned := unknownNPCShips.LoadOrStore(ship.ItemID, true); !warned {
+			comm.Logger.WithError(err).Warnf("Unable to look up NPC ship type %d, it is counted as a rat", ship.ItemID)
+		}
 		return true
 	}
 	return !comm.NPCNotRatGroups.ContainsIDNumber(info.GroupID)

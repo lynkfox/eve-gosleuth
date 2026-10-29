@@ -58,7 +58,7 @@ func (f *Fit) Tags() []FitTag {
 /*
 	TagsWith reads the fit's tags by the rules in fit_tag_rules.json: those whose weight reaches their threshold, with each of the rule's requires matched and none of its forbids, only the first listed of each exclusive set.
 	A rule's tag_weights are added once the other tags are settled, so they read only tags without tag_weights of their own; the exclusive sets are applied again after, so such a tag can be in one (Polarized over Ratting).
-	The Fleet Doctrine tag is read from battles and other losses, not the fit, so it is never here (see aggregate.FleetDoctrine).
+	The Fleet Doctrine tag is read from battles and other losses, not the fit, so it is never here (see aggregate.FleetDoctrineInBattle and FleetDoctrineRepeated).
 
 Parameters:
   - context: what the loss's killmail adds, ie the rats on it, which only NPCs signals read
@@ -162,7 +162,8 @@ func sortFitTags(tags []FitTag) {
 	})
 }
 
-// passedBy is how many times over a tag reaches its threshold, or its share threshold for one without a threshold, ie 2 for three points against Tackle's 1.5
+// passedBy is how many times over a tag reaches its threshold, or its share threshold for one without a threshold, ie 2 for three points against Tackle's 1.5.
+// A tag of counts (Fleet Doctrine) goes by the reason nearest the number it needed, ie 1.4 for 7 of 5 hulls with 3 of 1 logi.
 func passedBy(tag FitTag) float64 {
 	switch {
 	case tag.Threshold > 0:
@@ -170,7 +171,15 @@ func passedBy(tag FitTag) float64 {
 	case tag.ShareThreshold > 0:
 		return tag.Share / tag.ShareThreshold
 	}
-	return 0
+	least := 0.0
+	for _, reason := range tag.Reasons {
+		if reason.Needed > 0 {
+			if passed := float64(reason.Count) / float64(reason.Needed); least == 0 || passed < least {
+				least = passed
+			}
+		}
+	}
+	return least
 }
 
 // tagParts lists the fit's hull, and its modules, drones, and implants with the size of the rack each is a share of. Drones, fighters, implants, and the hull are a share of an average of the high, mid, and low racks.

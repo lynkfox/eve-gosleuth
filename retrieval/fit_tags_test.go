@@ -262,6 +262,14 @@ func TestFitTagRules(t *testing.T) {
 		assert.True(t, comm.HullBonused([]*comm.FitType{nil, {Bonuses: []string{"bonus to Energy Neutralizer drain amount"}}}, []string{"Energy Neutralizer"}), "a subsystem's bonus, the hull unknown")
 	})
 
+	t.Run("merged losses keep the tag of counts furthest past what it needed", func(t *testing.T) {
+		doctrine := func(hulls, logi int) []retrieval.FitTag {
+			return []retrieval.FitTag{{Name: "Fleet Doctrine", Priority: 1, Reasons: []retrieval.FitTagReason{{Name: "Ferox", Count: hulls, Needed: 5}, {Name: "Logi", Count: logi, Needed: 1}}}}
+		}
+		merged := retrieval.MergeFitTags(doctrine(5, 3), doctrine(9, 2))
+		assert.Equal(t, 9, merged[0].Reasons[0].Count, "9 of 5 and 2 of 1 pass by 1.8, 5 of 5 by 1")
+	})
+
 	t.Run("an npcs signal counts the killmail's rats, not anything fitted", func(t *testing.T) {
 		fit := tagFit(t, thorax, nil, nil, nil, nil)
 		assert.NotContains(t, tagNames(fit.Tags()), "Ratting", "no context, no rats")
