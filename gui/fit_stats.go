@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -45,8 +46,12 @@ func fitStats(fit *retrieval.Fit, abyssal bool) []FitStats {
 	for _, mode := range modes {
 		in.Mode = mode.TypeID
 		stats, err := fitting.Compute(in)
+		if errors.Is(err, fitting.ErrUnknownHull) {
+			comm.Logger.WithError(err).Debugf("No stats for hull %d", in.Hull) // a hull newer than the game data, expected
+			return nil
+		}
 		if err != nil {
-			comm.Logger.WithError(err).Debugf("No stats for hull %d", in.Hull)
+			comm.Logger.WithError(err).Warnf("No stats for hull %d", in.Hull)
 			return nil
 		}
 		if abyssal {

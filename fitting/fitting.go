@@ -4,9 +4,13 @@ package fitting
 import (
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
 )
+
+// ErrNotFinite is returned when a stat works out to NaN or infinity, which only a broken dogma.json can cause, and which json can't carry to the window
+var ErrNotFinite = errors.New("a stat is not a finite number")
 
 // ErrUnknownHull is returned when dogma.json has no type for the fit's hull, ie a hull newer than the SDE it was made from
 var ErrUnknownHull = errors.New("the hull is not in dogma.json")
@@ -73,12 +77,13 @@ Parameters:
 
 Returns:
   - *Stats: its stats
-  - error: ErrUnknownHull if dogma.json has no type for the hull
+  - error: ErrUnknownHull if dogma.json has no type for the hull, ErrNotFinite if a stat is NaN or infinite, or the panic the engine raised (recorded in crash.log)
 */
 func Compute(in Input) (stats *Stats, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("computing the stats of hull %d: %v", in.Hull, recovered)
+			comm.RecordPanic("computing fit stats", recovered)
+			stats, err = nil, fmt.Errorf("computing the stats of hull %d: %v", in.Hull, recovered)
 		}
 	}()
 
@@ -87,7 +92,31 @@ func Compute(in Input) (stats *Stats, err error) {
 		return nil, err
 	}
 	fit.AddHand(handCodedModifiers(fit)...)
-	return computeStats(fit), nil
+	stats = computeStats(fit)
+	if !stats.finite() {
+		return nil, fmt.Errorf("%w for hull %d", ErrNotFinite, in.Hull)
+	}
+	return stats, nil
+}
+
+// finite reports whether every number in the stats is finite
+func (s *Stats) finite() bool {
+	numbers := []float64{s.EHP, s.PassiveRegen, s.Sensor.Strength,
+		s.LocalRep.Shield, s.LocalRep.Armor, s.LocalRep.Hull, s.LocalRep.Capacitor,
+		s.RemoteRep.Shield, s.RemoteRep.Armor, s.RemoteRep.Hull, s.RemoteRep.Capacitor}
+	for _, layer := range []Layer{s.Shield, s.Armor, s.Hull} {
+		numbers = append(numbers, layer.HP, layer.EHP)
+		numbers = append(numbers, layer.Resonance[:]...)
+	}
+	for _, value := range s.EwarResist {
+		numbers = append(numbers, value)
+	}
+	for _, value := range numbers {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return false
+		}
+	}
+	return true
 }
 
 /*
