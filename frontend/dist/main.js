@@ -1797,6 +1797,7 @@ function renderFits(fits) {
   filterFits hides the fits the filter box does not match, and the hull headings left with none.
   Each word in the box must be in the fit's search text (fitSearchText), so "rifter scram" finds Rifters with a warp scrambler.
   The words after "tag:" or "tags:" that name a tag, by its name or a start of three letters or more that fits only it (fitTagNamed), are tags a fit must have, so "rifter tags: abyssal imp" finds Rifters tagged both.
+  A tag's name may be several words, ie Fleet Doctrine, so the longest run of words naming one is taken first (fitTagAt).
   Any other word after them is an ordinary word, so typing on after clicking a tag narrows by name too.
   While filtering, the hulls with a match unfold, once each so one folded again stays folded; clearing the box folds those that were folded before, but the chosen fit's.
 */
@@ -1804,10 +1805,12 @@ function filterFits(fits, rows, hulls) {
   const [named, ...tagged] = el("fits-filter").value.toLowerCase().split(/\btags?:/);
   const words = named.split(/\s+/).filter(Boolean);
   const tags = [];
-  for (const word of tagged.join(" ").split(/[\s,]+/).filter(Boolean)) {
-    const tag = fitTagNamed(word);
+  const after = tagged.join(" ").split(/[\s,]+/).filter(Boolean);
+  for (let at = 0; at < after.length; ) {
+    const [tag, used] = fitTagAt(after, at);
     if (tag) tags.push(tag);
-    else words.push(word);
+    else words.push(after[at]);
+    at += used;
   }
   const filtering = words.length > 0 || tags.length > 0;
   const matched = new Set();
@@ -2029,6 +2032,15 @@ function fitTagNamed(word) {
   if (named || word.length < FIT_TAG_PREFIX) return named || null;
   const started = all.filter((tag) => tag.name.toLowerCase().startsWith(word));
   return started.length === 1 ? started[0] : null;
+}
+
+// fitTagAt is the tag named by the longest run of filter words from at, ie "fleet doctrine" or "fleet doc", with how many words it took. A word naming none is [null, 1].
+function fitTagAt(words, at) {
+  for (let end = words.length; end > at; end--) {
+    const tag = fitTagNamed(words.slice(at, end).join(" "));
+    if (tag) return [tag, end - at];
+  }
+  return [null, 1];
 }
 
 // fitTag is a fit's tag, named on hover by the name the filter box finds it by; the key gives its meaning. A clickable one lists only the fits with that tag, in place of the filter box's words.
