@@ -114,6 +114,10 @@ const (
 	shieldCommandBurst    = 43555
 	paladin               = 28659
 	nighthawk             = 22470
+	kronos                = 28661
+	lachesis              = 11971
+	polarizedBlaster      = 34282
+	sensorDampener        = 1969
 )
 
 func TestFitTagRules(t *testing.T) {
@@ -237,6 +241,17 @@ func TestEmbeddedFitTagRules(t *testing.T) {
 		bombs := []int{largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb}
 		assert.Contains(t, tagNames(tagFit(t, bhaalgorn, bombs, nil, nil, nil).Tags()), "Firewaller", "six of seven")
 		assert.NotContains(t, tagNames(tagFit(t, bhaalgorn, bombs[1:], nil, nil, nil).Tags()), "Firewaller", "five of seven")
+	})
+
+	t.Run("a polarized weapon names the row before anything else", func(t *testing.T) {
+		tags := tagFit(t, kronos, []int{polarizedBlaster, bastionModule, polarizedBlaster, heavyNosferatu, heavyNosferatu}, nil, nil, nil).Tags()
+		assert.Equal(t, "Polarized", tags[0].Name)
+	})
+
+	t.Run("one ewar module on a hull bonused for it is ewar, two anywhere else", func(t *testing.T) {
+		assert.Contains(t, tagNames(tagFit(t, lachesis, nil, []int{sensorDampener}, nil, nil).Tags()), "EWAR")
+		assert.NotContains(t, tagNames(tagFit(t, thorax, nil, []int{sensorDampener}, nil, nil).Tags()), "EWAR")
+		assert.Contains(t, tagNames(tagFit(t, thorax, nil, []int{sensorDampener, sensorDampener}, nil, nil).Tags()), "EWAR")
 	})
 
 	t.Run("command bursts are links", func(t *testing.T) {
