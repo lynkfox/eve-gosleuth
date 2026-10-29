@@ -153,6 +153,9 @@ Returns:
   - bonusKind: whether the attribute was placed
 */
 func classifyBonus(name string) (string, bonusKind) {
+	if name == "" {
+		return "", bonusUnplaced
+	}
 	// a few of CCP's names start with a capital
 	name = strings.ToLower(name[:1]) + name[1:]
 	if skill, fixed := bonusHandFixes[name]; fixed {

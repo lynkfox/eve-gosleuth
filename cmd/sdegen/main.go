@@ -65,11 +65,6 @@ func run(sdeDir string, zipPath string, out string, dogmaOut string, pyfaDir str
 	if err != nil {
 		return err
 	}
-	if err := writeAtomically(out, text); err != nil {
-		return err
-	}
-	fmt.Printf("SDE build %d: wrote %d types to %s (%.2f MB)\n", extract.SDEBuild, len(extract.Types), out, float64(len(text))/1024/1024)
-
 	dogma, source, err := ExtractDogma(sde, extract)
 	if err != nil {
 		return err
@@ -78,6 +73,12 @@ func run(sdeDir string, zipPath string, out string, dogmaOut string, pyfaDir str
 	if err != nil {
 		return err
 	}
+
+	// both are made before either is written, so a failure never leaves the two files from different SDE builds
+	if err := writeAtomically(out, text); err != nil {
+		return err
+	}
+	fmt.Printf("SDE build %d: wrote %d types to %s (%.2f MB)\n", extract.SDEBuild, len(extract.Types), out, float64(len(text))/1024/1024)
 	if err := writeAtomically(dogmaOut, dogmaText); err != nil {
 		return err
 	}
