@@ -4,9 +4,14 @@ GoSleuth is an Eve Online Intel tool. Give it a target and it will pull killmail
 
 In the grand tradition of eve tools like **Py**Fa being coded in **Py**thon and using **Py** in its name, **Go**Sleuth is coded in **Go**-lang.
 
+[Click Here for a Full Feature List](docs/features.md)
+
+## Always Free, Always Open
+
 GoSleuth will always be free, open source, free of ads, subscriptions, paid feature tiers, ect. This app runs entirely in your local environment and connects to no servers beyond the standard apis that are listed in the Data Sources. This app strives to maintain your privacy - if you feel that it is not for some reason, please submit a bug report on the issues page of this repo. 
 
 If you feel this app has been worth your time, feel free to - with no obligation or expectation - donate some Isk or Plex to Luxxianna Seraph in game.
+
 
 
 ## Yes. This app used AI in its development
