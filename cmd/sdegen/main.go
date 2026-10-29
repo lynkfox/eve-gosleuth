@@ -1,6 +1,6 @@
-// Command sdegen extracts what fits need from CCP's static data export (SDE) into static_data/fit_types.json.
+// Command sdegen extracts what fits need from CCP's static data export (SDE) into static_data/fit_types.json and static_data/dogma.json.
 //
-//	go run ./cmd/sdegen [-sde-dir DIR | -sde-zip FILE] [-out static_data/fit_types.json]
+//	go run ./cmd/sdegen [-sde-dir DIR | -sde-zip FILE] [-out static_data/fit_types.json] [-dogma-out static_data/dogma.json] [-pyfa DIR]
 //
 // With -sde-dir it reads an extracted JSONL SDE, with -sde-zip a downloaded one; without either, it downloads the latest JSONL zip to a temp file and reads it from there.
 package main
@@ -22,17 +22,19 @@ const LATEST_SDE_ZIP_URL = "https://developers.eveonline.com/static-data/eve-onl
 func main() {
 	sdeDir := flag.String("sde-dir", "", "an extracted JSONL SDE folder; the latest SDE is downloaded when empty")
 	sdeZip := flag.String("sde-zip", "", "a downloaded JSONL SDE zip, read without extracting it")
-	out := flag.String("out", "static_data/fit_types.json", "the file to write")
+	out := flag.String("out", "static_data/fit_types.json", "the fit types file to write")
+	dogmaOut := flag.String("dogma-out", "static_data/dogma.json", "the dogma file to write")
+	pyfaDir := flag.String("pyfa", "", "a Pyfa clone, whose skill= arguments the bonus skills are checked against (a dev check, only read)")
 	flag.Parse()
 
-	if err := run(*sdeDir, *sdeZip, *out); err != nil {
+	if err := run(*sdeDir, *sdeZip, *out, *dogmaOut, *pyfaDir); err != nil {
 		fmt.Fprintln(os.Stderr, "sdegen:", err)
 		os.Exit(1)
 	}
 }
 
-// run opens the SDE, extracts the fit types, and writes them to out
-func run(sdeDir string, zipPath string, out string) error {
+// run opens the SDE, extracts the fit types and the dogma, and writes them to out and dogmaOut
+func run(sdeDir string, zipPath string, out string, dogmaOut string, pyfaDir string) error {
 	var sde fs.FS
 	if sdeDir != "" {
 		sde = os.DirFS(sdeDir)
@@ -63,17 +65,42 @@ func run(sdeDir string, zipPath string, out string) error {
 	if err != nil {
 		return err
 	}
-	// write beside the target first, so a failure never leaves a truncated file
-	temp := out + ".new"
+	if err := writeAtomically(out, text); err != nil {
+		return err
+	}
+	fmt.Printf("SDE build %d: wrote %d types to %s (%.2f MB)\n", extract.SDEBuild, len(extract.Types), out, float64(len(text))/1024/1024)
+
+	dogma, source, err := ExtractDogma(sde, extract)
+	if err != nil {
+		return err
+	}
+	dogmaText, err := marshalDogma(dogma)
+	if err != nil {
+		return err
+	}
+	if err := writeAtomically(dogmaOut, dogmaText); err != nil {
+		return err
+	}
+	fmt.Printf("wrote %d types, %d attributes, %d effects, %d skills, and %d bonus attributes to %s (%.2f MB)\n", len(dogma.Types), len(dogma.Attributes), len(dogma.Effects), len(dogma.Skills), len(dogma.BonusSkills), dogmaOut, float64(len(dogmaText))/1024/1024)
+	for _, line := range source.modeReport {
+		fmt.Println("  modes:", line)
+	}
+	reportBonuses(source)
+	if pyfaDir != "" {
+		if err := reportPyfa(source, pyfaDir); err != nil {
+			return fmt.Errorf("reading Pyfa: %w", err)
+		}
+	}
+	return nil
+}
+
+// writeAtomically writes beside the target first, so a failure never leaves a truncated file
+func writeAtomically(path string, text []byte) error {
+	temp := path + ".new"
 	if err := os.WriteFile(temp, text, 0o644); err != nil {
 		return err
 	}
-	if err := os.Rename(temp, out); err != nil {
-		return err
-	}
-
-	fmt.Printf("SDE build %d: wrote %d types to %s (%.2f MB)\n", extract.SDEBuild, len(extract.Types), out, float64(len(text))/1024/1024)
-	return nil
+	return os.Rename(temp, path)
 }
 
 // downloadLatest saves the latest SDE zip to a temp file and returns its path
