@@ -49,6 +49,16 @@ Data moves through the packages in this order (see `cmd/cli/main.go` or `App.Col
    - `RawKillmail.Expand` and `cached.ExpandPilot/Corporation/Alliance/System/Item` build the readable `Killmail` model (killmail_models.go) through the cache.
 4. **`aggregate`**: `CollateAllKillmailData` walks the killmails in order and fills `CollectedData` (collated_models.go). Killmails each within 15 minutes of the last in a battle are one battle, however long it runs, if they are in one of its systems or share pilots with it (a fight moving through a gate); several battles can be open at once, and a killmail linking two merges them (`FindBattles`). Query functions (`GetMostFrequentFleetmates`, `GetTopAllies`, `StructuresUsed`, `GetPIPilots`, `GetRatters`, ...) read from it. A killmail whose victim and every attacker are the target or its holdings is `internal` (`aggregate.IsInternal`): a loss, never a kill.
 
+## Commit messages
+
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/), so the changelog can be built from them (git-cliff, planned with the release workflow for 1.0).
+
+- The first line is `<type>(<area>): <summary>`, ie `feat(fits): merge ECM flavors as one module`. The summary is written as before, plain words saying what changed for the user, lower case first.
+- Types: `feat` (something new for the user), `fix` (a bug), `docs`, `refactor`, `test`, `perf`, `build` (wails, sdegen output, versions), `ci`, `chore` (tooling, hooks, agents), `revert`. A breaking change adds `!` after the area.
+- Areas, optional but used where one fits: `search`, `killmails`, `allies`, `holdings`, `myintel`, `structures`, `capitals`, `systems`, `fits`, `tags`, `cache`, `static-data`, `gui`, `themes`, `about`, `debug`, `sdegen`, `cli`.
+- One kind of change per commit where it can be split, so each lands under one heading in the changelog.
+- `.githooks/commit-msg` checks the first line. Git uses it once `git config core.hooksPath .githooks` is set in the clone. Until 1.0 it only warns; at 1.0 set its `WARN_ONLY` to 0 so it refuses a message that doesn't follow these rules.
+
 ## Conventions
 
 - Doc comments on exported functions use a `/* Name ... Parameters: ... Returns: ... */` block style.

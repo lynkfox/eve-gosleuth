@@ -1,0 +1,30 @@
+#!/bin/sh
+# Checks a commit message against the Conventional Commits rules in CLAUDE.md (Commit messages).
+# Until 1.0 it only warns; at 1.0 change WARN_ONLY to 0 so a message that doesn't follow them is refused.
+# Git runs it from .githooks once `git config core.hooksPath .githooks` is set in the clone.
+WARN_ONLY=1
+
+TYPES='feat|fix|docs|refactor|test|perf|build|ci|chore|revert'
+first=$(grep -v '^#' "$1" | head -n 1)
+
+# merges and git's own fixup/squash/revert messages are left alone
+case "$first" in
+  Merge\ *|fixup!\ *|squash!\ *|amend!\ *|Revert\ *) exit 0 ;;
+esac
+
+if printf '%s\n' "$first" | grep -Eq "^($TYPES)(\([a-z0-9-]+\))?!?: .+"; then
+  exit 0
+fi
+
+{
+  echo "commit-msg: the first line doesn't follow the commit rules (CLAUDE.md, Commit messages):"
+  echo "  $first"
+  echo "  expected: <type>(<area>): <summary>, ie feat(fits): merge ECM flavors as one module"
+  echo "  types: $(echo "$TYPES" | tr '|' ' ')"
+} >&2
+
+if [ "$WARN_ONLY" = 1 ]; then
+  echo "  (a warning until 1.0; the commit goes ahead)" >&2
+  exit 0
+fi
+exit 1
