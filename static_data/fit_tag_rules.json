@@ -1,0 +1,167 @@
+{
+"bonus_ignores": ["resistance", "impedance", "immune to", "do not apply"],
+"exclusive": {"tank style": ["Passive", "Active", "Buffer"]},
+"tags": {
+  "Tackle": {"letter": "T", "meaning": "Points, webs, or a tackle hull", "names_row": 2, "threshold": 2, "signals": [
+    {"note": "warp scramblers and disruptors, more on a hull bonused for them", "groups": [52], "weight": 1, "bonused_by": ["Warp Scrambler", "Warp Disruptor"], "bonused_weight": 1.5},
+    {"note": "stasis webifiers", "groups": [65], "weight": 0.5},
+    {"note": "stasis grapplers", "groups": [1672], "weight": 0.5},
+    {"note": "HIC warp disruption field generators", "groups": [899], "weight": 1},
+    {"note": "interceptor, interdictor, or HIC hull", "hull": true, "groups": [831, 541, 894], "weight": 1},
+    {"note": "Executioner, Condor, Atron, or Slasher hull", "hull": true, "types": [589, 583, 608, 585], "weight": 1}
+  ]},
+  "Webber": {"letter": "W", "meaning": "Webs, most of all on a hull bonused for them", "names_row": 2, "threshold": 2, "signals": [
+    {"note": "stasis webifiers, more on a hull bonused for them", "groups": [65], "weight": 1, "bonused_by": ["Stasis Webifier"], "bonused_weight": 1.5},
+    {"note": "stasis grapplers", "groups": [1672], "weight": 1}
+  ]},
+  "Roller": {"letter": "Ro", "meaning": "Rolls wormholes: a Higgs anchor, zero-point entanglers, or two propulsion modules on a big hull", "names_row": 2, "threshold": 2, "signals": [
+    {"note": "Higgs anchor rigs, of every size", "groups": [1308], "weight": 2},
+    {"note": "zero-point mass entanglers", "groups": [2008], "weight": 1},
+    {"note": "propulsion modules on a battleship or capital, two for a 100MN or capital MWD and AB", "groups": [46], "hull_sizes": [3, 4], "weight": 1}
+  ]},
+  "Bubbles": {"letter": "B", "meaning": "Launches or projects warp disruption bubbles", "names_row": 2, "threshold": 1, "signals": [
+    {"note": "interdiction sphere launchers", "groups": [589], "weight": 1},
+    {"note": "HIC warp disruption field generators", "groups": [899], "weight": 1}
+  ]},
+  "Logi": {"letter": "L", "meaning": "Remote repairs and no weapons", "names_row": 2, "threshold": 1, "requires": [
+    {"note": "a remote repairer", "groups": [41, 325, 585, 1697, 1698, 2018], "weight": 0}
+  ], "forbids": [
+    {"note": "turrets and launchers: a gun ship with a remote repairer is spider tanking", "groups": [53, 74, 55, 4060, 1986, 506, 507, 508, 509, 510, 511, 524, 771, 862, 1245, 1673, 1674], "weight": 0}
+  ], "signals": [
+    {"note": "remote shield, armor, and hull repairers", "groups": [41, 325, 585, 1697, 1698, 2018], "weight": 1},
+    {"note": "remote capacitor transmitters", "groups": [67], "weight": 0.5},
+    {"note": "remote repair augmentor rigs", "types": [25900, 27068, 31073, 31075, 26298, 31077, 31079, 31081], "weight": 0.5}
+  ]},
+  "ECM": {"letter": "J", "meaning": "Jammers", "names_row": 2, "threshold": 2, "signals": [
+    {"note": "ECM modules, more on a hull bonused for them", "groups": [201], "weight": 1, "bonused_by": ["ECM"], "bonused_weight": 1.5},
+    {"note": "burst jammers", "groups": [80], "weight": 1}
+  ]},
+  "EWAR": {"letter": "E", "meaning": "Dampeners, weapon disruptors, or target painters", "names_row": 2, "threshold": 2, "signals": [
+    {"note": "sensor dampeners, more on a hull bonused for them", "groups": [208], "weight": 1, "bonused_by": ["Sensor Dampener"], "bonused_weight": 1.5},
+    {"note": "weapon disruptors, more on a hull bonused for them", "groups": [291], "weight": 1, "bonused_by": ["Weapon Disruptor"], "bonused_weight": 1.5},
+    {"note": "target painters, more on a hull bonused for them", "groups": [379], "weight": 1, "bonused_by": ["Target Painter"], "bonused_weight": 1.5}
+  ]},
+  "Neut": {"letter": "N", "meaning": "Three neutralizers or nosferatus, fewer on a hull bonused for them, or a heavy neutralizer on a cruiser", "names_row": 2, "threshold": 3, "signals": [
+    {"note": "energy neutralizers and nosferatus, more on a hull bonused for them", "groups": [71, 68], "weight": 1, "bonused_by": ["Energy Neutralizer", "Energy Nosferatu"], "bonused_weight": 1.5},
+    {"note": "heavy energy neutralizers on a medium hull", "markets": [691], "hull_sizes": [2], "weight": 3}
+  ]},
+  "Cloaky": {"letter": "C", "meaning": "Fits a cloak", "names_row": 2, "threshold": 1, "signals": [
+    {"note": "cloaking devices", "groups": [330], "weight": 1}
+  ]},
+  "Scanner": {"letter": "S", "meaning": "A scanning array with probes, or a relic or data analyzer", "names_row": 2, "threshold": 3, "signals": [
+    {"note": "scan probe launchers", "groups": [481], "weight": 1},
+    {"note": "scan rangefinding, pinpointing, and acquisition arrays", "groups": [1223, 1238], "weight": 2},
+    {"note": "relic and data analyzers", "groups": [538], "weight": 3}
+  ]},
+  "Cyno": {"letter": "Y", "meaning": "Fits a cynosural field generator; always names the row", "names_row": 1, "threshold": 1, "signals": [
+    {"note": "cynosural, covert cynosural, and industrial cynosural field generators", "types": [21096, 52694, 28646], "weight": 1}
+  ]},
+  "Ratting": {"letter": "R", "meaning": "Fit for PvE: salvaging, tractoring, drone range, no point", "names_row": 2, "threshold": 2, "signals": [
+    {"note": "tractor beams", "groups": [650], "weight": 1},
+    {"note": "salvagers", "groups": [1122], "weight": 1},
+    {"note": "salvage drones", "groups": [1159], "max": 1, "weight": 0.2},
+    {"note": "drone link augmentors", "groups": [647], "weight": 0.5},
+    {"note": "warp scramblers and disruptors count against", "groups": [52], "weight": -1},
+    {"note": "ancillary shield boosters and armor repairers count against, they are for PvP", "groups": [1156, 1199], "weight": -1},
+    {"note": "capacitor boosters count against, they are for PvP", "groups": [76], "weight": -1}
+  ]},
+  "Bait": {"letter": "Bt", "meaning": "Heavy buffer with little or no damage", "names_row": 2, "threshold": 5, "signals": [
+    {"note": "reinforced bulkheads", "groups": [78], "weight": 2},
+    {"note": "hull repairers", "groups": [63], "weight": 1.5},
+    {"note": "transverse bulkhead rigs", "types": [33890, 33894, 33898, 33902, 33892, 33896, 33900, 33904], "weight": 1.5},
+    {"note": "armor plates and shield extenders", "groups": [329, 38], "weight": 1},
+    {"note": "trimark and core defense field extender rigs", "types": [25894, 30987, 30993, 31055, 26302, 31057, 31059, 31061, 26088, 31788, 31790, 31792, 26448, 31794, 31796, 31798], "weight": 0.5},
+    {"note": "damage controls", "groups": [60], "weight": 0.5},
+    {"note": "tackle adds a little", "groups": [52, 65], "max": 0.5, "weight": 0.5},
+    {"note": "turrets and launchers count against", "groups": [53, 74, 55, 4060, 1986, 506, 507, 508, 509, 510, 511, 524, 771, 862, 1245, 1673, 1674], "weight": -1},
+    {"note": "combat drones count against", "groups": [100, 5239], "weight": -0.2},
+    {"note": "fighters count against", "groups": [1652, 1653, 4777, 4779], "weight": -0.1}
+  ]},
+  "Lasers": {"letter": "Ls", "meaning": "Energy turrets", "names_row": 3, "hidden": true, "threshold": 2, "signals": [
+    {"note": "energy turrets", "groups": [53], "weight": 1},
+    {"note": "heat sinks", "groups": [205], "weight": 0.5},
+    {"note": "energy weapon rigs", "groups": [775], "weight": 0.5}
+  ]},
+  "Hybrids": {"letter": "Hy", "meaning": "Hybrid turrets", "names_row": 3, "hidden": true, "threshold": 2, "signals": [
+    {"note": "hybrid turrets", "groups": [74], "weight": 1},
+    {"note": "magnetic field stabilizers", "groups": [302], "weight": 0.5},
+    {"note": "hybrid weapon rigs", "groups": [776], "weight": 0.5}
+  ]},
+  "Projectiles": {"letter": "Pj", "meaning": "Projectile turrets", "names_row": 3, "hidden": true, "threshold": 2, "signals": [
+    {"note": "projectile turrets", "groups": [55], "weight": 1},
+    {"note": "gyrostabilizers", "groups": [59], "weight": 0.5},
+    {"note": "projectile weapon rigs", "groups": [777], "weight": 0.5}
+  ]},
+  "Missiles": {"letter": "Ms", "meaning": "Missile launchers", "names_row": 3, "hidden": true, "threshold": 2, "signals": [
+    {"note": "missile and bomb launchers", "groups": [506, 507, 508, 509, 510, 511, 524, 771, 862, 1245, 1673, 1674], "weight": 1},
+    {"note": "ballistic control systems", "groups": [367], "weight": 0.5},
+    {"note": "missile guidance computers and enhancers", "groups": [1395, 1396], "weight": 0.5},
+    {"note": "launcher rigs", "groups": [779], "weight": 0.5}
+  ]},
+  "Drones": {"letter": "Dr", "meaning": "Combat drones", "names_row": 3, "hidden": true, "threshold": 1, "signals": [
+    {"note": "combat drones", "groups": [100, 5239], "weight": 0.2},
+    {"note": "drone damage amplifiers", "groups": [645], "weight": 0.5},
+    {"note": "drone navigation and tracking modules", "groups": [644, 646, 1292], "weight": 0.5},
+    {"note": "drone rigs", "groups": [778], "weight": 0.5}
+  ]},
+  "Fighters": {"letter": "Fi", "meaning": "Fighters", "names_row": 3, "hidden": true, "threshold": 1, "signals": [
+    {"note": "light and heavy fighters", "groups": [1652, 1653, 4777, 4779], "weight": 0.1},
+    {"note": "fighter support units", "groups": [407], "weight": 0.5}
+  ]},
+  "Vorton": {"letter": "Vo", "meaning": "Vorton projectors", "names_row": 3, "hidden": true, "threshold": 2, "signals": [
+    {"note": "vorton projectors", "groups": [4060], "weight": 1},
+    {"note": "vorton tuning systems", "groups": [4067], "weight": 0.5}
+  ]},
+  "Disintegrator": {"letter": "Di", "meaning": "Entropic disintegrators", "names_row": 3, "hidden": true, "threshold": 1, "signals": [
+    {"note": "entropic disintegrators", "groups": [1986], "weight": 1},
+    {"note": "entropic radiation sinks", "groups": [1988], "weight": 0.5}
+  ]},
+  "Close": {"letter": "Cl", "meaning": "Short range weapons", "threshold": 2, "signals": [
+    {"note": "pulse lasers, blasters, and autocannons", "markets": [558, 556, 559], "weight": 1},
+    {"note": "rocket, heavy assault, and torpedo launchers", "groups": [507, 771, 508, 1673, 524], "weight": 1},
+    {"note": "vorton projectors", "groups": [4060], "weight": 1},
+    {"note": "light, medium, heavy, and hybrid drones", "markets": [837, 838, 839, 3880], "weight": 0.2}
+  ]},
+  "Long": {"letter": "Lg", "meaning": "Long range weapons", "threshold": 2, "signals": [
+    {"note": "beam lasers, railguns, and artillery", "markets": [557, 555, 560], "weight": 1},
+    {"note": "light, heavy, and cruise launchers", "groups": [509, 511, 510, 1245, 506, 1674], "weight": 1},
+    {"note": "sentry drones", "markets": [911], "weight": 0.4}
+  ]},
+  "Shield": {"letter": "Sh", "meaning": "Shield tank", "threshold": 2, "signals": [
+    {"note": "extenders, boosters, amplifiers, hardeners, rechargers", "groups": [38, 39, 40, 77, 295, 338, 1156, 1700], "weight": 1},
+    {"note": "shield power relays and flux coils", "groups": [57, 770], "weight": 0.5},
+    {"note": "shield rigs", "groups": [774], "weight": 0.5}
+  ]},
+  "Armor": {"letter": "Ar", "meaning": "Armor tank", "threshold": 2, "signals": [
+    {"note": "plates, repairers, hardeners, membranes, coatings", "groups": [62, 98, 326, 328, 329, 1150, 1199, 1699], "weight": 1},
+    {"note": "armor rigs", "groups": [773], "weight": 0.5}
+  ]},
+  "Hull": {"letter": "Hu", "meaning": "Hull tank", "threshold": 2, "signals": [
+    {"note": "reinforced bulkheads and hull repairers", "groups": [78, 63], "weight": 1},
+    {"note": "transverse bulkhead rigs", "types": [33890, 33894, 33898, 33902, 33892, 33896, 33900, 33904], "weight": 0.5}
+  ]},
+  "Active": {"letter": "Ac", "meaning": "Repairs itself", "threshold": 1, "signals": [
+    {"note": "shield boosters and ancillary shield boosters", "groups": [40, 1156], "weight": 1},
+    {"note": "armor repairers and ancillary armor repairers", "groups": [62, 1199], "weight": 1},
+    {"note": "hull repairers", "groups": [63], "weight": 1},
+    {"note": "shield boost amplifiers", "groups": [338], "weight": 0.5},
+    {"note": "auxiliary nano pump, nanobot accelerator, and operational solidifier rigs", "types": [25896, 27064, 31045, 31047, 26294, 31049, 31051, 31053, 25898, 31063, 31065, 31067, 26296, 27066, 31069, 31071, 26086, 31816, 31818, 31820, 26452, 31822, 31824, 31826], "weight": 0.5}
+  ]},
+  "Buffer": {"letter": "Bf", "meaning": "Extra hit points", "threshold": 2, "signals": [
+    {"note": "shield extenders, armor plates, and reinforced bulkheads", "groups": [38, 329, 78], "weight": 1},
+    {"note": "trimark, core defense field extender, and transverse bulkhead rigs", "types": [25894, 30987, 30993, 31055, 26302, 31057, 31059, 31061, 26088, 31788, 31790, 31792, 26448, 31794, 31796, 31798, 33890, 33894, 33898, 33902, 33892, 33896, 33900, 33904], "weight": 0.5}
+  ]},
+  "Passive": {"letter": "Ps", "meaning": "Passive shield regeneration", "threshold": 2, "signals": [
+    {"note": "shield rechargers, power relays, and flux coils", "groups": [39, 57, 770], "weight": 1},
+    {"note": "core defense field purger rigs", "types": [26084, 31800, 31802, 31804, 26450, 31810, 31812, 31814], "weight": 1}
+  ]},
+  "Nano": {"letter": "Na", "meaning": "Speed fit", "threshold": 2, "requires": [
+    {"note": "a propulsion module", "groups": [46], "weight": 0}
+  ], "signals": [
+    {"note": "overdrive injectors", "groups": [764], "weight": 1},
+    {"note": "nanofiber internal structures", "groups": [763], "weight": 1},
+    {"note": "polycarbon engine housing rigs", "types": [26070, 31177, 31179, 31181, 26312, 31183, 31185, 31187], "weight": 1}
+  ]},
+  "Fleet Doctrine": {"letter": "F", "meaning": "Flown in numbers, with logi, or lost again and again", "fleet_doctrine": {"battle_hulls": 5, "battle_logi": 1, "repeat_losses": 5, "repeat_pilots": 5}}
+}
+}

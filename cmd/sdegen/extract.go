@@ -8,8 +8,10 @@ import (
 	"io"
 	"io/fs"
 	"math"
+	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
 )
@@ -76,6 +78,7 @@ const (
 	attrMedSlotModifier   = 1375
 	attrLowSlotModifier   = 1376
 	attrServiceSlots      = 2056
+	attrRigSize           = 1547
 	attrFitsToShipType    = 1380
 	attrImplantness       = 331
 	attrBoosterness       = 1087
@@ -86,6 +89,7 @@ type sdeType struct {
 	Key         int               `json:"_key"`
 	GroupID     int               `json:"groupID"`
 	MetaGroupID int               `json:"metaGroupID"`
+	MarketGroup int               `json:"marketGroupID"`
 	Name        map[string]string `json:"name"`
 	Published   bool              `json:"published"`
 }
@@ -95,6 +99,30 @@ type sdeGroup struct {
 	Key        int `json:"_key"`
 	CategoryID int `json:"categoryID"`
 }
+
+// sdeMarketGroup is the part of a marketGroups.jsonl line the extract reads
+type sdeMarketGroup struct {
+	Key    int `json:"_key"`
+	Parent int `json:"parentGroupID"`
+}
+
+// sdeBonus is one line of a ship's traits in typeBonus.jsonl
+type sdeBonus struct {
+	Text map[string]string `json:"bonusText"`
+}
+
+// sdeTypeBonus is a typeBonus.jsonl line: a ship's role bonuses, and its bonuses per skill
+type sdeTypeBonus struct {
+	Key   int        `json:"_key"`
+	Role  []sdeBonus `json:"roleBonuses"`
+	Misc  []sdeBonus `json:"miscBonuses"`
+	Types []struct {
+		Bonuses []sdeBonus `json:"_value"`
+	} `json:"types"`
+}
+
+// traitMarkup is the html in a trait's text, ie <a href=showinfo:3423>
+var traitMarkup = regexp.MustCompile(`<[^>]*>`)
 
 // sdeTypeDogma is a typeDogma.jsonl line
 type sdeTypeDogma struct {
@@ -150,11 +178,20 @@ func Extract(sde fs.FS) (*comm.FitTypesFile, error) {
 		if !kept && !slices.Contains(keptUnpublishedGroups, item.GroupID) {
 			return
 		}
-		extract.Types[item.Key] = &comm.FitType{TypeID: item.Key, Name: item.Name["en"], GroupID: item.GroupID, CategoryID: category, Abyssal: item.MetaGroupID == abyssalMetaGroup}
+		extract.Types[item.Key] = &comm.FitType{TypeID: item.Key, Name: item.Name["en"], GroupID: item.GroupID, CategoryID: category, Abyssal: item.MetaGroupID == abyssalMetaGroup, Market: item.MarketGroup}
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	marketParent := map[int]int{}
+	err = eachLine(sde, "marketGroups.jsonl", func(group *sdeMarketGroup) {
+		marketParent[group.Key] = group.Parent
+	})
+	if err != nil {
+		return nil, err
+	}
+	extract.Markets = keptMarkets(extract.Types, marketParent)
 
 	// maxSubSystems is 5 on T3 cruisers, which fit one subsystem of each of 4 groups, so a hull's subsystem slots are counted from the groups made for it
 	subsystemGroups := map[int]map[int]struct{}{}
@@ -197,6 +234,8 @@ func Extract(sde fs.FS) (*comm.FitTypesFile, error) {
 					fitType.TurretSlots = value
 				case attrLauncherSlotsLeft:
 					fitType.LauncherSlots = value
+				case attrRigSize:
+					fitType.RigSize = value
 				}
 			}
 			if fitType.CategoryID == subsystemCategory {
@@ -226,11 +265,45 @@ func Extract(sde fs.FS) (*comm.FitTypesFile, error) {
 		}
 	}
 
+	err = eachLine(sde, "typeBonus.jsonl", func(traits *sdeTypeBonus) {
+		hull, kept := extract.Types[traits.Key]
+		if !kept {
+			return
+		}
+		bonuses := slices.Concat(traits.Role, traits.Misc)
+		for _, skill := range traits.Types {
+			bonuses = append(bonuses, skill.Bonuses...)
+		}
+		for _, bonus := range bonuses {
+			text := strings.TrimSpace(traitMarkup.ReplaceAllString(bonus.Text["en"], ""))
+			if text != "" && !slices.Contains(hull.Bonuses, text) {
+				hull.Bonuses = append(hull.Bonuses, text)
+			}
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	if extract.SDEBuild == 0 {
 		return nil, errors.New("_sde.jsonl has no build number")
 	}
 	reportOddities(extract)
 	return extract, nil
+}
+
+// keptMarkets returns the market groups the kept types are listed under, and their ancestors, each to its parent
+func keptMarkets(types map[int]*comm.FitType, marketParent map[int]int) map[int]int {
+	kept := map[int]int{}
+	for _, fitType := range types {
+		for group := fitType.Market; group != 0; group = marketParent[group] {
+			if _, seen := kept[group]; seen {
+				break
+			}
+			kept[group] = marketParent[group]
+		}
+	}
+	return kept
 }
 
 // eachLine streams a jsonl file, decoding each line into a new T and handing it to use
@@ -304,8 +377,13 @@ func marshalExtract(extract *comm.FitTypesFile) ([]byte, error) {
 		return nil, err
 	}
 
+	markets, err := encode(extract.Markets)
+	if err != nil {
+		return nil, err
+	}
+
 	var out bytes.Buffer
-	fmt.Fprintf(&out, "{\"sde_build\":%d,\n\"cargo_kept\":%s,\n\"types\":{", extract.SDEBuild, cargo)
+	fmt.Fprintf(&out, "{\"sde_build\":%d,\n\"cargo_kept\":%s,\n\"market_groups\":%s,\n\"types\":{", extract.SDEBuild, cargo, markets)
 	for index, id := range sortedIDs(extract.Types) {
 		body, err := encode(extract.Types[id])
 		if err != nil {

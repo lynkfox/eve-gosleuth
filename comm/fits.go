@@ -29,16 +29,19 @@ type FitType struct {
 	Slot       FitSlot `json:"slot,omitempty"`      // the slot a module fits in: high, mid, low, rig, subsystem, or service. Empty for anything that is not a module, ie a charge.
 	Abyssal    bool    `json:"abyssal,omitempty"`   // a mutated (abyssal) module, whose rolled stats a killmail does not record
 	HeadSlot   int     `json:"head_slot,omitempty"` // an implant's slot (1-10), or a booster's (1-4)
+	Market     int     `json:"market,omitempty"`    // the market group it is listed under, 0 for a type not on the market (ie mutated modules). InMarketGroup reads its parents.
 
 	// a hull's slots and hardpoints
-	HighSlots      int `json:"high_slots,omitempty"`
-	MidSlots       int `json:"mid_slots,omitempty"`
-	LowSlots       int `json:"low_slots,omitempty"`
-	RigSlots       int `json:"rig_slots,omitempty"`
-	SubsystemSlots int `json:"subsystem_slots,omitempty"`
-	ServiceSlots   int `json:"service_slots,omitempty"`
-	TurretSlots    int `json:"turret_slots,omitempty"`
-	LauncherSlots  int `json:"launcher_slots,omitempty"`
+	HighSlots      int      `json:"high_slots,omitempty"`
+	MidSlots       int      `json:"mid_slots,omitempty"`
+	LowSlots       int      `json:"low_slots,omitempty"`
+	RigSlots       int      `json:"rig_slots,omitempty"`
+	SubsystemSlots int      `json:"subsystem_slots,omitempty"`
+	ServiceSlots   int      `json:"service_slots,omitempty"`
+	TurretSlots    int      `json:"turret_slots,omitempty"`
+	LauncherSlots  int      `json:"launcher_slots,omitempty"`
+	RigSize        int      `json:"rig_size,omitempty"` // the hull's size by the rigs it takes: 1 small, 2 medium, 3 large, 4 capital
+	Bonuses        []string `json:"bonuses,omitempty"`  // the hull's role and skill bonuses as text without the numbers, ie "bonus to Energy Nosferatu and Energy Neutralizer drain amount"
 
 	// slots a T3 cruiser subsystem adds to its hull
 	HighSlotModifier int `json:"high_slot_modifier,omitempty"`

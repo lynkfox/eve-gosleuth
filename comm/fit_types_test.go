@@ -109,4 +109,23 @@ func TestEmbeddedFitTypes(t *testing.T) {
 		assert.True(t, comm.KeptInFitCargo(comm.FitTypeOf(28668)), "Nanite Repair Paste")
 		assert.False(t, comm.KeptInFitCargo(comm.FitTypeOf(2185)), "Hammerhead II")
 	})
+
+	t.Run("a type is in its market group and every group above it", func(t *testing.T) {
+		pulse := comm.FitTypeOf(3057) // Mega Pulse Laser II, under Large (573) under Pulse Lasers (558) under Energy Turrets (88)
+		assert.True(t, comm.InMarketGroup(pulse, 573))
+		assert.True(t, comm.InMarketGroup(pulse, 558))
+		assert.True(t, comm.InMarketGroup(pulse, 88))
+		assert.False(t, comm.InMarketGroup(pulse, 557), "Beam Lasers")
+		assert.True(t, comm.InMarketGroup(comm.FitTypeOf(28211), 911), "Garde II, a sentry drone")
+		assert.False(t, comm.InMarketGroup(comm.FitTypeOf(2185), 911), "Hammerhead II is not a sentry")
+		assert.False(t, comm.InMarketGroup(nil, 88))
+	})
+
+	t.Run("a hull has its size and its bonuses as text", func(t *testing.T) {
+		ashimmu := comm.FitTypeOf(17922)
+		if assert.NotNil(t, ashimmu) {
+			assert.Equal(t, 2, ashimmu.RigSize, "a cruiser takes medium rigs")
+			assert.Contains(t, ashimmu.Bonuses, "bonus to Energy Nosferatu and Energy Neutralizer drain amount")
+		}
+	})
 }

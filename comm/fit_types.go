@@ -15,9 +15,10 @@ type FitCargoRules struct {
 
 // FitTypesFile is the layout of fit_types.json, written by cmd/sdegen from CCP's static data export
 type FitTypesFile struct {
-	SDEBuild  int              `json:"sde_build"`  // the SDE build the file was made from
-	CargoKept FitCargoRules    `json:"cargo_kept"` // the cargo a fit shows, for KeptInFitCargo
-	Types     map[int]*FitType `json:"types"`      // keyed by type id
+	SDEBuild  int              `json:"sde_build"`     // the SDE build the file was made from
+	CargoKept FitCargoRules    `json:"cargo_kept"`    // the cargo a fit shows, for KeptInFitCargo
+	Markets   map[int]int      `json:"market_groups"` // each market group a type is listed under, and its ancestors, to its parent (0 at the top), for InMarketGroup
+	Types     map[int]*FitType `json:"types"`         // keyed by type id
 }
 
 // fitTypes is the loaded fit_types.json. Empty until InitStaticData is called.
@@ -88,6 +89,29 @@ func KeptInFitCargo(fitType *FitType) bool {
 		return false
 	}
 	return slices.Contains(fitTypes.CargoKept.Categories, fitType.CategoryID) || slices.Contains(fitTypes.CargoKept.Groups, fitType.GroupID)
+}
+
+/*
+	InMarketGroup reports whether a type is listed under a market group, directly or below it, ie Pulse Lasers (558) holds every pulse laser of every size
+
+Parameters:
+  - fitType: the type, nil for a type fit_types.json does not have
+  - marketGroup: the market group
+
+Returns:
+  - bool: true if the type's market group is marketGroup or one of its children. false for nil, or a type not on the market.
+*/
+func InMarketGroup(fitType *FitType, marketGroup int) bool {
+	if fitType == nil {
+		return false
+	}
+	// the depth bound stops a loop an edited copy could make
+	for group, depth := fitType.Market, 0; group != 0 && depth < 32; group, depth = fitTypes.Markets[group], depth+1 {
+		if group == marketGroup {
+			return true
+		}
+	}
+	return false
 }
 
 /*

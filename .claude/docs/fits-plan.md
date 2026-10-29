@@ -123,7 +123,13 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 - The rules live in `static_data/fit_tag_rules.json`, so they can be tuned beside the exe without a rebuild.
 - **Weights and thresholds.** Each signal (a module group, market group or type, fitted or counted) adds weight to a tag, positive or negative, and the tag applies once its total passes the tag's threshold.
 - Each tag remembers which modules gave it weight, so the fitting window can say why it applied ("Tackle: Warp Scrambler, Stasis Webifier").
-- **Data:** groups alone can't tell pulse from beam, blaster from rail, autocannon from artillery, or a sentry from other drones. `cmd/sdegen` adds each type's market group to `fit_types.json`, and rules can match a market group or any of its parents. Check the SDE's market tree splits these before relying on it. Phase 2b and phase 4 extend the same extract.
+- **Data:** groups alone can't tell pulse from beam, blaster from rail, autocannon from artillery, or a sentry from other drones. `cmd/sdegen` adds each type's market group to `fit_types.json` (built 2026-10-28: `market` per type, a `market_groups` parent map, `comm.InMarketGroup`), and rules can match a market group or any of its parents. Checked 2026-10-28: the market tree splits all four (Pulse 558 / Beam 557, Blasters 556 / Railguns 555, Autocannons 559 / Artillery 560, Sentry Drones 911). Only mutated modules, a few Civilian items, and the Lux titan weapons have no market group; match those by group. Phase 2b and phase 4 extend the same extract.
+- **The draft rules** (2026-10-28) are in `static_data/fit_tag_rules.json`, nothing reads them yet. A weight is about one slot given to that job. A signal matches modules and drones by `types`, `groups`, `categories` or `markets`, or the hull with `hull: true`; each matching item adds its `weight`, up to the signal's `max`. A tag's `requires` must each match at least once (Nano needs a propulsion module), and none of its `forbids` may match (Logi: no turrets or launchers, so a spider-tanking gun ship isn't logi). `hull_sizes` limits a signal to hulls of those rig sizes (a heavy neut on a cruiser). `bonused_by` lists words: on a hull with a bonus line containing one, each match adds `bonused_weight` instead (a Blood Raider hull's neuts count more; one without neuts gets nothing). Matching ignores case, and skips bonus lines containing a phrase in the file's `bonus_ignores` ("resistance", "immune to", ...), which name what a hull resists rather than what it uses. `note` is for people only.
+- **Hull bonuses** (2026-10-28): sdegen keeps each hull's `rig_size` (attribute 1547) and `bonuses`, its role and skill trait lines from typeBonus.jsonl as text without markup or numbers (about 160 KB). Text, not the skill ids the traits link: a skill covers more than the bonused module (the Ashimmu's web bonus links Propulsion Jamming, which scrams also use), and some useful lines link nothing ("bonus to Armor Plates and Shield Extenders").
+- **Whether a tag applies vs which names the row** (decided 2026-10-28): thresholds use the raw weights, so three neuts is three neuts on any hull. Applying roles are ranked by **share of the rack**: each module adds its weight divided by the slots in its rack (the hull's, with subsystem modifiers); hull and drone signals divide by the hull's average of high, mid and low slots. Two points in a frigate's three mids outrank two neuts in a battleship's eight highs.
+- **Drones are a weapon** (decided 2026-10-28): drones count toward Drones, Close and Long, never toward a role.
+- **Naming the row** (decided 2026-10-28): a tag's `names_row` is its rank, lowest first. A cyno (1) always names the row. Other roles (2) name it next, the heaviest by rack share winning; weapon tags (3) name it only when no role applies. Tank, range and the rest never name it.
+- **Weapon tags are hidden** (decided 2026-10-28): Lasers, Hybrids and the rest are weighed, and can name a row, but show no square for now. **Close and Long are tags of their own**, not part of a weapon tag.
 
 ### Tag set
 
@@ -131,9 +137,9 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
   - turrets by market group (pulse, blaster, autocannon are Close; beam, rail, artillery Long)
   - launchers by group (rockets, heavy assault missiles, torpedoes Close; light, heavy and cruise missiles Long)
   - drones: sentries Long, the rest Close.
-- **Tank:** Shield, Armor or Hull, and Active, Buffer or Passive (shield regen). No resist profile tags (omni or tuned).
+- **Tank:** Shield, Armor or Hull, and Active, Buffer or Passive (shield regen). No resist profile tags (omni or tuned). Active, Buffer and Passive are **exclusive** (decided 2026-10-28), the only exclusive set: the file's `exclusive` lists them, the heaviest by raw weight applies alone, and a tie goes to the one listed first (Passive, Active, Buffer). Layers can mix, so a fit can be Shield and Armor.
 - **Movement:** Nano only (overdrives, nanofibers, polycarbon rigs, with a propulsion module).
-- **Roles:** Tackle, Bubbles, Logi, EWAR, Neut, Cloaky, Probes, Cyno (and Covert cyno if the extract can tell them apart), Kitchen-sink (more than one weapon system, or a mixed tank), Ratting.
+- **Roles:** Tackle, Webber (added 2026-10-28: web-bonused hulls such as the Vindicator and Huginn fill their own role; webs still count a little toward Tackle), Roller (added 2026-10-28: a Higgs anchor rig of any size, two or more zero-point mass entanglers on a HIC, or two propulsion modules on a battleship or capital), Bubbles, Logi, ECM, EWAR, Neut, Cloaky, Scanner, Cyno, Ratting. **Scanner** (replaced Probes 2026-10-28): a probe launcher with any scanning array (or two arrays), or any relic or data analyzer. **Cyno** (one tag for every cyno, covert and industrial included, 2026-10-28) applies with a single generator and always names the row. Kitchen-sink was dropped 2026-10-28: in game it describes a doctrine where everyone brings what they like, not a ship.
 - **Bait**, a narrow weighted rule:
   - a heavy buffer; a hull tank (bulkheads, hull repairers) weighs most
   - little or no damage weighs for it
@@ -147,8 +153,8 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 
 ### Showing tags
 
-- **The fitting window** shows every tag of the fit, with the reasons on hover.
-- **The fit list** (decided 2026-10-28): the fit's heaviest-weighted tag names its row, and the rest are the colored squares on the line beneath, as A and I are now. The key in the tab's help explains each square. Squares need not be one letter.
+- **A fit can have many tags** (decided 2026-10-28). The fitting window shows every tag of the fit, with the reasons on hover.
+- **The fit list** (decided 2026-10-28): the fit's heaviest-weighted tag names its row, and the rest are the colored squares on the line beneath, as A and I are now. The row may show only the top 2 or 3 tags by rack share, to be settled when it is built; the filter still finds every tag. The key in the tab's help explains each square. Squares need not be one letter.
 - **The list is filtered by tag** in the filter box, by name or letter after "tag:"/"tags:" (`filterFits`, `fitTagNamed`), or by clicking a tag, so each new tag is filterable once it is in `FIT_TAGS` with a `name`.
 
 **Data crunching comes later.** A debug export writes every fit in the cache to JSONL, to be clustered offline for tuning the rule weights. The app still classifies by rules only.
