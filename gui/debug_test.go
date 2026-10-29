@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"encoding/json"
 	"errors"
+	staticdata "github.com/lynkfox/go_eve_sleuth/static_data"
 	"io"
 	"os"
 	"path/filepath"
@@ -67,6 +68,7 @@ func TestDebugMode(t *testing.T) {
 		assert.Contains(t, files["search.log"], "%USERPROFILE%")
 		assert.NotContains(t, files["search.log"], home, "the user's home folder holds their user name")
 		assert.Contains(t, files["goroutines.txt"], "goroutine")
+		assert.NotContains(t, files, "static_data/ships.json", "no edited game data, so none copied")
 
 		var session debugSession
 		assert.NoError(t, json.Unmarshal([]byte(files["session.json"]), &session))
@@ -86,6 +88,23 @@ func TestDebugMode(t *testing.T) {
 
 		assert.Equal(t, DebugInfo{}, app.GetDebugInfo())
 		assert.Error(t, app.OpenDebugFolder())
+	})
+
+	t.Run("the user's edited game data is copied into the bundle", func(t *testing.T) {
+		edited := t.TempDir()
+		assert.NoError(t, os.WriteFile(filepath.Join(edited, "ships.json"), []byte(`{"capital_groups": {"513": null}}`), 0o644))
+		assert.NoError(t, os.WriteFile(filepath.Join(edited, "notes.txt"), []byte("not game data"), 0o644))
+		overrideDir = func() string { return edited }
+		t.Cleanup(func() { overrideDir = staticdata.OverrideDir })
+
+		app := debugApp(t, true)
+		app.startDebug("URSA.")
+		app.finishDebug(nil)
+
+		files := zipFiles(t, filepath.Join(app.debug.dir, app.GetDebugInfo().Latest))
+		assert.Equal(t, `{"capital_groups": {"513": null}}`, files["static_data/ships.json"])
+		assert.NotContains(t, files, "static_data/notes.txt", "only json files are game data")
+		assert.Contains(t, files["session.json"], "ships.json", "listed with its hash too")
 	})
 
 	t.Run("a search that fails is bundled with why", func(t *testing.T) {

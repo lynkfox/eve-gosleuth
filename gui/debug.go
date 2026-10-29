@@ -260,15 +260,23 @@ func buildDetails() map[string]string {
 	return details
 }
 
+// overrideDir is the static data folder beside the exe, a variable so tests can point it elsewhere
+var overrideDir = staticdata.OverrideDir
+
+// overrideFiles are the json files in the static data folder beside the exe, by full path, none if there is no folder
+func overrideFiles() []string {
+	dir := overrideDir()
+	if dir == "" {
+		return nil
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "*.json"))
+	return files
+}
+
 // staticOverrides are the static data files in use from the folder beside the exe, with a hash of each, as edited game data can explain odd results
 func staticOverrides() map[string]string {
 	overrides := map[string]string{}
-	dir := staticdata.OverrideDir()
-	if dir == "" {
-		return overrides
-	}
-	files, _ := filepath.Glob(filepath.Join(dir, "*.json"))
-	for _, path := range files {
+	for _, path := range overrideFiles() {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
@@ -280,7 +288,7 @@ func staticOverrides() map[string]string {
 }
 
 /*
-	writeDebugBundle zips a search's log with its session details, the newest of the crash log, and a dump of every goroutine, each a readable text file, so the user can see what they send
+	writeDebugBundle zips a search's log with its session details, the newest of the crash log, a dump of every goroutine, and a copy of each static data file the user edited (under static_data/), each a readable text file, so the user can see what they send
 
 Returns:
   - string: the zip's path
@@ -328,6 +336,21 @@ func (a *App) writeDebugBundle(logPath string, started time.Time, session debugS
 				return err
 			}
 			if _, err := entry.Write([]byte(comm.NewestEntries(string(crashLog), crashLogInBundle))); err != nil {
+				return err
+			}
+		}
+
+		// the user's edited game data, which can explain odd results, as it was when the search ran
+		for _, path := range overrideFiles() {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				continue
+			}
+			entry, err = archive.Create("static_data/" + filepath.Base(path))
+			if err != nil {
+				return err
+			}
+			if _, err := entry.Write([]byte(comm.RedactPaths(string(data)))); err != nil {
 				return err
 			}
 		}
