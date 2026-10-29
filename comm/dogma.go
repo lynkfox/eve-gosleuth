@@ -17,6 +17,7 @@ type DogmaFile struct {
 	BonusSkills   map[int]int             `json:"bonus_skills"`   // a hull or subsystem bonus attribute, ie shipBonusMF, to the skill whose level multiplies it. A role bonus is not here.
 	Modes         map[int][]DogmaMode     `json:"modes"`          // a tactical destroyer hull to its modes
 	Skills        []int                   `json:"skills"`         // every skill, which a character with all skills trained has at V
+	Buffs         map[int]*DogmaBuff      `json:"buffs"`          // a warfare buff (dbuffCollections in the SDE), which command bursts apply, keyed by its id
 	Unpenalized   map[int][]int           `json:"unpenalized"`    // an effect to the attributes its modifiers are never stacking penalized on, though the attributes say they should be: ie Bastion's hull resists, as Pyfa has them
 }
 
@@ -59,6 +60,23 @@ type DogmaType struct {
 	Attributes    map[int]float64 `json:"attributes"` // only the attributes the engine's outputs depend on; any other reads as the attribute's default
 	Effects       []int           `json:"effects,omitempty"`
 	DefaultEffect int             `json:"default_effect,omitempty"` // the effect activating the module runs, 0 for none
+}
+
+// DogmaBuff is what a warfare buff does, ie Armor Energizing's armor resists. A burst sets its value; of several bursts giving one buff, only the strongest counts.
+type DogmaBuff struct {
+	Aggregate     string            `json:"aggregate"`                // Maximum or Minimum: which of several values counts
+	Operation     int               `json:"operation"`                // as DogmaModifier.Operation
+	Item          []int             `json:"item,omitempty"`           // attributes of the ship
+	Location      []int             `json:"location,omitempty"`       // attributes of every module fitted to it
+	LocationGroup []DogmaBuffTarget `json:"location_group,omitempty"` // attributes of its modules of a group
+	LocationSkill []DogmaBuffTarget `json:"location_skill,omitempty"` // attributes of its modules that require a skill
+}
+
+// DogmaBuffTarget is an attribute a buff changes on the modules of a group, or those requiring a skill
+type DogmaBuffTarget struct {
+	Attribute int `json:"attribute"`
+	Group     int `json:"group,omitempty"`
+	Skill     int `json:"skill,omitempty"`
 }
 
 // DogmaMode is one of a tactical destroyer's modes
@@ -226,6 +244,19 @@ Returns:
 */
 func DogmaUnpenalized(effectID int, attributeID int) bool {
 	return slices.Contains(dogma.Unpenalized[effectID], attributeID)
+}
+
+/*
+	DogmaBuffOf looks up a warfare buff in dogma.json
+
+Parameters:
+  - buffID: the buff, ie the warfareBuff1ID of a command burst charge
+
+Returns:
+  - *DogmaBuff: the buff, nil if dogma.json does not have it. Shared, so do not change it.
+*/
+func DogmaBuffOf(buffID int) *DogmaBuff {
+	return dogma.Buffs[buffID]
 }
 
 /*

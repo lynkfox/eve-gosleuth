@@ -196,6 +196,7 @@ It has these sections, each keyed by id:
 | `bonus_skills` | Hull bonuses the game doesn't scale by skill level itself, to the skill that scales them |
 | `unpenalized` | Effects whose bonus to an attribute is never stacking penalized, though the attribute is: Bastion's hull resists |
 | `modes` | Each tactical destroyer's modes |
+| `buffs` | What each command burst buff does: the attributes it changes, how, and whether the strongest (`Maximum`) or weakest (`Minimum`) of several bursts counts |
 
 To fix one value, give only that value, ie a module's armor repair amount (attribute 84): `{"types": {"3530": {"attributes": {"84": 400}}}}`.
 

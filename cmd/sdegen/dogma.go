@@ -72,6 +72,9 @@ var outputAttributes = []int{
 var structuralAttributes = []int{
 	182, 183, 184, 1285, 1289, 1290, // requiredSkill1 to requiredSkill6
 	attributeSkillLevel,
+	2468, 2470, 2472, 2536, // warfareBuff1ID to warfareBuff4ID: which buffs a command burst gives
+	2469, 2471, 2473, 2537, // warfareBuff1Value to warfareBuff4Value: how strong
+	2596, 2597, 2598, 2599, // warfareBuff1Multiplier to warfareBuff4Multiplier: a burst charge's, which its effect multiplies the values by
 }
 
 // codeEffects are effects kept even with no modifiers, as the fitting package handles them in code or reads them as markers
@@ -80,6 +83,7 @@ var codeEffects = []int{
 	4928,                                     // Reactive Armor Hardener
 	6184, 6185, 6186, 6188, 6651, 6652, 7166, // remote capacitor, hull, shield, armor, ancillary armor, ancillary shield, and mutadaptive armor repair
 	6187, 6197, // energy neutralizers and nosferatus, for neut pressure
+	6732, 6733, 6734, 6735, 6736, 6753, // armor, shield, skirmish, information, and mining command bursts, and titan effect generators, whose buffs the engine applies
 	16,                           // online
 	11, 12, 13, 2663, 3772, 6306, // low, high, mid, rig, subsystem, and service slots
 }
@@ -177,6 +181,7 @@ func ExtractDogma(sde fs.FS, fit *comm.FitTypesFile) (*comm.DogmaFile, *dogmaSou
 		BonusSkills:   map[int]int{},
 		Modes:         map[int][]comm.DogmaMode{},
 		Unpenalized:   unpenalized,
+		Buffs:         map[int]*comm.DogmaBuff{},
 	}
 	source := &dogmaSource{
 		attributeNames: map[int]string{},
@@ -253,6 +258,20 @@ func ExtractDogma(sde fs.FS, fit *comm.FitTypesFile) (*comm.DogmaFile, *dogmaSou
 	}
 
 	// who each hull's bonuses belong to: the bonus attribute names say, and typeBonus.jsonl and the hulls' own skill requirements confirm
+	// the warfare buffs command bursts give
+	var buffErr error
+	err = eachLine(sde, "dbuffCollections.jsonl", func(buff *sdeBuff) {
+		kept, err := buff.dogmaBuff()
+		if err != nil {
+			buffErr = errors.Join(buffErr, err)
+			return
+		}
+		out.Buffs[buff.Key] = kept
+	})
+	if err = errors.Join(err, buffErr); err != nil {
+		return nil, nil, err
+	}
+
 	err = eachLine(sde, "typeBonus.jsonl", func(traits *sdeTraits) { source.traits[traits.Key] = traits })
 	if err != nil {
 		return nil, nil, err
@@ -421,7 +440,7 @@ func marshalDogma(dogma *comm.DogmaFile) ([]byte, error) {
 	for _, section := range []struct {
 		name  string
 		value any
-	}{{"skills", dogma.Skills}, {"modes", dogma.Modes}, {"bonus_skills", dogma.BonusSkills}, {"unpenalized", dogma.Unpenalized}} {
+	}{{"skills", dogma.Skills}, {"modes", dogma.Modes}, {"bonus_skills", dogma.BonusSkills}, {"unpenalized", dogma.Unpenalized}, {"buffs", dogma.Buffs}} {
 		body, err := encode(section.value)
 		if err != nil {
 			return nil, err
@@ -492,4 +511,52 @@ func skillScaledAttributes(candidates map[int]candidate, rawDogma map[int]*sdeDo
 		}
 	}
 	return scaled
+}
+
+// buffOperations are the operation names dbuffCollections.jsonl uses, as dogma operations
+var buffOperations = map[string]int{
+	"PreAssignment": -1, "PreMul": 0, "PreDiv": 1, "ModAdd": 2, "ModSub": 3, "PostMul": 4, "PostDiv": 5, "PostPercent": 6, "PostAssignment": 7,
+}
+
+// sdeBuff is a dbuffCollections.jsonl line: a warfare buff
+type sdeBuff struct {
+	Key       int    `json:"_key"`
+	Aggregate string `json:"aggregateMode"`
+	Operation string `json:"operationName"`
+	Item      []struct {
+		Attribute int `json:"dogmaAttributeID"`
+	} `json:"itemModifiers"`
+	Location []struct {
+		Attribute int `json:"dogmaAttributeID"`
+	} `json:"locationModifiers"`
+	LocationGroup []struct {
+		Attribute int `json:"dogmaAttributeID"`
+		Group     int `json:"groupID"`
+	} `json:"locationGroupModifiers"`
+	LocationSkill []struct {
+		Attribute int `json:"dogmaAttributeID"`
+		Skill     int `json:"skillID"`
+	} `json:"locationRequiredSkillModifiers"`
+}
+
+// dogmaBuff turns a buff line into what dogma.json keeps, failing on an operation name it doesn't know
+func (b *sdeBuff) dogmaBuff() (*comm.DogmaBuff, error) {
+	operation, known := buffOperations[b.Operation]
+	if !known {
+		return nil, fmt.Errorf("buff %d has an unknown operation %q", b.Key, b.Operation)
+	}
+	kept := &comm.DogmaBuff{Aggregate: b.Aggregate, Operation: operation}
+	for _, target := range b.Item {
+		kept.Item = append(kept.Item, target.Attribute)
+	}
+	for _, target := range b.Location {
+		kept.Location = append(kept.Location, target.Attribute)
+	}
+	for _, target := range b.LocationGroup {
+		kept.LocationGroup = append(kept.LocationGroup, comm.DogmaBuffTarget{Attribute: target.Attribute, Group: target.Group})
+	}
+	for _, target := range b.LocationSkill {
+		kept.LocationSkill = append(kept.LocationSkill, comm.DogmaBuffTarget{Attribute: target.Attribute, Skill: target.Skill})
+	}
+	return kept, nil
 }

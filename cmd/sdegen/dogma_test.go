@@ -95,6 +95,9 @@ func tinySDE() fstest.MapFS {
 			fmt.Sprintf(`{"_key":%d,"dogmaAttributes":[{"attributeID":271,"value":0.8}]}`, testModeDefense)),
 		"typeBonus.jsonl": jsonl(
 			fmt.Sprintf(`{"_key":%d,"roleBonuses":[{"bonus":5.0}],"types":[{"_key":%d,"_value":[{"bonus":10.0}]}]}`, testHull, testSkill)),
+		"dbuffCollections.jsonl": jsonl(
+			`{"_key":13,"aggregateMode":"Minimum","operationName":"PostPercent","itemModifiers":[{"dogmaAttributeID":267},{"dogmaAttributeID":268}]}`,
+			`{"_key":14,"aggregateMode":"Minimum","operationName":"PostPercent","locationRequiredSkillModifiers":[{"dogmaAttributeID":73,"skillID":3393}],"locationGroupModifiers":[{"dogmaAttributeID":6,"groupID":62}]}`),
 	}
 }
 
@@ -162,6 +165,17 @@ func TestClassifyBonus(t *testing.T) {
 func TestExtractDogma(t *testing.T) {
 	dogma, source, err := ExtractDogma(tinySDE(), tinyFit())
 	assert.NoError(t, err)
+
+	t.Run("warfare buffs", func(t *testing.T) {
+		assert.Equal(t, &comm.DogmaBuff{Aggregate: "Minimum", Operation: 6, Item: []int{267, 268}}, dogma.Buffs[13])
+		assert.Equal(t, []comm.DogmaBuffTarget{{Attribute: 73, Skill: 3393}}, dogma.Buffs[14].LocationSkill)
+		assert.Equal(t, []comm.DogmaBuffTarget{{Attribute: 6, Group: 62}}, dogma.Buffs[14].LocationGroup)
+
+		broken := tinySDE()
+		broken["dbuffCollections.jsonl"] = jsonl(`{"_key":1,"aggregateMode":"Maximum","operationName":"Sideways"}`)
+		_, _, err := ExtractDogma(broken, tinyFit())
+		assert.ErrorContains(t, err, "unknown operation")
+	})
 
 	t.Run("header", func(t *testing.T) {
 		assert.Equal(t, 42, dogma.SDEBuild)
