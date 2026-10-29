@@ -1991,6 +1991,28 @@ body.debug-mode::after {
 .fit-row-name { color: var(--text); font-weight: 600; }
 .fit-view-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
 .fit-view-tags:empty { display: none; }
+
+/* how a fit's tag was reached, under the tag on hover: one row a module, then the total against the threshold. Fixed to the page so the fitting window's scrolling can't clip it. */
+.fit-tag-tip {
+  position: fixed;
+  z-index: 20;
+  max-width: 360px;
+  padding: 10px 12px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
+  font-size: 12px;
+  pointer-events: none;
+}
+.fit-tag-tip[hidden] { display: none; }
+.fit-tag-tip-title { color: var(--highlight); font-weight: 700; }
+.fit-tag-tip-meaning { margin-bottom: 6px; color: var(--muted); }
+.fit-tag-tip table { width: 100%; border-collapse: collapse; }
+.fit-tag-tip td { padding: 1px 0; vertical-align: top; }
+.fit-tag-tip td:last-child { padding-left: 12px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fit-tag-tip-against td:last-child { color: var(--error); }
+.fit-tag-tip-total td { padding-top: 4px; border-top: 1px solid var(--border); font-weight: 600; }
 /* in the help's color key the tag is a grid cell, which would stretch it over its meaning's lines */
 .help-content dt.fit-tag { align-self: center; justify-self: start; }
 

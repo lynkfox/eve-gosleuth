@@ -2,7 +2,6 @@ package retrieval
 
 import (
 	"cmp"
-	"fmt"
 	"slices"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
@@ -10,14 +9,24 @@ import (
 
 // FitTag is a tag a fit has, read from its modules by the rules in fit_tag_rules.json
 type FitTag struct {
-	Name     string   `json:"name"`
-	Meaning  string   `json:"meaning"`
-	Priority int      `json:"priority"` // the order the fit shows its tags in, lowest first, 0 after the rest
-	Role     bool     `json:"role"`     // it can name the fit's row
-	Hidden   bool     `json:"hidden"`   // never shown, only found by the filter
-	Weight   float64  `json:"weight"`   // its signals' weights added up
-	Share    float64  `json:"share"`    // the same as a share of the racks its modules are in, ie 1 for a full rack
-	Reasons  []string `json:"reasons"`  // what gave it weight, ie "Warp Scrambler II ×2"
+	Name     string `json:"name"`
+	Meaning  string `json:"meaning"`
+	Priority int    `json:"priority"` // the order the fit shows its tags in, lowest first, 0 after the rest
+	Role     bool   `json:"role"`     // it can name the fit's row
+	Hidden   bool   `json:"hidden"`   // never shown, only found by the filter
+
+	Weight         float64        `json:"weight"`         // its signals' weights added up
+	Threshold      float64        `json:"threshold"`      // the weight it needed, 0 if it has none
+	Share          float64        `json:"share"`          // the same as a share of the racks its modules are in, ie 1 for a full rack
+	ShareThreshold float64        `json:"shareThreshold"` // the share it needed, 0 if it has none
+	Reasons        []FitTagReason `json:"reasons"`        // what gave it weight, which adds up to Weight
+}
+
+// FitTagReason is one module, drone, hull, or other tag that gave a tag weight
+type FitTagReason struct {
+	Name   string  `json:"name"`
+	Count  int     `json:"count"`  // how many of it, 0 for another tag
+	Weight float64 `json:"weight"` // all of them together, negative for one counting against the tag
 }
 
 // tagPart is one thing on a fit a signal can match: a module, a drone stack, or the hull
@@ -30,6 +39,7 @@ type tagPart struct {
 
 /*
 	Tags reads the fit's tags by the rules in fit_tag_rules.json: those whose weight reaches their threshold, with each of the rule's requires matched and none of its forbids, only the heaviest of each exclusive set.
+	A rule's tag_weights are added once the other tags are settled, so they read only tags without tag_weights of their own.
 	The Fleet Doctrine tag is read from battles, not the fit, so it is never here.
 
 Returns:
@@ -42,15 +52,35 @@ func (f *Fit) Tags() []FitTag {
 	}
 	rules := comm.FitTagRules()
 	hull, parts := f.tagParts()
+
+	weighedByTags := map[string]FitTag{} // scored by their signals, waiting on the other tags
 	for name, rule := range rules.Tags {
 		if rule.FleetDoctrine != nil {
 			continue
 		}
-		if tag, applies := scoreTag(name, rule, hull, parts); applies {
+		tag, possible := scoreTag(name, rule, hull, parts)
+		switch {
+		case !possible:
+		case len(rule.TagWeights) > 0:
+			weighedByTags[name] = tag
+		case tagPasses(tag):
 			tags = append(tags, tag)
 		}
 	}
 	tags = keepHeaviestExclusive(tags, rules.Exclusive)
+
+	settled := len(tags)
+	for name, tag := range weighedByTags {
+		for _, other := range tags[:settled] {
+			if weight, weighs := rules.Tags[name].TagWeights[other.Name]; weighs {
+				tag.Weight += weight
+				tag.Reasons = append(tag.Reasons, FitTagReason{Name: other.Name, Weight: weight})
+			}
+		}
+		if tagPasses(tag) {
+			tags = append(tags, tag)
+		}
+	}
 
 	slices.SortFunc(tags, func(a, b FitTag) int {
 		if a.Priority != b.Priority {
@@ -99,9 +129,12 @@ func signalMatches(signal *comm.FitTagSignal, hull *comm.FitType, part tagPart) 
 	return signal.Hull == isHull && signal.FitsHull(hull) && signal.Matches(part.fitType)
 }
 
-// scoreTag adds up a tag's signals over the fit's parts, and reports whether it applies
+// scoreTag adds up a tag's signals over the fit's parts, and reports false if its requires or forbids rule it out
 func scoreTag(name string, rule *comm.FitTagRule, hull *comm.FitType, parts []tagPart) (FitTag, bool) {
-	tag := FitTag{Name: name, Meaning: rule.Meaning, Priority: rule.Priority, Role: rule.Role, Hidden: rule.Hidden, Reasons: []string{}}
+	tag := FitTag{
+		Name: name, Meaning: rule.Meaning, Priority: rule.Priority, Role: rule.Role, Hidden: rule.Hidden,
+		Threshold: rule.Threshold, ShareThreshold: rule.ShareThreshold, Reasons: []FitTagReason{},
+	}
 
 	anyMatch := func(signal *comm.FitTagSignal) bool {
 		return slices.ContainsFunc(parts, func(part tagPart) bool { return signalMatches(signal, hull, part) })
@@ -117,8 +150,6 @@ func scoreTag(name string, rule *comm.FitTagRule, hull *comm.FitType, parts []ta
 		}
 	}
 
-	counted := map[string]int{} // reasons by name, in the order first seen
-	order := []string{}
 	for index := range rule.Signals {
 		signal := &rule.Signals[index]
 		each := signal.Weight
@@ -126,40 +157,57 @@ func scoreTag(name string, rule *comm.FitTagRule, hull *comm.FitType, parts []ta
 			each = signal.BonusedWeight
 		}
 		weight, share := 0.0, 0.0
+		reasons := []FitTagReason{}
 		for _, part := range parts {
 			if !signalMatches(signal, hull, part) {
 				continue
 			}
 			weight += each * float64(part.quantity)
 			share += each * float64(part.quantity) / part.rack
-			if each > 0 {
-				if _, seen := counted[part.item.Name]; !seen {
-					order = append(order, part.item.Name)
-				}
-				counted[part.item.Name] += part.quantity
-			}
+			reasons = addReason(reasons, FitTagReason{Name: part.item.Name, Count: part.quantity, Weight: each * float64(part.quantity)})
 		}
 		if signal.Max > 0 && weight > signal.Max {
+			// each match keeps its part of the capped weight, so the reasons still add up
+			for index := range reasons {
+				reasons[index].Weight *= signal.Max / weight
+			}
 			share *= signal.Max / weight
 			weight = signal.Max
 		}
 		tag.Weight += weight
 		tag.Share += share
-	}
-
-	for _, reason := range order {
-		if counted[reason] > 1 {
-			reason = fmt.Sprintf("%s ×%d", reason, counted[reason])
+		for _, reason := range reasons {
+			// a module two signals count is one reason, its count once
+			if at := slices.IndexFunc(tag.Reasons, func(each FitTagReason) bool { return each.Name == reason.Name }); at >= 0 {
+				tag.Reasons[at].Weight += reason.Weight
+				tag.Reasons[at].Count = max(tag.Reasons[at].Count, reason.Count)
+			} else {
+				tag.Reasons = append(tag.Reasons, reason)
+			}
 		}
-		tag.Reasons = append(tag.Reasons, reason)
 	}
-	if rule.Threshold <= 0 && rule.ShareThreshold <= 0 {
-		return tag, false
+	return tag, true
+}
+
+// addReason adds a match to a signal's reasons, counting it with any of the same name
+func addReason(reasons []FitTagReason, reason FitTagReason) []FitTagReason {
+	if at := slices.IndexFunc(reasons, func(each FitTagReason) bool { return each.Name == reason.Name }); at >= 0 {
+		reasons[at].Count += reason.Count
+		reasons[at].Weight += reason.Weight
+		return reasons
 	}
-	byWeight := rule.Threshold <= 0 || tag.Weight >= rule.Threshold
+	return append(reasons, reason)
+}
+
+// tagPasses reports whether a scored tag reaches its threshold and its share threshold, each that is set, and has at least one
+func tagPasses(tag FitTag) bool {
+	if tag.Threshold <= 0 && tag.ShareThreshold <= 0 {
+		return false
+	}
+	byWeight := tag.Threshold <= 0 || tag.Weight >= tag.Threshold
 	// a rack's share adds up in floats, so a full one may fall a hair short of 1
-	byShare := rule.ShareThreshold <= 0 || tag.Share >= rule.ShareThreshold-1e-9
-	return tag, byWeight && byShare
+	byShare := tag.ShareThreshold <= 0 || tag.Share >= tag.ShareThreshold-1e-9
+	return byWeight && byShare
 }
 
 // keepHeaviestExclusive leaves only the heaviest of each exclusive set's tags, a tie going to the one listed first

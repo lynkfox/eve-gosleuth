@@ -1772,6 +1772,7 @@ function renderFits(fits) {
     el("fit-view-loss").replaceChildren();
     el("fit-view-loss").oncontextmenu = null;
     el("fit-view-tags").replaceChildren();
+    hideFitTagTip();
     el("fit-view-note").hidden = true;
     el("fit-ring").replaceChildren();
     el("fit-prev").hidden = true;
@@ -1953,7 +1954,59 @@ function fitHasTag(fit, tag) {
 
 // fitTagReasons is a tag's hover text: its name, and the modules that gave it weight
 function fitTagReasons(tag) {
-  return tag.reasons?.length ? `${tag.name}: ${tag.reasons.join(", ")}` : tag.name;
+  const reasons = (tag.reasons || []).filter((reason) => reason.weight > 0).map((reason) => (reason.count > 1 ? `${reason.name} ×${reason.count}` : reason.name));
+  return reasons.length ? `${tag.name}: ${reasons.join(", ")}` : tag.name;
+}
+
+// fitTagWeight writes a tag's weight to two places at most, ie 1.5 or 10.5, with a sign for a reason's
+function fitTagWeight(weight, signed = false) {
+  const shown = String(Math.round(weight * 100) / 100);
+  return signed && weight >= 0 ? `+${shown}` : shown.replace("-", "−");
+}
+
+/*
+  showFitTagTip fills the fitting window's tag tip with how a tag was reached and puts it under the tag: each module, drone, hull, or other tag with its count and the weight it gave,
+  then the total against the threshold, and the share of the racks against its own threshold for a tag with one (Firewaller).
+  One tip serves every tag, fixed to the page, so the window's scrolling can't clip it.
+*/
+function showFitTagTip(chip, tag) {
+  const tip = el("fit-tag-tip");
+  const title = document.createElement("div");
+  title.className = "fit-tag-tip-title";
+  title.textContent = tag.name;
+  const meaning = document.createElement("div");
+  meaning.className = "fit-tag-tip-meaning";
+  meaning.textContent = tag.meaning;
+
+  const table = document.createElement("table");
+  const row = (label, value, className = "") => {
+    const line = document.createElement("tr");
+    line.className = className;
+    const name = document.createElement("td");
+    name.textContent = label;
+    const weight = document.createElement("td");
+    weight.textContent = value;
+    line.append(name, weight);
+    table.append(line);
+  };
+  for (const reason of tag.reasons || []) {
+    const counted = reason.count > 1 ? `${reason.name} ×${reason.count}` : reason.name;
+    row(reason.count === 0 ? `${counted} tag` : counted, fitTagWeight(reason.weight, true), reason.weight < 0 ? "fit-tag-tip-against" : "");
+  }
+  if (tag.threshold > 0) row("Total", `${fitTagWeight(tag.weight)} of ${fitTagWeight(tag.threshold)} needed`, "fit-tag-tip-total");
+  if (tag.shareThreshold > 0) row("Share of its racks", `${Math.round(tag.share * 100)}% of ${Math.round(tag.shareThreshold * 100)}% needed`, "fit-tag-tip-total");
+
+  tip.replaceChildren(title, meaning, table);
+  tip.hidden = false;
+  // under the tag, kept inside the window's edges
+  const at = chip.getBoundingClientRect();
+  const width = tip.offsetWidth;
+  tip.style.left = `${Math.max(8, Math.min(at.left, window.innerWidth - width - 8))}px`;
+  tip.style.top = `${at.bottom + 6}px`;
+}
+
+function hideFitTagTip() {
+  el("fit-tag-tip").hidden = true;
 }
 
 // fitTagNamed is the tag a filter word names: the one with that name, or else the first whose name starts with it, Abyssal and Implants before the rules' tags
@@ -2056,10 +2109,16 @@ function renderFitWindow(fit, loss, choose) {
   shown.replaceChildren([loss.pilotName, spokenDate(loss.time), loss.systemName].filter(Boolean).join(" · "));
   if (loss.podKillmailId) shown.append(" ", fitTag(FIT_IMPLANTS_TAG, true));
   shown.oncontextmenu = (event) => openSectionsMenu(event, sections);
-  // every tag of this loss by name, with what gave it weight on hover
+  // every tag of this loss by name, with how it was reached on hover or focus (showFitTagTip)
+  hideFitTagTip();
   el("fit-view-tags").replaceChildren(...(loss.tags || []).filter((tag) => !tag.hidden).map((tag) => {
     const chip = fitTag(fitRuleTag(tag), true);
-    chip.title = fitTagReasons(tag);
+    chip.removeAttribute("title");
+    chip.tabIndex = 0;
+    chip.addEventListener("mouseenter", () => showFitTagTip(chip, tag));
+    chip.addEventListener("focus", () => showFitTagTip(chip, tag));
+    chip.addEventListener("mouseleave", hideFitTagTip);
+    chip.addEventListener("blur", hideFitTagTip);
     return chip;
   }));
   const zkill = el("fit-zkill");

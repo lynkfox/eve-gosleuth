@@ -165,10 +165,11 @@ A tag's fields:
 | `priority` | The order a fit shows its tags in, lowest first. A row shows its first role and the next three tags. Tags without one come after the rest. |
 | `role` | `true` for a tag that can name a fit's row, as its first role by `priority` does |
 | `threshold` | The total weight it needs to apply |
-| `share_threshold` | The share of their racks its modules must fill: Firewall's 1 needs every high slot to be a smartbomb. A tag with both needs both. |
+| `share_threshold` | The share of their racks its modules must fill: Firewaller's 1 needs every high slot to be a smartbomb. A tag with both needs both. |
 | `signals` | What gives it weight (below) |
 | `requires` | Signals of which each must match something, or the tag doesn't apply. Their weights are ignored. |
 | `forbids` | Signals of which none may match. Logi forbids guns, so a ship spider tanking with one remote repairer isn't logi. |
+| `tag_weights` | Weight added for other tags the fit has, ie `{"Buffer": -5, "Passive": -5}` on Ratting, as a buffer or passive tank is rarely a ratting fit. Only tags without `tag_weights` of their own count. |
 | `hidden` | `true` to never show it. The filter still finds it. The weapons, Close, and Long are hidden. |
 
 A signal matches each fitted module and drone (or the hull, with `"hull": true`) by any of `types`, `groups`, `categories`, or `markets`. A market group also matches everything listed below it, so Pulse Lasers (558) holds every size. Each match adds `weight`, so three neutralizers add 3, and each drone in a stack counts. A signal can also have:
@@ -180,7 +181,7 @@ A signal matches each fitted module and drone (or the hull, with `"hull": true`)
 | `bonused_by`, `bonused_weight` | On a hull with a bonus naming one of these words, each match adds `bonused_weight` instead. Matching ignores upper and lower case. |
 | `note` | Your description. GoSleuth doesn't read it. |
 
-Weights may be negative: Bait counts each gun against itself. As a guide, a weight of 1 is about one slot given over to the tag's job.
+Weights may be negative: Bait counts each gun against itself. As a guide, a weight of 1 is about one slot given over to the tag's job. Hovering a tag in the fitting window shows what gave it weight, each module's share, and the total against its threshold, which is the quickest way to see why a tag did or didn't apply.
 
 At the top of the file:
 - `bonus_ignores`: bonus lines containing one of these words never count for `bonused_by`. A "bonus to Sensor Dampener resistance" is about what the hull resists, not what it fits.

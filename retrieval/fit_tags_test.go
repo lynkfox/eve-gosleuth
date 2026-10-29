@@ -31,6 +31,7 @@ const fitTagRulesFixture = `{
 	"Drones": {"hidden": true, "threshold": 1, "signals": [{"groups": [100], "weight": 0.2}]},
 	"Passive": {"priority": 5, "threshold": 1, "signals": [{"groups": [39], "weight": 1}]},
 	"Buffer": {"priority": 6, "threshold": 1, "signals": [{"groups": [38], "weight": 1}]},
+	"Ratting": {"priority": 7, "role": true, "threshold": 1, "tag_weights": {"Buffer": -5}, "signals": [{"groups": [65], "weight": 2}]},
 	"Fleet Doctrine": {"priority": 1, "role": true, "fleet_doctrine": {"battle_hulls": 5}}
 }}`
 
@@ -107,6 +108,7 @@ const (
 	scanRangefindingArray = 33180
 	dataAnalyzer          = 22175
 	largeSmartbomb        = 3995
+	steelPlates           = 20353
 	bastionModule         = 33400
 	shieldCommandBurst    = 43555
 	paladin               = 28659
@@ -123,7 +125,8 @@ func TestFitTagRules(t *testing.T) {
 		neut := tagNamed(tags, "Neut")
 		if assert.NotNil(t, neut, "1.5 each on a Bhaalgorn reaches 3") {
 			assert.Equal(t, 3.0, neut.Weight)
-			assert.Equal(t, []string{"Heavy Energy Neutralizer II", "Heavy Energy Nosferatu II"}, neut.Reasons)
+			assert.Equal(t, []retrieval.FitTagReason{{Name: "Heavy Energy Neutralizer II", Count: 1, Weight: 1.5}, {Name: "Heavy Energy Nosferatu II", Count: 1, Weight: 1.5}}, neut.Reasons)
+			assert.Equal(t, 3.0, neut.Threshold)
 		}
 		assert.Nil(t, tagNamed(tagFit(t, thorax, []int{mediumNeutralizer, mediumNeutralizer}, nil, nil, nil).Tags(), "Neut"), "1 each on a hull without the bonus")
 	})
@@ -146,7 +149,7 @@ func TestFitTagRules(t *testing.T) {
 		tackle := tagNamed(tagFit(t, thorax, nil, []int{warpScrambler, warpScrambler}, nil, nil).Tags(), "Tackle")
 		if assert.NotNil(t, tackle) {
 			assert.Equal(t, 1.5, tackle.Weight, "two scramblers capped at 1, and the Thorax hull's 0.5")
-			assert.Equal(t, []string{"Warp Scrambler II ×2", "Thorax"}, tackle.Reasons, "in the order of the signals")
+			assert.Equal(t, []retrieval.FitTagReason{{Name: "Warp Scrambler II", Count: 2, Weight: 1}, {Name: "Thorax", Count: 1, Weight: 0.5}}, tackle.Reasons, "in the order of the signals, the scramblers sharing the capped weight")
 			assert.InDelta(t, 2.0/4*0.5+0.5/(14.0/3), tackle.Share, 0.0001, "two of four mids, halved by the cap, and the hull's 0.5 over the average of its 5, 4, and 5 slots")
 		}
 	})
@@ -155,7 +158,8 @@ func TestFitTagRules(t *testing.T) {
 		drones := tagNamed(tagFit(t, vexor, nil, nil, nil, map[int]int{hobgoblin: 5}).Tags(), "Drones")
 		if assert.NotNil(t, drones) {
 			assert.InDelta(t, 1.0, drones.Weight, 0.0001)
-			assert.Equal(t, []string{"Hobgoblin II ×5"}, drones.Reasons)
+			assert.Len(t, drones.Reasons, 1)
+			assert.Equal(t, 5, drones.Reasons[0].Count)
 			assert.True(t, drones.Hidden)
 		}
 	})
@@ -174,6 +178,13 @@ func TestFitTagRules(t *testing.T) {
 		full := []int{largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb, largeSmartbomb}
 		assert.Contains(t, tagNames(tagFit(t, bhaalgorn, full, nil, nil, nil).Tags()), "Firewall", "seven smartbombs in seven highs")
 		assert.NotContains(t, tagNames(tagFit(t, bhaalgorn, full[1:], nil, nil, nil).Tags()), "Firewall", "six, and an empty slot")
+	})
+
+	t.Run("tag weights add the weight of other tags the fit has", func(t *testing.T) {
+		assert.Contains(t, tagNames(tagFit(t, thorax, nil, []int{stasisWebifier}, nil, nil).Tags()), "Ratting")
+		tags := tagFit(t, thorax, nil, []int{stasisWebifier, largeShieldExtender}, nil, nil).Tags()
+		assert.NotContains(t, tagNames(tags), "Ratting", "a buffer tank takes 5 off the web's 2")
+		assert.Contains(t, tagNames(tags), "Buffer")
 	})
 
 	t.Run("a hull bonus line with an ignored phrase is not a bonus", func(t *testing.T) {
@@ -211,6 +222,8 @@ func TestEmbeddedFitTagRules(t *testing.T) {
 		tags := tagFit(t, paladin, []int{megaPulse, bastionModule, megaPulse, largeSmartbomb, largeSmartbomb, megaPulse, megaPulse}, nil, nil, nil).Tags()
 		assert.Equal(t, "Ratting", tags[0].Name)
 		assert.NotContains(t, tagNames(tagFit(t, paladin, []int{megaPulse, bastionModule, megaPulse, megaPulse}, nil, nil, nil).Tags()), "Ratting", "a bastion alone")
+		plated := tagFit(t, paladin, []int{megaPulse, bastionModule, megaPulse, largeSmartbomb, largeSmartbomb, megaPulse, megaPulse}, nil, []int{steelPlates, steelPlates}, nil).Tags()
+		assert.NotContains(t, tagNames(plated), "Ratting", "a buffer tank counts hard against it")
 	})
 
 	t.Run("command bursts are links", func(t *testing.T) {

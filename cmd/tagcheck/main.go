@@ -9,6 +9,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -130,6 +131,14 @@ func printFit(label string, fit *retrieval.Fit) {
 		case tag.Role && !named:
 			mark, named = "NAME  ", true
 		}
-		fmt.Printf("   %s %-12s priority %2d  weight %5.2f  share %4.2f  <- %s\n", mark, tag.Name, tag.Priority, tag.Weight, tag.Share, strings.Join(tag.Reasons, ", "))
+		reasons := []string{}
+		for _, reason := range tag.Reasons {
+			count := ""
+			if reason.Count > 1 {
+				count = fmt.Sprintf(" ×%d", reason.Count)
+			}
+			reasons = append(reasons, fmt.Sprintf("%s%s %+g", reason.Name, count, math.Round(reason.Weight*100)/100))
+		}
+		fmt.Printf("   %s %-12s priority %2d  weight %5.2f of %g  share %4.2f  <- %s\n", mark, tag.Name, tag.Priority, tag.Weight, tag.Threshold, tag.Share, strings.Join(reasons, ", "))
 	}
 }

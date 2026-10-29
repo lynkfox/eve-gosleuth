@@ -72,6 +72,8 @@ type FitTagRule struct {
 	Forbids        []FitTagSignal `json:"forbids"`
 	Signals        []FitTagSignal `json:"signals"`
 
+	TagWeights map[string]float64 `json:"tag_weights"` // weight added for each of these other tags the fit has, ie Buffer counting against Ratting. Only tags without tag_weights of their own count.
+
 	FleetDoctrine *FleetDoctrineRule `json:"fleet_doctrine"` // set on the one tag read from battles and other losses rather than the fit
 }
 
