@@ -116,7 +116,7 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 
 ## Phase 3: tags
 
-**Decided 2026-10-28.** **Status (2026-10-28): scoring built.** `comm.LoadFitTagRules` loads the rules (merged over by an edited copy like the other files), `retrieval.Fit.Tags()` scores them, and `gui.FitLoss.Tags` / `FitGroup.Tags` (its first loss's) carry them to the frontend. Not yet done: showing them in the Fits tab, the user guide section for `fit_tag_rules.json`, and Fleet Doctrine.
+**Decided 2026-10-28.** **Status (2026-10-28): scoring built.** `comm.LoadFitTagRules` loads the rules (merged over by an edited copy like the other files), `retrieval.Fit.Tags()` scores them, and `gui.FitLoss.Tags` / `FitGroup.Tags` (its first loss's) carry them to the frontend. The Fits tab shows them (see features.md) and the user guide covers the file. Not yet done: Fleet Doctrine, and tuning the weights against real fits.
 
 Tags describe what a fit brings, for intel: what it shoots with, how it tanks, and what it is for.
 

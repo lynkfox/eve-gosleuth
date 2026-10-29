@@ -134,6 +134,59 @@ To show its fits, a new hull also needs its slots: `high_slots`, `mid_slots`, `l
 
 To fix one field of an existing type, give only that field: `{"types": {"587": {"group": 25}}}`.
 
+The Fits tab's tags also read some fields from here: a type's `market` (its market group), and a hull's `rig_size` (1 small, 2 medium, 3 large, 4 capital) and `bonuses` (its role and skill bonuses as text).
+
+### `fit_tag_rules.json`
+
+How the Fits tab tags each fit: Tackle, Webber, Neut, Logi, Cyno, Scanner, Shield, Active, and the rest. Each tag adds up weights from what is fitted, and applies once the total reaches its `threshold`.
+
+```json
+{
+    "tags": {
+        "Neut": {
+            "letter": "N",
+            "meaning": "Energy neutralizers",
+            "names_row": 2,
+            "threshold": 3,
+            "signals": [
+                { "note": "neuts and nosferatus", "groups": [71, 68], "weight": 1,
+                  "bonused_by": ["Energy Neutralizer", "Energy Nosferatu"], "bonused_weight": 1.5 }
+            ]
+        }
+    }
+}
+```
+
+A tag's fields:
+
+| Field | Meaning |
+|---|---|
+| `letter` | Its square in the fit list. It can be more than one letter. |
+| `meaning` | What it means, shown in the tab's key |
+| `threshold` | The total weight it needs to apply |
+| `signals` | What gives it weight (below) |
+| `requires` | Signals of which each must match something, or the tag doesn't apply. Their weights are ignored. |
+| `forbids` | Signals of which none may match. Logi forbids guns, so a ship spider tanking with one remote repairer isn't logi. |
+| `names_row` | Which tags may name a fit's row, lowest first: 1 always wins (a cyno), then 2 (roles), then 3 (weapons). Leave it out for a tag that never names a row. |
+| `hidden` | `true` to give it no square. It can still name a row, and the filter still finds it. |
+
+A signal matches each fitted module and drone (or the hull, with `"hull": true`) by any of `types`, `groups`, `categories`, or `markets`. A market group also matches everything listed below it, so Pulse Lasers (558) holds every size. Each match adds `weight`, so three neutralizers add 3, and each drone in a stack counts. A signal can also have:
+
+| Field | Meaning |
+|---|---|
+| `max` | The most this signal adds in all |
+| `hull_sizes` | Counts only on hulls of these sizes, as in `rig_size` above |
+| `bonused_by`, `bonused_weight` | On a hull with a bonus naming one of these words, each match adds `bonused_weight` instead. Matching ignores upper and lower case. |
+| `note` | Your description. GoSleuth doesn't read it. |
+
+Weights may be negative: Bait counts each gun against itself. As a guide, a weight of 1 is about one slot given over to the tag's job.
+
+At the top of the file:
+- `bonus_ignores`: bonus lines containing one of these words never count for `bonused_by`. A "bonus to Sensor Dampener resistance" is about what the hull resists, not what it fits.
+- `exclusive`: sets of tags of which only the heaviest applies, a tie going to the one listed first. Built in, a fit is only one of Passive, Active, or Buffer.
+
+`signals`, `requires`, and `forbids` are lists, so your copy of one replaces it whole. To change only a tag's threshold, give just that: `{"tags": {"Neut": {"threshold": 2}}}`. To remove a tag, set it to `null`. Fleet Doctrine is not read from the fit; its numbers are under `fleet_doctrine`.
+
 ### `jspace_statics.json`
 
 ```json

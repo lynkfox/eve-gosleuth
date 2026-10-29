@@ -1986,6 +1986,11 @@ body.debug-mode::after {
 
 .fit-tag-abyssal { background: var(--error); color: #0b0e13; }
 .fit-tag-implants { background: var(--badge); color: var(--badge-text); }
+/* a tag read by fit_tag_rules.json, outlined so it doesn't read as A or I */
+.fit-tag-rule { box-shadow: inset 0 0 0 1px var(--highlight); color: var(--highlight); }
+.fit-row-name { color: var(--text); font-weight: 600; }
+.fit-view-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
+.fit-view-tags:empty { display: none; }
 /* in the help's color key the tag is a grid cell, which would stretch it over its meaning's lines */
 .help-content dt.fit-tag { align-self: center; justify-self: start; }
 
