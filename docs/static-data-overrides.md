@@ -157,11 +157,13 @@ For example, to also merge fits that differ only in which shield hardeners they 
 
 ### `fit_types.json`
 
-Every ship, module, charge, drone, implant, structure, and control tower, by type id, made from CCP's game data. The structure and capital checks above look up a ship's group here, so **a ship CCP has just added counts as a capital, structure, or anything else only once it is in this file.** Add it like this:
+Every ship, module, charge, drone, implant, structure, and control tower, by type id, made from CCP's game data. The structure and capital checks above look up a ship's group here, so **a ship CCP has just added counts as a capital, structure, or anything else only once it is in this file.**
 
 This file is built by parsing the SDE and generally doesn't need to be modified until something new is released and no update is forthcoming. 
 
 In the event the project seems to be abandoned, there are dev tools in the `cmd/sdegen` of the repo that can be used to regenerate this file, which can either be placed wholesale into the static_data override folder or a diff generated and create just the necessary updates.
+
+Add it like this:
 
 ```json
 {
