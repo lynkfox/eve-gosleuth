@@ -1,5 +1,5 @@
 {
-"bonus_ignores": ["resistance", "impedance", "immune to", "do not apply"],
+"bonus_ignores": ["resistance", "impedance", "immune to", "do not apply", "penalty to", "reduction in Drone hitpoints"],
 "exclusive": {"tank style": ["Active", "Passive", "Buffer"]},
 "tags": {
   "Polarized": {"meaning": "Polarized weapons: huge damage, no resists", "threshold": 1, "priority": 1, "role": true, "signals": [
@@ -15,7 +15,8 @@
   ]},
   "Webber": {"meaning": "Webs, most of all on a hull bonused for them", "threshold": 2, "priority": 16, "role": true, "signals": [
     {"note": "stasis webifiers, more on a hull bonused for them", "groups": [65], "weight": 1, "bonused_by": ["Stasis Webifier"], "bonused_weight": 1.5},
-    {"note": "stasis grapplers", "groups": [1672], "weight": 1}
+    {"note": "stasis grapplers", "groups": [1672], "weight": 1},
+    {"note": "stasis webifying drones, once however many: a nudge, more on a hull bonused for them", "groups": [641], "types": [92033, 92034, 92035], "once": true, "weight": 0.5, "bonused_by": ["Stasis Webifying Drone", "Stasis Webifier Drone"], "bonused_weight": 1}
   ]},
   "Roller": {"meaning": "Rolls wormholes: a Higgs anchor, zero-point entanglers, or two propulsion modules on a big hull", "threshold": 2, "priority": 5, "role": true, "signals": [
     {"note": "Higgs anchor rigs, of every size", "groups": [1308], "weight": 2},
@@ -39,20 +40,24 @@
   ], "signals": [
     {"note": "remote shield, armor, and hull repairers", "groups": [41, 325, 585, 1697, 1698, 2018], "weight": 1},
     {"note": "remote capacitor transmitters", "groups": [67], "weight": 0.5},
-    {"note": "remote repair augmentor rigs", "types": [25900, 27068, 31073, 31075, 26298, 31077, 31079, 31081], "weight": 0.5}
+    {"note": "remote repair augmentor rigs", "types": [25900, 27068, 31073, 31075, 26298, 31077, 31079, 31081], "weight": 0.5},
+    {"note": "logistic drones, once however many: a nudge, more on a hull bonused for them", "groups": [640], "once": true, "weight": 0.5, "bonused_by": ["Logistic Drone", "Logistics Drone"], "bonused_weight": 0.75}
   ]},
   "ECM": {"meaning": "Jammers: two, or one on a hull bonused for them", "threshold": 1.5, "priority": 12, "role": true, "signals": [
     {"note": "ECM modules, more on a hull bonused for them", "groups": [201], "weight": 1, "bonused_by": ["ECM"], "bonused_weight": 1.5},
-    {"note": "burst jammers", "groups": [80], "weight": 1}
+    {"note": "burst jammers", "groups": [80], "weight": 1},
+    {"note": "ECM drones, once however many: a nudge, more on a hull bonused for them", "types": [23473, 23705, 23707, 92039, 92040, 92041], "once": true, "weight": 0.5, "bonused_by": ["ECM Drone"], "bonused_weight": 0.75}
   ]},
   "EWAR": {"meaning": "Dampeners, weapon disruptors, or target painters: two, or one on a hull bonused for it", "threshold": 1.5, "priority": 11, "role": true, "signals": [
     {"note": "sensor dampeners, more on a hull bonused for them", "groups": [208], "weight": 1, "bonused_by": ["Sensor Dampener"], "bonused_weight": 1.5},
     {"note": "weapon disruptors, more on a hull bonused for them", "groups": [291], "weight": 1, "bonused_by": ["Weapon Disruptor"], "bonused_weight": 1.5},
-    {"note": "target painters, more on a hull bonused for them", "groups": [379], "weight": 1, "bonused_by": ["Target Painter"], "bonused_weight": 1.5}
+    {"note": "target painters, more on a hull bonused for them", "groups": [379], "weight": 1, "bonused_by": ["Target Painter"], "bonused_weight": 1.5},
+    {"note": "sensor dampening, tracking disrupting, and target painting drones, once however many: a nudge", "types": [23506, 23510, 23512, 23713, 23715, 23721, 23723, 23725, 23727, 92461, 92462, 92463, 92464, 92465, 92466, 92467, 92468, 92469], "once": true, "weight": 0.5}
   ]},
   "Neut": {"meaning": "Three neutralizers or nosferatus, fewer on a hull bonused for them, or a heavy neutralizer on a cruiser", "threshold": 3, "priority": 10, "role": true, "signals": [
     {"note": "energy neutralizers and nosferatus, more on a hull bonused for them", "groups": [71, 68], "weight": 1, "bonused_by": ["Energy Neutralizer", "Energy Nosferatu"], "bonused_weight": 1.5},
-    {"note": "heavy energy neutralizers on a medium hull", "markets": [691], "hull_sizes": [2], "weight": 3}
+    {"note": "heavy energy neutralizers on a medium hull", "markets": [691], "hull_sizes": [2], "weight": 3},
+    {"note": "energy neutralizer drones, once however many: a nudge", "groups": [544], "types": [92036, 92037, 92038], "once": true, "weight": 1}
   ]},
   "Cloaky": {"meaning": "Fits a cloak, never on a capital", "threshold": 1, "priority": 18, "role": true, "forbids": [
     {"note": "a capital hull", "hull": true, "hull_sizes": [4], "weight": 0}
@@ -72,7 +77,7 @@
     {"note": "smartbombs, which with a bastion module make it PvE", "groups": [72], "max": 1, "weight": 0.5},
     {"note": "tractor beams", "groups": [650], "weight": 1},
     {"note": "salvagers", "groups": [1122], "weight": 1},
-    {"note": "salvage drones", "groups": [1159], "max": 1, "weight": 0.2},
+    {"note": "salvage drones, once however many", "groups": [1159], "once": true, "weight": 0.2},
     {"note": "drone link augmentors", "groups": [647], "weight": 0.5},
     {"note": "warp scramblers and disruptors count against", "groups": [52], "weight": -1},
     {"note": "ancillary shield boosters and armor repairers count against, they are for PvP", "groups": [1156, 1199], "weight": -1},
@@ -87,8 +92,8 @@
     {"note": "damage controls", "groups": [60], "weight": 0.5},
     {"note": "tackle adds a little", "groups": [52, 65], "max": 0.5, "weight": 0.5},
     {"note": "turrets and launchers count against", "groups": [53, 74, 55, 4060, 1986, 506, 507, 508, 509, 510, 511, 524, 771, 862, 1245, 1673, 1674], "weight": -1},
-    {"note": "combat drones count against", "groups": [100, 5239], "weight": -0.2},
-    {"note": "fighters count against", "groups": [1652, 1653, 4777, 4779], "weight": -0.1}
+    {"note": "combat drones count against, once however many", "groups": [100, 5239], "once": true, "weight": -0.2},
+    {"note": "fighters count against, once however many", "groups": [1652, 1653, 4777, 4779], "once": true, "weight": -0.1}
   ]},
   "Lasers": {"meaning": "Energy turrets", "hidden": true, "threshold": 2, "signals": [
     {"note": "energy turrets", "groups": [53], "weight": 1},
@@ -111,14 +116,16 @@
     {"note": "missile guidance computers and enhancers", "groups": [1395, 1396], "weight": 0.5},
     {"note": "launcher rigs", "groups": [779], "weight": 0.5}
   ]},
-  "Drones": {"meaning": "Combat drones", "hidden": true, "threshold": 1, "signals": [
-    {"note": "combat drones", "groups": [100, 5239], "weight": 0.2},
+  "Drones": {"meaning": "Combat drones: a hull bonused for them, or drones with a drone module", "hidden": true, "threshold": 1, "signals": [
+    {"note": "a hull bonused for drones, as those in space when it died are not on the killmail", "hull": true, "weight": 0, "bonused_by": ["Drone damage", "Drone hitpoints", "Combat Drone", "Sentry Drone", "Heavy Drone", "Drone tracking", "Drone optimal range", "Drone operation range", "Drone max velocity", "Drone microwarp velocity", "Drone velocity", "additional drone"], "bonused_weight": 1},
+    {"note": "combat drones, once however many", "groups": [100, 5239], "once": true, "weight": 0.5},
     {"note": "drone damage amplifiers", "groups": [645], "weight": 0.5},
     {"note": "drone navigation and tracking modules", "groups": [644, 646, 1292], "weight": 0.5},
     {"note": "drone rigs", "groups": [778], "weight": 0.5}
   ]},
   "Fighters": {"meaning": "Fighters", "hidden": true, "threshold": 1, "signals": [
-    {"note": "light and heavy fighters", "groups": [1652, 1653, 4777, 4779], "weight": 0.1},
+    {"note": "a hull that launches fighters, as those in space when it died are not on the killmail", "hull": true, "weight": 0, "bonused_by": ["Can launch Light", "Fighter damage"], "bonused_weight": 1},
+    {"note": "light and heavy fighters, once however many", "groups": [1652, 1653, 4777, 4779], "once": true, "weight": 1},
     {"note": "fighter support units", "groups": [407], "weight": 0.5}
   ]},
   "Vorton": {"meaning": "A vorton projector, one to a ship", "hidden": true, "threshold": 1, "signals": [
@@ -133,12 +140,12 @@
     {"note": "pulse lasers, blasters, and autocannons", "markets": [558, 556, 559], "weight": 1},
     {"note": "rocket, heavy assault, and torpedo launchers", "groups": [507, 771, 508, 1673, 524], "weight": 1},
     {"note": "vorton projectors", "groups": [4060], "weight": 1},
-    {"note": "light, medium, heavy, and hybrid drones", "markets": [837, 838, 839, 3880], "weight": 0.2}
+    {"note": "light, medium, heavy, and hybrid drones, once however many, more on a hull bonused for them", "markets": [837, 838, 839, 3880], "once": true, "weight": 0.5, "bonused_by": ["Drone damage", "Drone hitpoints", "Combat Drone", "Heavy Drone", "Light Drone", "Drone tracking", "Drone max velocity", "Drone microwarp velocity", "Drone velocity", "additional drone"], "bonused_weight": 2}
   ]},
   "Long": {"meaning": "Long range weapons", "hidden": true, "threshold": 2, "signals": [
     {"note": "beam lasers, railguns, and artillery", "markets": [557, 555, 560], "weight": 1},
     {"note": "light, heavy, and cruise launchers", "groups": [509, 511, 510, 1245, 506, 1674], "weight": 1},
-    {"note": "sentry drones", "markets": [911], "weight": 0.4}
+    {"note": "sentry drones, once however many, more on a hull bonused for them", "markets": [911], "once": true, "weight": 0.5, "bonused_by": ["Drone damage", "Drone hitpoints", "Sentry Drone", "Drone optimal range", "Drone tracking", "additional drone"], "bonused_weight": 2}
   ]},
   "Shield": {"meaning": "Shield tank", "threshold": 2, "priority": 19, "role": true, "signals": [
     {"note": "extenders, boosters, amplifiers, hardeners, rechargers", "groups": [38, 39, 40, 77, 295, 338, 1156, 1700], "weight": 1},

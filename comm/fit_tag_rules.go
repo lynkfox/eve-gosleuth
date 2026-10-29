@@ -20,6 +20,7 @@ type FitTagSignal struct {
 
 	Weight        float64  `json:"weight"`         // added for each match
 	Max           float64  `json:"max"`            // the most the signal adds in all, 0 for no limit
+	Once          bool     `json:"once"`           // its matches add the weight of one, however many: ie drones, whose count on a killmail leaves out those in space
 	BonusedBy     []string `json:"bonused_by"`     // words in a hull bonus line (HullBonused) that make each match add BonusedWeight instead
 	BonusedWeight float64  `json:"bonused_weight"` // added for each match on a hull bonused for it
 }

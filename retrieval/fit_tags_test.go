@@ -35,6 +35,10 @@ const fitTagRulesFixture = `{
 	"Capped": {"hidden": true, "threshold": 1, "signals": [
 		{"groups": [71, 68], "weight": 1, "max": 3, "bonused_by": ["Energy Neutralizer"], "bonused_weight": 2}
 	]},
+	"Swarm": {"hidden": true, "threshold": 2, "signals": [
+		{"hull": true, "weight": 0, "bonused_by": ["Drone hitpoints"], "bonused_weight": 1},
+		{"groups": [100], "once": true, "weight": 0.5, "bonused_by": ["Drone hitpoints"], "bonused_weight": 1}
+	]},
 	"Fleet Doctrine": {"priority": 1, "role": true, "fleet_doctrine": {"battle_hulls": 5}}
 }}`
 
@@ -106,6 +110,10 @@ const (
 	shieldRecharger       = 394
 	largeShieldExtender   = 3841
 	hobgoblin             = 2456
+	hammerhead            = 2183
+	warrior               = 2486
+	hobgoblinSD           = 23715
+	acolyteEV             = 23659
 	cynoGenerator         = 21096
 	coreProbeLauncher     = 17938
 	scanRangefindingArray = 33180
@@ -178,6 +186,15 @@ func TestFitTagRules(t *testing.T) {
 			assert.Equal(t, 5, drones.Reasons[0].Count)
 			assert.True(t, drones.Hidden)
 		}
+	})
+
+	t.Run("a once signal's matches add the weight of one, and a zero weight hull signal counts only when bonused", func(t *testing.T) {
+		swarm := tagNamed(tagFit(t, vexor, nil, nil, nil, map[int]int{hobgoblin: 5, hammerhead: 5}).Tags(), "Swarm")
+		if assert.NotNil(t, swarm, "the Vexor's bonus and its drones") {
+			assert.InDelta(t, 2.0, swarm.Weight, 0.0001)
+			assert.ElementsMatch(t, []retrieval.FitTagReason{{Name: "Vexor", Count: 1, Weight: 1, Bonus: 1}, {Name: "Hobgoblin II", Count: 5, Weight: 0.5, Bonus: 0.25}, {Name: "Hammerhead I", Count: 5, Weight: 0.5, Bonus: 0.25}}, swarm.Reasons, "the two stacks sharing the one weight")
+		}
+		assert.Nil(t, tagNamed(tagFit(t, thorax, nil, nil, nil, map[int]int{hobgoblin: 5, hammerhead: 5}).Tags(), "Swarm"), "0.5 for drones on a hull without the bonus")
 	})
 
 	t.Run("only the first listed of an exclusive set applies, however heavy the rest", func(t *testing.T) {
@@ -345,5 +362,16 @@ func TestEmbeddedFitTagRules(t *testing.T) {
 		if armor := tagNamed(armored(append(amulets, amulets...), steelPlates), "Armor"); assert.NotNil(t, armor) {
 			assert.Equal(t, 2.0, armor.Weight, "ten implants still add only 0.5")
 		}
+	})
+
+	t.Run("a drone hull is drones without any on the killmail, drones alone on another hull are not", func(t *testing.T) {
+		assert.Contains(t, tagNames(tagFit(t, vexor, nil, nil, nil, nil).Tags()), "Drones")
+		assert.NotContains(t, tagNames(tagFit(t, thorax, nil, nil, nil, map[int]int{warrior: 10}).Tags()), "Drones", "ten in the bay count as one kind")
+	})
+
+	t.Run("support drones nudge a role, but never make one", func(t *testing.T) {
+		assert.NotContains(t, tagNames(tagFit(t, thorax, nil, nil, nil, map[int]int{hobgoblinSD: 5}).Tags()), "EWAR")
+		assert.Contains(t, tagNames(tagFit(t, thorax, nil, []int{sensorDampener}, nil, map[int]int{hobgoblinSD: 5}).Tags()), "EWAR", "with one dampener")
+		assert.NotContains(t, tagNames(tagFit(t, thorax, nil, nil, nil, map[int]int{acolyteEV: 5}).Tags()), "Neut")
 	})
 }
