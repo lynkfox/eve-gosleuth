@@ -32,6 +32,9 @@ const fitTagRulesFixture = `{
 	"Passive": {"priority": 5, "threshold": 1, "signals": [{"groups": [39], "weight": 1}]},
 	"Buffer": {"priority": 6, "threshold": 1, "signals": [{"groups": [38], "weight": 1}]},
 	"Ratting": {"priority": 7, "role": true, "threshold": 1, "tag_weights": {"Buffer": -5}, "signals": [{"groups": [65], "weight": 2}]},
+	"Capped": {"hidden": true, "threshold": 1, "signals": [
+		{"groups": [71, 68], "weight": 1, "max": 3, "bonused_by": ["Energy Neutralizer"], "bonused_weight": 2}
+	]},
 	"Fleet Doctrine": {"priority": 1, "role": true, "fleet_doctrine": {"battle_hulls": 5}}
 }}`
 
@@ -198,6 +201,20 @@ func TestFitTagRules(t *testing.T) {
 		tags := tagFit(t, thorax, nil, []int{stasisWebifier, largeShieldExtender}, nil, nil).Tags()
 		assert.NotContains(t, tagNames(tags), "Ratting", "a buffer tank takes 5 off the web's 2")
 		assert.Contains(t, tagNames(tags), "Buffer")
+	})
+
+	t.Run("a capped signal's bonus is only what the cap left above the weight without it", func(t *testing.T) {
+		capped := tagNamed(tagFit(t, bhaalgorn, []int{heavyNeutralizer, heavyNosferatu}, nil, nil, nil).Tags(), "Capped")
+		if assert.NotNil(t, capped) {
+			assert.Equal(t, 3.0, capped.Weight, "4 bonused, capped at 3")
+			assert.Equal(t, []retrieval.FitTagReason{{Name: "Heavy Energy Neutralizer II", Count: 1, Weight: 1.5, Bonus: 0.5}, {Name: "Heavy Energy Nosferatu II", Count: 1, Weight: 1.5, Bonus: 0.5}}, capped.Reasons, "2 without the bonus, so it gave 1")
+		}
+		capped = tagNamed(tagFit(t, bhaalgorn, []int{heavyNeutralizer, heavyNeutralizer, heavyNosferatu}, nil, nil, nil).Tags(), "Capped")
+		if assert.NotNil(t, capped) {
+			for _, reason := range capped.Reasons {
+				assert.Zero(t, reason.Bonus, "3 reach the cap without the bonus")
+			}
+		}
 	})
 
 	t.Run("a hull bonus line with an ignored phrase is not a bonus", func(t *testing.T) {

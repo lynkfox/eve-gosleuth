@@ -199,21 +199,27 @@ func scoreTag(name string, rule *comm.FitTagRule, hull *comm.FitType, bonusers [
 		if len(signal.BonusedBy) > 0 && comm.HullBonused(bonusers, signal.BonusedBy) {
 			each, bonus = signal.BonusedWeight, signal.BonusedWeight-signal.Weight
 		}
-		weight, share := 0.0, 0.0
+		weight, bonused, share := 0.0, 0.0, 0.0
 		reasons := []FitTagReason{}
 		for _, part := range parts {
 			if !signalMatches(signal, hull, part) {
 				continue
 			}
 			weight += each * float64(part.quantity)
+			bonused += bonus * float64(part.quantity)
 			share += each * float64(part.quantity) / part.rack
 			reasons = addReason(reasons, FitTagReason{Name: part.item.Name, Count: part.quantity, Weight: each * float64(part.quantity), Bonus: bonus * float64(part.quantity)})
 		}
 		if signal.Max > 0 && weight > signal.Max {
-			// each match keeps its part of the capped weight, so the reasons still add up
+			// each match keeps its part of the capped weight, so the reasons still add up.
+			// The bonus is only what the cap left above the weight without it, which is nothing if that reached the cap too.
+			bonusLeft := 0.0
+			if bonused > 0 {
+				bonusLeft = (signal.Max - min(weight-bonused, signal.Max)) / bonused
+			}
 			for index := range reasons {
 				reasons[index].Weight *= signal.Max / weight
-				reasons[index].Bonus *= signal.Max / weight
+				reasons[index].Bonus *= bonusLeft
 			}
 			share *= signal.Max / weight
 			weight = signal.Max

@@ -43,7 +43,12 @@ func (s *FitTagSignal) Matches(fitType *FitType) bool {
 	return slices.ContainsFunc(s.Markets, func(market int) bool { return InMarketGroup(fitType, market) })
 }
 
-// AnyType reports whether the signal names no types, groups, categories, or market groups, so a hull signal matches every hull of its sizes, ie a capital
+/*
+	AnyType reports whether the signal names no types, groups, categories, or market groups, so a hull signal matches every hull of its sizes, ie a capital
+
+Returns:
+  - bool: true if it names none of them
+*/
 func (s *FitTagSignal) AnyType() bool {
 	return len(s.Types) == 0 && len(s.Groups) == 0 && len(s.Categories) == 0 && len(s.Markets) == 0
 }

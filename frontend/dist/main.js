@@ -1836,12 +1836,11 @@ function filterFits(fits, rows, hulls) {
 
 /*
   fitSearchText is what the filter box matches a fit against, lowercased: its hull, its modules, and the pilot, corp and alliance of each loss.
-  A fit's losses all have the same modules (buildFits), so its first loss's are read, but who lost it differs by loss.
+  Every loss's modules are read, as a merged fit's can differ (fit_merged_groups, ie its ECM flavors), as does who lost it.
   Names are joined on a line break, which no word holds, so a word matches within one name.
 */
 function fitSearchText(fit) {
-  const layout = fit.losses[0].fit;
-  const modules = FIT_RACKS.flatMap((rack) => (layout[rack.key] || []).map((slot) => slot?.module.name));
+  const modules = new Set(fit.losses.flatMap((loss) => FIT_RACKS.flatMap((rack) => (loss.fit[rack.key] || []).map((slot) => slot?.module.name))));
   const owners = fit.losses.flatMap((loss) => [loss.pilotName, loss.corpName, loss.allianceName]);
   return [fit.shipName, ...modules, ...owners].filter(Boolean).join("\n").toLowerCase();
 }
@@ -1917,7 +1916,7 @@ function fitRow(fit) {
     const count = document.createElement("span");
     count.className = "fit-row-count";
     count.textContent = `×${fit.losses.length}`;
-    count.title = `Lost ${fit.losses.length} times with these modules`;
+    count.title = `Lost ${fit.losses.length} times with this fit`;
     row.append(count);
   }
   return row;
@@ -2925,7 +2924,7 @@ const TAB_HELP = {
     "Right-click a structure to search its system, owner, or killers, or open it on an external site.",
   ],
   "tab-fits": [
-    "Fits by ship. Losses with the same modules are merged into one, whatever slots they were in.",
+    "Fits by ship. Losses with the same fit are merged into one, whatever slots its modules were in, and whichever ECM flavors it used.",
     "Non-combat ships (pods, shuttles, haulers, mining ships), structures, and losses with nothing fitted are left out.",
     "A merged fit's losses page with the arrows by its name, or ← →, each showing its own layout, charges, and drones.",
     "Right-click the hull, a module, a drone, or the zKillboard button (which has the capsule too) to open it on an external site.",
