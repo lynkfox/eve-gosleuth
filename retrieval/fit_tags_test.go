@@ -282,6 +282,12 @@ func TestEmbeddedFitTagRules(t *testing.T) {
 		assert.NotContains(t, tagNames(plated), "Ratting", "a buffer tank counts hard against it")
 	})
 
+	t.Run("a bastion with an active tank and no point is ratting", func(t *testing.T) {
+		highs := []int{megaPulse, bastionModule, megaPulse, megaPulse}
+		assert.Equal(t, "Ratting", tagFit(t, paladin, highs, nil, []int{largeArmorRepairer}, nil).Tags()[0].Name)
+		assert.NotContains(t, tagNames(tagFit(t, paladin, highs, []int{warpScrambler}, []int{largeArmorRepairer}, nil).Tags()), "Ratting", "a point makes it PvP")
+	})
+
 	t.Run("any repairer makes the tank active, whatever its buffer", func(t *testing.T) {
 		tags := tagNames(tagFit(t, bhaalgorn, nil, nil, []int{steelPlates, steelPlates, steelPlates, largeArmorRepairer}, nil).Tags())
 		assert.Contains(t, tags, "Active")
