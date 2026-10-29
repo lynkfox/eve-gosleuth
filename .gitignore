@@ -36,3 +36,9 @@ cached_data.json
 
 # Wails build output
 build/bin/
+
+# the golden fits' Pyfa harness setup (see fitting/testdata/golden/harness/SETUP.md)
+fitting/testdata/golden/harness/pyfa_build/
+fitting/testdata/golden/harness/venv/
+fitting/testdata/golden/harness/save/
+__pycache__/

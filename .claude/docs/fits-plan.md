@@ -169,6 +169,8 @@ Tags describe what a fit brings, for intel: what it shoots with, how it tanks, a
 
 ## Phase 4: dogma engine (resists, EHP, repair, ewar resistance)
 
+**Status (2026-10-29): built,** the same afternoon it was planned, by the agent split below (extract, engine core, effects & outputs, golden; then the strip). `go test ./fitting` checks 37 Pyfa fits; 34 match within 0.1% and 3 are known differences (below). Its behaviour is in `features.md` under Fits.
+
 **Planned 2026-10-29.** Two research passes went into it: one over the SDE (build 3660036) and one over Pyfa's engine (`eos`, v2.69.3, commit d2722a4c). Their notes are kept with this plan's history. Pyfa is GPLv3 and this project is MIT, so Pyfa is read for reference and used to produce test numbers, and none of its code is copied.
 
 ### What the research settled
@@ -181,6 +183,7 @@ Tags describe what a fit brings, for intel: what it shoots with, how it tanks, a
   - remote reps for logi: shield 6186, armor 6188, hull 6185, ancillary 6651/6652, mutadaptive 7166, and capacitor 6184
   
   Damage Control, Assault Damage Control, Bastion, Siege, Triage, the tactical destroyer modes and the T3 subsystems all work from `modifierInfo`.
+- **Corrected while building:** the research was wrong here. Skills scale 400 of the 415 hull bonus attributes themselves through their own effects (ie Battlecruisers multiplies `shipBonusCBC2` by its level), and scaling those again zeroed a Drake's shield resists. `bonus_skills` now holds only the 15 no skill scales (sdegen's `skillScaledAttributes`), ie the assault frigates' `eliteBonusAssaultShips1`.
 - **Hull bonuses scale with skill level, and the SDE doesn't say which do.** A hull's bonus attribute (ie `shipBonusMF`, 587) has to be multiplied by the level of its skill, and a role bonus is not. Pyfa hard-codes the skill in 1,378 places. Attribute names carry the skill, so `shipBonus<race><class><n>`, `eliteBonus<class>` and `subsystemBonus<race><kind>` (414 attributes) can be read by `cmd/sdegen` into a bonus-attribute-to-skill table in the extract. `typeBonus.jsonl` trait values back it up, and sdegen reports the ones it can't place, for its own config. A dev check compares the table with the `skill=` arguments in Pyfa's `effects.py`.
 - **Skills are ordinary dogma.** Each skill scales its own bonus by `skillLevel` (280) with an `itemID` modifier. All V means attribute 280 is 5 on every skill. That needs the 512 skills (category 16) and the character type (1373) in the extract.
 - **Size is no concern.** An extract trimmed to the attributes our outputs depend on is about 0.8 MB (100 KB gzipped). That covers 7,904 types and 1,141 effects, with modifiers on `targetID` dropped. Adding the 2,144 unpublished types in the kept categories brings it to 1 MB. Those include expired boosters, retired modules, and the 18 tactical destroyer modes (group 1306, needed).
@@ -256,6 +259,21 @@ Tags describe what a fit brings, for intel: what it shoots with, how it tanks, a
 | 3 | me | adapter, golden test runner, `gui/fits.go`, `main.js`, docs | Wire it into the search, fix whatever the golden tests turn up, the strip and the mode switch, CLI output, `features.md`, help text, and `docs/static-data-overrides.md` for `dogma.json`. |
 
 I relay any finding that affects another agent with SendMessage, and run the real thing (the CLI on real killmails, the GUI build) before calling it done.
+
+### What the golden fits found (2026-10-29)
+
+- Hull bonuses scaled twice (above): 23 of 38 fits failed, then 8.
+- Implant sets: a set's bonus reaches the other implants through the character's location, which the engine first left implants out of.
+- **Bastion's hull resists aren't stacking penalized** against a Damage Control, as Pyfa has it (user's call: follow Pyfa). That is the `unpenalized` list in `dogma.json`, written by sdegen's `unpenalized`, read by `comm.DogmaUnpenalized`.
+- The harness wrote a Herald with a placeholder hull id; that fit was dropped.
+- **Known differences** (in the golden files): the Damnation and Vulture, as Pyfa applies a fit's own command bursts to itself; and a Reactive Armor Hardener with a Damage Control and a hardener settles 0.13% from Pyfa on thermal, not yet explained.
+- Regenerating: the harness is in `fitting/testdata/golden/harness/` (`SETUP.md` there: a Pyfa checkout, a venv, and Pyfa's `db_update.py`, none committed). Regenerating keeps the known differences.
+
+### Next: own boosts, with a button (user's call 2026-10-29)
+
+- A command ship's bursts reach itself in game, and Pyfa counts them. The user wants **a button in the fitting window to turn the fit's own boosts on and off**.
+- The SDE gives bursts no modifiers, but `dbuffCollections.jsonl` defines each warfare buff (what it modifies, how, and which aggregate mode), and a burst charge names its buffs with `warfareBuff1ID`..`4ID` and their values. So bursts can likely be data-driven: sdegen extracts the buff collections, and the engine applies a fit's own active bursts' buffs to its ship when the button is on, keeping the strongest of each buff as the game does.
+- The stats then travel twice (with and without boosts), or per mode and boost for a tactical destroyer, and the Damnation and Vulture golden fits lose their known difference.
 
 ### Later, not in this phase
 
