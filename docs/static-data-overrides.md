@@ -233,7 +233,7 @@ Weights may be negative: e.g. Bait counts each gun against itself. As a guide, a
 
 At the top of the file:
 - `bonus_ignores`: bonus lines containing one of these words never count for `bonused_by`. A "bonus to Sensor Dampener resistance" is about what the hull resists, not what it fits.
-- `exclusive`: sets of tags of which only the first listed that the fit has applies. Built in, a fit is only one of Active, Passive, or Buffer, in that order: any repairer makes a tank active, however much buffer it has.
+- `exclusive`: sets of tags of which only the first listed that the fit has applies. Built in, a fit is only one of Active, Passive, or Buffer, in that order: any repairer makes a tank active, however much buffer it has. And a fit with a polarized weapon is never Ratting.
 
 `signals`, `requires`, and `forbids` are lists, so your copy of one replaces it whole. To change only a tag's threshold, give just that: `{"tags": {"Neut": {"threshold": 2}}}`. To remove a tag, set it to `null`.
 

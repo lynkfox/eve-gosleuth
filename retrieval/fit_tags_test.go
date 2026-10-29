@@ -313,6 +313,13 @@ func TestEmbeddedFitTagRules(t *testing.T) {
 		assert.NotContains(t, tagNames(tagFit(t, paladin, []int{megaPulse, megaPulse, megaPulse}, nil, nil, nil).Tags()), "Ratting", "the hull alone")
 	})
 
+	t.Run("a polarized weapon is never ratting, though the rest says it is", func(t *testing.T) {
+		highs := []int{polarizedBlaster, bastionModule, megaPulse, megaPulse}
+		tags := tagNames(tagFit(t, paladin, highs, nil, []int{largeArmorRepairer}, nil).Tags())
+		assert.Contains(t, tags, "Polarized")
+		assert.NotContains(t, tags, "Ratting")
+	})
+
 	t.Run("a bastion with an active tank and no point is ratting", func(t *testing.T) {
 		highs := []int{megaPulse, bastionModule, megaPulse, megaPulse}
 		assert.Equal(t, "Ratting", tagFit(t, paladin, highs, nil, []int{largeArmorRepairer}, nil).Tags()[0].Name)

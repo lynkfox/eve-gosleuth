@@ -57,7 +57,7 @@ func (f *Fit) Tags() []FitTag {
 
 /*
 	TagsWith reads the fit's tags by the rules in fit_tag_rules.json: those whose weight reaches their threshold, with each of the rule's requires matched and none of its forbids, only the first listed of each exclusive set.
-	A rule's tag_weights are added once the other tags are settled, so they read only tags without tag_weights of their own.
+	A rule's tag_weights are added once the other tags are settled, so they read only tags without tag_weights of their own; the exclusive sets are applied again after, so such a tag can be in one (Polarized over Ratting).
 	The Fleet Doctrine tag is read from battles and other losses, not the fit, so it is never here (see aggregate.FleetDoctrine).
 
 Parameters:
@@ -112,6 +112,7 @@ func (f *Fit) TagsWith(context FitTagContext) []FitTag {
 			tags = append(tags, tag)
 		}
 	}
+	tags = keepFirstExclusive(tags, rules.Exclusive)
 
 	sortFitTags(tags)
 	return tags

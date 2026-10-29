@@ -1,6 +1,6 @@
 {
 "bonus_ignores": ["resistance", "impedance", "immune to", "do not apply", "penalty to", "reduction in Drone hitpoints"],
-"exclusive": {"tank style": ["Active", "Passive", "Buffer"]},
+"exclusive": {"tank style": ["Active", "Passive", "Buffer"], "pvp or pve": ["Polarized", "Ratting"]},
 "tags": {
   "Polarized": {"meaning": "Polarized weapons: huge damage, no resists", "threshold": 1, "priority": 1, "role": true, "signals": [
     {"note": "polarized weapons", "types": [34272, 34274, 34276, 34278, 34280, 34282, 34284, 34286, 34288, 34290, 34292, 34294], "weight": 1}
