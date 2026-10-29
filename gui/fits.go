@@ -25,20 +25,23 @@ type FitGroup struct {
 	Implants      bool      `json:"implants"` // a loss of it has the implants of its capsule (see podsWithShips). Implants don't decide which fits merge.
 	Losses        []FitLoss `json:"losses"`   // most implants first, then newest
 	LastLost      time.Time `json:"lastLost"` // its newest loss, which need not be its first
+
+	Tags []retrieval.FitTag `json:"tags"` // its first loss's, see FitLoss.Tags
 }
 
 // FitLoss is one loss of a fit, with its own charges and cargo
 type FitLoss struct {
-	KillmailID   int       `json:"killmailId"`
-	URL          string    `json:"url"` // the killmail on zKillboard
-	Time         time.Time `json:"time"`
-	PilotName    string    `json:"pilotName"`          // the pilot, or the owning corp for a structure
-	CorpName     string    `json:"corpName,omitempty"` // the victim's corp and alliance at the time, for the filter box
-	AllianceName string    `json:"allianceName,omitempty"`
-	SystemName   string    `json:"systemName"`
-	EFT          string    `json:"eft"`
-	MissingTypes int       `json:"missingTypes"` // item types not in fit_types.json, so the fit may be incomplete
-	Fit          FitLayout `json:"fit"`
+	KillmailID   int                `json:"killmailId"`
+	URL          string             `json:"url"` // the killmail on zKillboard
+	Time         time.Time          `json:"time"`
+	PilotName    string             `json:"pilotName"`          // the pilot, or the owning corp for a structure
+	CorpName     string             `json:"corpName,omitempty"` // the victim's corp and alliance at the time, for the filter box
+	AllianceName string             `json:"allianceName,omitempty"`
+	SystemName   string             `json:"systemName"`
+	EFT          string             `json:"eft"`
+	Tags         []retrieval.FitTag `json:"tags"`         // read from its modules and drones (Fit.Tags). Drones don't decide which fits merge, so a fit's losses can differ.
+	MissingTypes int                `json:"missingTypes"` // item types not in fit_types.json, so the fit may be incomplete
+	Fit          FitLayout          `json:"fit"`
 
 	// the capsule the pilot lost with implants later in the battle, see podsWithShips. Its implants are the fit's.
 	PodKillmailID int    `json:"podKillmailId,omitempty"`
@@ -141,6 +144,7 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 			fit = &withImplants
 		}
 		loss.EFT = fit.EFT(retrieval.EFTTitle(km))
+		loss.Tags = fit.Tags()
 
 		key := fitKey(km.Victim.Ship.ItemID, km.Victim.Fit)
 		group := byKey[key]
@@ -168,6 +172,7 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 			}
 			return b.Time.Compare(a.Time)
 		})
+		group.Tags = group.Losses[0].Tags
 		for _, loss := range group.Losses {
 			if loss.Time.After(group.LastLost) {
 				group.LastLost = loss.Time

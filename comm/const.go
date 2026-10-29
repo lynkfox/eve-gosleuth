@@ -105,6 +105,7 @@ func InitStaticData(staticFiles fs.FS, overrides ...fs.FS) error {
 		staticFile{"space_classes.json", LoadSpaceClasses},
 		staticFile{"inventory_flags.json", LoadInventoryFlags},
 		staticFile{"fit_types.json", LoadFitTypes},
+		staticFile{"fit_tag_rules.json", LoadFitTagRules},
 	)
 
 	var errs []error

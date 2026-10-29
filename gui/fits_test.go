@@ -127,6 +127,17 @@ func TestBuildFitsMergesWhateverTheOrder(t *testing.T) {
 	assert.True(t, fits[0].Abyssal)
 	assert.Len(t, fits[1].Losses, 3)
 	assert.False(t, fits[1].Abyssal)
+
+	tagNames := func(tags []retrieval.FitTag) []string {
+		names := []string{}
+		for _, tag := range tags {
+			names = append(names, tag.Name)
+		}
+		return names
+	}
+	assert.Equal(t, 2, fits[1].Losses[1].KillmailID)
+	assert.Contains(t, tagNames(fits[1].Losses[1].Tags), "Drones", "each loss has its own tags, from its own drones")
+	assert.NotContains(t, tagNames(fits[1].Tags), "Drones", "the fit's are its first loss's, which had none")
 }
 
 func TestBuildFitsGivesShipsTheirPodsImplants(t *testing.T) {
