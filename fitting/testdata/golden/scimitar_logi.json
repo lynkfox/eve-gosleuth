@@ -1,0 +1,121 @@
+{
+  "name": "Scimitar, logi",
+  "pyfa": "v2.69.3 (d2722a4c)",
+  "pyfa_data": "game client build 3624425, dumped 2026-10-17 (Pyfa staticdata/phobos/metadata.0.json); our SDE is build 3660036",
+  "input": {
+    "hull": 11978,
+    "modules": [
+      {
+        "type": 2048,
+        "slot": "low"
+      },
+      {
+        "type": 1987,
+        "slot": "low"
+      },
+      {
+        "type": 1987,
+        "slot": "low"
+      },
+      {
+        "type": 3841,
+        "slot": "mid"
+      },
+      {
+        "type": 2281,
+        "slot": "mid"
+      },
+      {
+        "type": 2303,
+        "slot": "mid"
+      },
+      {
+        "type": 10850,
+        "slot": "mid"
+      },
+      {
+        "type": 527,
+        "slot": "mid"
+      },
+      {
+        "type": 3598,
+        "slot": "high"
+      },
+      {
+        "type": 3598,
+        "slot": "high"
+      },
+      {
+        "type": 3598,
+        "slot": "high"
+      },
+      {
+        "type": 12221,
+        "slot": "high"
+      },
+      {
+        "type": 31796,
+        "slot": "rig"
+      },
+      {
+        "type": 31796,
+        "slot": "rig"
+      }
+    ]
+  },
+  "expected": {
+    "shield": {
+      "hp": 7592.4,
+      "resonance": [
+        0.147656,
+        0.113012,
+        0.354375,
+        0.295313
+      ],
+      "ehp": 33360.1
+    },
+    "armor": {
+      "hp": 2101.25,
+      "resonance": [
+        0.085,
+        0.27625,
+        0.6375,
+        0.765
+      ],
+      "ehp": 4765.41
+    },
+    "hull": {
+      "hp": 1792.5,
+      "resonance": [
+        0.402,
+        0.402,
+        0.402,
+        0.402
+      ],
+      "ehp": 4458.96
+    },
+    "ehp": 42584.5,
+    "local_rep": {
+      "shield": 34.6667,
+      "armor": 0.0,
+      "hull": 0.0
+    },
+    "passive_regen": 20.2464,
+    "remote_rep": {
+      "shield": 127.5,
+      "armor": 0.0,
+      "hull": 0.0,
+      "capacitor": 23.4
+    },
+    "sensor": {
+      "type": "Ladar",
+      "strength": 42.7874
+    },
+    "ewar_resist": {
+      "sensorDampenerResistance": 1.0,
+      "weaponDisruptionResistance": 1.0,
+      "stasisWebifierResistance": 1.0,
+      "energyWarfareResistance": 1.0
+    }
+  }
+}

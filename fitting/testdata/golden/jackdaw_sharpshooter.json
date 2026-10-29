@@ -1,0 +1,122 @@
+{
+  "name": "Jackdaw, sharpshooter mode",
+  "pyfa": "v2.69.3 (d2722a4c)",
+  "pyfa_data": "game client build 3624425, dumped 2026-10-17 (Pyfa staticdata/phobos/metadata.0.json); our SDE is build 3660036",
+  "input": {
+    "hull": 34828,
+    "modules": [
+      {
+        "type": 2048,
+        "slot": "low"
+      },
+      {
+        "type": 22291,
+        "slot": "low"
+      },
+      {
+        "type": 22291,
+        "slot": "low"
+      },
+      {
+        "type": 380,
+        "slot": "mid"
+      },
+      {
+        "type": 2281,
+        "slot": "mid"
+      },
+      {
+        "type": 2303,
+        "slot": "mid"
+      },
+      {
+        "type": 448,
+        "slot": "mid"
+      },
+      {
+        "type": 10631,
+        "slot": "high"
+      },
+      {
+        "type": 10631,
+        "slot": "high"
+      },
+      {
+        "type": 10631,
+        "slot": "high"
+      },
+      {
+        "type": 10631,
+        "slot": "high"
+      },
+      {
+        "type": 10631,
+        "slot": "high"
+      },
+      {
+        "type": 31794,
+        "slot": "rig"
+      },
+      {
+        "type": 31794,
+        "slot": "rig"
+      }
+    ],
+    "mode": 35678
+  },
+  "expected": {
+    "shield": {
+      "hp": 2556.0,
+      "resonance": [
+        0.590625,
+        0.113012,
+        0.265781,
+        0.295313
+      ],
+      "ehp": 8083.93
+    },
+    "armor": {
+      "hp": 750.0,
+      "resonance": [
+        0.425,
+        0.23375,
+        0.478125,
+        0.765
+      ],
+      "ehp": 1577.39
+    },
+    "hull": {
+      "hp": 750.0,
+      "resonance": [
+        0.402,
+        0.402,
+        0.402,
+        0.402
+      ],
+      "ehp": 1865.67
+    },
+    "ehp": 11527.0,
+    "local_rep": {
+      "shield": 0.0,
+      "armor": 0.0,
+      "hull": 0.0
+    },
+    "passive_regen": 10.65,
+    "remote_rep": {
+      "shield": 0.0,
+      "armor": 0.0,
+      "hull": 0.0,
+      "capacitor": 0.0
+    },
+    "sensor": {
+      "type": "Gravimetric",
+      "strength": 36.0
+    },
+    "ewar_resist": {
+      "sensorDampenerResistance": 0.333333,
+      "weaponDisruptionResistance": 0.333333,
+      "stasisWebifierResistance": 1.0,
+      "energyWarfareResistance": 1.0
+    }
+  }
+}

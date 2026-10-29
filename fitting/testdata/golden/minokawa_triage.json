@@ -1,0 +1,129 @@
+{
+  "name": "Minokawa, triage",
+  "pyfa": "v2.69.3 (d2722a4c)",
+  "pyfa_data": "game client build 3624425, dumped 2026-10-17 (Pyfa staticdata/phobos/metadata.0.json); our SDE is build 3660036",
+  "input": {
+    "hull": 37605,
+    "modules": [
+      {
+        "type": 2048,
+        "slot": "low"
+      },
+      {
+        "type": 41500,
+        "slot": "low"
+      },
+      {
+        "type": 11642,
+        "slot": "low"
+      },
+      {
+        "type": 11648,
+        "slot": "low"
+      },
+      {
+        "type": 1952,
+        "slot": "mid"
+      },
+      {
+        "type": 40357,
+        "slot": "mid"
+      },
+      {
+        "type": 12223,
+        "slot": "high"
+      },
+      {
+        "type": 4294,
+        "slot": "high"
+      },
+      {
+        "type": 41466,
+        "slot": "high"
+      },
+      {
+        "type": 41466,
+        "slot": "high"
+      },
+      {
+        "type": 41466,
+        "slot": "high"
+      },
+      {
+        "type": 41466,
+        "slot": "high"
+      },
+      {
+        "type": 31049,
+        "slot": "rig"
+      },
+      {
+        "type": 31061,
+        "slot": "rig"
+      },
+      {
+        "type": 31061,
+        "slot": "rig"
+      }
+    ]
+  },
+  "expected": {
+    "shield": {
+      "hp": 221250.0,
+      "resonance": [
+        0.7,
+        0.56,
+        0.42,
+        0.35
+      ],
+      "ehp": 435961.0
+    },
+    "armor": {
+      "hp": 144000.0,
+      "resonance": [
+        0.19125,
+        0.210375,
+        0.6375,
+        0.765
+      ],
+      "ehp": 319268.0
+    },
+    "hull": {
+      "hp": 137500.0,
+      "resonance": [
+        0.402,
+        0.402,
+        0.402,
+        0.402
+      ],
+      "ehp": 342040.0
+    },
+    "ehp": 1097270.0,
+    "local_rep": {
+      "shield": 0.0,
+      "armor": 2644.39,
+      "hull": 0.0
+    },
+    "passive_regen": 49.1667,
+    "remote_rep": {
+      "shield": 0.0,
+      "armor": 5133.33,
+      "hull": 0.0,
+      "capacitor": 1787.5
+    },
+    "sensor": {
+      "type": "Gravimetric",
+      "strength": 124.32
+    },
+    "ewar_resist": {
+      "sensorDampenerResistance": 0.3,
+      "weaponDisruptionResistance": 1.0,
+      "targetPainterResistance": 1.0,
+      "stasisWebifierResistance": 1.0,
+      "energyWarfareResistance": 1.0,
+      "remoteRepairImpedance": 1e-06,
+      "remoteAssistanceImpedance": 0.2,
+      "remoteCapacitorImpedance": 1e-06
+    }
+  }
+}

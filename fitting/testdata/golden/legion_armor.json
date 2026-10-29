@@ -1,0 +1,144 @@
+{
+  "name": "Legion, armor",
+  "pyfa": "v2.69.3 (d2722a4c)",
+  "pyfa_data": "game client build 3624425, dumped 2026-10-17 (Pyfa staticdata/phobos/metadata.0.json); our SDE is build 3660036",
+  "input": {
+    "hull": 29986,
+    "modules": [
+      {
+        "type": 45587,
+        "slot": "subsystem"
+      },
+      {
+        "type": 45623,
+        "slot": "subsystem"
+      },
+      {
+        "type": 45598,
+        "slot": "subsystem"
+      },
+      {
+        "type": 45611,
+        "slot": "subsystem"
+      },
+      {
+        "type": 2048,
+        "slot": "low"
+      },
+      {
+        "type": 33101,
+        "slot": "low",
+        "charge": 28668
+      },
+      {
+        "type": 20351,
+        "slot": "low"
+      },
+      {
+        "type": 11269,
+        "slot": "low"
+      },
+      {
+        "type": 11648,
+        "slot": "low"
+      },
+      {
+        "type": 11644,
+        "slot": "low"
+      },
+      {
+        "type": 32772,
+        "slot": "mid",
+        "charge": 3554
+      },
+      {
+        "type": 1952,
+        "slot": "mid",
+        "charge": 41155
+      },
+      {
+        "type": 4147,
+        "slot": "high"
+      },
+      {
+        "type": 4147,
+        "slot": "high"
+      },
+      {
+        "type": 4147,
+        "slot": "high"
+      },
+      {
+        "type": 4147,
+        "slot": "high"
+      },
+      {
+        "type": 31059,
+        "slot": "rig"
+      },
+      {
+        "type": 31059,
+        "slot": "rig"
+      },
+      {
+        "type": 31053,
+        "slot": "rig"
+      }
+    ]
+  },
+  "expected": {
+    "shield": {
+      "hp": 2250.0,
+      "resonance": [
+        0.875,
+        0.7,
+        0.39375,
+        0.21875
+      ],
+      "ehp": 4114.29
+    },
+    "armor": {
+      "hp": 14175.0,
+      "resonance": [
+        0.31875,
+        0.194604,
+        0.168407,
+        0.255
+      ],
+      "ehp": 60527.7
+    },
+    "hull": {
+      "hp": 2250.0,
+      "resonance": [
+        0.402,
+        0.402,
+        0.402,
+        0.402
+      ],
+      "ehp": 5597.01
+    },
+    "ehp": 70239.0,
+    "local_rep": {
+      "shield": 48.6667,
+      "armor": 82.8,
+      "hull": 0.0
+    },
+    "passive_regen": 5.35714,
+    "remote_rep": {
+      "shield": 0.0,
+      "armor": 0.0,
+      "hull": 0.0,
+      "capacitor": 0.0
+    },
+    "sensor": {
+      "type": "Radar",
+      "strength": 39.984
+    },
+    "ewar_resist": {
+      "sensorDampenerResistance": 1.0,
+      "weaponDisruptionResistance": 1.0,
+      "stasisWebifierResistance": 1.0,
+      "energyWarfareResistance": 0.85
+    }
+  }
+}

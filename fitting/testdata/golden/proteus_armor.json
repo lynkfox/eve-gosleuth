@@ -1,0 +1,141 @@
+{
+  "name": "Proteus, armor",
+  "pyfa": "v2.69.3 (d2722a4c)",
+  "pyfa_data": "game client build 3624425, dumped 2026-10-17 (Pyfa staticdata/phobos/metadata.0.json); our SDE is build 3660036",
+  "input": {
+    "hull": 29988,
+    "modules": [
+      {
+        "type": 45594,
+        "slot": "subsystem"
+      },
+      {
+        "type": 45629,
+        "slot": "subsystem"
+      },
+      {
+        "type": 45604,
+        "slot": "subsystem"
+      },
+      {
+        "type": 45618,
+        "slot": "subsystem"
+      },
+      {
+        "type": 2048,
+        "slot": "low"
+      },
+      {
+        "type": 3530,
+        "slot": "low"
+      },
+      {
+        "type": 11648,
+        "slot": "low"
+      },
+      {
+        "type": 11644,
+        "slot": "low"
+      },
+      {
+        "type": 11269,
+        "slot": "low"
+      },
+      {
+        "type": 1952,
+        "slot": "mid"
+      },
+      {
+        "type": 448,
+        "slot": "mid"
+      },
+      {
+        "type": 12058,
+        "slot": "mid"
+      },
+      {
+        "type": 3186,
+        "slot": "high"
+      },
+      {
+        "type": 3186,
+        "slot": "high"
+      },
+      {
+        "type": 3186,
+        "slot": "high"
+      },
+      {
+        "type": 3186,
+        "slot": "high"
+      },
+      {
+        "type": 31059,
+        "slot": "rig"
+      },
+      {
+        "type": 31059,
+        "slot": "rig"
+      },
+      {
+        "type": 31053,
+        "slot": "rig"
+      }
+    ]
+  },
+  "expected": {
+    "shield": {
+      "hp": 2375.0,
+      "resonance": [
+        0.875,
+        0.525,
+        0.2625,
+        0.4375
+      ],
+      "ehp": 4523.81
+    },
+    "armor": {
+      "hp": 5400.0,
+      "resonance": [
+        0.31875,
+        0.145953,
+        0.0973019,
+        0.57375
+      ],
+      "ehp": 19018.2
+    },
+    "hull": {
+      "hp": 2750.0,
+      "resonance": [
+        0.402,
+        0.402,
+        0.402,
+        0.402
+      ],
+      "ehp": 6840.8
+    },
+    "ehp": 30382.8,
+    "local_rep": {
+      "shield": 0.0,
+      "armor": 73.6,
+      "hull": 0.0
+    },
+    "passive_regen": 5.65476,
+    "remote_rep": {
+      "shield": 0.0,
+      "armor": 0.0,
+      "hull": 0.0,
+      "capacitor": 0.0
+    },
+    "sensor": {
+      "type": "Magnetometric",
+      "strength": 33.744
+    },
+    "ewar_resist": {
+      "sensorDampenerResistance": 1.0,
+      "weaponDisruptionResistance": 1.0,
+      "stasisWebifierResistance": 1.0,
+      "energyWarfareResistance": 0.85
+    }
+  }
+}

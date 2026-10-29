@@ -1,0 +1,127 @@
+{
+  "name": "Apocalypse, rah hardener dc",
+  "pyfa": "v2.69.3 (d2722a4c)",
+  "pyfa_data": "game client build 3624425, dumped 2026-10-17 (Pyfa staticdata/phobos/metadata.0.json); our SDE is build 3660036",
+  "input": {
+    "hull": 642,
+    "modules": [
+      {
+        "type": 2048,
+        "slot": "low"
+      },
+      {
+        "type": 4403,
+        "slot": "low"
+      },
+      {
+        "type": 11644,
+        "slot": "low"
+      },
+      {
+        "type": 20353,
+        "slot": "low"
+      },
+      {
+        "type": 11269,
+        "slot": "low"
+      },
+      {
+        "type": 1952,
+        "slot": "mid"
+      },
+      {
+        "type": 12058,
+        "slot": "mid"
+      },
+      {
+        "type": 3057,
+        "slot": "high"
+      },
+      {
+        "type": 3057,
+        "slot": "high"
+      },
+      {
+        "type": 3057,
+        "slot": "high"
+      },
+      {
+        "type": 3057,
+        "slot": "high"
+      },
+      {
+        "type": 26302,
+        "slot": "rig"
+      },
+      {
+        "type": 26302,
+        "slot": "rig"
+      },
+      {
+        "type": 26294,
+        "slot": "rig"
+      }
+    ]
+  },
+  "expected": {
+    "shield": {
+      "hp": 8250.0,
+      "resonance": [
+        0.875,
+        0.7,
+        0.525,
+        0.4375
+      ],
+      "ehp": 13004.9
+    },
+    "armor": {
+      "hp": 26820.0,
+      "resonance": [
+        0.314595,
+        0.331525,
+        0.224543,
+        0.329764
+      ],
+      "ehp": 89368.2
+    },
+    "hull": {
+      "hp": 9625.0,
+      "resonance": [
+        0.402,
+        0.402,
+        0.402,
+        0.402
+      ],
+      "ehp": 23942.8
+    },
+    "ehp": 126316.0,
+    "local_rep": {
+      "shield": 0.0,
+      "armor": 0.0,
+      "hull": 0.0
+    },
+    "passive_regen": 11.0,
+    "remote_rep": {
+      "shield": 0.0,
+      "armor": 0.0,
+      "hull": 0.0,
+      "capacitor": 0.0
+    },
+    "sensor": {
+      "type": "Radar",
+      "strength": 35.52
+    },
+    "ewar_resist": {
+      "sensorDampenerResistance": 1.0,
+      "weaponDisruptionResistance": 1.0,
+      "stasisWebifierResistance": 1.0,
+      "energyWarfareResistance": 1.0
+    }
+  },
+  "known_differences": [
+    {
+      "field": "armor.resonance",
+      "reason": "the Reactive Armor Hardener settles 0.13% from Pyfa on thermal; not yet explained"
+    }
+  ]
+}

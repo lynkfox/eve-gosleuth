@@ -1,0 +1,73 @@
+{
+  "name": "Rifter, plain",
+  "pyfa": "v2.69.3 (d2722a4c)",
+  "pyfa_data": "game client build 3624425, dumped 2026-10-17 (Pyfa staticdata/phobos/metadata.0.json); our SDE is build 3660036",
+  "input": {
+    "hull": 587,
+    "modules": [
+      {
+        "type": 2889,
+        "slot": "high"
+      },
+      {
+        "type": 2889,
+        "slot": "high"
+      }
+    ]
+  },
+  "expected": {
+    "shield": {
+      "hp": 562.5,
+      "resonance": [
+        1.0,
+        0.8,
+        0.6,
+        0.5
+      ],
+      "ehp": 775.862
+    },
+    "armor": {
+      "hp": 562.5,
+      "resonance": [
+        0.4,
+        0.65,
+        0.75,
+        0.9
+      ],
+      "ehp": 833.333
+    },
+    "hull": {
+      "hp": 437.5,
+      "resonance": [
+        0.67,
+        0.67,
+        0.67,
+        0.67
+      ],
+      "ehp": 652.985
+    },
+    "ehp": 2262.18,
+    "local_rep": {
+      "shield": 0.0,
+      "armor": 0.0,
+      "hull": 0.0
+    },
+    "passive_regen": 3.0,
+    "remote_rep": {
+      "shield": 0.0,
+      "armor": 0.0,
+      "hull": 0.0,
+      "capacitor": 0.0
+    },
+    "sensor": {
+      "type": "Ladar",
+      "strength": 9.6
+    },
+    "ewar_resist": {
+      "sensorDampenerResistance": 1.0,
+      "weaponDisruptionResistance": 1.0,
+      "stasisWebifierResistance": 1.0,
+      "energyWarfareResistance": 1.0
+    }
+  }
+}

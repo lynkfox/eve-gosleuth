@@ -1,0 +1,83 @@
+{
+  "name": "Monitor, ewar",
+  "pyfa": "v2.69.3 (d2722a4c)",
+  "pyfa_data": "game client build 3624425, dumped 2026-10-17 (Pyfa staticdata/phobos/metadata.0.json); our SDE is build 3660036",
+  "input": {
+    "hull": 45534,
+    "modules": [
+      {
+        "type": 3831,
+        "slot": "mid"
+      },
+      {
+        "type": 1952,
+        "slot": "mid"
+      },
+      {
+        "type": 2281,
+        "slot": "mid"
+      },
+      {
+        "type": 26913,
+        "slot": "high"
+      }
+    ]
+  },
+  "expected": {
+    "shield": {
+      "hp": 15781.2,
+      "resonance": [
+        0.054,
+        0.054,
+        0.054,
+        0.054
+      ],
+      "ehp": 292245.0
+    },
+    "armor": {
+      "hp": 14062.5,
+      "resonance": [
+        0.08,
+        0.08,
+        0.08,
+        0.08
+      ],
+      "ehp": 175781.0
+    },
+    "hull": {
+      "hp": 2500.0,
+      "resonance": [
+        0.536,
+        0.536,
+        0.536,
+        0.536
+      ],
+      "ehp": 4664.18
+    },
+    "ehp": 472691.0,
+    "local_rep": {
+      "shield": 0.0,
+      "armor": 0.0,
+      "hull": 0.0
+    },
+    "passive_regen": 5.26042,
+    "remote_rep": {
+      "shield": 0.0,
+      "armor": 42.6667,
+      "hull": 0.0,
+      "capacitor": 0.0
+    },
+    "sensor": {
+      "type": "Gravimetric",
+      "strength": 35.52
+    },
+    "ewar_resist": {
+      "ECMResistance": 1e-05,
+      "sensorDampenerResistance": 0.3,
+      "weaponDisruptionResistance": 1.0,
+      "targetPainterResistance": 0.3,
+      "stasisWebifierResistance": 1.0,
+      "energyWarfareResistance": 0.3
+    }
+  }
+}

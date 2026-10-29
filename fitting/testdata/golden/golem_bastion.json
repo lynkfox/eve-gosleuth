@@ -1,0 +1,125 @@
+{
+  "name": "Golem, bastion",
+  "pyfa": "v2.69.3 (d2722a4c)",
+  "pyfa_data": "game client build 3624425, dumped 2026-10-17 (Pyfa staticdata/phobos/metadata.0.json); our SDE is build 3660036",
+  "input": {
+    "hull": 28710,
+    "modules": [
+      {
+        "type": 2048,
+        "slot": "low"
+      },
+      {
+        "type": 22291,
+        "slot": "low"
+      },
+      {
+        "type": 22291,
+        "slot": "low"
+      },
+      {
+        "type": 22291,
+        "slot": "low"
+      },
+      {
+        "type": 10842,
+        "slot": "mid"
+      },
+      {
+        "type": 2281,
+        "slot": "mid"
+      },
+      {
+        "type": 2303,
+        "slot": "mid"
+      },
+      {
+        "type": 24443,
+        "slot": "mid"
+      },
+      {
+        "type": 1952,
+        "slot": "mid"
+      },
+      {
+        "type": 33400,
+        "slot": "high"
+      },
+      {
+        "type": 2420,
+        "slot": "high"
+      },
+      {
+        "type": 2420,
+        "slot": "high"
+      },
+      {
+        "type": 2420,
+        "slot": "high"
+      },
+      {
+        "type": 26448,
+        "slot": "rig"
+      },
+      {
+        "type": 26448,
+        "slot": "rig"
+      }
+    ]
+  },
+  "expected": {
+    "shield": {
+      "hp": 15840.0,
+      "resonance": [
+        0.421168,
+        0.120881,
+        0.221113,
+        0.210584
+      ],
+      "ehp": 65068.3
+    },
+    "armor": {
+      "hp": 8375.0,
+      "resonance": [
+        0.304371,
+        0.251106,
+        0.399487,
+        0.547868
+      ],
+      "ehp": 22291.2
+    },
+    "hull": {
+      "hp": 9625.0,
+      "resonance": [
+        0.2814,
+        0.2814,
+        0.2814,
+        0.2814
+      ],
+      "ehp": 34204.0
+    },
+    "ehp": 121564.0,
+    "local_rep": {
+      "shield": 498.239,
+      "armor": 0.0,
+      "hull": 0.0
+    },
+    "passive_regen": 23.2394,
+    "remote_rep": {
+      "shield": 0.0,
+      "armor": 0.0,
+      "hull": 0.0,
+      "capacitor": 0.0
+    },
+    "sensor": {
+      "type": "Gravimetric",
+      "strength": 78.2282
+    },
+    "ewar_resist": {
+      "sensorDampenerResistance": 1.0,
+      "weaponDisruptionResistance": 1.0,
+      "stasisWebifierResistance": 1.0,
+      "energyWarfareResistance": 1.0
+    }
+  }
+}

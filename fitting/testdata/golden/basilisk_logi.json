@@ -1,0 +1,118 @@
+{
+  "name": "Basilisk, logi",
+  "pyfa": "v2.69.3 (d2722a4c)",
+  "pyfa_data": "game client build 3624425, dumped 2026-10-17 (Pyfa staticdata/phobos/metadata.0.json); our SDE is build 3660036",
+  "input": {
+    "hull": 11985,
+    "modules": [
+      {
+        "type": 2048,
+        "slot": "low"
+      },
+      {
+        "type": 1987,
+        "slot": "low"
+      },
+      {
+        "type": 3841,
+        "slot": "mid"
+      },
+      {
+        "type": 2281,
+        "slot": "mid"
+      },
+      {
+        "type": 2303,
+        "slot": "mid"
+      },
+      {
+        "type": 1952,
+        "slot": "mid",
+        "charge": 41155
+      },
+      {
+        "type": 12058,
+        "slot": "mid"
+      },
+      {
+        "type": 3598,
+        "slot": "high"
+      },
+      {
+        "type": 3598,
+        "slot": "high"
+      },
+      {
+        "type": 3598,
+        "slot": "high"
+      },
+      {
+        "type": 12221,
+        "slot": "high"
+      },
+      {
+        "type": 31796,
+        "slot": "rig"
+      },
+      {
+        "type": 31796,
+        "slot": "rig"
+      }
+    ]
+  },
+  "expected": {
+    "shield": {
+      "hp": 10231.2,
+      "resonance": [
+        0.590625,
+        0.056506,
+        0.177188,
+        0.295313
+      ],
+      "ehp": 36552.0
+    },
+    "armor": {
+      "hp": 1406.25,
+      "resonance": [
+        0.425,
+        0.116875,
+        0.31875,
+        0.765
+      ],
+      "ehp": 3460.21
+    },
+    "hull": {
+      "hp": 1608.75,
+      "resonance": [
+        0.402,
+        0.402,
+        0.402,
+        0.402
+      ],
+      "ehp": 4001.87
+    },
+    "ehp": 44014.1,
+    "local_rep": {
+      "shield": 0.0,
+      "armor": 0.0,
+      "hull": 0.0
+    },
+    "passive_regen": 27.2832,
+    "remote_rep": {
+      "shield": 127.5,
+      "armor": 0.0,
+      "hull": 0.0,
+      "capacitor": 23.4
+    },
+    "sensor": {
+      "type": "Gravimetric",
+      "strength": 73.3304
+    },
+    "ewar_resist": {
+      "sensorDampenerResistance": 1.0,
+      "weaponDisruptionResistance": 1.0,
+      "stasisWebifierResistance": 1.0,
+      "energyWarfareResistance": 1.0
+    }
+  }
+}
