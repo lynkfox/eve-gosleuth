@@ -1,7 +1,8 @@
 # Releases the app whenever info.productVersion in wails.json changes on main.
-# Tests and vets, cross-builds the Windows exe as in CLAUDE.md, writes the notes with git-cliff
-# (cliff.toml) from the conventional commits since the last tag, adds the Readme's Installing
-# section after them, and publishes release vX.Y.Z,
+# Tests and vets, cross-builds the Windows exe as in CLAUDE.md, writes the notes: the version's
+# tag line and summary from .github/release-notes/X.Y.Z.md, then git-cliff's (cliff.toml) from
+# the conventional commits since the last tag, then the Readme's Installing section. It publishes
+# release vX.Y.Z,
 # which creates that tag. A version that already has a tag is skipped, so other edits to
 # wails.json don't release. 0.x versions are marked pre-release.
 name: Release
@@ -49,6 +50,53 @@ jobs:
             *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
           esac
 
+      # .github/release-notes/X.Y.Z.md: a "# tag line" first line, then an optional summary.
+      # Required for a major or minor bump over the last tag, a warning for a patch. The app's
+      # update popup and What's New show the tag line and summary.
+      - name: Read the version's notes file
+        if: steps.version.outputs.skip == 'false'
+        run: |
+          export LC_ALL=C.UTF-8 # so the tag line's length counts characters, not bytes
+          version=${{ steps.version.outputs.version }}
+          notes=".github/release-notes/$version.md"
+          previous=$(git tag -l 'v*' --sort=-v:refname | head -1)
+          bump=patch
+          if [ -z "$previous" ] || [ "${previous#v}" = "$version" ]; then
+            bump=minor
+          else
+            IFS=. read -r old_major old_minor _ <<< "${previous#v}"
+            IFS=. read -r major minor _ <<< "$version"
+            if [ "$major" != "$old_major" ]; then bump=major
+            elif [ "$minor" != "$old_minor" ]; then bump=minor
+            fi
+          fi
+          if [ ! -f "$notes" ]; then
+            if [ "$bump" = patch ]; then
+              echo "::warning::no $notes, so $version has no tag line or summary"
+              : > NOTES_HEAD.md
+              exit 0
+            fi
+            echo "::error::$version is a $bump bump over $previous and needs $notes (a '# tag line' first line, then an optional summary)"
+            exit 1
+          fi
+          first=$(head -1 "$notes" | tr -d '\r')
+          case "$first" in
+            "# "*) ;;
+            *) echo "::error file=$notes,line=1::the first line must be '# ' and the tag line"; exit 1 ;;
+          esac
+          tagline="${first#\# }"
+          if [ -z "$tagline" ] || [ ${#tagline} -gt 120 ]; then
+            echo "::error file=$notes,line=1::the tag line must be 1 to 120 characters (it is ${#tagline})"
+            exit 1
+          fi
+          {
+            printf '*%s*\n' "$tagline"
+            summary=$(tail -n +2 "$notes" | tr -d '\r')
+            if [ -n "$(printf '%s' "$summary" | tr -d '[:space:]')" ]; then
+              printf '\n%s\n' "$summary"
+            fi
+          } > NOTES_HEAD.md
+
       - uses: actions/setup-go@v5
         if: steps.version.outputs.skip == 'false'
         with:
@@ -77,9 +125,10 @@ jobs:
         env:
           OUTPUT: RELEASE_NOTES.md
 
-      # the Readme's Installing section (with its Updating part) goes under the changes, so the
-      # release page says how to install; on that page the zip is right there, so no link to it
-      - name: Add the install steps to the notes
+      # the body is the tag line and summary, the changes, a marker the app stops reading at, then
+      # the Readme's Installing section (with its Updating part), so the release page says how to
+      # install; on that page the zip is right there, so no link to it
+      - name: Add the tag line, summary, and install steps to the notes
         if: steps.version.outputs.skip == 'false'
         run: |
           install=$(awk '/^## Installing/ { on = 1 } on && /^## / && !/^## Installing/ { exit } on' Readme.md \
@@ -88,7 +137,15 @@ jobs:
             echo "::error file=Readme.md::no '## Installing' section to add to the release notes"
             exit 1
           fi
-          printf '\n%s\n' "$install" >> RELEASE_NOTES.md
+          {
+            if [ -s NOTES_HEAD.md ]; then
+              cat NOTES_HEAD.md
+              echo
+            fi
+            cat RELEASE_NOTES.md
+            printf '\n<!-- end of notes -->\n\n%s\n' "$install"
+          } > RELEASE_BODY.md
+          mv RELEASE_BODY.md RELEASE_NOTES.md
 
       - name: Publish the release
         if: steps.version.outputs.skip == 'false'
@@ -100,7 +157,7 @@ jobs:
           body_path: RELEASE_NOTES.md
           prerelease: ${{ steps.version.outputs.prerelease }}
           fail_on_unmatched_files: true
-          # the static data beside the zip is for the planned auto-updater (.claude/docs/build-pipeline.md)
+          # the static data beside the zip is for a possible data-only update (.claude/docs/update-check-plan.md)
           files: |
             build/bin/eve-gosleuth-${{ steps.version.outputs.version }}.zip
             static_data/fit_types.json
