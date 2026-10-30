@@ -2,6 +2,7 @@ package aggregate_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/aggregate"
 	"github.com/lynkfox/go_eve_sleuth/comm"
@@ -78,6 +79,30 @@ func TestGetCapitalPilots(t *testing.T) {
 		assert.Empty(t, aggregate.GetCapitalPilots(killmails, &retrieval.IntelTarget{IDNumber: 1, TypeOfEntity: types.CORPORATION}))
 		assert.NotNil(t, aggregate.GetCapitalPilots(nil, &retrieval.IntelTarget{IDNumber: 99013330, TypeOfEntity: types.ALLIANCE}))
 	})
+}
+
+func TestGetCapitalPilotsSeen(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+	assert.NoError(t, comm.InitStaticData(staticdata.Files))
+
+	naglfar := &retrieval.Item{ItemID: 19722, Name: "Naglfar"}
+	corp := &retrieval.Corporation{CorporationID: 98744491, Name: "URSA PRIMUS"}
+	ursa := &retrieval.Alliance{AllianceID: 99013330, Name: "URSA."}
+	zed := &retrieval.Pilot{CharacterID: 1, Name: "zed"}
+	jita, amarr := &retrieval.System{SystemID: 1, Name: "Jita"}, &retrieval.System{SystemID: 2, Name: "Amarr"}
+	early, late := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC), time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	flown := func(at time.Time, system *retrieval.System) *retrieval.Killmail {
+		return &retrieval.Killmail{KillmailTime: at, System: system, Victim: &retrieval.KillmailVictim{},
+			Attackers: []*retrieval.KillmailAttacker{{Pilot: zed, Ship: naglfar, CorpAtKill: corp, AllianceAtKill: ursa}}}
+	}
+
+	// the newest is in the middle of the list, so order does not decide it
+	capitals := aggregate.GetCapitalPilots([]*retrieval.Killmail{flown(early, jita), flown(late, amarr), flown(early.Add(time.Hour), jita)},
+		&retrieval.IntelTarget{IDNumber: 99013330, TypeOfEntity: types.ALLIANCE})
+
+	assert.Len(t, capitals, 1)
+	assert.Equal(t, aggregate.Sighting{Time: late, System: amarr}, capitals[0].Seen[1])
+	assert.Len(t, capitals[0].Seen, 1)
 }
 
 func TestHasLeftTarget(t *testing.T) {

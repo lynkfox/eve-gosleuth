@@ -3,6 +3,7 @@ package aggregate
 import (
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
@@ -13,6 +14,13 @@ import (
 type CapitalShipPilots struct {
 	Ship   *retrieval.Item
 	Pilots []*retrieval.Pilot // by name, each pilot once
+	Seen   map[int]Sighting   // each pilot's newest killmail flying it, by character id
+}
+
+// Sighting is when and where a pilot was last seen flying a ship
+type Sighting struct {
+	Time   time.Time
+	System *retrieval.System // nil when not known
 }
 
 // killmailParticipant is anyone on a killmail, victim or attacker, with the ship and the corp and alliance they flew for on it
@@ -54,7 +62,7 @@ Parameters:
   - target: a corporation or alliance target
 
 Returns:
-  - []CapitalShipPilots: each capital ship type flown, by name, with its pilots by name. Empty for other target types or when none were flown.
+  - []CapitalShipPilots: each capital ship type flown, by name, with its pilots by name and each pilot's newest sighting (Seen). Empty for other target types or when none were flown.
 */
 func GetCapitalPilots(killmails []*retrieval.Killmail, target *retrieval.IntelTarget) []CapitalShipPilots {
 	byShip := map[int]*CapitalShipPilots{}
@@ -70,11 +78,14 @@ func GetCapitalPilots(killmails []*retrieval.Killmail, target *retrieval.IntelTa
 
 			capital, found := byShip[seen.ship.ItemID]
 			if !found {
-				capital = &CapitalShipPilots{Ship: seen.ship}
+				capital = &CapitalShipPilots{Ship: seen.ship, Seen: map[int]Sighting{}}
 				byShip[seen.ship.ItemID] = capital
 			}
 			if !slices.ContainsFunc(capital.Pilots, func(pilot *retrieval.Pilot) bool { return pilot.CharacterID == seen.pilot.CharacterID }) {
 				capital.Pilots = append(capital.Pilots, seen.pilot)
+			}
+			if last, found := capital.Seen[seen.pilot.CharacterID]; !found || km.KillmailTime.After(last.Time) {
+				capital.Seen[seen.pilot.CharacterID] = Sighting{Time: km.KillmailTime, System: km.System}
 			}
 		}
 	}

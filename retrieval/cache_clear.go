@@ -87,7 +87,7 @@ func (c *CachedEveIDs) Entries() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.db == nil {
-		count := len(c.NameLookups) + len(c.Searched) + len(c.IgnoredAllies) + len(c.Holdings) + len(c.ZkillLists) + len(c.PendingChecks)
+		count := len(c.NameLookups) + len(c.Searched) + len(c.IgnoredAllies) + len(c.Holdings) + len(c.ZkillLists) + len(c.Images) + len(c.PendingChecks)
 		for _, entries := range c.idMaps() {
 			count += len(entries.entries)
 		}
@@ -148,7 +148,7 @@ func (c *CachedEveIDs) removeWhere(match func(section, *CacheEntry) bool, where 
 	for _, entries := range []struct {
 		section section
 		entries map[string]*CacheEntry
-	}{{sectionNameLookups, c.NameLookups}, {sectionRecentSearches, c.Searched}, {sectionIgnoredAllies, c.IgnoredAllies}, {sectionHoldings, c.Holdings}, {sectionZkillLists, c.ZkillLists}, {sectionIntelChecks, c.PendingChecks}} {
+	}{{sectionNameLookups, c.NameLookups}, {sectionRecentSearches, c.Searched}, {sectionIgnoredAllies, c.IgnoredAllies}, {sectionHoldings, c.Holdings}, {sectionZkillLists, c.ZkillLists}, {sectionImages, c.Images}, {sectionIntelChecks, c.PendingChecks}} {
 		for key, entry := range entries.entries {
 			if match(entries.section, entry) {
 				delete(entries.entries, key)

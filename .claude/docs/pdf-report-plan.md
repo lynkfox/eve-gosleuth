@@ -34,9 +34,9 @@ Each section is one picker checkbox, except the Summary, which is always include
 3. **Fleet Doctrines** (the main section)
    - One block per fit with the Fleet Doctrine tag, most losses first: hull render, ship name, the fit's naming tag, losses and pilots, last seen (date and system).
    - Modules summarised by rack, collapsed to counts (ie "3× Heavy Missile Launcher II"), not the slot ring.
-   - **Fight stats** from `FitLoss.Stats` (the first loss with stats, or the one with most implants as the fits list chooses): total EHP; tank type (shield / armor / hull, from where the EHP is); the weakest resist as **Shoot: Thermal** (lowest average resonance across the tanked layer); sensor type and strength for ECM; neut pressure and remote repair where non-zero. A tactical destroyer shows its Defense mode only.
+   - **Fight stats** (an Assault Damage Control counts as off: its burst is brief on a long cooldown, and FCs know it, so neither its EHP nor a note about it is shown; user, 2026-10-29) from `FitLoss.Stats` (the first loss with stats, or the one with most implants as the fits list chooses): total EHP; tank type (shield / armor / hull, from where the EHP is); the weakest resist as **Shoot: Thermal** (lowest average resonance across the tanked layer); sensor type and strength for ECM; neut pressure and remote repair where non-zero. A tactical destroyer shows its Defense mode only.
    - The Fleet Doctrine reason in one line, as counts ("seen with 7 Ferox and 2 logi on one side").
-   - Then **Other notable hulls**: a small table of the rest of the losses counted by role tag (Cyno, Tackle, Logi, Bomber, Neut, ...), hull names beside each.
+   - Grouped by hull class, largest first (Capitals, Battleships, ... Frigates), a divider at each, alphabetical by hull within one (user, 2026-10-29). Other notable hulls was built and then dropped the same day at the user's request.
 4. **Capital Pilots**
    - Count line at the top by class, then a table per class in this order: Titans, Supercarriers, Dreadnoughts and Lancers, Force Auxiliaries, Carriers, then capital industrials, freighters, and jump freighters last.
    - Each row: pilot, current corp (and alliance if not the target's), last seen flying that hull (date, system), and a mark for pilots who have left (`CapitalPilot.Left`).
@@ -47,7 +47,7 @@ Each section is one picker checkbox, except the Summary, which is always include
 6. **Who they fly with**
    - Top allies, headed "potential allies, not confirmed" as the tab is.
    - Top members.
-7. **Appendix: EFT** of each doctrine fit, monospaced, so readers can paste them into Pyfa.
+7. **Appendix: EFT** of each doctrine fit, monospaced, so readers can paste them into Pyfa. Built 2026-10-29 with phase 2: each doctrine links to its EFT and back, and the PDF has an outline.
 
 Every page: footer with the target, "GoSleuth vX.Y.Z", the generation date (spoken format, "Oct 29th, 2026"), and page N of M. Nothing names the user.
 
@@ -67,7 +67,7 @@ Every page: footer with the target, "GoSleuth vX.Y.Z", the generation date (spok
 ## Phases
 
 1. **Skeleton** (built 2026-10-29, not yet tried with a real search). `report` package with layout helpers, fonts, footer; `lastReport`; `ExportPDF` with the save dialog; Summary page only (header, scope, kill/loss counts, no findings yet). Tests: builds a PDF from a fixture `Input` without error; page count; text extraction not needed.
-2. **The FC sections.** Activity (with `PrimeTimeZone`), Fleet Doctrines (with fight stats and other hulls), Capital Pilots (with `LastSeen`), then Key findings on the Summary from them. Images and their cache section.
+2. **The FC sections** (built 2026-10-29 by five sonnet agents behind the `Input` contract, not yet tried with a real search; see features.md for the rules chosen). Activity (with `PrimeTimeZone`), Fleet Doctrines (with fight stats and other hulls), Capital Pilots (with `LastSeen`), then Key findings on the Summary from them. Images and their cache section.
 3. **The rest and the picker.** Where they live, Who they fly with, EFT appendix, the section dialog and `Settings.PDFSections`. Update `features.md` and the user docs.
 4. **Later: pilot and system.** A pilot: activity, ships flown and fits, fleetmates, systems. A system: activity, top pilots and corps, structures lost, ratters, PI pilots.
 

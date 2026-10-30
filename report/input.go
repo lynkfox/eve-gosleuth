@@ -8,7 +8,11 @@ import "time"
 type Section string
 
 const (
-	SectionSummary Section = "summary"
+	SectionSummary   Section = "summary"
+	SectionActivity  Section = "activity"
+	SectionDoctrines Section = "doctrines"
+	SectionCapitals  Section = "capitals"
+	SectionAppendix  Section = "appendix" // the EFT of each Fleet Doctrine, linked from its block
 )
 
 // Input is everything the report shows, filled by the gui from the search's report and target
@@ -19,6 +23,91 @@ type Input struct {
 	Losses      Tally     // the target's losses, internal ones included (see aggregate.IsInternal)
 	GeneratedAt time.Time // when the PDF was made, shown in the footer in EVE time
 	AppVersion  string    // ie 0.9.3, shown in the footer as GoSleuth v0.9.3
+
+	Activity  Activity
+	Doctrines []Doctrine     // the fits tagged Fleet Doctrine, by hull class, largest first, then ship name
+	Capitals  []CapitalClass // in report order: titans first, jump freighters last (ships.json capital_report_classes)
+}
+
+// Activity is when the target's killmails happened, in EVE time
+type Activity struct {
+	Grid     [7][24]int // killmails by weekday, Monday first, and hour
+	Weeks    []Week     // each week from the oldest killmail's to the newest's, oldest first, empty weeks included
+	TimeZone string     // from aggregate.PrimeTimeZone: EUTZ, USTZ, AUTZ, or Spread, empty with no killmails
+}
+
+// Week is one week's kills and losses, for the strip that shows whether activity is rising or falling
+type Week struct {
+	Start  time.Time // the Monday 00:00 EVE it starts on
+	Kills  int
+	Losses int // internal ones included
+}
+
+// Doctrine is one fit tagged Fleet Doctrine, every loss of it merged
+type Doctrine struct {
+	ShipName   string
+	HullClass  string // ie Battleships, from ships.json hull_classes; the section shows a divider where it changes
+	Render     []byte // the hull's render, a JPEG or PNG, nil for none (drawn as a plain box with the name)
+	Role       string // the fit's naming tag besides Fleet Doctrine, ie Logi or Shield DPS, empty for none
+	Losses     int
+	Pilots     int // the different pilots who lost it
+	LastSeen   time.Time
+	LastSystem string
+	Racks      []Rack      // High, Mid, Low, Rig, Subsystem, Drones, in that order, empty racks left out
+	Fight      *FightStats // nil when the dogma engine had no numbers for it
+	Reason     string      // why it is a Fleet Doctrine, in counts, ie "seen with 7 Ferox and 2 logi on one side", empty for none
+	EFT        string      // the fit as EFT text, for the appendix
+}
+
+// Rack is one rack of a fit, its modules collapsed to counts
+type Rack struct {
+	Name    string // High, Mid, Low, Rig, Subsystem, Drones
+	Modules []ModuleCount
+}
+
+// ModuleCount is a module and how many of it, ie 3 Heavy Missile Launcher II
+type ModuleCount struct {
+	Name  string
+	Count int
+}
+
+// FightStats is what a fleet needs to know to shoot a fit, from the dogma engine with all skills V and every module active
+type FightStats struct {
+	Mode           string  // a tactical destroyer's mode, ie Defense, empty for other hulls
+	EHP            float64 // omni, all three layers
+	Tank           string  // Shield, Armor, or Hull: the layer with the most EHP
+	Weakest        string  // EM, Thermal, Kinetic, or Explosive: the damage type the tanked layer resists least
+	WeakestResist  float64 // that resist as a fraction, ie 0.35 for 35%
+	SensorType     string  // Radar, Ladar, Magnetometric, Gravimetric, or Multispectral
+	SensorStrength float64
+	Neut           float64 // GJ per second its neutralizers and nosferatus take, 0 for none
+	RemoteRep      float64 // HP per second it repairs others, all layers, 0 for none
+	LocalRep       float64 // HP per second it repairs itself, all layers, 0 for none
+}
+
+// CapitalClass is one class of capital the target's pilots flew, ie Titans, with its hulls and pilots
+type CapitalClass struct {
+	Name   string
+	Hulls  []CapitalHull  // by pilots, most first
+	Pilots []CapitalPilot // one row per pilot and hull, newest sighting first
+}
+
+// CapitalHull is one capital hull of a class and how many of the target's pilots flew it
+type CapitalHull struct {
+	Name   string
+	Icon   []byte // a 64 px icon, nil for none
+	Pilots int
+}
+
+// CapitalPilot is a pilot seen flying a capital for the target
+type CapitalPilot struct {
+	Name       string
+	Ship       string
+	Corp       string // current, empty when not known
+	Alliance   string // current, empty when in none or the same as the target
+	LastSeen   time.Time
+	LastSystem string
+	Left       bool // no longer in the target's alliance, see aggregate.HasLeftTarget
 }
 
 // Target is the corp, alliance, pilot, or system the report is about

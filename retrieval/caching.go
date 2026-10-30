@@ -84,6 +84,7 @@ type CachedEveIDs struct {
 	Holdings             map[string]*CacheEntry // the user's holding links, by holdingKey. Never expire, see SaveHoldingLink.
 	PendingChecks        map[string]*CacheEntry // imported pilots, corporations, and alliances still to check with the ESI, by intelCheckKey, see AddIntelChecks
 	ZkillLists           map[string]*CacheEntry // entities' zKillboard killmail lists, by zkillListKey. Never expire, see SaveKnownZkillList.
+	Images               map[string]*CacheEntry // the PDF report's images from the image server, by url. Dropped by a newer SDE, see SaveImage.
 	Client               api.ESIClient          // the uncached client that cache misses are fetched with
 	Path                 string                 // the database file
 	mu                   sync.Mutex
@@ -237,6 +238,9 @@ func (c *CachedEveIDs) ensureMaps() {
 	}
 	if c.ZkillLists == nil {
 		c.ZkillLists = make(map[string]*CacheEntry)
+	}
+	if c.Images == nil {
+		c.Images = make(map[string]*CacheEntry)
 	}
 	if c.dirty == nil {
 		c.dirty = make(map[rowKey]*CacheEntry)

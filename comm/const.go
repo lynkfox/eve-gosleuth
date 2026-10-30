@@ -17,6 +17,8 @@ const VERSION = "0.0.2"
 var (
 	CapitalGroups        = newStaticValues() // the groups of the ships the Capital Pilots tab counts: titans, dreadnoughts, carriers, force auxiliaries, ...
 	CapitalTypes         = newStaticValues() // capital ship types outside CapitalGroups, none built in, for edited copies
+	CapitalReportClasses = newStaticValues() // each capital group's class in the PDF report, ie Titans; groups sharing a name are one class, ie Dreadnoughts and Lancers
+	HullClasses          = newStaticValues() // each ship group's hull class the PDF report's Fleet Doctrines are grouped by, ie Battleships
 	HaulerGroups         = newStaticValues() // the groups of the ships that count as PI haulers: T1 haulers and T2 transports, not freighters
 	HaulerExclusions     = newStaticValues() // ship types in HaulerGroups that are not haulers, ie the Noctis salvager
 	FitIgnoredCategories = newStaticValues() // FitIgnoredCategories, FitIgnoredGroups, and FitIgnoredTypes are the hulls whose losses are not shown as fits (FitHullIgnored)
@@ -54,6 +56,8 @@ func sectionedFiles() []sectionedFile {
 		{"ships.json", map[string]**StaticValues{
 			"capital_groups":         &CapitalGroups,
 			"capital_types":          &CapitalTypes,
+			"capital_report_classes": &CapitalReportClasses,
+			"hull_classes":           &HullClasses,
 			"hauler_groups":          &HaulerGroups,
 			"hauler_exclusions":      &HaulerExclusions,
 			"fit_ignored_categories": &FitIgnoredCategories,

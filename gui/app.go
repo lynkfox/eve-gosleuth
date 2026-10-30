@@ -125,6 +125,8 @@ type IntelReport struct {
 	PreviousStructureLosses []StructureLoss `json:"previousStructureLosses"`
 	Scope                   ReportScope     `json:"scope"`   // what the search covered, for At a glance's Scope card and the PDF report
 	Sources                 string          `json:"sources"` // where the search's data came from, ie "9748 hits from cache, 1763 from the ESI; zKillboard live", for the frontend's summary line
+	// the PDF report's images by url (see pdfImageURLs), fetched during the search so the export makes no API calls. A url that failed is left out.
+	Images map[string][]byte `json:"-"`
 }
 
 // CapitalShip is a capital ship type a corp or alliance target's pilots flew, and who flew it
@@ -142,6 +144,8 @@ type CapitalPilot struct {
 	Corporation *EntityRef `json:"corporation"` // current, null when not known
 	Alliance    *EntityRef `json:"alliance"`    // current, null when in none
 	Left        bool       `json:"left"`        // no longer in the target's alliance, see aggregate.HasLeftTarget
+	LastSeen    time.Time  `json:"lastSeen"`    // their newest killmail flying this ship for the target
+	LastSystem  string     `json:"lastSystem"`  // the system of it, empty when not known
 	ZkillURL    string     `json:"zkillUrl"`
 	EveWhoURL   string     `json:"evewhoUrl"`
 }
@@ -769,6 +773,11 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		report.Systems = buildSystemSummaries(aggregate.GetMostVisitedSystems(systemLimit, collected.SystemsVisted), collected.Killmails, &target)
 	}
 
+	if entityType == types.CORPORATION || entityType == types.ALLIANCE {
+		comm.ReportProgress("Fetching report images")
+		report.Images = a.fetchReportImages(pdfImageURLs(entityType, targetID, report))
+	}
+
 	// a killmail pull fills the cache with many new entries, save them now rather than only on shutdown
 	comm.ReportProgress("Saving cache")
 	a.saveCache()
@@ -843,6 +852,12 @@ func buildCapitalShips(capitals []aggregate.CapitalShipPilots, target *retrieval
 				ZkillURL: api.ZkillEntityURL(types.PILOT, pilot.CharacterID), EveWhoURL: api.EveWhoURL(types.PILOT, pilot.CharacterID)}
 			if corp := pilot.Corporation; corp != nil {
 				capitalPilot.Corporation, capitalPilot.Alliance = groupRefs(corp, corp.Alliance)
+			}
+			if sighting, found := capital.Seen[pilot.CharacterID]; found {
+				capitalPilot.LastSeen = sighting.Time
+				if sighting.System != nil {
+					capitalPilot.LastSystem = sighting.System.Name
+				}
 			}
 			ship.Pilots = append(ship.Pilots, capitalPilot)
 		}

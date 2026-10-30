@@ -92,6 +92,8 @@ Each section is a list of `"id": "label"` entries.
 |---|---|---|
 | `capital_groups` | ship groups | The Capital Pilots tab: titans, dreadnoughts, carriers, force auxiliaries, ... |
 | `capital_types` | ship types | Single ships that count as capitals although their group doesn't (none built in) |
+| `hull_classes` | ship groups | The hull class a Fleet Doctrine is listed under in the PDF report: Capitals, Battleships, Battlecruisers, Cruisers, Destroyers, Frigates, largest first. A group not listed goes under Other hulls, last. A new class name you add is listed after Frigates |
+| `capital_report_classes` | ship groups | The class each capital group is listed under in the PDF report, ie Titans. Groups given the same name are one class, as dreadnoughts and lancers are |
 | `hauler_groups` | ship groups | The PI Pilots tab's haulers: T1 haulers and transports, not freighters |
 | `hauler_exclusions` | ship types | Ships in those groups that aren't haulers (built in: the Noctis) |
 | `fit_ignored_categories` | categories | Losses not shown on the Fits tab, by category, group, or single type: capsules, shuttles, haulers, mining ships, structures, ... |

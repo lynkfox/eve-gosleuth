@@ -850,12 +850,15 @@ function setExportPDF(shown) {
   el("export-pdf-top").hidden = !shown;
 }
 
-// exportPDF saves the shown report as a PDF at a place the user picks, the button off while it is made. The section picker comes later, for now only the Summary.
+// PDF_SECTIONS are the PDF report's sections, until the section picker chooses them (phase 3); the Summary is always first
+const PDF_SECTIONS = ["summary", "activity", "doctrines", "capitals", "appendix"];
+
+// exportPDF saves the shown report as a PDF at a place the user picks, the button off while it is made
 async function exportPDF() {
   const button = el("export-pdf-top");
   button.disabled = true;
   try {
-    const path = await backend().ExportPDF(["summary"]);
+    const path = await backend().ExportPDF(PDF_SECTIONS);
     if (path) tickerPush(`Saved ${path.split(/[\\/]/).pop()}`);
   } catch (err) {
     setStatus(String(err), true);

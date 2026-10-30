@@ -63,7 +63,8 @@ func (d *pageDoc) summary(in Input) {
 	d.Ln(5)
 	d.killTiles(in.Kills, in.Losses)
 
-	// Phase 2: the Key findings box goes here, below the kills and losses.
+	d.Ln(4)
+	d.findings(keyFindings(in))
 }
 
 // typeWords turns the contract's type code into words
@@ -81,8 +82,13 @@ func typeWords(t string) string {
 	return t
 }
 
-// logo draws an image, returning false (and drawing nothing) if it can't be read
-func (d *pageDoc) logo(data []byte, x, y, size float64) (ok bool) {
+// logo draws the target's logo, returning false (and drawing nothing) if it can't be read
+func (d *pageDoc) logo(data []byte, x, y, size float64) bool {
+	return d.image("logo", data, x, y, size, size)
+}
+
+// image draws a PNG or JPEG under a name unique to it in the document, returning false (and drawing nothing) if it can't be read. Drawing the same name again reuses it.
+func (d *pageDoc) image(name string, data []byte, x, y, w, h float64) (ok bool) {
 	kind := ""
 	switch {
 	case bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")):
@@ -97,12 +103,12 @@ func (d *pageDoc) logo(data []byte, x, y, size float64) (ok bool) {
 			ok = false
 		}
 	}()
-	info := d.RegisterImageOptionsReader("logo", fpdf.ImageOptions{ImageType: kind}, bytes.NewReader(data))
+	info := d.RegisterImageOptionsReader(name, fpdf.ImageOptions{ImageType: kind}, bytes.NewReader(data))
 	if d.Error() != nil || info == nil {
 		d.ClearError()
 		return false
 	}
-	d.ImageOptions("logo", x, y, size, size, false, fpdf.ImageOptions{ImageType: kind}, 0, "")
+	d.ImageOptions(name, x, y, w, h, false, fpdf.ImageOptions{ImageType: kind}, 0, "")
 	if d.Error() != nil {
 		d.ClearError()
 		return false
