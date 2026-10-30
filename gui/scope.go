@@ -39,6 +39,7 @@ func buildScope(target *retrieval.IntelTarget, cards []KillmailCard, limits Sear
 		return scope
 	}
 	scope.Sources = append(scope.Sources, ScopeSource{Name: target.DisplayName(), Main: true})
+	// killmails carry only their holding's name (Via), so two affiliates sharing a name, ie a corp and an alliance, count as one: rare enough to accept
 	index := map[string]int{"": 0}
 	for _, holding := range target.Holdings {
 		index[holding.Name] = len(scope.Sources)

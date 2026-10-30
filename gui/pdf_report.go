@@ -14,7 +14,8 @@ import (
 )
 
 /*
-	ExportPDF saves the last search's report as a PDF to a file the user picks. It does not wait for a running search.
+	ExportPDF saves the last search's report as a PDF to a file the user picks. It takes a.mu only to copy the report, so the file picker never holds up a search.
+	The frontend shows it only for a corporation or alliance.
 
 Parameters:
   - sections: the sections to include beyond the Summary, which is always first, ie summary
@@ -24,14 +25,12 @@ Returns:
   - error: a user readable message if there is no report to export or the file could not be made or written
 */
 func (a *App) ExportPDF(sections []string) (path string, err error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	defer recoverAsError(&err)
 
-	if a.lastTarget == nil || a.lastReport == nil {
+	input, found := a.lastPDFInput()
+	if !found {
 		return "", errors.New("Search for a corporation or alliance first, then export its report")
 	}
-	input := pdfInput(*a.lastTarget, *a.lastReport, a.version, time.Now())
 
 	name := input.Target.Ticker
 	if name == "" {
@@ -64,6 +63,16 @@ func (a *App) ExportPDF(sections []string) (path string, err error) {
 	}
 	comm.Logger.Infof("Saved the PDF report %s", comm.RedactPaths(path))
 	return path, nil
+}
+
+// lastPDFInput makes the PDF's input from the last search, false if there is none
+func (a *App) lastPDFInput() (report.Input, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.lastTarget == nil || a.lastReport == nil {
+		return report.Input{}, false
+	}
+	return pdfInput(*a.lastTarget, *a.lastReport, a.version, time.Now()), true
 }
 
 // windowsInvalidFileChars are the characters a Windows file name can not hold
