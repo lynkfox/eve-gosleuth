@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,6 +15,7 @@ import (
 	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
+	"github.com/lynkfox/go_eve_sleuth/fitting"
 	"github.com/lynkfox/go_eve_sleuth/report"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -179,6 +181,11 @@ func isFleetDoctrine(fit FitGroup) bool {
 	return slices.ContainsFunc(fit.Tags, func(tag retrieval.FitTag) bool { return tag.Name == fleetDoctrineTag })
 }
 
+// inPDFDoctrines reports whether a fit is one of the PDF's Fleet Doctrines: tagged so, and with no mutated module on any loss, whose unknown rolls make it no doctrine a fleet can plan against (user's call 2026-10-30)
+func inPDFDoctrines(fit FitGroup) bool {
+	return isFleetDoctrine(fit) && !fit.Abyssal
+}
+
 /*
 	pdfImageURLs lists the images the PDF report of a corp or alliance draws, so the search can fetch them: the target's logo, each Fleet Doctrine hull's render, and each capital hull's icon
 
@@ -199,7 +206,7 @@ func pdfImageURLs(targetType types.EntityType, targetID int, rep IntelReport) []
 	}
 	add(api.EntityImageURL(targetType, targetID))
 	for _, fit := range rep.Fits {
-		if isFleetDoctrine(fit) {
+		if inPDFDoctrines(fit) {
 			add(api.TypeRenderURLAt(fit.ShipID, pdfRenderSize))
 		}
 	}
@@ -329,7 +336,7 @@ func pdfDoctrines(fits []FitGroup, images map[string][]byte) []report.Doctrine {
 	doctrines := []report.Doctrine{}
 	chosen := []FitGroup{}
 	for _, fit := range fits {
-		if isFleetDoctrine(fit) && len(fit.Losses) > 0 {
+		if inPDFDoctrines(fit) && len(fit.Losses) > 0 {
 			chosen = append(chosen, fit)
 		}
 	}
@@ -346,10 +353,17 @@ func pdfDoctrines(fits []FitGroup, images map[string][]byte) []report.Doctrine {
 			Render:    images[api.TypeRenderURLAt(fit.ShipID, pdfRenderSize)],
 			Role:      fitRole(fit),
 			Losses:    len(fit.Losses),
-			Racks:     pdfRacks(fit.Losses[0].Fit),
+			Racks:     pdfRacks(fit),
 			Reason:    doctrineReason(fit),
 			EFT:       fit.Losses[0].EFT,
 		}
+		switch {
+		case fit.Summary != nil && fit.Summary.EFT != "":
+			doctrine.EFT = fit.Summary.EFT // the common loss with the largest implant set (summaryEFT)
+		case fit.Summary != nil && fit.Summary.CommonLoss >= 0 && fit.Summary.CommonLoss < len(fit.Losses):
+			doctrine.EFT = fit.Losses[fit.Summary.CommonLoss].EFT
+		}
+		doctrine.Fight, doctrine.FightMax = pdfSummaryFight(fit)
 		pilots := map[string]bool{}
 		newest := fit.Losses[0]
 		for _, loss := range fit.Losses {
@@ -377,8 +391,24 @@ func pdfDoctrines(fits []FitGroup, images map[string][]byte) []report.Doctrine {
 	return doctrines
 }
 
-// pdfRacks collapses a fit's slots to counts by module name, in the order first seen, leaving empty racks out
-func pdfRacks(layout FitLayout) []report.Rack {
+/*
+pdfRacks collapses a fit's slots to counts, in the order first seen, leaving empty racks out.
+A fit with a Summary is laid out by its CommonLoss and each module is the most common variant of its base type across the losses (ties to the CommonLoss's), with Different counting the losses that fitted another variant of that base type in the rack.
+A fit with no Summary collapses its first loss by module name.
+
+Parameters:
+  - fit: the fit group, with Summary filled when it was lost more than once
+
+Returns:
+  - []report.Rack: High, Mid, Low, Rig, Subsystem, Drones, empty racks left out
+*/
+func pdfRacks(fit FitGroup) []report.Rack {
+	common := 0
+	if fit.Summary != nil && fit.Summary.CommonLoss >= 0 && fit.Summary.CommonLoss < len(fit.Losses) {
+		common = fit.Summary.CommonLoss
+	}
+	layout := fit.Losses[common].Fit
+	merged := fit.Summary != nil && len(fit.Losses) > 1
 	racks := []report.Rack{}
 	add := func(name string, modules []report.ModuleCount) {
 		if len(modules) > 0 {
@@ -392,26 +422,98 @@ func pdfRacks(layout FitLayout) []report.Rack {
 		}
 		return append(modules, report.ModuleCount{Name: name, Count: quantity})
 	}
-	slots := func(fitted []*FitSlot) []report.ModuleCount {
+	rack := func(pick func(FitLayout) []*FitSlot) []report.ModuleCount {
+		if merged {
+			return pdfMergedRack(fit.Losses, common, pick)
+		}
 		modules := []report.ModuleCount{}
-		for _, slot := range fitted {
+		for _, slot := range pick(layout) {
 			if slot != nil {
 				modules = count(modules, slot.Module.Name, 1)
 			}
 		}
 		return modules
 	}
-	add("High", slots(layout.Highs))
-	add("Mid", slots(layout.Mids))
-	add("Low", slots(layout.Lows))
-	add("Rig", slots(layout.Rigs))
-	add("Subsystem", slots(layout.Subsystems))
+	add("High", rack(func(l FitLayout) []*FitSlot { return l.Highs }))
+	add("Mid", rack(func(l FitLayout) []*FitSlot { return l.Mids }))
+	add("Low", rack(func(l FitLayout) []*FitSlot { return l.Lows }))
+	add("Rig", rack(func(l FitLayout) []*FitSlot { return l.Rigs }))
+	add("Subsystem", rack(func(l FitLayout) []*FitSlot { return l.Subsystems }))
 	drones := []report.ModuleCount{}
 	for _, drone := range layout.Drones {
 		drones = count(drones, drone.Name, max(drone.Quantity, 1))
 	}
 	add("Drones", drones)
 	return racks
+}
+
+/*
+pdfMergedRack counts one rack of a merged fit by what merged it (moduleKey: the base type, or a fit_merged_groups group such as ECM), in the order of the CommonLoss's slots.
+
+Parameters:
+  - losses: every loss of the fit
+  - common: the index of the CommonLoss
+  - pick: the rack of a layout
+
+Returns:
+  - []report.ModuleCount: each base type's most common variant, how many slots it fills, and how many losses fitted another variant
+*/
+func pdfMergedRack(losses []FitLoss, common int, pick func(FitLayout) []*FitSlot) []report.ModuleCount {
+	type group struct {
+		count    int
+		commonID int
+	}
+	order := []int{}
+	groups := map[int]*group{}
+	for _, slot := range pick(losses[common].Fit) {
+		if slot == nil {
+			continue
+		}
+		key := moduleKey(slot.Module.ID, false)
+		if groups[key] == nil {
+			groups[key] = &group{commonID: slot.Module.ID}
+			order = append(order, key)
+		}
+		groups[key].count++
+	}
+	modules := make([]report.ModuleCount, 0, len(order))
+	for _, key := range order {
+		// per variant: the losses that fitted it in this rack, and its name
+		fitted := map[int]int{}
+		names := map[int]string{}
+		for _, loss := range losses {
+			ids := map[int]bool{}
+			for _, slot := range pick(loss.Fit) {
+				if slot != nil && moduleKey(slot.Module.ID, false) == key {
+					ids[slot.Module.ID] = true
+					names[slot.Module.ID] = slot.Module.Name
+				}
+			}
+			for id := range ids {
+				fitted[id]++
+			}
+		}
+		shown := groups[key].commonID
+		ids := slices.Sorted(maps.Keys(fitted))
+		for _, id := range ids {
+			n := fitted[id]
+			if n > fitted[shown] {
+				shown = id
+			}
+		}
+		// Different: the losses with any module of this key that isn't the shown one
+		different := 0
+		for _, loss := range losses {
+			for _, slot := range pick(loss.Fit) {
+				if slot != nil && moduleKey(slot.Module.ID, false) == key && slot.Module.ID != shown {
+					different++
+					break
+				}
+			}
+		}
+		modules = append(modules, report.ModuleCount{Name: names[shown], Count: groups[key].count, Different: different})
+	}
+	return modules
 }
 
 // damageTypes are the damage types in the order of a fitting.Layer's Resonance
@@ -422,31 +524,92 @@ func pdfFightStats(stats []FitStats) *report.FightStats {
 	if len(stats) == 0 || stats[0].Stats == nil {
 		return nil
 	}
-	first := stats[0]
+	fight, _ := pdfFight(stats[0].Mode, stats[0].Stats, "", -1)
+	return fight
+}
+
+/*
+pdfFight reads the fight numbers from one set of stats.
+
+Parameters:
+  - mode: the tactical destroyer mode, empty for other hulls
+  - stats: the numbers
+  - tank: the layer to read the resist from (Shield, Armor, Hull), empty for the one with the most EHP
+  - weakest: the damage type index to read the resist of, -1 for the layer's weakest
+
+Returns:
+  - *report.FightStats: the numbers
+  - int: the damage type index the resist was read of
+*/
+func pdfFight(mode string, stats *fitting.Stats, tank string, weakest int) (*report.FightStats, int) {
 	fight := &report.FightStats{
-		Mode:           first.Mode,
-		EHP:            first.EHP,
-		SensorType:     first.Sensor.Type,
-		SensorStrength: first.Sensor.Strength,
-		Neut:           first.Neut,
-		RemoteRep:      first.RemoteRep.Shield + first.RemoteRep.Armor + first.RemoteRep.Hull,
-		LocalRep:       first.LocalRep.Shield + first.LocalRep.Armor + first.LocalRep.Hull,
+		Mode:           mode,
+		EHP:            stats.EHP,
+		SensorType:     stats.Sensor.Type,
+		SensorStrength: stats.Sensor.Strength,
+		Neut:           stats.Neut,
+		RemoteRep:      stats.RemoteRep.Shield + stats.RemoteRep.Armor + stats.RemoteRep.Hull,
+		LocalRep:       stats.LocalRep.Shield + stats.LocalRep.Armor + stats.LocalRep.Hull,
 	}
-	tank, layer := "Shield", first.Shield
-	if first.Armor.EHP > layer.EHP {
-		tank, layer = "Armor", first.Armor
+	layer := stats.Shield
+	if tank == "" {
+		tank = "Shield"
+		if stats.Armor.EHP > layer.EHP {
+			tank, layer = "Armor", stats.Armor
+		}
+		if stats.Hull.EHP > layer.EHP {
+			tank, layer = "Hull", stats.Hull
+		}
+	} else if tank == "Armor" {
+		layer = stats.Armor
+	} else if tank == "Hull" {
+		layer = stats.Hull
 	}
-	if first.Hull.EHP > layer.EHP {
-		tank, layer = "Hull", first.Hull
-	}
-	weakest := 0
-	for index, resonance := range layer.Resonance {
-		if resonance > layer.Resonance[weakest] {
-			weakest = index
+	if weakest < 0 {
+		weakest = 0
+		for index, resonance := range layer.Resonance {
+			if resonance > layer.Resonance[weakest] {
+				weakest = index
+			}
 		}
 	}
 	fight.Tank, fight.Weakest, fight.WeakestResist = tank, damageTypes[weakest], 1-layer.Resonance[weakest]
-	return fight
+	return fight, weakest
+}
+
+/*
+pdfSummaryFight reads Fight and FightMax from the first mode of a summary's stats ranges.
+The tank layer and the damage type to shoot are the CommonLoss's, as each end of the range takes each number alone and so can name a hole no real loss has; both ends read that layer and damage type.
+
+Parameters:
+  - fit: the fit, with its Summary and Losses
+
+Returns:
+  - *report.FightStats: the lowest numbers, nil when the summary has none
+  - *report.FightStats: the highest numbers, nil when it has none
+*/
+func pdfSummaryFight(fit FitGroup) (*report.FightStats, *report.FightStats) {
+	summary := fit.Summary
+	if summary == nil || len(summary.Stats) == 0 || summary.Stats[0].Min == nil {
+		return nil, nil
+	}
+	first := summary.Stats[0]
+	tank, weakest := "", -1
+	if summary.CommonLoss >= 0 && summary.CommonLoss < len(fit.Losses) {
+		for _, stats := range fit.Losses[summary.CommonLoss].Stats {
+			if stats.Mode == first.Mode && stats.Stats != nil {
+				common, hole := pdfFight(stats.Mode, stats.Stats, "", -1)
+				tank, weakest = common.Tank, hole
+				break
+			}
+		}
+	}
+	low, weakest := pdfFight(first.Mode, first.Min, tank, weakest)
+	if first.Max == nil {
+		return low, nil
+	}
+	high, _ := pdfFight(first.Mode, first.Max, low.Tank, weakest)
+	return low, high
 }
 
 /*

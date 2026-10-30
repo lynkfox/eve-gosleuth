@@ -259,6 +259,20 @@ func TestPDFDoctrinesByHullClass(t *testing.T) {
 	assert.Equal(t, []string{"Battleships", "Battlecruisers", "Battlecruisers", "Frigates", otherHullClass}, classes)
 }
 
+func TestPDFDoctrinesLeaveOutAbyssal(t *testing.T) {
+	doctrine := []retrieval.FitTag{{Name: "Fleet Doctrine"}}
+	plain := FitGroup{ShipID: 587, ShipName: "Rifter", Tags: doctrine, Losses: make([]FitLoss, 2)}
+	abyssal := FitGroup{ShipID: 16227, ShipName: "Ferox", Tags: doctrine, Abyssal: true, Losses: make([]FitLoss, 3)}
+
+	doctrines := pdfDoctrines([]FitGroup{plain, abyssal}, nil)
+	if assert.Len(t, doctrines, 1, "a doctrine with a mutated module is left out of the PDF") {
+		assert.Equal(t, "Rifter", doctrines[0].ShipName)
+	}
+	urls := pdfImageURLs(types.CORPORATION, 1, IntelReport{Fits: []FitGroup{plain, abyssal}})
+	assert.Contains(t, urls, api.TypeRenderURLAt(587, pdfRenderSize))
+	assert.NotContains(t, urls, api.TypeRenderURLAt(16227, pdfRenderSize), "nor its render fetched")
+}
+
 func TestPDFBattles(t *testing.T) {
 	day := func(d int) time.Time { return time.Date(2026, 10, d, 20, 0, 0, 0, time.UTC) }
 	battles := []Battle{}
@@ -280,4 +294,96 @@ func TestPDFBattles(t *testing.T) {
 	latest, biggest = pdfBattles(nil)
 	assert.Empty(t, latest)
 	assert.Empty(t, biggest)
+}
+
+func TestPDFRacksMergedVariants(t *testing.T) {
+	pdfTestInit(t)
+	grappler := func(id int, name string) *FitSlot { return &FitSlot{Module: FitPart{ID: id, Name: name}} }
+	shadow := func() *FitSlot { return grappler(41058, "Shadow Serpentis Heavy Stasis Grappler") }
+	gunnar := func() *FitSlot { return grappler(41054, "Heavy Gunnar Compact Stasis Grappler") }
+	loss := func(eft string, mids ...*FitSlot) FitLoss {
+		return FitLoss{EFT: eft, Fit: FitLayout{Mids: mids, Drones: []FitPart{{Name: "Hobgoblin II", Quantity: 2}}}}
+	}
+	doctrine := []retrieval.FitTag{{Name: "Fleet Doctrine"}}
+
+	// two losses, one variant each: a tie, so the CommonLoss's (index 1, Gunnar) is shown
+	tie := FitGroup{ShipName: "X", Tags: doctrine, Summary: &FitSummary{CommonLoss: 1},
+		Losses: []FitLoss{loss("[a]", shadow(), shadow()), loss("[b]", gunnar(), gunnar())}}
+	racks := pdfRacks(tie)
+	assert.Equal(t, []report.Rack{
+		{Name: "Mid", Modules: []report.ModuleCount{{Name: "Heavy Gunnar Compact Stasis Grappler", Count: 2, Different: 1}}},
+		{Name: "Drones", Modules: []report.ModuleCount{{Name: "Hobgoblin II", Count: 2}}},
+	}, racks)
+
+	// three losses: Shadow twice, Gunnar once, the CommonLoss is the Gunnar one, yet Shadow is most common
+	most := FitGroup{ShipName: "X", Tags: doctrine, Summary: &FitSummary{CommonLoss: 2},
+		Losses: []FitLoss{loss("[a]", shadow(), shadow()), loss("[b]", shadow(), shadow()), loss("[c]", gunnar(), gunnar())}}
+	assert.Equal(t, []report.ModuleCount{{Name: "Shadow Serpentis Heavy Stasis Grappler", Count: 2, Different: 1}}, pdfRacks(most)[0].Modules)
+
+	// a loss that mixes both variants counts as different
+	mixed := FitGroup{ShipName: "X", Summary: &FitSummary{CommonLoss: 0},
+		Losses: []FitLoss{loss("[a]", shadow(), shadow()), loss("[b]", shadow(), gunnar()), loss("[c]", shadow(), shadow())}}
+	assert.Equal(t, 1, pdfRacks(mixed)[0].Modules[0].Different)
+
+	// no summary: the first loss, collapsed by name, nothing different
+	plain := FitGroup{ShipName: "X", Losses: []FitLoss{loss("[a]", shadow()), loss("[b]", gunnar())}}
+	assert.Equal(t, []report.ModuleCount{{Name: "Shadow Serpentis Heavy Stasis Grappler", Count: 1}}, pdfRacks(plain)[0].Modules)
+
+	// ECM flavors merge as one module (fit_merged_groups) though their base types differ, so the other flavor counts as different
+	radar := func() *FitSlot { return grappler(2575, "Radar ECM II") }
+	ladar := func() *FitSlot { return grappler(2559, "Ladar ECM II") }
+	ecm := FitGroup{ShipName: "X", Summary: &FitSummary{CommonLoss: 0},
+		Losses: []FitLoss{loss("[a]", radar()), loss("[b]", radar()), loss("[c]", radar()), loss("[d]", ladar()), loss("[e]", ladar())}}
+	assert.Equal(t, []report.ModuleCount{{Name: "Radar ECM II", Count: 1, Different: 2}}, pdfRacks(ecm)[0].Modules)
+
+	// the doctrine takes the EFT of the CommonLoss
+	plain.Tags = doctrine
+	ds := pdfDoctrines([]FitGroup{tie, plain}, nil)
+	assert.Len(t, ds, 2)
+	assert.Equal(t, "[b]", ds[0].EFT)
+	assert.Equal(t, "[a]", ds[1].EFT)
+}
+
+func TestPDFDoctrineFightRange(t *testing.T) {
+	low := &fitting.Stats{EHP: 80000, Shield: fitting.Layer{EHP: 70000, Resonance: [4]float64{0.5, 0.7, 0.6, 0.4}},
+		Armor: fitting.Layer{EHP: 5000}, Sensor: fitting.Sensor{Type: "Radar", Strength: 20}}
+	// its own weakest would be Explosive (0.9 -> 0.1 resist), but Fight's weakest is Thermal
+	high := &fitting.Stats{EHP: 95000, Shield: fitting.Layer{EHP: 90000, Resonance: [4]float64{0.4, 0.55, 0.3, 0.9}},
+		Armor: fitting.Layer{EHP: 5000}, Sensor: fitting.Sensor{Type: "Ladar", Strength: 24}}
+	fit := FitGroup{ShipName: "X", Tags: []retrieval.FitTag{{Name: "Fleet Doctrine"}}, Losses: []FitLoss{{}, {}},
+		Summary: &FitSummary{Stats: []FitStatsRange{{Mode: "Defense", Min: low, Max: high}}}}
+
+	d := pdfDoctrines([]FitGroup{fit}, nil)[0]
+
+	if assert.NotNil(t, d.Fight) && assert.NotNil(t, d.FightMax) {
+		assert.Equal(t, "Thermal", d.Fight.Weakest)
+		assert.Equal(t, d.Fight.Weakest, d.FightMax.Weakest)
+		assert.InDelta(t, 0.3, d.Fight.WeakestResist, 1e-9)
+		assert.InDelta(t, 0.45, d.FightMax.WeakestResist, 1e-9, "Thermal in the max stats, not their own weakest")
+		assert.Equal(t, "Shield", d.FightMax.Tank)
+		assert.Equal(t, "Defense", d.Fight.Mode)
+		assert.InDelta(t, 80000, d.Fight.EHP, 1e-9)
+		assert.InDelta(t, 95000, d.FightMax.EHP, 1e-9)
+		assert.Equal(t, "Radar", d.Fight.SensorType)
+	}
+
+	// the common loss's own hole is EM, which neither end of the range has as its weakest: the PDF shoots what the fit most flown has
+	fit.Losses[0].Stats = []FitStats{{Mode: "Defense", Stats: &fitting.Stats{Shield: fitting.Layer{EHP: 80000, Resonance: [4]float64{0.8, 0.6, 0.6, 0.5}}}}}
+	d = pdfDoctrines([]FitGroup{fit}, nil)[0]
+	if assert.NotNil(t, d.Fight) && assert.NotNil(t, d.FightMax) {
+		assert.Equal(t, "EM", d.Fight.Weakest)
+		assert.Equal(t, "EM", d.FightMax.Weakest)
+		assert.InDelta(t, 0.5, d.Fight.WeakestResist, 1e-9)
+		assert.InDelta(t, 0.6, d.FightMax.WeakestResist, 1e-9)
+	}
+	fit.Losses[0].Stats = nil
+
+	fit.Summary.Stats[0].Max = nil
+	d = pdfDoctrines([]FitGroup{fit}, nil)[0]
+	assert.NotNil(t, d.Fight)
+	assert.Nil(t, d.FightMax)
+	fit.Summary = nil
+	d = pdfDoctrines([]FitGroup{fit}, nil)[0]
+	assert.Nil(t, d.Fight)
+	assert.Nil(t, d.FightMax)
 }

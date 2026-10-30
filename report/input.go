@@ -72,12 +72,13 @@ type Doctrine struct {
 	Pilots     int // the different pilots who lost it
 	LastSeen   time.Time
 	LastSystem string
-	Racks      []Rack      // High, Mid, Low, Rig, Subsystem, Drones, in that order, empty racks left out
-	Fight      *FightStats // nil when the dogma engine had no numbers for it
+	Racks      []Rack      // High, Mid, Low, Rig, Subsystem, Drones, in that order, empty racks left out. Each module is the most common variant of its base type across the losses.
+	Fight      *FightStats // nil when the dogma engine had no numbers for it. For a fit lost more than once, each number's lowest across its losses (FitStatsRange.Min)
+	FightMax   *FightStats // each number's highest across its losses (FitStatsRange.Max), nil for a fit lost once or with no numbers. The tiles show a range where it differs from Fight.
 	Implants   []string    // the implants seen on any of its losses, by name, empty for none
 	Implanted  int         // how many of its losses had implants
 	Reason     string      // why it is a Fleet Doctrine, in counts, ie "seen with 7 Ferox and 2 logi on one side", empty for none
-	EFT        string      // the fit as EFT text, for the appendix
+	EFT        string      // the fit as EFT text, for the appendix: the most common exact variant's (FitSummary.CommonLoss)
 }
 
 // Rack is one rack of a fit, its modules collapsed to counts
@@ -88,8 +89,9 @@ type Rack struct {
 
 // ModuleCount is a module and how many of it, ie 3 Heavy Missile Launcher II
 type ModuleCount struct {
-	Name  string
-	Count int
+	Name      string
+	Count     int
+	Different int // how many of the fit's losses fitted another variant of this module's base type in its place, ie 2 for "(2 fits had a different type)"; 0 for none, and always for drones
 }
 
 // FightStats is what a fleet needs to know to shoot a fit, from the dogma engine with all skills V and every module active

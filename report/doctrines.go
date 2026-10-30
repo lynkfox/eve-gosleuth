@@ -71,7 +71,7 @@ func (d *pageDoc) doctrineBlock(index int, dc Doctrine, divider string, link doc
 	if h := textH; h > headH {
 		headH = h
 	}
-	tiles := doctrineTiles(dc.Fight)
+	tiles := doctrineRangeTiles(dc.Fight, dc.FightMax)
 	racks := dc.Racks
 	if len(dc.Implants) > 0 {
 		tiles = append([]doctrineTile{{text: fmt.Sprintf("Implants on %s of %s %s", count(dc.Implanted), count(dc.Losses), doctrinePlural(dc.Losses, "loss", "losses")), col: colWarn, bold: true}}, tiles...)
@@ -183,37 +183,79 @@ func (d *pageDoc) doctrineReason(reason string, width float64) []string {
 	return lines
 }
 
-// doctrineTiles lists the fight stats worth showing, the call a fleet commander makes in red
+// doctrineRange formats a number as shown, or "low – high" when the two differ once formatted, lower first
+func doctrineRange(low, high float64, format func(float64) string) string {
+	l, h := format(low), format(high)
+	if high < low {
+		l, h = h, l
+	}
+	if l == h {
+		return l
+	}
+	return l + " – " + h
+}
+
+// doctrineTiles lists the fight stats of a fit lost once
 func doctrineTiles(f *FightStats) []doctrineTile {
+	return doctrineRangeTiles(f, nil)
+}
+
+/*
+doctrineRangeTiles lists the fight stats worth showing, the call a fleet commander makes in red.
+Where max is given and a number differs from f's once rounded as shown, the tile shows "low – high".
+*/
+func doctrineRangeTiles(f, max *FightStats) []doctrineTile {
 	if f == nil {
 		return nil
+	}
+	if max == nil {
+		max = f
+	}
+	num := func(dec int) func(float64) string {
+		return func(v float64) string { return trimNum(v, dec) }
 	}
 	var t []doctrineTile
 	if f.Mode != "" {
 		t = append(t, doctrineTile{text: f.Mode + " mode", col: colMuted})
 	}
-	if f.EHP > 0 {
-		t = append(t, doctrineTile{text: doctrineEHP(f.EHP) + " EHP", col: colText, bold: true})
+	if f.EHP > 0 || max.EHP > 0 {
+		t = append(t, doctrineTile{text: doctrineRange(f.EHP, max.EHP, doctrineEHP) + " EHP", col: colText, bold: true})
 	}
 	if f.Tank != "" {
 		t = append(t, doctrineTile{text: f.Tank + " tank", col: colText})
 	}
 	if f.Weakest != "" {
-		t = append(t, doctrineTile{text: fmt.Sprintf("Shoot: %s (%s%% resist)", f.Weakest, trimNum(f.WeakestResist*100, 0)), col: colLoss, bold: true})
+		resist := doctrineRange(f.WeakestResist*100, max.WeakestResist*100, num(0))
+		t = append(t, doctrineTile{text: fmt.Sprintf("Shoot: %s (%s%% resist)", f.Weakest, resist), col: colLoss, bold: true})
 	}
 	if f.SensorType != "" {
-		t = append(t, doctrineTile{text: fmt.Sprintf("Sensor %s %s", f.SensorType, trimNum(f.SensorStrength, 1)), col: colText})
+		t = append(t, doctrineTile{text: fmt.Sprintf("Sensor %s %s", f.SensorType, doctrineRange(f.SensorStrength, max.SensorStrength, num(1))), col: colText})
 	}
-	if f.Neut > 0 {
-		t = append(t, doctrineTile{text: "Neut " + trimNum(f.Neut, 1) + " GJ/s", col: colWarn})
+	if f.Neut > 0 || max.Neut > 0 {
+		t = append(t, doctrineTile{text: "Neut " + doctrineRange(f.Neut, max.Neut, num(1)) + " GJ/s", col: colWarn})
 	}
-	if f.RemoteRep > 0 {
-		t = append(t, doctrineTile{text: "Remote rep " + trimNum(f.RemoteRep, 0) + " HP/s", col: colText})
+	if f.RemoteRep > 0 || max.RemoteRep > 0 {
+		t = append(t, doctrineTile{text: "Remote rep " + doctrineRange(f.RemoteRep, max.RemoteRep, num(0)) + " HP/s", col: colText})
 	}
-	if f.LocalRep > 0 {
-		t = append(t, doctrineTile{text: "Local rep " + trimNum(f.LocalRep, 0) + " HP/s", col: colText})
+	if f.LocalRep > 0 || max.LocalRep > 0 {
+		t = append(t, doctrineTile{text: "Local rep " + doctrineRange(f.LocalRep, max.LocalRep, num(0)) + " HP/s", col: colText})
 	}
 	return t
+}
+
+// doctrineModule is a module's text in a rack, ie "3× Heavy Gunnar Compact Stasis Grappler (2 fits had a different type)"
+func doctrineModule(m ModuleCount) string {
+	text := m.Name
+	if m.Count > 1 {
+		text = fmt.Sprintf("%d× %s", m.Count, m.Name)
+	}
+	switch {
+	case m.Different == 1:
+		text += " (1 fit had a different type)"
+	case m.Different > 1:
+		text += fmt.Sprintf(" (%d fits had a different type)", m.Different)
+	}
+	return text
 }
 
 // doctrineEHP formats effective hit points short, ie 84.2k
@@ -279,11 +321,7 @@ func (d *pageDoc) doctrineRacks(racks []Rack, draw bool) float64 {
 		}
 		parts := make([]string, 0, len(r.Modules))
 		for _, m := range r.Modules {
-			if m.Count > 1 {
-				parts = append(parts, fmt.Sprintf("%d× %s", m.Count, m.Name))
-			} else {
-				parts = append(parts, m.Name)
-			}
+			parts = append(parts, doctrineModule(m))
 		}
 		d.sans("", 9)
 		w := bodyWidth - doctrineRackW

@@ -69,8 +69,14 @@ func TestDoctrines(t *testing.T) {
 	for i := 0; i < 40; i++ {
 		mods = append(mods, report.ModuleCount{Name: fmt.Sprintf("Very Long Module Name Number %d II", i), Count: i + 1})
 	}
+	merged := doctrineFixture(1)[0]
+	merged.ShipName = "Ferox merged"
+	merged.Racks = []report.Rack{{Name: "Mid", Modules: []report.ModuleCount{
+		{Name: "Heavy Gunnar Compact Stasis Grappler", Count: 2, Different: 2}, {Name: "Large Shield Extender II", Count: 1, Different: 1},
+		{Name: strings.Repeat("Extremely Long Module Name ", 6), Count: 1, Different: 12}}}}
+	merged.FightMax = &report.FightStats{EHP: 99900, Tank: "Shield", Weakest: "Thermal", WeakestResist: 0.42, SensorType: "Magnetometric", SensorStrength: 25, Neut: 20, RemoteRep: 450, LocalRep: 80}
 	ds := []report.Doctrine{
-		doctrineFixture(1)[0],
+		doctrineFixture(1)[0], merged,
 		{ShipName: "Guardian", Role: "Logi", Losses: 1, Pilots: 1, Racks: doctrineFixture(1)[0].Racks, Reason: "x",
 			Implants: []string{"High-grade Crystal Alpha", "High-grade Crystal Beta"}, Implanted: 1},
 		{ShipName: strings.Repeat("Extraordinarily Long Ship Name ", 5), Losses: 9, Pilots: 3, LastSeen: time.Now(),
