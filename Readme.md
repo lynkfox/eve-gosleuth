@@ -68,12 +68,10 @@ If you dislike AI assited coding then there is absolutely zero issue from me if 
 Roadmap of planned features.
 
 * Next
-  * first time user tour
-    * overlay that darkens screen, highlights buttons with descriptions
-    * generates sample search (fake the search?) and shows off the various tabs.
-
-* A bit further out
   * Jspace Home Systems / Nullsec Staging added to Affilliates system
+  * Custom Collation searches (generated in My Intel)
+    * unlike affiliates, these wont necessarily have a "main"
+    * affiliate searches that cross over into a collation wont pull its other collation members
 
 * Future plans
   * wails v3 upgrade for multiple windows (side tools)
