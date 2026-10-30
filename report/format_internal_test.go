@@ -1,6 +1,7 @@
 package report
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -31,4 +32,14 @@ func TestCount(t *testing.T) {
 	assert.Equal(t, "7", count(7))
 	assert.Equal(t, "1,234", count(1234))
 	assert.Equal(t, "1,234,567", count(1234567))
+}
+
+func TestFit(t *testing.T) {
+	d := newDoc(Input{})
+	d.AddPage()
+	d.sans("", 10)
+	assert.Equal(t, "Short", d.fit("Short", 50))
+	cut := d.fit("A name far too long to fit in a narrow cell", 30)
+	assert.True(t, strings.HasSuffix(cut, "…"), cut)
+	assert.LessOrEqual(t, d.GetStringWidth(cut), 30.0)
 }

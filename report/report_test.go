@@ -2,10 +2,12 @@ package report_test
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,4 +87,21 @@ func TestBuildUnknownSectionsIgnored(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, bytes.HasPrefix(b, []byte("%PDF")))
 	assert.Equal(t, bytes.Count(a, []byte("/Type /Page\n")), bytes.Count(b, []byte("/Type /Page\n")))
+}
+
+func TestBuildManyAffiliatesAndLongNames(t *testing.T) {
+	in := fixture()
+	in.Target.Name = strings.Repeat("W", 50)
+	in.Target.Details = append(in.Target.Details, report.Detail{Label: "A label far too long for its column", Value: "value"})
+	for i := 0; i < 80; i++ {
+		in.Scope.Sources = append(in.Scope.Sources, report.Source{Name: fmt.Sprintf("Affiliate %d %s", i, strings.Repeat("M", 40)), Killmails: i,
+			Oldest: in.Scope.Oldest, Newest: in.Scope.Newest})
+	}
+	b, err := report.Build(in, nil)
+	assert.NoError(t, err)
+	assert.True(t, bytes.HasPrefix(b, []byte("%PDF")))
+	assert.Regexp(t, `/Count [2-9]`, string(b), "the scope box carries on to the next page")
+	if p := os.Getenv("REPORT_SAMPLE_LONG"); p != "" {
+		assert.NoError(t, os.WriteFile(p, b, 0o644))
+	}
 }

@@ -24,14 +24,25 @@ func (d *pageDoc) summary(in Input) {
 	}
 
 	d.SetXY(textX, top)
-	d.sans("B", 22)
 	d.text(colText)
-	nameW := d.GetStringWidth(t.Name) + 2
-	d.CellFormat(nameW, 10, t.Name, "", 0, "L", false, 0, "")
+	// a long name shrinks to fit beside its ticker, down to 14 pt, then is cut short
+	width := pageWidth - pageMargin - textX
+	ticker := ""
 	if t.Ticker != "" {
 		d.sans("", 14)
+		ticker = "[" + t.Ticker + "]"
+		width -= d.GetStringWidth(ticker) + 2
+	}
+	size := 22.0
+	for d.sans("B", size); size > 14 && d.GetStringWidth(t.Name)+2 > width; d.sans("B", size) {
+		size--
+	}
+	name := d.fit(t.Name, width-2)
+	d.CellFormat(d.GetStringWidth(name)+2, 10, name, "", 0, "L", false, 0, "")
+	if ticker != "" {
+		d.sans("", 14)
 		d.text(colMuted)
-		d.CellFormat(0, 10, "["+t.Ticker+"]", "", 0, "L", false, 0, "")
+		d.CellFormat(0, 10, ticker, "", 0, "L", false, 0, "")
 	}
 	d.SetXY(textX, top+10)
 	d.sans("", 10.5)
@@ -99,63 +110,66 @@ func (d *pageDoc) logo(data []byte, x, y, size float64) (ok bool) {
 	return true
 }
 
-// scopeBox says what the search covered and any caveat on it
+// scopeLine is one line of the scope box
+type scopeText struct {
+	text   string
+	col    rgb
+	style  string
+	size   float64
+	height float64
+}
+
+// scopeBox says what the search covered and any caveat on it, carried on to the next page in a box of its own when it doesn't fit, ie with many affiliates
 func (d *pageDoc) scopeBox(s Scope) {
-	lines := []struct {
-		text string
-		col  rgb
-	}{{scopeLine(s), colText}}
+	line := func(text string, col rgb) scopeText { return scopeText{text, col, "", 9.5, 5.2} }
+	lines := []scopeText{{"SCOPE", colAccent, "B", 9, 5}, {scopeLine(s), colText, "B", 9.5, 5.2}}
 	for _, source := range s.Sources {
-		lines = append(lines, struct {
-			text string
-			col  rgb
-		}{sourceLine(source), colText})
+		lines = append(lines, line(sourceLine(source), colText))
 	}
-	for _, l := range s.Limits {
-		lines = append(lines, struct {
-			text string
-			col  rgb
-		}{l, colText})
+	for _, limit := range s.Limits {
+		lines = append(lines, line(limit, colText))
 	}
 	if s.Stopped {
-		lines = append(lines, struct {
-			text string
-			col  rgb
-		}{"The search was stopped early, so this covers only what was collected by then.", colWarn})
+		lines = append(lines, line("The search was stopped early, so this covers only what was collected by then.", colWarn))
 	}
 	if s.RateLimited {
-		lines = append(lines, struct {
-			text string
-			col  rgb
-		}{"The ESI rate limited the search, so killmails that needed it are missing.", colWarn})
+		lines = append(lines, line("The ESI rate limited the search, so killmails that needed it are missing.", colWarn))
 	}
-	const lh = 5.2
-	h := float64(len(lines))*lh + 5.5 + 9
-	d.fill(colBoxBg)
-	d.draw(colRule)
-	d.SetLineWidth(0.2)
-	y := d.GetY()
-	d.RoundedRect(pageMargin, y, bodyWidth, h, 1.5, "1234", "FD")
-	d.SetXY(pageMargin+3, y+2)
-	d.sans("B", 9)
-	d.text(colAccent)
-	d.CellFormat(0, 5, "SCOPE", "", 1, "L", false, 0, "")
-	for i, l := range lines {
-		d.SetX(pageMargin + 3)
-		d.sans("", 9.5)
-		if i == 0 {
-			d.sans("B", 9.5)
+	lines = append(lines, scopeText{"Killmails show only deaths: not who survived, objectives, or fights that left no killmail.", colMuted, "", 8.5, 6})
+
+	const pad = 2.5
+	for len(lines) > 0 {
+		// the lines that fit on this page, at least one on a fresh page so it always moves on
+		n, height := 0, 0.0
+		for n < len(lines) && height+lines[n].height <= d.room()-2*pad {
+			height += lines[n].height
+			n++
 		}
-		d.text(l.col)
-		d.CellFormat(0, lh, l.text, "", 1, "L", false, 0, "")
+		if n == 0 {
+			if d.GetY() > pageMargin+1 {
+				d.AddPage()
+				continue
+			}
+			n, height = 1, lines[0].height
+		}
+
+		y := d.GetY()
+		d.fill(colBoxBg)
+		d.draw(colRule)
+		d.SetLineWidth(0.2)
+		d.RoundedRect(pageMargin, y, bodyWidth, height+2*pad, 1.5, "1234", "FD")
+		d.SetY(y + pad)
+		for _, l := range lines[:n] {
+			d.SetX(pageMargin + 3)
+			d.sans(l.style, l.size)
+			d.text(l.col)
+			d.CellFormat(bodyWidth-6, l.height, d.fit(l.text, bodyWidth-6), "", 1, "LM", false, 0, "")
+		}
+		d.SetY(y + height + 2*pad)
+		if lines = lines[n:]; len(lines) > 0 {
+			d.AddPage()
+		}
 	}
-	d.SetX(pageMargin + 3)
-	d.sans("", 8.5)
-	d.text(colMuted)
-	d.SetY(d.GetY() + 1)
-	d.SetX(pageMargin + 3)
-	d.CellFormat(0, 5, "Killmails show only deaths: not who survived, objectives, or fights that left no killmail.", "", 1, "L", false, 0, "")
-	d.SetY(y + h)
 }
 
 // scopeLine is "<N> killmails from <oldest> to <newest>"
@@ -196,6 +210,8 @@ func killmailSpan(n int, oldest, newest time.Time) string {
 
 // killTiles draws the kills and losses tiles side by side and the ISK efficiency under them
 func (d *pageDoc) killTiles(kills, losses Tally) {
+	// the heading, tiles, and efficiency line stay on one page
+	d.keepTogether(52)
 	d.heading("Kills and losses")
 	d.Ln(1)
 	gap := 6.0

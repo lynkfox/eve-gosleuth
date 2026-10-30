@@ -73,9 +73,34 @@ func (d *pageDoc) footer(in Input) {
 	if in.Target.Ticker != "" {
 		left += " [" + in.Target.Ticker + "]"
 	}
-	d.CellFormat(bodyWidth*0.33, 5, left, "", 0, "L", false, 0, "")
+	d.CellFormat(bodyWidth*0.33, 5, d.fit(left, bodyWidth*0.33), "", 0, "L", false, 0, "")
 	d.CellFormat(bodyWidth*0.27, 5, "GoSleuth v"+in.AppVersion, "", 0, "C", false, 0, "")
 	d.CellFormat(bodyWidth*0.40, 5, fmt.Sprintf("Generated %s · Page %d of {nb}", spokenDate(in.GeneratedAt), d.PageNo()), "", 0, "R", false, 0, "")
+}
+
+// fit cuts text to the width in the current font, ending it with an ellipsis, so it never runs past its cell
+func (d *pageDoc) fit(text string, width float64) string {
+	if d.GetStringWidth(text) <= width {
+		return text
+	}
+	runes := []rune(text)
+	for len(runes) > 0 && d.GetStringWidth(string(runes)+"…") > width {
+		runes = runes[:len(runes)-1]
+	}
+	return strings.TrimRight(string(runes), " ") + "…"
+}
+
+// room is the height left on the page above the footer
+func (d *pageDoc) room() float64 {
+	_, pageH := d.GetPageSize()
+	return pageH - pageBottom - d.GetY()
+}
+
+// keepTogether starts a new page unless a block of the height fits on this one
+func (d *pageDoc) keepTogether(height float64) {
+	if d.room() < height {
+		d.AddPage()
+	}
 }
 
 // heading prints a section title with a thin accent rule under it
@@ -97,7 +122,7 @@ func (d *pageDoc) keyValues(rows []Detail, labelW float64) {
 		d.SetX(pageMargin)
 		d.sans("", 9.5)
 		d.text(colMuted)
-		d.CellFormat(labelW, 5.5, r.Label, "", 0, "L", false, 0, "")
+		d.CellFormat(labelW, 5.5, d.fit(r.Label, labelW-1), "", 0, "L", false, 0, "")
 		d.text(colText)
 		d.MultiCell(bodyWidth-labelW, 5.5, r.Value, "", "L", false)
 	}
