@@ -878,7 +878,7 @@ function myIntelCard(group) {
   counts.className = "myintel-card-counts";
   const parts = [];
   if (group.holdings.length) parts.push(`${group.holdings.length} ${group.holdings.length === 1 ? "affiliate" : "affiliates"}`);
-  if (group.heldFor.length) parts.push(`holds for ${group.heldFor.length}`);
+  if (group.heldFor.length) parts.push(`affiliate of ${group.heldFor.length}`);
   if (group.ignoredAllies.length) parts.push(`${group.ignoredAllies.length} ignored`);
   counts.textContent = parts.join(" · ");
   const remove = document.createElement("button");
@@ -921,7 +921,7 @@ function myIntelCard(group) {
   }
 
   if (group.heldFor.length > 0) {
-    body.append(myIntelTitle("Holds for"));
+    body.append(myIntelTitle("Affiliate of"));
     body.append(...group.heldFor.map((main) => myIntelRow(main, {
       noteText: main.note,
       onRemove: () => myIntelChange(() => backend().RemoveHolding(main.type, main.id, entity.type, entity.id), showError, `Removed ${entity.name} as an affiliate of ${main.name}`),
