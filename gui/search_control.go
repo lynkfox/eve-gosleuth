@@ -39,6 +39,11 @@ func (a *App) ask(event string, details any) bool {
 	if a.stopRequested.Load() {
 		return false
 	}
+	// a dev tool has no one to ask, and wants the search to go ahead
+	if a.headless {
+		comm.Logger.Infof("Answering %s with yes", event)
+		return true
+	}
 
 	runtime.EventsEmit(a.ctx, event, details)
 	select {
@@ -73,6 +78,10 @@ func (a *App) AnswerPrompt(yes bool) {
 
 // reportRateLimited is the comm.RateLimitReporter that tells the frontend, which shows a warning
 func (a *App) reportRateLimited(until time.Time) {
+	if a.headless {
+		comm.Logger.Warnf("The ESI rate limited requests until %s", until.Format(time.RFC3339))
+		return
+	}
 	runtime.EventsEmit(a.ctx, rateLimitedEvent, until)
 }
 

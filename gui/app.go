@@ -41,8 +41,10 @@ type App struct {
 
 	// the update check's client, see CheckForUpdates
 	github api.GitHubClient
-	// neither settings.json nor the cache existed at startup: a new user, who gets no What's New (and later the new user tour)
+	// neither settings.json nor the cache existed at startup: a new user, who gets no What's New and is offered the tour (IsNewUser)
 	newUser bool
+	// built by NewHeadlessApp for a dev tool, with no window: questions are answered yes and events only logged
+	headless bool
 	// the releases of the last check, kept so About's What's New link need not ask GitHub again, and a lock for changes to the cache's AppState
 	releasesMu      sync.Mutex
 	releases        []api.GitHubRelease
@@ -314,6 +316,17 @@ func (a *App) startup(ctx context.Context) {
 		runtime.EventsEmit(a.ctx, progressEvent, message)
 	})
 	comm.SetRateLimitReporter(a.reportRateLimited)
+	a.load()
+
+	// imported entities a check the app closed during did not finish
+	go func() {
+		defer comm.RecoverGoroutine("checking imported entities", nil)
+		a.runIntelChecks()
+	}()
+}
+
+// load reads the static data, settings, and cache, and sets up the clients, for startup or a headless App (NewHeadlessApp). It marks the App ready before the SDE check.
+func (a *App) load() {
 	a.promptAnswers = make(chan bool, 1)
 
 	if err := comm.InitStaticData(staticdata.Files, staticdata.Overrides()...); err != nil {
@@ -355,12 +368,6 @@ func (a *App) startup(ctx context.Context) {
 
 	a.sde = api.NewSDEClient()
 	a.checkSDERelease()
-
-	// imported entities a check the app closed during did not finish
-	go func() {
-		defer comm.RecoverGoroutine("checking imported entities", nil)
-		a.runIntelChecks()
-	}()
 }
 
 // fileMissing is whether no file is at path. A file that can't be read for another reason counts as there.
