@@ -107,6 +107,8 @@ def compute(name, eft, mode_idx):
         if m.isEmpty: continue
         d = {"type": m.item.ID, "slot": SLOTS[m.slot]}
         if m.charge is not None: d["charge"] = m.charge.ID
+        # our engine leaves a briefly active module (the Assault Damage Control) online unless told it is active, as Pyfa has it here
+        if m.state == State.ACTIVE and any(e.name == "moduleBonusAssaultDamageControl" for e in m.item.effects.values()): d["state"] = "active"
         mods.append(d)
     inp = {"hull": ship.item.ID, "modules": mods}
     imps = [i.item.ID for i in f.implants]

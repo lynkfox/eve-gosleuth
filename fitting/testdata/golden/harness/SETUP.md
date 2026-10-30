@@ -3,7 +3,7 @@
 These scripts ran Pyfa without its window to write the `*.eft` and `*.json` beside this folder (2026-10-29, Pyfa v2.69.3, commit d2722a4c). Pyfa is GPLv3: it is run here to get numbers, and none of its code is in the app.
 
 - `fits_def.py` holds every fit as EFT text with its file name. Add a fit there.
-- `run_golden.py` imports each fit with Pyfa's `service.port.eft.importEft`, uses an All 5 character, forces every module that can be active to active (never overheated), sets the Uniform damage pattern before computing (so the Reactive Armor Hardener settles against it), sets each tactical destroyer mode in turn, and writes `fitting.Input` and `fitting.Stats` json. It prints "no problems" only when every line resolved, every module and implant was kept, and every charge loaded.
+- `run_golden.py` imports each fit with Pyfa's `service.port.eft.importEft`, uses an All 5 character, forces every module that can be active to active (never overheated), marks an active Assault Damage Control `"state": "active"` in the input (the app leaves it online), sets the Uniform damage pattern before computing (so the Reactive Armor Hardener settles against it), sets each tactical destroyer mode in turn, and writes `fitting.Input` and `fitting.Stats` json. It prints "no problems" only when every line resolved, every module and implant was kept, and every charge loaded.
 - `pyfa_env.py` starts Pyfa headless, and `stubs/sitecustomize_wx.py` hands back a stand-in for any `wx`, `gui`, or `graphs` module Pyfa's own folder doesn't supply.
 
 Setup, in this folder (the checkout, venv, and database are not committed):

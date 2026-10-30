@@ -138,6 +138,9 @@ func NewFit(in Input) (*Fit, error) {
 			role = RoleSubsystem
 		}
 		module := &Item{Type: moduleType, Role: role, Slot: fitted.Slot, State: StateActive}
+		if fitted.State != moduleStateActive && brieflyActive(moduleType) {
+			module.State = StateOnline
+		}
 		f.Modules = append(f.Modules, module)
 		f.all = append(f.all, module)
 

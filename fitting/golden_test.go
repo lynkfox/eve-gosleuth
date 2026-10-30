@@ -133,3 +133,48 @@ func compareNumbers(path string, expected any, actual any, skipped map[string]bo
 		return nil
 	}
 }
+
+// TestAssaultDamageControlOff checks that an Assault Damage Control is left online unless its state says active: its burst isn't counted, its steady bonus is
+func TestAssaultDamageControlOff(t *testing.T) {
+	comm.InitLogger(logrus.ErrorLevel)
+	if err := comm.InitStaticData(staticdata.Files); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join("testdata", "golden", "assault_dc_zealot.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden := goldenFit{}
+	if err := json.Unmarshal(data, &golden); err != nil {
+		t.Fatal(err)
+	}
+	burst, err := fitting.Compute(golden.Input)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	off := golden.Input
+	off.Modules = append([]fitting.Module{}, golden.Input.Modules...)
+	for i := range off.Modules {
+		off.Modules[i].State = ""
+	}
+	steady, err := fitting.Compute(off)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	without := golden.Input
+	without.Modules = []fitting.Module{}
+	for _, module := range golden.Input.Modules {
+		if module.Type != 47257 {
+			without.Modules = append(without.Modules, module)
+		}
+	}
+	none, err := fitting.Compute(without)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Less(t, steady.EHP, burst.EHP/2, "the burst is not counted")
+	assert.Greater(t, steady.EHP, none.EHP, "the steady Damage Control bonus is")
+}

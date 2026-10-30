@@ -1,11 +1,30 @@
 package fitting
 
 import (
+	"slices"
+
 	"github.com/lynkfox/go_eve_sleuth/comm"
 )
 
 // reactiveArmorHardenerEffect is the SDE name of the effect the Reactive Armor Hardener's resonance shifting is written in code for, since the SDE gives it no modifiers
 const reactiveArmorHardenerEffect = "adaptiveArmorHardener"
+
+// brieflyActiveEffects are the SDE names of active effects that run briefly on a long cooldown, so a fit's numbers leave them off: the Assault Damage Control's resist burst.
+// Such a module is fitted online, keeping its online effects (the Assault Damage Control's steady Damage Control bonus), unless its Module.State is moduleStateActive.
+var brieflyActiveEffects = []string{"moduleBonusAssaultDamageControl"}
+
+// moduleStateActive is the Module.State that runs a burst module as active
+const moduleStateActive = "active"
+
+// brieflyActive reports whether a module type has one of brieflyActiveEffects
+func brieflyActive(moduleType *comm.DogmaType) bool {
+	for _, effectID := range moduleType.Effects {
+		if effect := comm.DogmaEffectOf(effectID); effect != nil && slices.Contains(brieflyActiveEffects, effect.Name) {
+			return true
+		}
+	}
+	return false
+}
 
 /*
 	activeEffectNamed finds a module's effect by name, if it is in force

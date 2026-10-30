@@ -1,4 +1,4 @@
-// Package fitting is a dogma engine: it works out a fit's stats (resists, EHP, repair, sensors, ewar resistance) from static_data/dogma.json, with every skill at V, every module active, its own command bursts on itself, no heat and no other fleet boosts
+// Package fitting is a dogma engine: it works out a fit's stats (resists, EHP, repair, sensors, ewar resistance) from static_data/dogma.json, with every skill at V, every module active but those only briefly active (an Assault Damage Control, see brieflyActiveEffects), its own command bursts on itself, no heat and no other fleet boosts
 package fitting
 
 import (
@@ -28,6 +28,8 @@ type Module struct {
 	Type   int          `json:"type"`
 	Charge int          `json:"charge,omitempty"` // 0 if unloaded
 	Slot   comm.FitSlot `json:"slot"`
+	// active to run a briefly active module (see brieflyActiveEffects) as active, ie in the golden fits Pyfa computed with an Assault Damage Control on; empty for the default: every module active but a briefly active one, left online
+	State string `json:"state,omitempty"`
 }
 
 // Stats are a fit's numbers. Resonances are fractions of damage taken (1 is no resist), in the order EM, thermal, kinetic, explosive.
