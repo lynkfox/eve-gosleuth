@@ -17,6 +17,7 @@ wails build -platform windows/amd64 -skipbindings   # GUI -> build/bin/eve-gosle
 go run ./cmd/cli                        # CLI scratch driver (target is hardcoded in cmd/cli/main.go)
 go run ./cmd/sdegen                     # regenerate static_data/fit_types.json and dogma.json from the latest SDE (-sde-dir DIR or -sde-zip FILE to use a local copy, -pyfa DIR to check the hull bonus table against Pyfa)
 go run ./cmd/tagcheck 139498664 ...     # print the fit and tags of killmails (ids, zKill links, or ESI json) for tuning static_data/fit_tag_rules.json
+go run ./cmd/tourgen                    # regenerate the new user tour's demo reports (frontend/dist/tour/*.json) from real searches, players renamed
 go test ./...                           # all tests
 go test ./aggregate -run TestName -v    # single test
 GOOS=windows go vet ./...               # vet including the Wails windows code
@@ -59,7 +60,7 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/), so 
 
 - The first line is `<type>(<area>): <summary>`, ie `feat(fits): merge ECM flavors as one module`. The summary is written as before, plain words saying what changed for the user, lower case first.
 - Types: `feat` (something new for the user), `fix` (a bug), `docs`, `refactor`, `test`, `perf`, `build` (wails, sdegen output, versions), `ci`, `chore` (tooling, hooks, agents), `revert`. A breaking change adds `!` after the area.
-- Areas, optional but used where one fits: `search`, `killmails`, `allies`, `holdings`, `myintel`, `structures`, `capitals`, `systems`, `battles`, `fits`, `tags`, `cache`, `static-data`, `report` (the PDF report and what goes in it), `gui`, `themes`, `about`, `debug`, `sdegen`, `cli`.
+- Areas, optional but used where one fits: `search`, `killmails`, `allies`, `holdings`, `myintel`, `structures`, `capitals`, `systems`, `battles`, `fits`, `tags`, `cache`, `static-data`, `report` (the PDF report and what goes in it), `tour`, `gui`, `themes`, `about`, `debug`, `sdegen`, `cli`.
 - One kind of change per commit where it can be split, so each lands under one heading in the changelog.
 - `.githooks/commit-msg` checks the first line. Git uses it once `git config core.hooksPath .githooks` is set in the clone. Since 1.0 it refuses a message that doesn't follow these rules (`WARN_ONLY=0`).
 
