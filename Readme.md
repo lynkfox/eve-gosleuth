@@ -52,12 +52,14 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
  * first time user tour
   * overlay that darkens screen, highlights buttons with descriptions
   * generates sample search (fake the search?) and shows off the various tabs.
+ * filter killmail tab to loses/kills
 
 * If i feel like it pre-release?
  * Report data to be saved as a PDF for distribution.
  * Jspace Home Systems / Nullsec Staging 
  * Battles that the group has fought (we're already tracking, so just a display update)
   * needs warnings/reminders that its an estimation and may be wrong
+  * ability to tag a specific kill as a Fleet Doctrine from the battle pages for future refrence (saved in My Intel)
 
 * Release
  * GitActions workflows to build and release
@@ -68,6 +70,7 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
   * Side Tools
     * Killtrackers, based on any of the searchable targets in seperate windows
      * ability to pull killtrackers data since last open
+     * using their rss feed
     * ZKill search reports - Set up several search parameters that can be quickly run as a report
      * Ie: every structure kill in jspace since the report was last run
      * or: every structure kill involving a, b, and c, in jspace in the last day
