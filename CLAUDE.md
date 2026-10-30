@@ -62,6 +62,7 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/), so 
 - Types: `feat` (something new for the user), `fix` (a bug), `docs`, `refactor`, `test`, `perf`, `build` (wails, sdegen output, versions), `ci`, `chore` (tooling, hooks, agents), `revert`. A breaking change adds `!` after the area.
 - Areas, optional but used where one fits: `search`, `killmails`, `allies`, `holdings`, `myintel`, `structures`, `capitals`, `systems`, `battles`, `fits`, `tags`, `cache`, `static-data`, `report` (the PDF report and what goes in it), `tour`, `gui`, `themes`, `about`, `debug`, `sdegen`, `cli`.
 - One kind of change per commit where it can be split, so each lands under one heading in the changelog.
+- A fix to something no release has had yet stays out of the changelog, as no user can have met it. Check with `git tag --contains <the feature's commit>`: no tag means unreleased. Before it is pushed, fold it into the feature's commit (`git commit --fixup=<sha>`, then `GIT_SEQUENCE_EDITOR=: git rebase --autosquash --autostash <sha>~`). Once pushed, keep the `fix` type and end the message with a `changelog: ignore` footer, which git-cliff skips. A fix to anything a release shipped is a real fix and is listed.
 - `.githooks/commit-msg` checks the first line. Git uses it once `git config core.hooksPath .githooks` is set in the clone. Since 1.0 it refuses a message that doesn't follow these rules (`WARN_ONLY=0`).
 
 ## Conventions

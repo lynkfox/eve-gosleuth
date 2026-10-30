@@ -33,6 +33,8 @@ protect_breaking_commits = true
 tag_pattern = "v[0-9]+\\.[0-9]+\\.[0-9]+"
 sort_commits = "oldest"
 commit_parsers = [
+  # a fix to something no release has had yet, which no user can have met (CLAUDE.md, Commit messages)
+  { footer = "^changelog: ?ignore", skip = true },
   { message = "^feat", group = "<!-- 0 -->New" },
   { message = "^fix", group = "<!-- 1 -->Fixed" },
   { message = "^perf", group = "<!-- 2 -->Faster" },
