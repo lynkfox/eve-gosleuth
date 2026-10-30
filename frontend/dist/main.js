@@ -4999,7 +4999,8 @@ function showCaveatWarning() {
 // launchAfterCaveat runs once the caveat warning is closed or off: a new user is offered the tour (tour.js), the update check waiting for that to close
 async function launchAfterCaveat() {
   const newUser = await backend().IsNewUser().catch(() => false);
-  if (newUser) offerTour(checkForUpdatesAtLaunch);
+  // tour.js loads after this file, so the offer waits for it, or the launch goes on without one
+  if (newUser && typeof offerTour === "function") offerTour(checkForUpdatesAtLaunch);
   else checkForUpdatesAtLaunch();
 }
 
