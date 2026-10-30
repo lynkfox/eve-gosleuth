@@ -110,9 +110,7 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 ## Phase 2b: finding and folding fits
 
 - **A filter box** above the fit list. Built 2026-10-28: each word must match the hull, a module, or a loss's pilot, corp or alliance name, and the words after "tag:"/"tags:" are tags a fit must have. A ? to the box's left explains it. Hull headings with no match left are hidden. Still open: the system, and charge, drone or cargo names.
-- **Merge fits whose modules differ only by name.** Since tiericide, many modules with different names have the same stats and meta level, such as the named T1 variants within one meta group. Two fits merge when each pair of differing modules shares the same group, meta group and meta level, and the same dogma attributes.
-  - The equivalence comes from the `cmd/sdegen` extract: an `equivalent` id per module, or a list of equivalence classes, worked out at generation time. The app does no attribute comparison itself.
-  - The merged row shows the most common name for each slot and says that variants were folded in. The fitting window shows the selected loss's own modules.
+- ~~Merge fits whose modules differ only by name.~~ Replaced by phase 5 (built), which merges by base type.
 
 ## Phase 3: tags
 
@@ -284,6 +282,10 @@ What was planned:
 - Tags read from the numbers, ie Buffer or Active by EHP and rep/s rather than module counts.
 - Capacitor stability, DPS, speed, and structures.
 - A toggle to leave the implants out.
+
+## Phase 5: merge by base type, and the fit summary
+
+**Built 2026-10-30**, now in features.md (Fits, and the PDF's Doctrines). Fleet Doctrine's `repeat_losses`/`repeat_pilots` still want rechecking against real searches, as coarser merging makes them fire more often.
 
 ## Open decisions
 

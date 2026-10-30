@@ -16,7 +16,7 @@ import (
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
 )
 
-// FitGroup is one fit the target lost, with every loss of it merged: the same hull with the same modules in each rack, whatever the charges, drones, or cargo
+// FitGroup is one fit the target lost, with every loss of it merged: the same hull with the same base types of modules in each rack (a variant of a module is the same module), whatever the charges, drones, or cargo
 type FitGroup struct {
 	ShipID        int       `json:"shipId"`
 	ShipName      string    `json:"shipName"`
@@ -29,6 +29,32 @@ type FitGroup struct {
 	LastLost      time.Time `json:"lastLost"` // its newest loss, which need not be its first
 
 	Tags []retrieval.FitTag `json:"tags"` // every tag any of its losses has (see FitLoss.Tags), so its row shows why the filter matched it
+
+	Summary *FitSummary `json:"summary,omitempty"` // its losses side by side, nil for a fit lost once (see buildSummary)
+}
+
+// FitSummary is a merged fit's losses side by side, the fitting window's first page and the PDF's doctrine block: each slot's base type with the variants its losses fitted, and each number's range
+type FitSummary struct {
+	Fit        FitLayout       `json:"fit"`             // each slot's base type (comm.BaseType) and its Variants, each rack sorted by base type name; no charges; the drones and fighters of the CommonLoss; every implant any loss had, in slot order, its Quantity how many losses had it (summaryImplants); no boosters
+	Implanted  int             `json:"implanted"`       // how many of its losses had implants
+	EFT        string          `json:"eft"`             // the PDF's EFT: the CommonLoss's, with the largest implant set any loss had (summaryEFT)
+	Pilots     int             `json:"pilots"`          // the different pilots who lost it
+	CommonLoss int             `json:"commonLoss"`      // the index in Losses of the most common exact fit (its real module types, fit_merged_groups still applied), ties to the earliest in Losses; its EFT is the summary's
+	Stats      []FitStatsRange `json:"stats,omitempty"` // each mode's range across the losses with stats, in the order of their Stats, empty when none has any
+}
+
+// FitStatsRange is each number's lowest and highest across a fit's losses in one mode. Each number is taken alone, so neither end need be one real loss.
+type FitStatsRange struct {
+	Mode string `json:"mode,omitempty"`
+	// every number its lowest (Min) and highest (Max), each ewar resistance by its key; the rest (Sensor.Type, Assumptions, Unknown) from the CommonLoss, and Boosted when any loss is
+	Min *fitting.Stats `json:"min"`
+	Max *fitting.Stats `json:"max"`
+}
+
+// FitVariant is a real module seen in a summary slot, ie the Heavy Gunnar Compact Stasis Grappler in a Heavy Stasis Grappler I slot
+type FitVariant struct {
+	FitPart
+	Losses int `json:"losses"` // how many losses fitted it in this rack among the modules of its base type
 }
 
 // FitLoss is one loss of a fit, with its own charges and cargo
@@ -74,8 +100,9 @@ type FitLayout struct {
 
 // FitSlot is a fitted module and its loaded charge
 type FitSlot struct {
-	Module FitPart  `json:"module"`
-	Charge *FitPart `json:"charge"` // nil if unloaded
+	Module   FitPart      `json:"module"`
+	Charge   *FitPart     `json:"charge"`             // nil if unloaded
+	Variants []FitVariant `json:"variants,omitempty"` // only in a FitSummary: the real modules its losses fitted, most losses first, ties to the CommonLoss's, then by name. Every slot of one base type in a rack has the same list.
 }
 
 // FitPart is an item type in a fit, with how many for a stack
@@ -121,6 +148,9 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 	podOf := podsWithShips(ships, pods, battleOf)
 	doctrineIn := aggregate.FleetDoctrineInBattle(killmails, target, battleOf)
 
+	// each loss's fit (with its capsule's implants) and EFT title, for the summary's EFT
+	fitOf := map[int]*retrieval.Fit{}
+	titleOf := map[int]string{}
 	groups := []*FitGroup{}
 	byKey := map[string]*FitGroup{}
 	lossesOf := map[*FitGroup][]*retrieval.Killmail{}
@@ -158,6 +188,7 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 			fit = &withImplants
 		}
 		loss.EFT = fit.EFT(retrieval.EFTTitle(km))
+		fitOf[km.KillmailID], titleOf[km.KillmailID] = fit, retrieval.EFTTitle(km)
 		if !aggregate.IsStructure(km.Victim.Ship) { // a structure's numbers wait on security-scaled rigs and services
 			loss.Stats = fitStats(fit, hasAbyssal(fit))
 		}
@@ -207,6 +238,10 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 			lossTags = append(lossTags, loss.Tags)
 		}
 		group.Tags = retrieval.MergeFitTags(lossTags...)
+		group.Summary = buildSummary(group.Losses)
+		if group.Summary != nil {
+			group.Summary.EFT = summaryEFT(group.Losses, group.Summary.CommonLoss, fitOf, titleOf)
+		}
 		for _, loss := range group.Losses {
 			if loss.Time.After(group.LastLost) {
 				group.LastLost = loss.Time
@@ -227,6 +262,31 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 		return b.LastLost.Compare(a.LastLost)
 	})
 	return fits
+}
+
+/*
+	summaryEFT is a merged fit's EFT for the PDF: the CommonLoss's fit, with the largest set of implants any of its losses had in place of its own when it has fewer (user's call 2026-10-30), so the doctrine's EFT always shows what its pilots plug in
+
+Parameters:
+  - losses: the fit's losses, most implants first (buildFits), so the first has the largest set
+  - common: the index of the CommonLoss
+  - fitOf: each loss's fit by killmail id, with its capsule's implants
+  - titleOf: each loss's EFT title by killmail id
+
+Returns:
+  - string: the EFT text, the CommonLoss's own when it already has the largest set
+*/
+func summaryEFT(losses []FitLoss, common int, fitOf map[int]*retrieval.Fit, titleOf map[int]string) string {
+	own := losses[common]
+	fullest := fitOf[losses[0].KillmailID]
+	fit := fitOf[own.KillmailID]
+	if fit == nil || fullest == nil || len(fullest.Implants) <= len(fit.Implants) {
+		return own.EFT
+	}
+	// a copy, so the loss's own fit keeps its own implants
+	withImplants := *fit
+	withImplants.Implants = fullest.Implants
+	return withImplants.EFT(titleOf[own.KillmailID])
 }
 
 // affiliateOf is the affiliate (holding, in the code) whose pilot lost a killmail, nil when the target itself lost it
@@ -315,25 +375,37 @@ func podsWithShips(ships []*retrieval.Killmail, pods []*retrieval.Killmail, batt
 	return podOf
 }
 
-// fitKey is what makes two fits identical: the hull and the module types in each rack, in any order. Charges, drones, and cargo do not count, as they are too easily used up or forgotten by the time the ship dies.
+// fitKey is what makes two fits identical: the hull and the base type (comm.BaseType) of the modules in each rack, in any order, so a module's T2, meta, faction, and other variants are one module. Charges, drones, and cargo do not count, as they are too easily used up or forgotten by the time the ship dies.
 // A module in one of fit_merged_groups counts as its group, so a fit's ECM flavors, picked for the enemy's sensors, don't split it.
 func fitKey(shipID int, fit *retrieval.Fit) string {
+	return fitKeyOf(shipID, fit, false)
+}
+
+// fitKeyOf is fitKey, or with exact the key by each module's own type, which still counts a merged group as one module
+func fitKeyOf(shipID int, fit *retrieval.Fit, exact bool) string {
 	parts := []string{fmt.Sprint(shipID)}
 	for _, rack := range [][]*retrieval.FittedModule{fit.Highs, fit.Mids, fit.Lows, fit.Rigs, fit.Subsystems, fit.Services} {
 		ids := []int{}
 		for _, fitted := range rack {
 			if fitted != nil && fitted.Module != nil {
-				id := fitted.Module.ItemID
-				if comm.FitMergedGroups.ContainsGroupOf(id) {
-					id = -comm.TypeGroup(id) // negative so it can't clash with a type id
-				}
-				ids = append(ids, id)
+				ids = append(ids, moduleKey(fitted.Module.ItemID, exact))
 			}
 		}
 		slices.Sort(ids)
 		parts = append(parts, strings.Trim(fmt.Sprint(ids), "[]"))
 	}
 	return strings.Join(parts, "|")
+}
+
+// moduleKey is a module's identity when merging: its merged group (negative so it can't clash with a type id), else its base type, or with exact its own type
+func moduleKey(id int, exact bool) int {
+	if comm.FitMergedGroups.ContainsGroupOf(id) {
+		return -comm.TypeGroup(id)
+	}
+	if exact {
+		return id
+	}
+	return comm.BaseType(id)
 }
 
 // hasAbyssal is whether a fit has a mutated module. A merged fit is Abyssal if any of its losses is, as a merged group's flavors may differ.

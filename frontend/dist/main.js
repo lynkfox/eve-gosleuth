@@ -1804,11 +1804,12 @@ let fitsShown = noFitsShown();
 
 /*
   noFitsShown is fitsShown before any Fits tab is drawn. byKillmail is each loss's fit, by the loss's and its capsule's killmail ids.
+  selected is the loss shown, or the first loss of a fit whose summary is shown (onSummary).
   filter lists only the fits the filter box matches, searchText is what it matches each fit against (fitSearchText), and filterOpened is the hulls a filter has
   unfolded, each with whether it was folded before, so clearing the box folds them again; null while the box is empty.
 */
 function noFitsShown() {
-  return { fits: null, selected: 0, folded: new Set(), select: null, byKillmail: new Map(), filter: null, searchText: new Map(), filterOpened: null, ruleTags: [] };
+  return { fits: null, selected: 0, onSummary: false, folded: new Set(), select: null, byKillmail: new Map(), filter: null, searchText: new Map(), filterOpened: null, ruleTags: [] };
 }
 
 // FITS_FOLD_OVER is how many fits the tab lists before it starts with every hull folded, but the chosen one's
@@ -1816,7 +1817,7 @@ const FITS_FOLD_OVER = 12;
 
 /*
   renderFits fills the Fits tab of a pilot, corp, or alliance search: the target's fits, identical fits merged with a count, under a heading for each ship that folds.
-  Selecting one draws it in the fitting window on the right, with its losses to page through. Copy EFT puts the chosen loss on the clipboard for the in-game Import from clipboard.
+  Selecting one draws it in the fitting window on the right, a merged fit's summary first, with its losses to page through. Copy EFT puts the chosen loss on the clipboard for the in-game Import from clipboard.
   The first fit listed is selected to start, and a redraw keeps the one chosen.
 */
 function renderFits(fits) {
@@ -1837,10 +1838,11 @@ function renderFits(fits) {
   }
   const rows = new Map();
   const hulls = new Map();
-  // a fit picked from the list opens on its first loss, the one with the most implants, the newest of those (buildFits)
+  // a fit picked from the list opens on its summary, or a fit lost once on its loss; a killmail id opens that loss
   const select = (fit, killmailId) => {
-    const loss = fit.losses.find((each) => isFitLoss(each, killmailId)) || fit.losses[0];
-    fitsShown.selected = loss.killmailId;
+    const loss = fit.losses.find((each) => isFitLoss(each, killmailId)) || (fit.summary ? null : fit.losses[0]);
+    fitsShown.selected = (loss || fit.losses[0]).killmailId;
+    fitsShown.onSummary = !loss;
     for (const [shown, row] of rows) row.setAttribute("aria-selected", String(shown === fit));
     if (fitsShown.folded.delete(fit.shipName)) hulls.get(fit.shipName).unfold();
     renderFitWindow(fit, loss, (other) => select(fit, other));
@@ -1900,7 +1902,7 @@ function renderFits(fits) {
   } else {
     // a redraw keeps the chosen fit, even one the filter hides
     const kept = fitsShown.byKillmail.get(fitsShown.selected);
-    if (kept) select(kept, fitsShown.selected);
+    if (kept) select(kept, fitsShown.onSummary ? 0 : fitsShown.selected);
     else select(fits[0]);
   }
 }
@@ -1951,7 +1953,7 @@ function filterFits(fits, rows, hulls) {
 
 /*
   fitSearchText is what the filter box matches a fit against, lowercased: its hull, its modules, and the pilot, corp and alliance of each loss.
-  Every loss's modules are read, as a merged fit's can differ (fit_merged_groups, ie its ECM flavors), as does who lost it.
+  Every loss's modules are read, as a merged fit's can differ (its variants of a base type, and fit_merged_groups, ie its ECM flavors), as does who lost it.
   Names are joined on a line break, which no word holds, so a word matches within one name.
 */
 function fitSearchText(fit) {
@@ -2220,22 +2222,24 @@ const FIT_ARCS = [
 
 /*
   renderFitWindow draws a loss of a fit: the hull with its modules around it, loaded charges as a badge on their module, and an empty slot as a hollow socket.
-  Arrows beside the ship's name (or ← → anywhere on the tab) page through its losses, wrapping round at either end, the one shown named under it, and its implants, boosters, drones and fighters curve around the outside (FIT_ARCS).
+  loss null draws the fit's summary (renderFitSummary). Arrows beside the ship's name (or ← → anywhere on the tab) page through the summary and its losses, wrapping round at either end, the one shown named under it, and its implants, boosters, drones and fighters curve around the outside (FIT_ARCS).
   The hull, each module and charge, and each of those has a right click menu to open it on EVE Ref.
 */
 function renderFitWindow(fit, loss, choose) {
   el("fit-view-title").textContent = fit.shipName;
-  const index = fit.losses.indexOf(loss);
-  const count = fit.losses.length;
+  // the summary (null) is the first page of a fit lost more than once, then each loss
+  const pages = [...(fit.summary ? [null] : []), ...fit.losses];
+  const index = pages.indexOf(loss);
+  const count = pages.length;
   const page = (step) => {
-    if (count > 1) choose(fit.losses[(index + step + count) % count].killmailId);
+    if (count > 1) choose(pages[(index + step + count) % count]?.killmailId || 0);
   };
   const paged = count > 1;
   el("fit-prev").hidden = !paged;
   el("fit-next").hidden = !paged;
   el("fit-prev").onclick = () => page(-1);
   el("fit-next").onclick = () => page(1);
-  el("fit-page-count").textContent = paged ? `${index + 1} of ${count}` : "";
+  el("fit-page-count").textContent = !loss ? "Summary" : fit.losses.length > 1 ? `${fit.losses.indexOf(loss) + 1} of ${fit.losses.length}` : "";
   // anywhere on the tab, so a fit just picked from the list pages at once; a modified arrow is left to the WebView
   el("panel-fits").onkeydown = (event) => {
     // the arrows move the filter box's caret, not the loss
@@ -2246,6 +2250,10 @@ function renderFitWindow(fit, loss, choose) {
     page(step);
   };
 
+  if (!loss) {
+    renderFitSummary(fit);
+    return;
+  }
   // the loss shown, and its menu: its killmail, and the capsule whose implants it shows
   const sections = [
     killmailSection(loss.url),
@@ -2256,8 +2264,60 @@ function renderFitWindow(fit, loss, choose) {
   if (loss.podKillmailId) shown.append(" ", fitTag(FIT_IMPLANTS_TAG, true));
   shown.oncontextmenu = (event) => openSectionsMenu(event, sections);
   // every tag of this loss by name, with how it was reached on hover or focus (showFitTagTip), the hidden ones last and muted, as the list never shows them
+  fitViewTags(loss.tags);
+  const zkill = el("fit-zkill");
+  zkill.hidden = false;
+  zkill.disabled = false;
+  zkill.onclick = () => window.runtime.BrowserOpenURL(loss.url);
+  zkill.oncontextmenu = (event) => openSectionsMenu(event, sections);
+
+  const note = el("fit-view-note");
+  note.hidden = !loss.missingTypes;
+  note.textContent = loss.missingTypes ? `${loss.missingTypes} item ${loss.missingTypes === 1 ? "type is" : "types are"} newer than GoSleuth's item data, so this fit may be missing pieces.` : "";
+  fitCopyButton(loss.eft);
+  drawFitRing(fit, loss.fit, (slot) => ({
+    title: slot.charge ? `${slot.module.name}\n${slot.charge.name}` : slot.module.name,
+    sections: [typeSection(slot.module), ...(slot.charge ? [typeSection(slot.charge)] : [])],
+  }));
+  renderFitStats(fit, (loss.stats || []).map((stats) => ({ mode: stats.mode, stats, max: null })), loss.tags);
+}
+
+/*
+  renderFitSummary draws a merged fit's first page: each slot's base type, its variants on hover, the stats as ranges across the losses, and the most common variant's EFT to copy.
+  It is no one killmail, so the zKillboard button is hidden.
+*/
+function renderFitSummary(fit) {
+  const summary = fit.summary;
+  const losses = fit.losses.length;
+  const shown = el("fit-view-loss");
+  const implanted = summary.implanted ? [`implants on ${summary.implanted} of ${losses}`] : [];
+  shown.replaceChildren(["Summary", `${losses} losses`, `${summary.pilots} ${summary.pilots === 1 ? "pilot" : "pilots"}`, ...implanted].join(" · "));
+  if (summary.implanted) shown.append(" ", fitTag(FIT_IMPLANTS_TAG, true));
+  shown.oncontextmenu = null;
+  fitViewTags(fit.tags);
+  const zkill = el("fit-zkill");
+  zkill.hidden = true;
+  zkill.onclick = null;
+  zkill.oncontextmenu = null;
+  const note = el("fit-view-note");
+  note.hidden = true;
+  note.textContent = "";
+  const common = fit.losses[summary.commonLoss] || fit.losses[0];
+  fitCopyButton(common.eft);
+  drawFitRing(fit, summary.fit, (slot) => {
+    const variants = slot.variants || [];
+    const seen = variants.map((variant) => `${variant.name} ×${variant.losses}`);
+    return {
+      title: [slot.module.name, ...(seen.length ? ["Fitted:", ...seen] : [])].join("\n"),
+      sections: [typeSection(slot.module), ...variants.filter((variant) => variant.id !== slot.module.id).map(typeSection)],
+    };
+  }, (stack, key) => (key === "implants" ? `${stack.name}\nOn ${stack.quantity} of ${losses} losses` : null));
+  renderFitStats(fit, (summary.stats || []).map((range) => ({ mode: range.mode, stats: range.min, max: range.max })), fit.tags, losses);
+}
+
+// fitViewTags lists tags by name under the fitting window's title, with how each was reached on hover or focus (showFitTagTip), the hidden ones last and muted, as the list never shows them
+function fitViewTags(tags = []) {
   hideFitTagTip();
-  const tags = loss.tags || [];
   el("fit-view-tags").replaceChildren(...[...tags.filter((tag) => !tag.hidden), ...tags.filter((tag) => tag.hidden)].map((tag) => {
     const chip = fitTag(fitRuleTag(tag), true);
     chip.removeAttribute("title");
@@ -2268,19 +2328,21 @@ function renderFitWindow(fit, loss, choose) {
     chip.addEventListener("blur", hideFitTagTip);
     return chip;
   }));
-  const zkill = el("fit-zkill");
-  zkill.disabled = false;
-  zkill.onclick = () => window.runtime.BrowserOpenURL(loss.url);
-  zkill.oncontextmenu = (event) => openSectionsMenu(event, sections);
+}
 
-  const note = el("fit-view-note");
-  note.hidden = !loss.missingTypes;
-  note.textContent = loss.missingTypes ? `${loss.missingTypes} item ${loss.missingTypes === 1 ? "type is" : "types are"} newer than GoSleuth's item data, so this fit may be missing pieces.` : "";
+// fitCopyButton points Copy EFT at an EFT text
+function fitCopyButton(eft) {
   el("fit-copy").disabled = false;
-  el("fit-copy").onclick = () => window.runtime.ClipboardSetText(loss.eft)
+  el("fit-copy").onclick = () => window.runtime.ClipboardSetText(eft)
     .then((copied) => tickerPush(copied ? "Fit copied" : "Could not copy the fit"))
     .catch(() => tickerPush("Could not copy the fit"));
+}
 
+/*
+  drawFitRing draws a fit layout round the hull's render, each module slot named and given its menu by describe(slot).
+  Implants, boosters, drones and fighters show their quantity on their corner, named on hover by nameStack(stack, key) when it gives a name (a summary's implants, whose quantity is how many losses had them), else with their quantity.
+*/
+function drawFitRing(fit, layout, describe, nameStack = () => null) {
   const render = document.createElement("img");
   render.className = "fit-hull-render";
   render.src = fit.shipRenderUrl;
@@ -2288,7 +2350,7 @@ function renderFitWindow(fit, loss, choose) {
   withMenu(render, [typeSection({ name: fit.shipName, eveRefUrl: fit.shipEveRefUrl })]);
   const slots = [render];
   for (const rack of FIT_RACKS) {
-    const rackSlots = loss.fit[rack.key] || [];
+    const rackSlots = layout[rack.key] || [];
     const step = FIT_SLOT_STEP[rack.ring];
     rackSlots.forEach((slot, index) => {
       const socket = document.createElement("span");
@@ -2298,20 +2360,21 @@ function renderFitWindow(fit, loss, choose) {
       if (!slot) {
         socket.title = `Empty ${rack.label.toLowerCase()} slot`;
       } else {
-        socket.title = slot.charge ? `${slot.module.name}\n${slot.charge.name}` : slot.module.name;
+        const { title, sections } = describe(slot);
+        socket.title = title;
         socket.append(fitIcon(slot.module, "fit-module"));
         if (slot.charge) socket.append(fitIcon(slot.charge, "fit-charge"));
-        withMenu(socket, [typeSection(slot.module), ...(slot.charge ? [typeSection(slot.charge)] : [])]);
+        withMenu(socket, sections);
       }
       slots.push(socket);
     });
   }
   for (const arc of FIT_ARCS) {
-    arc.keys.flatMap((key) => loss.fit[key] || []).forEach((stack, index) => {
+    arc.keys.flatMap((key) => (layout[key] || []).map((stack) => [stack, key])).forEach(([stack, key], index) => {
       const item = document.createElement("span");
       item.className = "fit-slot fit-slot-far";
       item.style.setProperty("--angle", `${arc.start + arc.direction * index * FIT_SLOT_STEP.far}deg`);
-      item.title = stack.quantity > 1 ? `${stack.name} ×${stack.quantity.toLocaleString()}` : stack.name;
+      item.title = nameStack(stack, key) || (stack.quantity > 1 ? `${stack.name} ×${stack.quantity.toLocaleString()}` : stack.name);
       item.append(fitIcon(stack, "fit-module"));
       if (stack.quantity > 1) {
         const count = document.createElement("span");
@@ -2324,7 +2387,6 @@ function renderFitWindow(fit, loss, choose) {
     });
   }
   el("fit-ring").replaceChildren(...slots);
-  renderFitStats(fit, loss);
 }
 
 // FIT_DAMAGE_TYPES are the four damage types in the order the engine lists a layer's resonance, each with a fixed color: they mean a damage type, so no theme changes them
@@ -2370,11 +2432,19 @@ function fitStatsSpan(className, text) {
   return span;
 }
 
+// fitRange writes a number, or a summary's range of it as "low – high", each end written by format, one value where both read the same
+function fitRange(low, high, format) {
+  if (high === undefined || high === null) return format(low);
+  const [a, b] = [format(Math.min(fitStat(low), fitStat(high))), format(Math.max(fitStat(low), fitStat(high)))];
+  return a === b ? a : `${a} – ${b}`;
+}
+
 /*
-  renderFitStats fills the fitting window's stats strip from a loss's stats: one entry, or a tactical destroyer's three modes with a switch between them.
-  The strip is made on first use, under the ring. It is hidden when the loss has no stats (a structure, an unknown hull).
+  renderFitStats fills the fitting window's stats strip: one entry, or a tactical destroyer's three modes with a switch between them.
+  Each entry is {mode, stats, max}: a loss's stats with max null, or a summary's lowest (stats) and highest (max) of each number, shown as ranges, with how many losses they span (losses).
+  The strip is made on first use, under the ring. It is hidden when there are no stats (a structure, an unknown hull).
 */
-function renderFitStats(fit, loss) {
+function renderFitStats(fit, all, tags, losses) {
   let strip = document.getElementById("fit-stats");
   if (!strip) {
     strip = document.createElement("div");
@@ -2382,7 +2452,6 @@ function renderFitStats(fit, loss) {
     strip.className = "fit-stats";
     el("fit-ring").after(strip);
   }
-  const all = Array.isArray(loss.stats) ? loss.stats : [];
   strip.hidden = all.length === 0;
   if (!all.length) {
     strip.replaceChildren();
@@ -2390,7 +2459,7 @@ function renderFitStats(fit, loss) {
   }
   if (fitStatsMode.fit !== fit) fitStatsMode = { fit, mode: null };
   const draw = () => {
-    const stats = all.find((entry) => entry.mode === fitStatsMode.mode) || all[0];
+    const shown = all.find((entry) => entry.mode === fitStatsMode.mode) || all[0];
     const parts = [];
     if (all.length > 1) {
       const switcher = document.createElement("div");
@@ -2402,7 +2471,7 @@ function renderFitStats(fit, loss) {
         button.type = "button";
         button.className = "fit-mode";
         button.textContent = entry.mode || "Mode";
-        button.setAttribute("aria-pressed", String(entry === stats));
+        button.setAttribute("aria-pressed", String(entry === shown));
         button.onclick = () => {
           fitStatsMode = { fit, mode: entry.mode };
           draw();
@@ -2411,7 +2480,8 @@ function renderFitStats(fit, loss) {
       }
       parts.push(switcher);
     }
-    parts.push(...fitStatsBody(stats, loss));
+    parts.push(...fitStatsBody(shown.stats, shown.max, tags));
+    if (shown.max) parts.push(fitStatsSpan("fit-assumptions muted", `Each number's range across ${losses} losses, taken alone, so the best of one need not come with the best of another`));
     strip.replaceChildren(...parts);
   };
   draw();
@@ -2422,20 +2492,22 @@ const FIT_SENSOR_COLORS = { Radar: "#e0c341", Gravimetric: "#4a90d9", Magnetomet
 
 /*
   fitStatsBody is the strip's content for one stats entry, one grid: the Details button in line with the column titles, the total EHP and sensor boxes under it as tall as the three layer rows, and the rows themselves; then what was assumed.
+  With max (a summary's highest of each number) each number is a range from stats to max, and a resist bar shades from its lower end to its higher.
 */
-function fitStatsBody(stats, loss) {
+function fitStatsBody(stats, max, tags) {
   const parts = [];
   // its own links are in the numbers, as in game they reach the ship that runs them: worth a warning, as its fleet may not have had them
   if (stats.boosted) parts.push(fitStatsSpan("fit-stats-warning", "⚠ Includes its own command bursts"));
   const grid = document.createElement("div");
   grid.className = "fit-resists";
-  grid.append(fitStatDetails(stats, loss) || fitStatsSpan("", ""), fitStatsSpan("", ""), fitStatsSpan("fit-resist-title", "EHP"), ...FIT_DAMAGE_TYPES.map((type) => fitStatsSpan("fit-resist-title", type.name)));
+  grid.append(fitStatDetails(stats, max, tags) || fitStatsSpan("", ""), fitStatsSpan("", ""), fitStatsSpan("fit-resist-title", "EHP"), ...FIT_DAMAGE_TYPES.map((type) => fitStatsSpan("fit-resist-title", type.name)));
 
   // the total EHP, and how hard it is to jam: its sensor strength, tinted by sensor type, and any ECM resistance of the hull
   const sensor = stats.sensor || {};
-  const ecm = Math.round((1 - fitStat((stats.ewar_resist || {}).ECMResistance ?? 1)) * 100);
-  const jam = [`${sensor.type || "Sensor"} ${Math.round(fitStat(sensor.strength))}`];
-  if (ecm !== 0) jam.push(`${ecm}% ECM resist`);
+  const ecmOf = (each) => Math.round((1 - fitStat(((each && each.ewar_resist) || {}).ECMResistance ?? 1)) * 100);
+  const ecm = ecmOf(stats);
+  const jam = [`${sensor.type || "Sensor"} ${fitRange(sensor.strength, max && (max.sensor || {}).strength, (value) => String(Math.round(fitStat(value))))}`];
+  if (ecm !== 0 || (max && ecmOf(max) !== 0)) jam.push(`${fitRange(ecm, max && ecmOf(max), String)}% ECM resist`);
   const sensorBox = fitStatBox("Against ECM", jam);
   if (FIT_SENSOR_COLORS[sensor.type]) {
     const tint = document.createElement("span");
@@ -2445,19 +2517,26 @@ function fitStatsBody(stats, loss) {
   }
   const boxes = document.createElement("div");
   boxes.className = "fit-stats-boxes";
-  boxes.append(fitStatBox("Total EHP", [compactHp(stats.ehp)]), sensorBox);
+  boxes.append(fitStatBox("Total EHP", [fitRange(stats.ehp, max && max.ehp, compactHp)]), sensorBox);
   grid.append(boxes);
 
   // a row per layer: its EHP (its raw HP on hover), then each damage type's resist as a bar with the number on it. The layer's lowest resist is its hole, in the error color, unless all four are equal
-  for (const [label, layer] of [["Shield", stats.shield], ["Armor", stats.armor], ["Hull", stats.hull]]) {
-    const resists = ((layer && layer.resonance) || [1, 1, 1, 1]).map((resonance) => Math.max(0, Math.min(100, (1 - fitStat(resonance)) * 100)));
-    const lowest = Math.min(...resists);
-    const hasHole = resists.some((resist) => resist.toFixed(1) !== lowest.toFixed(1));
-    const ehp = fitStatsSpan("fit-resist-hp", compactHp(layer && layer.ehp));
-    ehp.title = `${compactHp(layer && layer.hp)} HP before resists`;
+  const resistsOf = (layer) => ((layer && layer.resonance) || [1, 1, 1, 1]).map((resonance) => Math.max(0, Math.min(100, (1 - fitStat(resonance)) * 100)));
+  for (const [label, key] of [["Shield", "shield"], ["Armor", "armor"], ["Hull", "hull"]]) {
+    const layer = stats[key];
+    const top = max && max[key];
+    // the lowest resonance is the highest resist, so a summary's min stats hold the higher end
+    const resists = resistsOf(layer);
+    const others = top ? resistsOf(top) : resists;
+    const lows = resists.map((resist, index) => Math.min(resist, others[index]));
+    const lowest = Math.min(...lows);
+    const hasHole = lows.some((resist) => resist.toFixed(1) !== lowest.toFixed(1));
+    const ehp = fitStatsSpan("fit-resist-hp", fitRange(layer && layer.ehp, top && top.ehp, compactHp));
+    ehp.title = `${fitRange(layer && layer.hp, top && top.hp, compactHp)} HP before resists`;
     grid.append(fitStatsSpan("fit-resist-layer", label), ehp);
     FIT_DAMAGE_TYPES.forEach((type, index) => {
-      const resist = resists[index];
+      const resist = lows[index];
+      const high = Math.max(resists[index], others[index]);
       const cell = document.createElement("span");
       cell.className = `fit-resist${hasHole && resist.toFixed(1) === lowest.toFixed(1) ? " fit-resist-hole" : ""}`;
       cell.title = `${label} ${type.name} resist`;
@@ -2467,7 +2546,16 @@ function fitStatsBody(stats, loss) {
       fill.style.width = `${resist}%`;
       fill.style.background = type.color;
       bar.append(fill);
-      cell.append(bar, fitStatsSpan("fit-resist-num", `${resist.toFixed(1)}%`));
+      // a range is shaded fainter from its low end to its high, and written whole, as two decimals would not fit the cell
+      const ranged = high.toFixed(0) !== resist.toFixed(0);
+      if (ranged) {
+        const spread = document.createElement("span");
+        spread.className = "fit-resist-spread";
+        spread.style.width = `${high - resist}%`;
+        spread.style.background = type.color;
+        bar.append(spread);
+      }
+      cell.append(bar, fitStatsSpan("fit-resist-num", ranged ? `${resist.toFixed(0)}–${high.toFixed(0)}%` : `${resist.toFixed(1)}%`));
       grid.append(cell);
     });
   }
@@ -2488,30 +2576,36 @@ function fitStatBox(label, lines) {
 /*
   fitStatDetails is the Details button whose panel, opening down over the strip on hover or click, has the stats the strip doesn't show:
   its self repair on an active tank, its shield regen on a passive one (the fit's Passive tag), its neut pressure, the repair and capacitor it gives as logi, and the hull's ewar resistances (ECM is in the sensor box).
-  null when there are none.
+  With max (a summary's highest of each number) each is a range, shown when either end has it. null when there are none.
 */
-function fitStatDetails(stats, loss) {
-  const rate = (value, unit = "HP/s") => `${Math.round(fitStat(value)).toLocaleString("en-US")} ${unit}`;
+function fitStatDetails(stats, max, tags = []) {
+  const top = max || {};
+  const number = (unit) => (value) => `${Math.round(fitStat(value)).toLocaleString("en-US")}${unit}`;
+  const rate = (low, high, unit = "HP/s") => `${fitRange(low, max ? high : null, number(""))} ${unit}`;
+  const has = (low, high) => fitStat(low) > 0 || (max && fitStat(high) > 0);
   const rows = [];
   const local = stats.local_rep || {};
+  const localTop = top.local_rep || {};
   for (const [key, label] of [["shield", "Shield boost"], ["armor", "Armor repair"], ["hull", "Hull repair"]]) {
-    if (fitStat(local[key]) > 0) rows.push([label, rate(local[key])]);
+    if (has(local[key], localTop[key])) rows.push([label, rate(local[key], localTop[key])]);
   }
-  const passive = (loss.tags || []).some((tag) => tag.name === "Passive");
-  if (passive && fitStat(stats.passive_regen) > 0) rows.push(["Shield regen (peak)", rate(stats.passive_regen)]);
-  if (fitStat(stats.neut) > 0) rows.push(["Neut pressure", rate(stats.neut, "GJ/s")]);
+  const passive = tags.some((tag) => tag.name === "Passive");
+  if (passive && has(stats.passive_regen, top.passive_regen)) rows.push(["Shield regen (peak)", rate(stats.passive_regen, top.passive_regen)]);
+  if (has(stats.neut, top.neut)) rows.push(["Neut pressure", rate(stats.neut, top.neut, "GJ/s")]);
   const remote = stats.remote_rep || {};
+  const remoteTop = top.remote_rep || {};
   for (const [key, label] of [["shield", "Remote shield"], ["armor", "Remote armor"], ["hull", "Remote hull"]]) {
-    if (fitStat(remote[key]) > 0) rows.push([label, rate(remote[key])]);
+    if (has(remote[key], remoteTop[key])) rows.push([label, rate(remote[key], remoteTop[key])]);
   }
-  if (fitStat(remote.capacitor) > 0) rows.push(["Remote cap", rate(remote.capacitor, "GJ/s")]);
+  if (has(remote.capacitor, remoteTop.capacitor)) rows.push(["Remote cap", rate(remote.capacitor, remoteTop.capacitor, "GJ/s")]);
 
   // the ewar resistances the hull has at all, as the % resisted, rounded first so a hair under 1 isn't shown as 0%
+  const percent = (value) => Math.round((1 - fitStat(value ?? 1)) * 100);
+  const resistTop = top.ewar_resist || {};
   const resisted = Object.entries(stats.ewar_resist || {})
     .filter(([key]) => key !== "ECMResistance")
-    .map(([key, value]) => [FIT_EWAR_LABELS[key] || key, Math.round((1 - fitStat(value)) * 100)])
-    .filter(([, percent]) => percent !== 0)
-    .map(([label, percent]) => [`${label} resist`, `${percent}%`]);
+    .filter(([key, value]) => percent(value) !== 0 || (max && percent(resistTop[key]) !== 0))
+    .map(([key, value]) => [`${FIT_EWAR_LABELS[key] || key} resist`, `${fitRange(percent(value), max ? percent(resistTop[key]) : null, String)}%`]);
   if (rows.length && resisted.length) rows.push(null); // a divider
   rows.push(...resisted);
   if (!rows.length) return null;
@@ -3305,9 +3399,9 @@ const TAB_HELP = {
     "Right-click a structure to search its system, owner, or killers, or open it on an external site.",
   ],
   "tab-fits": [
-    "Fits by ship. Losses with the same fit are merged into one, whatever slots its modules were in, and whichever ECM flavors it used.",
+    "Fits by ship. Losses with the same fit are merged into one, whatever slots its modules were in, whichever ECM flavors it used, and whether each module was T1, T2, meta, faction, or deadspace. A fit with an abyssal module merges only with the same abyssal modules.",
     "Non-combat ships (pods, shuttles, haulers, mining ships), structures, and losses with nothing fitted are left out.",
-    "A merged fit's losses page with the arrows by its name, or ← →, each showing its own layout, charges, and drones.",
+    "A merged fit opens on its summary: each slot's base module, the variants fitted on hover, every implant seen with how many losses had it, and each stat's range across the losses. The arrows by its name, or ← →, then page through its losses, each showing its own layout, charges, and drones.",
     "Right-click the hull, a module, a drone, or the zKillboard button (which has the capsule too) to open it on an external site.",
     "Tag key, beside the filter, explains each tag this search found. Hover a tag in the fitting window to see what earned it.",
     "Under the ship, its stats from a dogma engine: all skills V, every module active, no heat or boosts. Each layer's EHP is against even damage, and its weakest resist is red. Details ▾ gives its repair, passive regen, neut pressure, logi output, and ewar resistances. A ship running command bursts gets their bonuses itself, with a warning. A tactical destroyer has a switch between its modes.",

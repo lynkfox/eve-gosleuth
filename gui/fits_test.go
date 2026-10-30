@@ -123,11 +123,14 @@ func TestBuildFitsMergesWhateverTheOrder(t *testing.T) {
 		loss(4, []*retrieval.FittedModule{abyssalScram, battery, mwd}, nil, nil),
 	}, target, nil, nil)
 
-	assert.Len(t, fits, 2, "the same mids in any order, with or without drones or cargo, are one fit; the abyssal scram another")
-	assert.Len(t, fits[0].Losses, 1)
-	assert.True(t, fits[0].Abyssal)
-	assert.Len(t, fits[1].Losses, 3)
-	assert.False(t, fits[1].Abyssal)
+	assert.Len(t, fits, 2, "the same mids in any order, with or without drones or cargo, are one fit, but an abyssal scram is not its T2")
+	// the abyssal loss is the newest, so its fit comes first
+	abyssal, plain := fits[0], fits[1]
+	assert.Len(t, abyssal.Losses, 1)
+	assert.True(t, abyssal.Abyssal)
+	assert.Nil(t, abyssal.Summary)
+	assert.Len(t, plain.Losses, 3)
+	assert.False(t, plain.Abyssal)
 
 	tagNames := func(tags []retrieval.FitTag) []string {
 		names := []string{}
@@ -136,10 +139,10 @@ func TestBuildFitsMergesWhateverTheOrder(t *testing.T) {
 		}
 		return names
 	}
-	assert.Equal(t, 2, fits[1].Losses[1].KillmailID)
-	assert.Contains(t, tagNames(fits[1].Losses[1].Tags), "Close", "each loss has its own tags, from its own drones")
-	assert.NotContains(t, tagNames(fits[1].Losses[0].Tags), "Close", "the first loss had none")
-	assert.Contains(t, tagNames(fits[1].Tags), "Close", "the fit has every tag of its losses")
+	assert.Equal(t, 2, plain.Losses[1].KillmailID)
+	assert.Contains(t, tagNames(plain.Losses[1].Tags), "Close", "each loss has its own tags, from its own drones")
+	assert.NotContains(t, tagNames(plain.Losses[2].Tags), "Close", "the first loss had none")
+	assert.Contains(t, tagNames(plain.Tags), "Close", "the fit has every tag of its losses")
 }
 
 func TestBuildFitsMergesECMFlavors(t *testing.T) {
@@ -372,5 +375,51 @@ func TestBuildFitsAffiliateTag(t *testing.T) {
 	if assert.Contains(t, affiliateTags, 2, "the affiliate's loss") {
 		assert.True(t, affiliateTags[2].Hidden, "hidden like the weapon tags")
 		assert.Contains(t, affiliateTags[2].Meaning, "Singularity Syndicate")
+	}
+}
+
+func TestFitKeyMergesVariants(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+	assert.NoError(t, comm.InitStaticData(staticdata.Files))
+
+	fit := func(lows ...int) *retrieval.Fit {
+		modules := []*retrieval.FittedModule{}
+		for _, id := range lows {
+			modules = append(modules, &retrieval.FittedModule{Module: &retrieval.Item{ItemID: id}})
+		}
+		return &retrieval.Fit{Lows: modules}
+	}
+	assert.Equal(t, fitKey(1, fit(41058)), fitKey(1, fit(41054)), "grappler variants are one module")
+	assert.Equal(t, fitKey(1, fit(41057)), fitKey(1, fit(41058)))
+	assert.Equal(t, fitKey(1, fit(25890)), fitKey(1, fit(26290)), "reinforcer I and II are one module")
+	assert.NotEqual(t, fitKey(1, fit(18710)), fitKey(1, fit(18809)), "different base types do not merge")
+	assert.NotEqual(t, fitKeyOf(1, fit(41058), true), fitKeyOf(1, fit(41054), true), "the exact key keeps variants apart")
+	assert.Equal(t, fitKey(1, fit(2559)), fitKey(1, fit(2575)), "ECM flavors still merge")
+}
+
+func TestBuildFitsMergesVariantsWithSummary(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+	assert.NoError(t, comm.InitStaticData(staticdata.Files))
+
+	target := &retrieval.IntelTarget{IDNumber: 10, TypeOfEntity: types.PILOT}
+	loss := func(id, module int) *retrieval.Killmail {
+		return &retrieval.Killmail{
+			KillmailID:   id,
+			KillmailTime: time.Date(2026, 10, 27, 0, 0, id, 0, time.UTC),
+			Victim: &retrieval.KillmailVictim{
+				Pilot: &retrieval.Pilot{CharacterID: 10, Name: "Pilot"},
+				Ship:  &retrieval.Item{ItemID: 11957, Name: "Falcon"},
+				Fit: &retrieval.Fit{Hull: &retrieval.Item{ItemID: 11957, Name: "Falcon"}, Mids: []*retrieval.FittedModule{
+					{Module: &retrieval.Item{ItemID: module, Name: "Grappler"}},
+				}},
+			},
+		}
+	}
+	fits := buildFits([]*retrieval.Killmail{loss(1, 41058), loss(2, 41054)}, target, nil, nil)
+	assert.Len(t, fits, 1)
+	assert.Len(t, fits[0].Losses, 2)
+	if assert.NotNil(t, fits[0].Summary) {
+		assert.Equal(t, 41040, fits[0].Summary.Fit.Mids[0].Module.ID)
+		assert.Len(t, fits[0].Summary.Fit.Mids[0].Variants, 2)
 	}
 }

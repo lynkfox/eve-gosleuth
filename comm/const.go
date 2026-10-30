@@ -117,7 +117,8 @@ func InitStaticData(staticFiles fs.FS, overrides ...fs.FS) error {
 		staticFile{"space_classes.json", LoadSpaceClasses},
 		staticFile{"inventory_flags.json", LoadInventoryFlags},
 		staticFile{"fit_types.json", LoadFitTypes},
-		staticFile{"dogma.json", LoadDogma}, // after fit_types.json, to compare their builds
+		staticFile{"dogma.json", LoadDogma},                  // after fit_types.json, to compare their builds
+		staticFile{"fit_variations.json", LoadFitVariations}, // after fit_types.json, to compare their builds
 		staticFile{"fit_tag_rules.json", LoadFitTagRules},
 	)
 

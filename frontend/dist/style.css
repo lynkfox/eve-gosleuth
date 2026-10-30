@@ -2778,7 +2778,10 @@ main > * { flex: none; }
   background: var(--panel-raised);
 }
 .fit-resist-bar { position: absolute; inset: 0; }
+.fit-resist-bar { display: flex; }
 .fit-resist-bar > span { display: block; height: 100%; opacity: 0.35; }
+/* a summary's range, from its low end to its high, fainter */
+.fit-resist-bar > .fit-resist-spread { opacity: 0.15; }
 .fit-resist-num { position: relative; min-width: 0; overflow: hidden; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* a layer's lowest resist is its hole: bold, in the error color */
 .fit-resist-hole .fit-resist-num { color: var(--error); font-weight: 700; }

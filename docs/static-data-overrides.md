@@ -204,6 +204,23 @@ It has these sections, each keyed by id:
 
 To fix one value, give only that value, ie a module's armor repair amount (attribute 84): `{"types": {"3530": {"attributes": {"84": 400}}}}`.
 
+### `fit_variations.json`
+
+Each module's **base type**, so the Fits tab can merge fits that differ only in which version of a module they carry. A Heavy Gunnar Compact Stasis Grappler, a Shadow Serpentis one, and a Heavy Stasis Grappler II all point to the Heavy Stasis Grappler I. Mutated (abyssal) modules aren't listed, so a fit with one is never merged with fits without it: its rolls aren't on the killmail. Like `fit_types.json`, it is built from CCP's game data by `cmd/sdegen`, from the same release, and shouldn't need editing.
+
+It has one section, `parents`, which gives each module's type id and the id of its base type. A module that is its own base type is left out.
+
+To merge a new variant, add it. To stop one merging, set it to `null`, or to its own id:
+
+```json
+{
+    "parents": {
+        "99999": 41040,
+        "41058": null
+    }
+}
+```
+
 ### `fit_tag_rules.json`
 
 How the Fits tab tags each fit: Ratting, Logi, Links, Cyno, Neut, Tackle, Shield, Active, and the rest. Each tag adds up weights from what is fitted, and applies once the total reaches its `threshold`.

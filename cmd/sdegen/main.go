@@ -1,6 +1,6 @@
-// Command sdegen extracts what fits need from CCP's static data export (SDE) into static_data/fit_types.json and static_data/dogma.json.
+// Command sdegen extracts what fits need from CCP's static data export (SDE) into static_data/fit_types.json, static_data/dogma.json, and static_data/fit_variations.json.
 //
-//	go run ./cmd/sdegen [-sde-dir DIR | -sde-zip FILE] [-out static_data/fit_types.json] [-dogma-out static_data/dogma.json] [-pyfa DIR]
+//	go run ./cmd/sdegen [-sde-dir DIR | -sde-zip FILE] [-out static_data/fit_types.json] [-dogma-out static_data/dogma.json] [-variations-out static_data/fit_variations.json] [-pyfa DIR]
 //
 // With -sde-dir it reads an extracted JSONL SDE, with -sde-zip a downloaded one; without either, it downloads the latest JSONL zip to a temp file and reads it from there.
 package main
@@ -24,17 +24,18 @@ func main() {
 	sdeZip := flag.String("sde-zip", "", "a downloaded JSONL SDE zip, read without extracting it")
 	out := flag.String("out", "static_data/fit_types.json", "the fit types file to write")
 	dogmaOut := flag.String("dogma-out", "static_data/dogma.json", "the dogma file to write")
+	variationsOut := flag.String("variations-out", "static_data/fit_variations.json", "the module base types file to write")
 	pyfaDir := flag.String("pyfa", "", "a Pyfa clone, whose skill= arguments the bonus skills are checked against (a dev check, only read)")
 	flag.Parse()
 
-	if err := run(*sdeDir, *sdeZip, *out, *dogmaOut, *pyfaDir); err != nil {
+	if err := run(*sdeDir, *sdeZip, *out, *dogmaOut, *variationsOut, *pyfaDir); err != nil {
 		fmt.Fprintln(os.Stderr, "sdegen:", err)
 		os.Exit(1)
 	}
 }
 
 // run opens the SDE, extracts the fit types and the dogma, and writes them to out and dogmaOut
-func run(sdeDir string, zipPath string, out string, dogmaOut string, pyfaDir string) error {
+func run(sdeDir string, zipPath string, out string, dogmaOut string, variationsOut string, pyfaDir string) error {
 	var sde fs.FS
 	if sdeDir != "" {
 		sde = os.DirFS(sdeDir)
@@ -74,7 +75,16 @@ func run(sdeDir string, zipPath string, out string, dogmaOut string, pyfaDir str
 		return err
 	}
 
-	// both are made before either is written, so a failure never leaves the two files from different SDE builds
+	variations, err := ExtractVariations(sde, extract)
+	if err != nil {
+		return err
+	}
+	variationsText, err := marshalVariations(variations)
+	if err != nil {
+		return err
+	}
+
+	// all three are made before any is written, so a failure to build one never leaves them from different SDE builds (a failed write still can, which LoadFitVariations and LoadDogma warn of)
 	if err := writeAtomically(out, text); err != nil {
 		return err
 	}
@@ -83,6 +93,10 @@ func run(sdeDir string, zipPath string, out string, dogmaOut string, pyfaDir str
 		return err
 	}
 	fmt.Printf("wrote %d types, %d attributes, %d effects, %d skills, and %d bonus attributes to %s (%.2f MB)\n", len(dogma.Types), len(dogma.Attributes), len(dogma.Effects), len(dogma.Skills), len(dogma.BonusSkills), dogmaOut, float64(len(dogmaText))/1024/1024)
+	if err := writeAtomically(variationsOut, variationsText); err != nil {
+		return err
+	}
+	fmt.Printf("wrote %d module base types to %s (%d base types not in fit_types.json)\n", len(variations.Parents), variationsOut, missingParents(variations, extract))
 	for _, line := range source.modeReport {
 		fmt.Println("  modes:", line)
 	}
