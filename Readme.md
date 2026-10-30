@@ -8,7 +8,7 @@ In the grand tradition of eve tools like **Py**Fa being coded in **Py**thon and 
 
 ## Installing
 
-* Go to the [release page](https://github.com/lynkfox/eve-gosleuth/releases) and download the zip (you dont need any of the other files)
+* Go to the [release page](https://github.com/lynkfox/eve-gosleuth/releases) and download the eve-gosleuth zip (you dont need any of the other files)
 * Extract it wherever you wish.
 * Open it
  * If you get a warning window hit "More Info" and then "Run Anyway"
@@ -68,16 +68,11 @@ If you dislike AI assited coding then there is absolutely zero issue from me if 
 Roadmap of planned features.
 
 * Next
-  * Auto Update-er and Update changelong Splash screen
   * first time user tour
     * overlay that darkens screen, highlights buttons with descriptions
     * generates sample search (fake the search?) and shows off the various tabs.
-  * Battles that the group has fought (we're already tracking, so just a display update)
-    * needs warnings/reminders that its an estimation and may be wrong
-    * and inclusion in PDF report with links to eve tools, war beacon, and zkill battle pages
 
 * A bit further out
-  * On the battles tab, ability to tag a specific kill as a Fleet Doctrine from the battle pages for future refrence (saved in My Intel)
   * Jspace Home Systems / Nullsec Staging added to Affilliates system
 
 * Future plans
