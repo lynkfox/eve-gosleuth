@@ -163,6 +163,36 @@ func TestDebugMode(t *testing.T) {
 		assert.Contains(t, string(crash), "debug_test.go", "the stack shows where")
 	})
 
+	t.Run("a frontend error between searches goes in the next bundle, once", func(t *testing.T) {
+		app := debugApp(t, true)
+		app.startDebug("URSA.")
+		app.LogFrontendError("during the search")
+		app.finishDebug(nil)
+		files := zipFiles(t, filepath.Join(app.debug.dir, app.GetDebugInfo().Latest))
+		assert.Contains(t, files["search.log"], "during the search")
+		assert.NotContains(t, files, frontendLogName, "one made during the search is in its log")
+
+		app.LogFrontendError("TypeError: tab is null")
+		time.Sleep(2 * time.Millisecond) // a bundle is named for the millisecond its search started
+		app.startDebug("URSA.")
+		app.finishDebug(nil)
+		files = zipFiles(t, filepath.Join(app.debug.dir, app.GetDebugInfo().Latest))
+		assert.Contains(t, files[frontendLogName], "TypeError: tab is null")
+
+		time.Sleep(2 * time.Millisecond)
+		app.startDebug("URSA.")
+		app.finishDebug(nil)
+		files = zipFiles(t, filepath.Join(app.debug.dir, app.GetDebugInfo().Latest))
+		assert.NotContains(t, files, frontendLogName, "the bundle before took it")
+	})
+
+	t.Run("frontend errors are not kept with debug mode off", func(t *testing.T) {
+		app := debugApp(t, false)
+		app.LogFrontendError("TypeError: tab is null")
+		_, err := os.Stat(filepath.Join(app.debug.dir, frontendLogName))
+		assert.True(t, os.IsNotExist(err))
+	})
+
 	t.Run("a bundle holds the crash log, and none when there have been no crashes", func(t *testing.T) {
 		app := debugApp(t, true)
 		app.startDebug("URSA.")

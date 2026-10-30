@@ -29,10 +29,12 @@ const (
 	crashLogName       = "crash.log" // beside the settings, every panic, whether or not debug mode is on
 	debugBundlePrefix  = "gosleuth-debug-"
 	debugLogPrefix     = "search-"
+	frontendLogName    = "frontend.log" // in the debug folder, the frontend's errors between searches, until the next bundle takes them
 	debugBundlesKept   = 10
 	crashLogInBundle   = 256 << 10             // the most of the crash log a bundle holds, its newest entries
 	debugTimeLayout    = "20060102-150405.000" // to the millisecond, so two searches never share a bundle name, and sorting the names sorts them by time
 	frontendErrorLimit = 4000                  // the most characters of a frontend error kept, so a runaway one can not fill the log
+	frontendLogKept    = 256 << 10             // the most of the frontend log kept, its newest errors
 )
 
 // debugSearch is what a debug bundle says about its search, beyond the log
@@ -288,7 +290,7 @@ func staticOverrides() map[string]string {
 }
 
 /*
-	writeDebugBundle zips a search's log with its session details, the newest of the crash log, a dump of every goroutine, and a copy of each static data file the user edited (under static_data/), each a readable text file, so the user can see what they send
+	writeDebugBundle zips a search's log with its session details, the newest of the crash log, the frontend's errors since the last bundle, a dump of every goroutine, and a copy of each static data file the user edited (under static_data/), each a readable text file, so the user can see what they send
 
 Returns:
   - string: the zip's path
@@ -340,6 +342,17 @@ func (a *App) writeDebugBundle(logPath string, started time.Time, session debugS
 			}
 		}
 
+		// the frontend's errors since the last bundle, ie a tab that stopped working after the search ended
+		if frontendLog, err := os.ReadFile(filepath.Join(a.debug.dir, frontendLogName)); err == nil {
+			entry, err = archive.Create(frontendLogName)
+			if err != nil {
+				return err
+			}
+			if _, err := entry.Write(frontendLog); err != nil {
+				return err
+			}
+		}
+
 		// the user's edited game data, which can explain odd results, as it was when the search ran
 		for _, path := range overrideFiles() {
 			data, err := os.ReadFile(path)
@@ -374,6 +387,7 @@ func (a *App) writeDebugBundle(logPath string, started time.Time, session debugS
 		os.Remove(temp)
 		return "", err
 	}
+	os.Remove(filepath.Join(a.debug.dir, frontendLogName))
 	return bundlePath, nil
 }
 
@@ -437,7 +451,31 @@ func (a *App) LogFrontendError(message string) {
 	if len(message) > frontendErrorLimit {
 		message = message[:frontendErrorLimit] + "…"
 	}
-	comm.Logger.WithField("source", "frontend").Error(comm.RedactPaths(message))
+	message = comm.RedactPaths(message)
+	comm.Logger.WithField("source", "frontend").Error(message)
+	a.keepFrontendError(message)
+}
+
+// keepFrontendError adds a frontend error made between searches, in debug mode, to the frontend log, for the next bundle. One made during a search is in its log already.
+func (a *App) keepFrontendError(message string) {
+	if a.debug == nil || !a.currentSettings().DebugMode {
+		return
+	}
+	a.debug.mu.Lock()
+	defer a.debug.mu.Unlock()
+	if a.debug.file != nil {
+		return
+	}
+	if err := os.MkdirAll(a.debug.dir, 0o700); err != nil {
+		return
+	}
+	path := filepath.Join(a.debug.dir, frontendLogName)
+	kept, _ := os.ReadFile(path)
+	kept = append(kept, fmt.Sprintf("%s %s\n", time.Now().UTC().Format(time.RFC3339), message)...)
+	if len(kept) > frontendLogKept {
+		kept = kept[len(kept)-frontendLogKept:]
+	}
+	os.WriteFile(path, kept, 0o600)
 }
 
 // SetFrontendInfo keeps the frontend's user agent, which names the WebView2 version, for debug bundles. It does not wait for a running search.
