@@ -452,6 +452,8 @@ func (a *App) OpenDebugFolder() error {
 
 // LogFrontendError logs an error from the frontend's JavaScript, which is otherwise invisible, with its stack. It does not wait for a running search.
 func (a *App) LogFrontendError(message string) {
+	// redacted before the cut, which could split a home folder's path so it no longer matches
+	message = comm.RedactPaths(message)
 	if len(message) > frontendErrorLimit {
 		// cut at the start of a character, not inside one
 		cut := frontendErrorLimit
@@ -460,7 +462,6 @@ func (a *App) LogFrontendError(message string) {
 		}
 		message = message[:cut] + "…"
 	}
-	message = comm.RedactPaths(message)
 	comm.Logger.WithField("source", "frontend").Error(message)
 	a.keepFrontendError(message)
 }
