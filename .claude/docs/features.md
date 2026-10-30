@@ -146,7 +146,7 @@ The full plan and the decisions behind it are in `.claude/docs/fits-plan.md`.
   - The icons are `<symbol>`s in one sprite at the top of the report in `index.html`, drawn with `currentColor`. To change an icon, edit its symbol.
   - The panel header above the panels shows the selected tab's name, color key, and `?` help (`selectTab`).
 - **Order.** At a glance is always first and can't be moved. The tabs below it (`#tab-list`) can be dragged, or moved with Alt+↑/↓.
-  - The order in `index.html` is the default. A saved order (`Settings.TabOrder` via `SetTabOrder`) fills the slots of the tabs it names (`tabOrderFrom`), so a new tab keeps its default place. Preferences can reset it.
+  - The order in `index.html` is the default. A saved order (`Settings.TabOrder` via `SetTabOrder`) fills the slots of the tabs it names (`tabOrderFrom`), so a new tab keeps its default place. Preferences can reset it. Members and Allies come last by default (2026-10-30).
 - **Collapsing.** The « button shrinks the sidebar to its icons, with counts as badges and names in tooltips.
   - The choice is saved (`Settings.SidebarCollapsed` via `SetSidebarCollapsed`), so a first run starts expanded and later runs open the way it was left.
   - A window under 760 px wide shows icons only whatever was chosen, without changing the saved choice.
