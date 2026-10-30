@@ -5,10 +5,19 @@
 [changelog]
 header = ""
 body = """
+{#- an area as users read it: the names the app shows, else the area capitalized (fits is Fits) -#}
+{%- macro area(scope) -%}
+{%- if scope == "myintel" -%}My Intel
+{%- elif scope == "holdings" -%}Affiliates
+{%- elif scope == "static-data" -%}Static Data
+{%- elif scope == "gui" or scope == "cli" -%}{{ scope | upper }}
+{%- else -%}{{ scope | capitalize }}
+{%- endif -%}
+{%- endmacro area -%}
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | striptags | trim }}
 {% for commit in commits %}
-- {% if commit.breaking %}**Breaking:** {% endif %}{% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message }}\
+- {% if commit.breaking %}**Breaking:** {% endif %}{% if commit.scope %}**{{ self::area(scope=commit.scope) }}**: {% endif %}{{ commit.message }}\
 {% endfor %}
 {% endfor %}
 """
