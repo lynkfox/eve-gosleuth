@@ -24,18 +24,16 @@ Every search opens on **At a glance**: the target's profile (details, corporatio
 |---|:-:|:-:|:-:|
 | **Killmails:** *every killmail collected, newest first* | ✓ | ✓ | ✓ |
 | **Activity:** *when they're active, by weekday and hour* | ✓ | ✓ | ✓ |
-| **Top Fleetmates:** *the pilots most often on killmails with them* | ✓ | | |
-| **Top Pilots:** *the pilots on the most of their killmails* | | ✓ | |
-| **Members:** *the current roster (corp) or member corps (alliance)* | | ✓ | |
-| **Top Pilots/Corps:** *who is most active in the system* | | | ✓ |
+| **Top Fleetmates/Pilots/Corps:** *the pilots most often on killmails, as part of the target* | ✓ | ✓ | ✓ |
 | **Top Systems:** *where they fight* | ✓ | ✓ | |
 | **Battles:** *fights of 10 or more pilots, with links to their battle reports on zKillboard, EVE Tools, and Warbeacon* | ✓ | ✓ | ✓ |
-| **Allies?:** *who shows up on their kills, and might be friendly* | ✓ | ✓ | |
 | **Capital Pilots:** *who flies their capitals* | | ✓ | |
 | **Structures:** *citadels and towers they use, destroyed, and lost* | | ✓ | |
 | **Fits:** *the ships they lose, and how they fit them, potential classifications, and some stats* | ✓ | ✓ | |
 | **PI Pilots:** *haulers lost near the system's planets, or with PI aboard* | | | ✓ |
 | **Ratters:** *ships lost to Rat NPCs, and whether anyone else was there* | | | ✓ |
+| **Members:** *the current roster (corp) or member corps (alliance)* | | ✓ | |
+| **Allies?:** *who shows up on their kills, and might be friendly* | ✓ | ✓ | |
 
 A wormhole system also shows the last structure lost there, however long ago.
 
