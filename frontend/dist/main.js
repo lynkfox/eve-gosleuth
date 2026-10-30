@@ -20,6 +20,8 @@ const KILLMAILS_PER_PAGE = 10;
 
 let killmails = [];
 let killmailPage = 0;
+// killmailFilter is the Killmails tab's Kills, Losses, or All button, back to all on each search
+let killmailFilter = "all";
 
 function setStatus(message, isError = false) {
   const status = el("status");
@@ -1447,6 +1449,7 @@ function renderIntel(report) {
   intelReport = report;
   killmails = report.killmails || [];
   killmailPage = 0;
+  killmailFilter = "all";
   renderIntelSections(report);
 
   selectTab("tab-glance");
@@ -3100,6 +3103,7 @@ const TAB_HELP = {
   ],
   "tab-killmails": [
     "This search's killmails, newest first. Click one to open it on zKillboard.",
+    "Kills, Losses, and All at the top show only that side; an internal killmail counts as a loss.",
     "How many, and how far back, is set in Preferences.",
     "Right-click the victim or final blow to search them or open them on an external site, or a loss to Show fit.",
   ],
@@ -3748,12 +3752,36 @@ function wirePagerJumps(first, last, pageCount, onSelect) {
   last.addEventListener("click", () => onSelect(pageCount() - 1));
 }
 
+// shownKillmails are the killmails the Killmails tab's filter leaves, an internal killmail counting as a loss
+function shownKillmails() {
+  if (killmailFilter === "kill") return killmails.filter((km) => km.outcome === "kill");
+  if (killmailFilter === "loss") return killmails.filter((km) => km.outcome && km.outcome !== "kill");
+  return killmails;
+}
+
+// renderKillmailFilter marks the chosen button and counts each side, hiding the buttons for a system, whose killmails have no outcome
+function renderKillmailFilter() {
+  const filter = el("killmail-filter");
+  filter.hidden = !killmails.some((km) => km.outcome);
+  const kills = killmails.filter((km) => km.outcome === "kill").length;
+  const counts = { kill: kills, loss: killmails.filter((km) => km.outcome).length - kills, all: killmails.length };
+  const names = { kill: "Kills", loss: "Losses", all: "All" };
+  for (const button of filter.querySelectorAll("button")) {
+    const outcome = button.dataset.outcome;
+    button.textContent = `${names[outcome]} (${counts[outcome].toLocaleString("en-US")})`;
+    button.setAttribute("aria-pressed", String(outcome === killmailFilter));
+  }
+}
+
 function renderKillmailPage() {
-  const pageCount = Math.ceil(killmails.length / KILLMAILS_PER_PAGE);
+  const shown = shownKillmails();
+  const pageCount = Math.ceil(shown.length / KILLMAILS_PER_PAGE);
   const start = killmailPage * KILLMAILS_PER_PAGE;
 
-  el("killmail-list").replaceChildren(...killmails.slice(start, start + KILLMAILS_PER_PAGE).map(renderKillmailCard));
-  el("killmails-empty").hidden = killmails.length > 0;
+  renderKillmailFilter();
+  el("killmail-list").replaceChildren(...shown.slice(start, start + KILLMAILS_PER_PAGE).map(renderKillmailCard));
+  el("killmails-empty").textContent = killmails.length === 0 ? "No killmails found on zKillboard for this target." : killmailFilter === "kill" ? "No kills in this search." : "No losses in this search.";
+  el("killmails-empty").hidden = shown.length > 0;
 
   el("killmail-pager").hidden = pageCount <= 1;
   renderPager(el("page-label"), killmailPage, pageCount, showKillmailPage, { first: el("page-first"), last: el("page-last") });
@@ -5544,7 +5572,13 @@ el("search-confirm").addEventListener("close", () => {
 el("page-prev").addEventListener("click", () => changeKillmailPage(-1));
 el("page-next").addEventListener("click", () => changeKillmailPage(1));
 el("roster-prev").addEventListener("click", () => changeRosterPage(-1));
-wirePagerJumps(el("page-first"), el("page-last"), () => Math.ceil(killmails.length / KILLMAILS_PER_PAGE), showKillmailPage);
+wirePagerJumps(el("page-first"), el("page-last"), () => Math.ceil(shownKillmails().length / KILLMAILS_PER_PAGE), showKillmailPage);
+for (const button of el("killmail-filter").querySelectorAll("button")) {
+  button.addEventListener("click", () => {
+    killmailFilter = button.dataset.outcome;
+    showKillmailPage(0);
+  });
+}
 wirePagerJumps(el("roster-first"), el("roster-last"), () => (roster ? rosterPageCount() : 1), showRosterPage);
 el("roster-next").addEventListener("click", () => changeRosterPage(1));
 for (const tab of document.querySelectorAll(".tab")) tab.addEventListener("click", () => selectTab(tab.id));

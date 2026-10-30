@@ -58,6 +58,10 @@ Every row's menu is built by `withMenu` in main.js from sections (`openSectionsM
 - Holdings count as the target everywhere through `IntelTarget.IsGroup(corpID, allianceID)`: losses, members, capital pilots, and allies; the Members tab's roster stays the main corp's.
 - A killmail whose victim and every attacker are the target or its holdings (`aggregate.IsInternal`, any outside attacker or NPC makes it a normal loss) has the outcome `internal`: still a loss, never a kill.
 
+## Killmails tab
+
+- Kills, Losses, All buttons over the list (`#killmail-filter`, `killmailFilter`, `shownKillmails`) show one side, an internal killmail counted as a loss, with each side's count on its button; the pager pages the filtered list. They are hidden when no killmail has an outcome (a system search), and set back to All on each search.
+
 ## My Intel
 
 - A warning under the window's help line (`.myintel-warning`) says affiliates can reach further back than the main: each list is paged on its own, so a busy main hits its page limit while a quiet affiliate goes on, and its oldest battles show only the affiliates' side. Raised 2026-10-29 from an MSF search whose 10 pages reached Oct 15th while its affiliates reached August; cutting the affiliates at the main's oldest killmail was offered and turned down for the warning.

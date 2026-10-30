@@ -178,6 +178,12 @@
 
           <!-- a paged tab scrolls its list, its pager staying under it -->
           <div id="panel-killmails" class="tab-panel paged-panel" role="tabpanel" aria-labelledby="tab-killmails" hidden>
+            <!-- shows only the target's kills or losses; hidden for a system, whose killmails have no side -->
+            <div id="killmail-filter" class="killmail-filter" role="group" aria-label="Show" hidden>
+              <button type="button" data-outcome="kill" aria-pressed="false">Kills</button>
+              <button type="button" data-outcome="loss" aria-pressed="false">Losses</button>
+              <button type="button" data-outcome="all" aria-pressed="true">All</button>
+            </div>
             <ol id="killmail-list" class="killmail-list panel-scroll"></ol>
             <p id="killmails-empty" class="muted" hidden>No killmails found on zKillboard for this target.</p>
             <nav id="killmail-pager" class="pager" hidden>

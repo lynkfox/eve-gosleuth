@@ -2259,6 +2259,24 @@ body.debug-mode::after {
 
 /* the first and last page buttons, unseen but still taking their place while their page is one of the links */
 .page-jump { min-width: 36px; padding: 8px 10px; }
+
+/* the Killmails tab's Kills, Losses, All buttons, joined like the fitting window's mode switch */
+.killmail-filter { display: flex; margin-bottom: 8px; }
+.killmail-filter[hidden] { display: none; }
+.killmail-filter button {
+  padding: 4px 14px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: normal;
+  cursor: pointer;
+}
+.killmail-filter button + button { margin-left: -1px; }
+.killmail-filter button:first-child { border-radius: 4px 0 0 4px; }
+.killmail-filter button:last-child { border-radius: 0 4px 4px 0; }
+.killmail-filter button[aria-pressed="true"] { border-color: var(--accent); background: var(--panel-raised); color: var(--text); }
 .page-jump.page-jump-off { visibility: hidden; }
 
 /* the middle of a pager lines its page links up in a row */
