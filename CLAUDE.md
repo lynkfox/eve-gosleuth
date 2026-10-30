@@ -59,7 +59,7 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/), so 
 - Types: `feat` (something new for the user), `fix` (a bug), `docs`, `refactor`, `test`, `perf`, `build` (wails, sdegen output, versions), `ci`, `chore` (tooling, hooks, agents), `revert`. A breaking change adds `!` after the area.
 - Areas, optional but used where one fits: `search`, `killmails`, `allies`, `holdings`, `myintel`, `structures`, `capitals`, `systems`, `fits`, `tags`, `cache`, `static-data`, `gui`, `themes`, `about`, `debug`, `sdegen`, `cli`.
 - One kind of change per commit where it can be split, so each lands under one heading in the changelog.
-- `.githooks/commit-msg` checks the first line. Git uses it once `git config core.hooksPath .githooks` is set in the clone. Until 1.0 it only warns; at 1.0 set its `WARN_ONLY` to 0 so it refuses a message that doesn't follow these rules.
+- `.githooks/commit-msg` checks the first line. Git uses it once `git config core.hooksPath .githooks` is set in the clone. Since 1.0 it refuses a message that doesn't follow these rules (`WARN_ONLY=0`).
 
 ## Conventions
 

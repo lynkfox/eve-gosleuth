@@ -1,8 +1,8 @@
 #!/bin/sh
 # Checks a commit message against the Conventional Commits rules in CLAUDE.md (Commit messages).
-# Until 1.0 it only warns; at 1.0 change WARN_ONLY to 0 so a message that doesn't follow them is refused.
+# Since 1.0 a message that doesn't follow them is refused (WARN_ONLY=1 would only warn).
 # Git runs it from .githooks once `git config core.hooksPath .githooks` is set in the clone.
-WARN_ONLY=1
+WARN_ONLY=0
 
 TYPES='feat|fix|docs|refactor|test|perf|build|ci|chore|revert'
 first=$(grep -v '^#' "$1" | head -n 1)
@@ -24,7 +24,7 @@ fi
 } >&2
 
 if [ "$WARN_ONLY" = 1 ]; then
-  echo "  (a warning until 1.0; the commit goes ahead)" >&2
+  echo "  (a warning only; the commit goes ahead)" >&2
   exit 0
 fi
 exit 1
