@@ -119,6 +119,7 @@ type IntelReport struct {
 	Fits       []FitGroup        `json:"fits"`       // a pilot, corp, or alliance target's losses with their fits, identical fits merged
 	PIPilots   []PIPilot         `json:"piPilots"`   // a system target's pilots who lost haulers near its planets, or ships with PI aboard
 	Ratters    []Ratter          `json:"ratters"`    // a system target's pilots who lost ships with NPCs on the killmail
+	Battles    []Battle          `json:"battles"`    // the battles on the target's killmails, newest first
 	MemberList bool              `json:"memberList"` // a corp or alliance target has a Members tab, its rows come from GetMembers
 	// a corp or alliance target's Structures tab: the structures seen on its kills, and those it took part in destroying
 	Structures *StructuresReport `json:"structures"`
@@ -737,6 +738,7 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 	report.Killmails = buildKillmailCards(collected.Killmails, &target)
 	report.LabelNames = labelNames(report.Killmails, a.clients.ESIClient)
 	report.Scope = buildScope(&target, report.Killmails, settings.searchLimits())
+	report.Battles = buildBattles(collected.BattlesFought, collected.Killmails)
 
 	// each target type gets its own sections: who flies with a pilot, who flies for a corp or alliance, and who is active in a system
 	switch entityType {

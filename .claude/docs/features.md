@@ -62,6 +62,12 @@ Every row's menu is built by `withMenu` in main.js from sections (`openSectionsM
 
 - Kills, Losses, All buttons over the list (`#killmail-filter`, `killmailFilter`, `shownKillmails`) show one side, an internal killmail counted as a loss, with each side's count on its button; the pager pages the filtered list. They are hidden when no killmail has an outcome (a system search), and set back to All on each search.
 
+## Battles tab
+
+- Every target type has it. `buildBattles` (gui/battles.go) turns `CollectedData.BattlesFought` (`aggregate.FindBattles`, battles of more than one killmail) into rows, newest first: its first and last killmail times and length, its main system (the one with the most of its killmails, the first reached on a tie) and the others it spread to, then Pilots (`UniquePilots`, both sides, no NPCs), Ships (each pilot's distinct hulls, capsules included), and Kills (its killmails). All counts are from the search's killmails only.
+- Its battle report links (zKillboard related, EVE Tools, Warbeacon: `api.ZkillRelatedURL`, `EveToolsRelatedURL`, `WarbeaconRelatedURL`) are for the main system at the hour of the battle's middle, in EVE time with minutes 00, ie `30005206/202610301200`. They sit in the row's last column as `siteLinks` icons (`SITE_LINKS` keys `evetoolsUrl`, `warbeaconUrl`, the favicons credited in ATTRIBUTION.md and About), and in its right-click menu above the system.
+- Only battles with at least `battleMinPilots` (10) pilots, both sides together, are sent at all (user, 2026-10-30). It is paged like Killmails (`BATTLES_PER_PAGE` 20, `.paged-panel`), and At a glance's card notes how many battles were estimated.
+
 ## My Intel
 
 - Everything from the bulk buttons up (help, warning, filter, add form, undo, bulk buttons) stays at the top of the window; only the cards (`.myintel-list`) scroll, as `.myintel-body` is a flex column that doesn't scroll itself.

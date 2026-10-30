@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
@@ -216,4 +217,27 @@ func ParseEntityLink(text string) (types.EntityType, int, bool) {
 		return notALink, 0, false
 	}
 	return entityType, id, true
+}
+
+const EVE_TOOLS_BR_URL = "https://br.evetools.org"
+const WARBEACON_URL = "https://warbeacon.net"
+
+// relatedHour is a battle report's time as the related pages take it: the hour, in EVE time, with its minutes 00, ie 202610301200
+func relatedHour(at time.Time) string {
+	return at.UTC().Truncate(time.Hour).Format("200601021504")
+}
+
+// ZkillRelatedURL returns zKillboard's related kills page for a system around a time, ie https://zkillboard.com/related/30005206/202610301200/
+func ZkillRelatedURL(systemID int, at time.Time) string {
+	return fmt.Sprintf("%s/related/%d/%s/", ZKILL_URL, systemID, relatedHour(at))
+}
+
+// EveToolsRelatedURL returns the EVE Tools battle report for a system around a time, ie https://br.evetools.org/related/30005206/202610301200
+func EveToolsRelatedURL(systemID int, at time.Time) string {
+	return fmt.Sprintf("%s/related/%d/%s", EVE_TOOLS_BR_URL, systemID, relatedHour(at))
+}
+
+// WarbeaconRelatedURL returns the Warbeacon battle report for a system around a time, ie https://warbeacon.net/br/related/30005206/202610301200/
+func WarbeaconRelatedURL(systemID int, at time.Time) string {
+	return fmt.Sprintf("%s/br/related/%d/%s/", WARBEACON_URL, systemID, relatedHour(at))
 }

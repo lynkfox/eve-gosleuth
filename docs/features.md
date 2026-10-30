@@ -29,6 +29,7 @@ Every search opens on **At a glance**: the target's profile (details, corporatio
 | **Members:** *the current roster (corp) or member corps (alliance)* | | ✓ | |
 | **Top Pilots/Corps:** *who is most active in the system* | | | ✓ |
 | **Top Systems:** *where they fight* | ✓ | ✓ | |
+| **Battles:** *fights of 10 or more pilots, with links to their battle reports on zKillboard, EVE Tools, and Warbeacon* | ✓ | ✓ | ✓ |
 | **Allies?:** *who shows up on their kills, and might be friendly* | ✓ | ✓ | |
 | **Capital Pilots:** *who flies their capitals* | | ✓ | |
 | **Structures:** *citadels and towers they use, destroyed, and lost* | | ✓ | |

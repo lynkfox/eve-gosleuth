@@ -117,6 +117,7 @@
         <symbol id="icon-pi" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><ellipse cx="12" cy="12" rx="10.5" ry="3.5" transform="rotate(-20 12 12)"/></symbol>
         <symbol id="icon-ratters" viewBox="0 0 24 24"><path d="M7 17c0-3.9 2.7-7 6.5-7 2.4 0 4.3 1.2 5.5 3l3 3.2-3.2.8H7z"/><path d="M13.5 10.2a2 2 0 1 1 3-1.2"/><circle cx="19" cy="14" r="0.4"/><path d="M10 17v2M16 17v2M7 16c-3 0-5 1-5.5 4"/></symbol>
         <symbol id="icon-systems" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="8" r="2"/><circle cx="9" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M7 6.4l10 1.2M6 7.8l2.3 8.3M11 18h5M18.8 10l-.6 6"/></symbol>
+        <symbol id="icon-battles" viewBox="0 0 24 24"><path d="M14.5 17.5L3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2"/><path d="M14.5 6.5L18 3h3v3l-3.5 3.5M5 14l4 4M7 17l-3 3M3 19l2 2"/></symbol>
         <symbol id="icon-capitals" viewBox="0 0 24 24"><path d="M2 12h15l4-2.5L17 7H6L2 9.5z"/><path d="M7 7V4.5h5L14 7M2 9.5V12"/><path d="M13 18h5l2-1.2-2-1.3h-5z"/></symbol>
         <symbol id="icon-roster" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4" cy="6" r="1.2"/><circle cx="4" cy="12" r="1.2"/><circle cx="4" cy="18" r="1.2"/></symbol>
         <symbol id="icon-allies" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
@@ -139,6 +140,7 @@
             <button id="tab-pi" class="tab" type="button" role="tab" aria-controls="panel-pi" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-pi"/></svg><span class="tab-name">PI Pilots</span><span class="tab-count"></span></button>
             <button id="tab-ratters" class="tab" type="button" role="tab" aria-controls="panel-ratters" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-ratters"/></svg><span class="tab-name">Ratters</span><span class="tab-count"></span></button>
             <button id="tab-systems" class="tab" type="button" role="tab" aria-controls="panel-systems" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-systems"/></svg><span class="tab-name">Top Systems</span><span class="tab-count"></span></button>
+            <button id="tab-battles" class="tab" type="button" role="tab" aria-controls="panel-battles" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-battles"/></svg><span class="tab-name">Battles</span><span class="tab-count"></span></button>
             <button id="tab-capitals" class="tab" type="button" role="tab" aria-controls="panel-capitals" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-capitals"/></svg><span class="tab-name">Capital Pilots</span><span class="tab-count"></span></button>
             <button id="tab-structures" class="tab" type="button" role="tab" aria-controls="panel-structures" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-structures"/></svg><span class="tab-name">Structures</span><span class="tab-count"></span></button>
             <button id="tab-fits" class="tab" type="button" role="tab" aria-controls="panel-fits" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-fits"/></svg><span class="tab-name">Fits</span><span class="tab-count"></span></button>
@@ -313,6 +315,26 @@
               <tbody id="systems-body"></tbody>
             </table>
             <p id="systems-empty" class="muted" hidden>No systems found on the collected killmails.</p>
+          </div>
+
+          <div id="panel-battles" class="tab-panel paged-panel" role="tabpanel" aria-labelledby="tab-battles" hidden>
+            <p class="muted">An estimate: battles are grouped from this search's killmails alone, so one fight may be split in two, or two joined. The battle reports show the whole fight.</p>
+            <div class="panel-scroll">
+              <table>
+                <thead>
+                  <tr><th>When</th><th>System</th><th class="num" title="Pilots on its killmails, both sides">Pilots</th><th class="num" title="The ships those pilots flew, each pilot's hull counted once">Ships</th><th class="num" title="Ships destroyed">Kills</th><th>Battle reports</th></tr>
+                </thead>
+                <tbody id="battles-body"></tbody>
+              </table>
+              <p id="battles-empty" class="muted" hidden>No battles of 10 or more pilots on the collected killmails.</p>
+            </div>
+            <nav id="battle-pager" class="pager" hidden>
+              <button id="battle-first" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
+              <button id="battle-prev" class="secondary" type="button">Previous</button>
+              <span id="battle-label"></span>
+              <button id="battle-next" class="secondary" type="button">Next</button>
+              <button id="battle-last" class="secondary page-jump" type="button" title="Last page" aria-label="Last page">»</button>
+            </nav>
           </div>
 
           <div id="panel-pi" class="tab-panel" role="tabpanel" aria-labelledby="tab-pi" hidden>
@@ -490,6 +512,7 @@
           <li><button class="text-link" type="button" data-url="https://developers.eveonline.com">Fenris Creations' ESI and Static Data Export</button>: names, affiliations, ships, items, systems, and any killmail zKillboard lacks</li>
           <li><button class="text-link" type="button" data-url="https://images.evetech.net">Fenris Creations' image server</button>: portraits, logos, and ship pictures</li>
           <li><button class="text-link" type="button" data-url="https://evewho.com">EveWho</button>, <button class="text-link" type="button" data-url="https://evemaps.dotlan.net">Dotlan</button>, and <button class="text-link" type="button" data-url="https://everef.net">EVE Ref</button>: linked from the right click menus for more detail</li>
+          <li><button class="text-link" type="button" data-url="https://br.evetools.org">EVE Tools</button> and <button class="text-link" type="button" data-url="https://warbeacon.net">Warbeacon</button>: battle reports, linked from battles</li>
         </ul>
       </details>
 
@@ -511,7 +534,8 @@
           <li>Killmail lists from <button class="text-link" type="button" data-url="https://zkillboard.com/">zKillboard</button></li>
           <li>Corporation and alliance member lists from <button class="text-link" type="button" data-url="https://evewho.com/">EveWho</button></li>
           <li>System maps from <button class="text-link" type="button" data-url="https://evemaps.dotlan.net/">Dotlan EveMaps</button>, linked to from systems</li>
-          <li>The zKillboard, EveWho, and Dotlan link icons are those sites' own favicons, used to link to them</li>
+          <li>Battle reports from <button class="text-link" type="button" data-url="https://br.evetools.org/">EVE Tools</button> and <button class="text-link" type="button" data-url="https://warbeacon.net/">Warbeacon</button>, linked to from battles</li>
+          <li>The zKillboard, EveWho, Dotlan, EVE Tools, and Warbeacon link icons are those sites' own favicons, used to link to them</li>
         </ul>
       </details>
     </div>

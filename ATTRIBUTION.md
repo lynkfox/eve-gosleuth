@@ -35,4 +35,5 @@ The About window shows two trademarks, drawn inline in `frontend/dist/index.html
 - Killmail lists from [zKillboard](https://zkillboard.com/).
 - Corporation and alliance member lists from [EveWho](https://evewho.com/).
 - System maps from [Dotlan EveMaps](https://evemaps.dotlan.net/), linked to from systems.
-- The zKillboard, EveWho, and Dotlan link icons in `frontend/dist/icons/` are those sites' own favicons, used to link to them.
+- Battle reports from [EVE Tools](https://br.evetools.org/) and [Warbeacon](https://warbeacon.net/), linked to from battles.
+- The zKillboard, EveWho, Dotlan, EVE Tools, and Warbeacon link icons in `frontend/dist/icons/` are those sites' own favicons, used to link to them.

@@ -206,3 +206,12 @@ func TestDotlanSystemURL(t *testing.T) {
 	assert.Equal(t, "https://evemaps.dotlan.net/system/Old_Man_Star", api.DotlanSystemURL("Old Man Star"), "spaces are underscores")
 	assert.Equal(t, "https://evemaps.dotlan.net/system/J105443", api.DotlanSystemURL("J105443"))
 }
+
+func TestRelatedURLs(t *testing.T) {
+	at := time.Date(2026, 10, 30, 12, 47, 0, 0, time.UTC)
+	assert.Equal(t, "https://zkillboard.com/related/30005206/202610301200/", api.ZkillRelatedURL(30005206, at), "minutes are dropped")
+	assert.Equal(t, "https://br.evetools.org/related/30005206/202610301200", api.EveToolsRelatedURL(30005206, at))
+	assert.Equal(t, "https://warbeacon.net/br/related/30005206/202610301200/", api.WarbeaconRelatedURL(30005206, at))
+	local := time.FixedZone("EDT", -4*60*60)
+	assert.Equal(t, "https://zkillboard.com/related/30005206/202610301200/", api.ZkillRelatedURL(30005206, at.In(local)), "always in EVE time")
+}

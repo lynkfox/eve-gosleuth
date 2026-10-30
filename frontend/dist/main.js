@@ -23,6 +23,11 @@ let killmailPage = 0;
 // killmailFilter is the Killmails tab's Kills, Losses, or All button, back to all on each search
 let killmailFilter = "all";
 
+const BATTLES_PER_PAGE = 20;
+// battles are the report's, newest first, only those with 10 or more pilots (gui.battleMinPilots)
+let battles = [];
+let battlePage = 0;
+
 function setStatus(message, isError = false) {
   const status = el("status");
   status.textContent = message;
@@ -168,16 +173,18 @@ function offerSearch(entity) {
   dialog.showModal();
 }
 
-// SITE_LINKS are the external sites an entity or row links to, shown as small icons in this order. Dotlan is for systems.
+// SITE_LINKS are the external sites an entity or row links to, shown as small icons in this order. Dotlan is for systems, EVE Tools and Warbeacon for battles.
 const SITE_LINKS = [
   { key: "zkillUrl", name: "zKillboard", icon: "icons/zkillboard.png" },
   { key: "evewhoUrl", name: "EveWho", icon: "icons/evewho.png" },
   { key: "dotlanUrl", name: "Dotlan", icon: "icons/dotlan.png" },
+  { key: "evetoolsUrl", name: "EVE Tools", icon: "icons/evetools.png" },
+  { key: "warbeaconUrl", name: "Warbeacon", icon: "icons/warbeacon.png" },
 ];
 
 /*
   siteLinks builds the icon buttons that open an entity on each site in SITE_LINKS it has a url for
-  name: what the links are for, ie a pilot's name, for screen readers. urls: { zkillUrl, evewhoUrl, dotlanUrl }, any may be missing.
+  name: what the links are for, ie a pilot's name, for screen readers. urls: { zkillUrl, evewhoUrl, dotlanUrl, evetoolsUrl, warbeaconUrl }, any may be missing.
   vertical: stacked, as beside a row's portrait, rather than in a line under the target's
 */
 function siteLinks(name, urls, vertical = false) {
@@ -1529,6 +1536,7 @@ function renderIntel(report) {
   killmails = report.killmails || [];
   killmailPage = 0;
   killmailFilter = "all";
+  battlePage = 0;
   renderIntelSections(report);
 
   selectTab("tab-glance");
@@ -1548,6 +1556,7 @@ function renderIntelSections(report) {
   setTabCount("tab-capitals", report.capitals && new Set(report.capitals.flatMap((capital) => capital.pilots.map((pilot) => pilot.id))).size);
   setTabCount("tab-structures", report.structures && report.structures.used.length + report.structures.destroyed.length + report.structures.lost.length);
   setTabCount("tab-fits", report.fits && report.fits.length);
+  setTabCount("tab-battles", report.battles && report.battles.length);
   renderKillmailPage();
   renderActivity(report.killmails || []);
 
@@ -1591,6 +1600,11 @@ function renderIntelSections(report) {
   el("tab-ratters").hidden = !report.ratters;
   if (report.ratters) {
     renderRatters(report.ratters);
+  }
+
+  el("tab-battles").hidden = !report.battles;
+  if (report.battles) {
+    renderBattles(report.battles);
   }
 
   el("tab-capitals").hidden = !report.capitals;
@@ -3158,6 +3172,15 @@ const GLANCE_CARDS = {
     // built as the menu opens, as in the Allies tab
     rows: report.allies.slice(0, GLANCE_ROWS).map((ally) => ({ name: ally.name, imageUrl: ally.imageUrl, detail: plural(ally.pilots, "pilot", "pilots"), value: plural(ally.killmails, "kill", "kills"), menu: () => allySections(ally) })),
   }),
+  "tab-battles": (report) => ({
+    rows: report.battles.slice(0, GLANCE_ROWS).map((battle) => ({
+      name: battle.system.name,
+      detail: spokenDate(battle.start),
+      value: plural(battle.pilots, "pilot", "pilots"),
+      menu: battleSections(battle),
+    })),
+    note: `${plural(report.battles.length, "battle", "battles")} estimated`,
+  }),
   "tab-capitals": (report) => ({
     rows: topBy(report.capitals, (capital) => capital.pilots.length).map((capital) => ({ name: capital.name, imageUrl: capital.imageUrl, value: plural(capital.pilots.length, "pilot", "pilots") })),
   }),
@@ -3246,6 +3269,11 @@ const TAB_HELP = {
     "The 10 systems with the most of this target's killmails. Kills and Losses are the target's.",
     UNIQUE_DAYS_HELP,
     "Right-click a system to search it, or open it on an external site.",
+  ],
+  "tab-battles": [
+    "An estimate of the fights on this search's killmails, newest first: each killmail within 15 minutes of the last, in its systems or with its pilots.",
+    "Battles have to have at least 10 pilots involved (in total).",
+    "Right-click a battle to open its battle report, or search its system.",
   ],
   "tab-pi": [
     "Haulers lost near a planet, and any ship lost with PI aboard. Hover a PI tag to see the cargo.",
@@ -3599,6 +3627,7 @@ const TAB_COLOR_KEYS = {
   "tab-structures": [STRUCTURE_STATE_KEY],
   "tab-killmails": [OUTCOME_KEY, SECURITY_KEY, WORMHOLE_CLASS_KEY],
   "tab-systems": [SECURITY_KEY, WORMHOLE_KEY],
+  "tab-battles": [SECURITY_KEY, WORMHOLE_KEY],
 };
 
 // securityClass colors a security status by its band, high, low, or null, which the backend decides (api.SecurityBand)
@@ -4673,6 +4702,84 @@ function renderSystems(systems) {
   el("systems-empty").hidden = systems.length > 0;
 }
 
+// renderBattles fills the Battles tab from a report's battles, keeping the page the user is on
+function renderBattles(list) {
+  battles = list;
+  renderBattlePage();
+}
+
+function showBattlePage(page) {
+  battlePage = page;
+  renderBattlePage();
+}
+
+// renderBattlePage draws a page of the Battles tab: a row per battle, newest first, with its battle report links, over the pager
+function renderBattlePage() {
+  const pageCount = Math.ceil(battles.length / BATTLES_PER_PAGE);
+  battlePage = Math.max(0, Math.min(battlePage, pageCount - 1));
+  const start = battlePage * BATTLES_PER_PAGE;
+
+  const rows = battles.slice(start, start + BATTLES_PER_PAGE).map((battle) => {
+    const row = document.createElement("tr");
+
+    const whenCell = document.createElement("td");
+    const date = document.createElement("div");
+    date.textContent = spokenDate(battle.start);
+    const clock = document.createElement("div");
+    clock.className = "row-detail";
+    clock.textContent = battleClock(battle);
+    whenCell.append(date, clock);
+
+    const systemCell = document.createElement("td");
+    const name = document.createElement("div");
+    const security = document.createElement("span");
+    security.className = securityClass(battle.system.securityBand);
+    security.textContent = battle.system.securityStatus.toFixed(1);
+    name.append(`${battle.system.name} `, security);
+    const detail = document.createElement("div");
+    detail.className = "row-detail";
+    const parts = [...systemLocation(battle.system), ...(battle.otherSystems.length ? [`also ${battle.otherSystems.join(", ")}`] : [])];
+    parts.forEach((part, index) => {
+      if (index > 0) detail.append(" · ");
+      detail.append(part);
+    });
+    systemCell.append(name, detail);
+
+    const reports = document.createElement("td");
+    reports.append(siteLinks(`the battle in ${battle.system.name}`, battle));
+
+    row.append(whenCell, systemCell, numberCell(battle.pilots), numberCell(battle.ships), numberCell(battle.killmails), reports);
+    return withMenu(row, battleSections(battle));
+  });
+
+  el("battles-body").replaceChildren(...rows);
+  el("battles-empty").hidden = battles.length > 0;
+
+  el("battle-pager").hidden = pageCount <= 1;
+  renderPager(el("battle-label"), battlePage, pageCount, showBattlePage, { first: el("battle-first"), last: el("battle-last") });
+  el("battle-prev").disabled = battlePage === 0;
+  el("battle-next").disabled = battlePage >= pageCount - 1;
+}
+
+// battleClock is a battle's first and last killmail times and how long it ran, ie 11:50 – 12:10 EVE · 20 min, in the chosen time zone
+function battleClock(battle) {
+  const zone = preferences.timeZone === "local" ? "local" : "EVE";
+  const minutes = Math.round((new Date(battle.end) - new Date(battle.start)) / 60000);
+  const length = minutes >= 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} min` : `${minutes} min`;
+  return `${clockTime(timeParts(battle.start))} – ${clockTime(timeParts(battle.end))} ${zone} · ${length}`;
+}
+
+// battleSections are a battle's menu: its battle report on each site, then its system
+function battleSections(battle) {
+  const reports = [["zKillboard", battle.zkillUrl], ["EVE Tools", battle.evetoolsUrl], ["Warbeacon", battle.warbeaconUrl]]
+    .filter(([, url]) => url)
+    .map(([site, url]) => ({ label: `Open on ${site}`, action: () => window.runtime.BrowserOpenURL(url) }));
+  return [
+    ...(reports.length ? [{ heading: "Battle report", items: reports }] : []),
+    systemSection(battle.system),
+  ];
+}
+
 function clearIntel() {
   intelReport = null;
   intelTarget = null;
@@ -5687,6 +5794,9 @@ for (const button of el("killmail-filter").querySelectorAll("button")) {
     showKillmailPage(0);
   });
 }
+el("battle-prev").addEventListener("click", () => showBattlePage(battlePage - 1));
+el("battle-next").addEventListener("click", () => showBattlePage(battlePage + 1));
+wirePagerJumps(el("battle-first"), el("battle-last"), () => Math.ceil(battles.length / BATTLES_PER_PAGE), showBattlePage);
 wirePagerJumps(el("roster-first"), el("roster-last"), () => (roster ? rosterPageCount() : 1), showRosterPage);
 el("roster-next").addEventListener("click", () => changeRosterPage(1));
 for (const tab of document.querySelectorAll(".tab")) tab.addEventListener("click", () => selectTab(tab.id));
