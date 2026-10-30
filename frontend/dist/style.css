@@ -1590,6 +1590,7 @@ button.text-link {
 /* My Intel: a filter, a row to add a card, then a collapsible card per target with its holdings, the mains it holds for, and its ignored allies */
 #myintel { width: min(680px, calc(100vw - 32px)); height: calc(100vh - 32px); }
 .myintel-body { align-content: start; }
+.myintel-warning { margin: 0; padding: 6px 10px; border-radius: 4px; background: rgb(224 160 48 / 18%); color: #e0a030; font-size: 12px; }
 .myintel-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .myintel-bulk { display: flex; gap: 8px; }
 .myintel-bulk[hidden] { display: none; }
