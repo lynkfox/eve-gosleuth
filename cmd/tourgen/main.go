@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
 	"github.com/lynkfox/go_eve_sleuth/gui"
+	"github.com/lynkfox/go_eve_sleuth/retrieval"
 )
 
 func main() {
@@ -80,8 +83,10 @@ func captureSystem(app *gui.App, name string) systemDemo {
 	return systemDemo{SearchName: target.Display.Name, Target: target, Report: report}
 }
 
-// search runs SearchTarget then CollectIntel, as the page's search does, and takes the search back out of the user's recent searches
+// search runs SearchTarget then CollectIntel, as the page's search does, and takes the search back out of the user's recent searches unless it was there before
 func search(app *gui.App, name string, searchType string) (gui.TargetResult, gui.IntelReport) {
+	before, err := app.GetRecentSearches()
+	must(err)
 	target, err := app.SearchTarget(name, searchType, 0)
 	must(err)
 	if len(target.Choices) > 0 {
@@ -89,8 +94,12 @@ func search(app *gui.App, name string, searchType string) (gui.TargetResult, gui
 	}
 	report, err := app.CollectIntel(target.ID, target.Type)
 	must(err)
-	if _, err := app.RemoveRecentSearch(target.Display.Name, target.Type); err != nil {
-		comm.Logger.WithError(err).Warn("Could not remove the search from the recent searches")
+	if !slices.ContainsFunc(before, func(recent retrieval.RecentSearch) bool {
+		return recent.Type == target.Type && strings.EqualFold(recent.Name, target.Display.Name)
+	}) {
+		if _, err := app.RemoveRecentSearch(target.Display.Name, target.Type); err != nil {
+			comm.Logger.WithError(err).Warn("Could not remove the search from the recent searches")
+		}
 	}
 	return target, report
 }
