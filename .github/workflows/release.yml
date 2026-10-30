@@ -157,8 +157,6 @@ jobs:
           body_path: RELEASE_NOTES.md
           prerelease: ${{ steps.version.outputs.prerelease }}
           fail_on_unmatched_files: true
-          # the static data beside the zip is for a possible data-only update (.claude/docs/update-check-plan.md)
+          # only the zip: the exe has the static data built in, and loose data files beside it read as something to download
           files: |
             build/bin/eve-gosleuth-${{ steps.version.outputs.version }}.zip
-            static_data/fit_types.json
-            static_data/dogma.json
