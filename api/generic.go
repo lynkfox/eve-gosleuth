@@ -103,6 +103,8 @@ type APIConnection struct {
 	MaxRetries int
 	Backoff    time.Duration
 	Guard      *RateGuard // keeps requests within the server's rate limits, nil for none
+	// NotFoundIsAnswer logs a 404 at Info, for a server whose 404 means no such entity (the ESI's biomassed pilot), which its callers handle or log themselves
+	NotFoundIsAnswer bool
 }
 
 func (c APIConnection) UpdateHeaders(newHeaders map[string]string) {
@@ -239,8 +241,7 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 
 	}
 
-	// a 404 is an answer, ie a biomassed pilot, which the caller handles or logs as a failure itself
-	if IsNotFound(err) {
+	if c.NotFoundIsAnswer && IsNotFound(err) {
 		comm.Logger.WithError(err).Info("Request answered not found")
 	} else {
 		comm.Logger.WithError(err).Error("Could not complete request")

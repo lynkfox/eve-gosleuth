@@ -46,7 +46,8 @@ func NewESIClient() *ESIConnection {
 
 	connection := &ESIConnection{
 		Client: APIConnection{
-			BaseURL: ESI_URL,
+			BaseURL:          ESI_URL,
+			NotFoundIsAnswer: true,
 			HTTPClient: &http.Client{
 				Timeout: 3 * time.Second,
 			},
