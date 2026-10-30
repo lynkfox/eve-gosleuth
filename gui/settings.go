@@ -166,8 +166,14 @@ func saveSettings(path string, settings Settings) error {
 	return os.Rename(tmp, path)
 }
 
-// GetSettings returns the saved app settings, such as the theme, for the frontend to apply at startup
+// GetSettings returns the saved app settings, such as the theme, for the frontend to apply at startup. It waits for startup to load them.
 func (a *App) GetSettings() Settings {
+	a.waitReady()
+	return a.currentSettings()
+}
+
+// currentSettings returns the settings as they are, without waiting for startup, for the backend's own use
+func (a *App) currentSettings() Settings {
 	a.settingsMu.Lock()
 	defer a.settingsMu.Unlock()
 

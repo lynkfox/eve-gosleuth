@@ -244,3 +244,25 @@ func TestBuildStructuresLost(t *testing.T) {
 		assert.Equal(t, "", report.Lost[2].Moon, "a tower nearest a planet is not named after it")
 	}
 }
+
+func TestPageCallsWaitForStartup(t *testing.T) {
+	app := NewApp("1.0.0")
+	app.settings = Settings{Theme: "minmatar"}
+
+	got := make(chan Settings, 1)
+	go func() { got <- app.GetSettings() }()
+	select {
+	case <-got:
+		t.Fatal("GetSettings answered before startup was ready")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	app.markReady()
+	app.markReady() // a second call, as startup's deferred one, is harmless
+	select {
+	case settings := <-got:
+		assert.Equal(t, "minmatar", settings.Theme)
+	case <-time.After(time.Second):
+		t.Fatal("GetSettings still waiting after startup was ready")
+	}
+}

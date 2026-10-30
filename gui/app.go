@@ -25,8 +25,12 @@ const progressEvent = "progress"
 
 // App holds the backend state shared by every call from the frontend. Its exported methods are bound to the frontend by Wails, as window.go.gui.App.<Method>.
 type App struct {
-	ctx          context.Context
-	version      string     // from wails.json, see ProjectVersion
+	ctx     context.Context
+	version string // from wails.json, see ProjectVersion
+	// closed once startup has loaded the settings, debug recorder, and cache. Wails on Windows runs startup alongside the page loading,
+	// so the calls the page makes as it loads wait on it (waitReady). nil in tests, which build the App themselves.
+	ready        chan struct{}
+	readyOnce    sync.Once
 	mu           sync.Mutex // Wails runs each frontend call in its own goroutine, one search runs at a time
 	clients      retrieval.CollectionClientPool
 	cache        *retrieval.CachedEveIDs
@@ -259,7 +263,23 @@ const systemLimit = 10
 
 // NewApp creates a new App application struct
 func NewApp(version string) *App {
-	return &App{version: version}
+	return &App{version: version, ready: make(chan struct{})}
+}
+
+// markReady lets the calls waiting in waitReady through, once
+func (a *App) markReady() {
+	a.readyOnce.Do(func() {
+		if a.ready != nil {
+			close(a.ready)
+		}
+	})
+}
+
+// waitReady waits until startup has loaded the settings and cache, see App.ready
+func (a *App) waitReady() {
+	if a.ready != nil {
+		<-a.ready
+	}
 }
 
 /*
@@ -270,9 +290,11 @@ func Lifecycle(a *App) (startup func(context.Context), shutdown func(context.Con
 	return a.startup, a.shutdown
 }
 
-// startup is called when the app starts. It loads static data and the ESI cache before the frontend can make calls.
+// startup is called when the app starts. It loads static data and the ESI cache. On Windows the page loads alongside it, so the calls it makes as it loads wait for it (see App.ready).
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// a panic must not leave the page's first calls waiting forever
+	defer a.markReady()
 
 	comm.InitLogger(logrus.InfoLevel)
 	comm.SetProgressReporter(func(message string) {
@@ -303,6 +325,8 @@ func (a *App) startup(ctx context.Context) {
 		ESIClient:    cache,
 		EveWhoClient: api.NewEveWhoClient(),
 	}
+	// the SDE check may wait on the network, the page need not
+	a.markReady()
 
 	a.sde = api.NewSDEClient()
 	a.checkSDERelease()
@@ -363,7 +387,7 @@ func (a *App) shutdown(ctx context.Context) {
 	// neither lock is let go: the app is closing, and nothing may start after the cache is closed
 
 	// debug mode lasts until the app closes, so no one forgets it is on
-	if a.GetSettings().DebugMode {
+	if a.currentSettings().DebugMode {
 		if err := a.updateSettings(func(settings *Settings) { settings.DebugMode = false }); err != nil {
 			comm.Logger.WithError(err).Warn("Could not turn debug mode off")
 		}
@@ -500,6 +524,7 @@ Returns:
   - error: a user readable message if the target could not be found or loaded
 */
 func (a *App) SearchTarget(name string, searchType string, id int) (result TargetResult, err error) {
+	a.waitReady()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	defer a.finishDebugOnError(&err)
@@ -597,7 +622,7 @@ func (a *App) SearchTarget(name string, searchType string, id int) (result Targe
 	if foundName == "" {
 		foundName = name
 	}
-	a.cache.AddRecentSearch(retrieval.RecentSearch{Name: foundName, Type: searchType, ID: target.IDNumber, Ticker: display.Ticker}, a.GetSettings().MaxRecentSearches)
+	a.cache.AddRecentSearch(retrieval.RecentSearch{Name: foundName, Type: searchType, ID: target.IDNumber, Ticker: display.Ticker}, a.currentSettings().MaxRecentSearches)
 
 	result = TargetResult{
 		ID:              target.IDNumber,

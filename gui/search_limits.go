@@ -83,7 +83,7 @@ Returns:
   - error: a user readable message if one is out of range, in which case nothing changes, or if they could not be saved, in which case they still apply for this session
 */
 func (a *App) SaveSearchLimits(limits SearchLimits) error {
-	preferences := a.GetSettings().Preferences.withSearchLimits(limits)
+	preferences := a.currentSettings().Preferences.withSearchLimits(limits)
 	if err := preferences.validate(); err != nil {
 		return err
 	}

@@ -94,7 +94,7 @@ func (a *App) setupDebug() {
 
 // applyLogLevel logs everything in debug mode, and only from Info up otherwise
 func (a *App) applyLogLevel() {
-	if a.GetSettings().DebugMode {
+	if a.currentSettings().DebugMode {
 		comm.Logger.SetLevel(logrus.DebugLevel)
 	} else {
 		comm.Logger.SetLevel(logrus.InfoLevel)
@@ -103,7 +103,7 @@ func (a *App) applyLogLevel() {
 
 // startDebug starts a search's debug log, in debug mode. A search already logging, ie one asked again after choosing between matches, carries on in the same log.
 func (a *App) startDebug(typed string) {
-	if a.debug == nil || !a.GetSettings().DebugMode {
+	if a.debug == nil || !a.currentSettings().DebugMode {
 		return
 	}
 	a.debug.mu.Lock()
@@ -216,7 +216,7 @@ type debugMemory struct {
 }
 
 func (a *App) debugSession(search debugSearch, frontend string) debugSession {
-	settings := a.GetSettings()
+	settings := a.currentSettings()
 	a.settingsMu.Lock()
 	overridden := a.searchLimits != nil
 	a.settingsMu.Unlock()
@@ -442,6 +442,7 @@ func (a *App) LogFrontendError(message string) {
 
 // SetFrontendInfo keeps the frontend's user agent, which names the WebView2 version, for debug bundles. It does not wait for a running search.
 func (a *App) SetFrontendInfo(userAgent string) {
+	a.waitReady()
 	if a.debug == nil {
 		return
 	}

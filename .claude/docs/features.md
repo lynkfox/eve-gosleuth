@@ -10,7 +10,7 @@ How each feature works, for when you are changing it. The rules that apply every
 
 ## Recent searches
 
-Recent searches live in the cache, not settings (retrieval/recent_searches.go): `SearchTarget` calls `AddRecentSearch` with each found target as EVE spells it, with a corp's or alliance's ticker (`TargetDisplay.Ticker`, also on `RelatedEntity`, shown EVE style, [CORP] and <ALLY>, by `formatTicker`; a typed ticker finds its recent search), one `Permanent` row per search in the `recent_search` section keyed by type and lower case name, keeping the number set in Preferences (`Preferences.MaxRecentSearches`, default `DefaultRecentSearches` 5, at most `MaxRecentSearches` 25; lowering it calls `TrimRecentSearches`); the × on a row calls `RemoveRecentSearch`. An SDE release keeps them; Clear everything and Clear older than remove them.
+Recent searches live in the cache, not settings (retrieval/recent_searches.go): `SearchTarget` calls `AddRecentSearch` with each found target as EVE spells it, with a corp's or alliance's ticker (`TargetDisplay.Ticker`, also on `RelatedEntity`, shown EVE style, [CORP] and <ALLY>, by `formatTicker`; a typed ticker finds its recent search), one `Permanent` row per search in the `recent_search` section keyed by type and lower case name, keeping the number set in Preferences (`Preferences.MaxRecentSearches`, default `DefaultRecentSearches` 5, at most `MaxRecentSearches` 25; lowering it calls `TrimRecentSearches`); the × on a row calls `RemoveRecentSearch`. An SDE release keeps them; Clear everything and Clear older than remove them. The page asks for them as it loads, which waits for startup to load the cache (`App.waitReady`, see CLAUDE.md).
 
 ## Search limits, caveat warning, collapse target
 

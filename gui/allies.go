@@ -121,7 +121,7 @@ func (a *App) rankAllies(source *alliesSource) ([]AllySummary, []IgnoredAllySumm
 	for _, ally := range ignored {
 		skip[aggregate.AllyKey{Type: searchTypes[ally.Type], ID: ally.ID}] = true
 	}
-	ranking := aggregate.GetTopAllies(allyLimit, source.killmails, &source.target, skip, a.GetSettings().HideKilledAllies && !source.showKilled)
+	ranking := aggregate.GetTopAllies(allyLimit, source.killmails, &source.target, skip, a.currentSettings().HideKilledAllies && !source.showKilled)
 	return buildAllySummaries(ranking.Top, &source.target), ignoredAllySummaries(ignored, ranking.IgnoredKillmails), ranking.KilledAllies
 }
 

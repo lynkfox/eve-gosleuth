@@ -42,10 +42,11 @@ Returns:
   - error: a user readable message if they could not be read
 */
 func (a *App) GetRecentSearches() (recent []retrieval.RecentSearch, err error) {
+	a.waitReady()
 	defer recoverAsError(&err)
 
 	recent = []retrieval.RecentSearch{}
-	for _, search := range a.cache.RecentSearches(a.GetSettings().MaxRecentSearches) {
+	for _, search := range a.cache.RecentSearches(a.currentSettings().MaxRecentSearches) {
 		if _, ok := searchTypes[search.Type]; ok {
 			recent = append(recent, search)
 		}
