@@ -80,7 +80,8 @@ func (d *pageDoc) footer(in Input) {
 
 // fit cuts text to the width in the current font, ending it with an ellipsis, so it never runs past its cell
 func (d *pageDoc) fit(text string, width float64) string {
-	if d.GetStringWidth(text) <= width {
+	// a hair of slack, as a width measured from this same text can come back a rounding error short
+	if d.GetStringWidth(text) <= width+0.01 {
 		return text
 	}
 	runes := []rune(text)

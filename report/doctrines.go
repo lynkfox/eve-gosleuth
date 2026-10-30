@@ -244,7 +244,12 @@ func (d *pageDoc) doctrineStrip(tiles []doctrineTile, draw bool) float64 {
 			d.Rect(x, ty, w, doctrineTileH, "F")
 			d.text(t.col)
 			d.SetXY(x, ty)
-			d.CellFormat(w, doctrineTileH, d.fit(t.text, w-4), "", 0, "C", false, 0, "")
+			// sized to its text, so never cut short: only a tile wider than the page is
+			text := t.text
+			if w == bodyWidth {
+				text = d.fit(text, w-4)
+			}
+			d.CellFormat(w, doctrineTileH, text, "", 0, "C", false, 0, "")
 		}
 		x += w + doctrineTileSp
 	}

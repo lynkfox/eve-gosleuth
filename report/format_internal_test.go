@@ -43,3 +43,17 @@ func TestFit(t *testing.T) {
 	assert.True(t, strings.HasSuffix(cut, "…"), cut)
 	assert.LessOrEqual(t, d.GetStringWidth(cut), 30.0)
 }
+
+func TestDoctrineTilesNeverCut(t *testing.T) {
+	d := newDoc(Input{})
+	d.AddPage()
+	// an Ursa's tiles were drawn "72.5k E…", a tile as wide as its own text measured a rounding error short
+	for _, tile := range doctrineTiles(&FightStats{EHP: 72500, Tank: "Shield", Weakest: "EM", WeakestResist: 0.67, SensorType: "Gravimetric", SensorStrength: 20.4}) {
+		style := ""
+		if tile.bold {
+			style = "B"
+		}
+		d.sans(style, 8.5)
+		assert.Equal(t, tile.text, d.fit(tile.text, d.GetStringWidth(tile.text)+4-4))
+	}
+}
