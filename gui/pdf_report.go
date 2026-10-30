@@ -163,6 +163,7 @@ func pdfInput(target TargetResult, rep IntelReport, version string, now time.Tim
 		}
 	}
 	in.Activity = pdfActivity(rep.Killmails)
+	in.Latest, in.Biggest = pdfBattles(rep.Battles)
 	in.Doctrines = pdfDoctrines(rep.Fits, rep.Images)
 	in.Capitals = pdfCapitals(target, rep.Capitals, rep.Images)
 	return in
@@ -256,6 +257,33 @@ func pdfActivity(killmails []KillmailCard) report.Activity {
 	}
 	activity.TimeZone = aggregate.PrimeTimeZone(times)
 	return activity
+}
+
+// pdfBattleCount is how many battles the PDF lists
+const pdfBattleCount = 10
+
+// pdfBattles picks the PDF's battles, at most pdfBattleCount each: the latest, newest first, and the biggest, most pilots first, then most killmails, then newest
+func pdfBattles(battles []Battle) (latest, biggest []report.Battle) {
+	newest := slices.Clone(battles)
+	slices.SortStableFunc(newest, func(a, b Battle) int { return b.Start.Compare(a.Start) })
+	largest := slices.Clone(newest)
+	slices.SortStableFunc(largest, func(a, b Battle) int {
+		return cmp.Or(cmp.Compare(b.Pilots, a.Pilots), cmp.Compare(b.Killmails, a.Killmails))
+	})
+	return pdfBattleRows(newest), pdfBattleRows(largest)
+}
+
+// pdfBattleRows turns the first pdfBattleCount battles into the PDF's rows
+func pdfBattleRows(battles []Battle) []report.Battle {
+	result := []report.Battle{}
+	for _, battle := range battles[:min(len(battles), pdfBattleCount)] {
+		result = append(result, report.Battle{
+			Start: battle.Start, End: battle.End, System: battle.System.Name, OtherSystems: len(battle.OtherSystems),
+			Pilots: battle.Pilots, Ships: battle.Ships, Killmails: battle.Killmails,
+			ZkillURL: battle.ZkillURL, EveToolsURL: battle.EveToolsURL, WarbeaconURL: battle.WarbeaconURL,
+		})
+	}
+	return result
 }
 
 // fitRole is the fit's role tag besides Fleet Doctrine, the one with the lowest priority (0 last), empty for none

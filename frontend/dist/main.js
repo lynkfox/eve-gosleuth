@@ -858,7 +858,7 @@ function setExportPDF(shown) {
 }
 
 // PDF_SECTIONS are the PDF report's sections, until the section picker chooses them (phase 3); the Summary is always first
-const PDF_SECTIONS = ["summary", "activity", "doctrines", "capitals", "appendix"];
+const PDF_SECTIONS = ["summary", "activity", "battles", "doctrines", "capitals", "appendix"];
 
 // exportPDF saves the shown report as a PDF at a place the user picks, the button off while it is made
 async function exportPDF() {

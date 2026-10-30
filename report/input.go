@@ -10,6 +10,7 @@ type Section string
 const (
 	SectionSummary   Section = "summary"
 	SectionActivity  Section = "activity"
+	SectionBattles   Section = "battles"
 	SectionDoctrines Section = "doctrines"
 	SectionCapitals  Section = "capitals"
 	SectionAppendix  Section = "appendix" // the EFT of each Fleet Doctrine, linked from its block
@@ -25,6 +26,8 @@ type Input struct {
 	AppVersion  string    // ie 0.9.3, shown in the footer as GoSleuth v0.9.3
 
 	Activity  Activity
+	Latest    []Battle       // the latest battles, newest first, at most 10
+	Biggest   []Battle       // the biggest battles, most pilots first, at most 10
 	Doctrines []Doctrine     // the fits tagged Fleet Doctrine, by hull class, largest first, then ship name
 	Capitals  []CapitalClass // in report order: titans first, jump freighters last (ships.json capital_report_classes)
 }
@@ -41,6 +44,20 @@ type Week struct {
 	Start  time.Time // the Monday 00:00 EVE it starts on
 	Kills  int
 	Losses int // internal ones included
+}
+
+// Battle is one of the target's battles, estimated from its killmails (aggregate.FindBattles), with links to the sites that show the whole fight
+type Battle struct {
+	Start        time.Time // its first killmail
+	End          time.Time // its last killmail
+	System       string    // the system with the most of its killmails
+	OtherSystems int       // how many other systems it spread to
+	Pilots       int       // victims and attackers, both sides
+	Ships        int       // each pilot's hulls, counted once
+	Killmails    int
+	ZkillURL     string // battle report links, empty when its system is not known
+	EveToolsURL  string
+	WarbeaconURL string
 }
 
 // Doctrine is one fit tagged Fleet Doctrine, every loss of it merged

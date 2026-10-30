@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -256,4 +257,27 @@ func TestPDFDoctrinesByHullClass(t *testing.T) {
 	}
 	assert.Equal(t, []string{"Raven", "Brutix", "Ferox", "Rifter", "Mystery"}, names)
 	assert.Equal(t, []string{"Battleships", "Battlecruisers", "Battlecruisers", "Frigates", otherHullClass}, classes)
+}
+
+func TestPDFBattles(t *testing.T) {
+	day := func(d int) time.Time { return time.Date(2026, 10, d, 20, 0, 0, 0, time.UTC) }
+	battles := []Battle{}
+	for i := 1; i <= 12; i++ {
+		battles = append(battles, Battle{ID: fmt.Sprint(i), Start: day(i), End: day(i).Add(time.Hour), Pilots: 10 + i%5, Killmails: i,
+			System: SystemSummary{Name: "Jita"}, OtherSystems: []string{"Perimeter", "New Caldari"}, ZkillURL: "z"})
+	}
+
+	latest, biggest := pdfBattles(battles)
+
+	assert.Len(t, latest, pdfBattleCount)
+	assert.Equal(t, day(12), latest[0].Start, "newest first")
+	assert.Equal(t, day(3), latest[9].Start)
+	assert.Len(t, biggest, pdfBattleCount)
+	assert.Equal(t, 14, biggest[0].Pilots, "most pilots first")
+	assert.Equal(t, 9, biggest[0].Killmails, "then most killmails")
+	assert.Equal(t, report.Battle{Start: day(9), End: day(9).Add(time.Hour), System: "Jita", OtherSystems: 2, Pilots: 14, Killmails: 9, ZkillURL: "z"}, biggest[0])
+	assert.Equal(t, "1", battles[0].ID, "the tab's rows keep their order")
+	latest, biggest = pdfBattles(nil)
+	assert.Empty(t, latest)
+	assert.Empty(t, biggest)
 }

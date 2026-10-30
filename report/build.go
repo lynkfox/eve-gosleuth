@@ -25,6 +25,10 @@ func build(in Input, sections []Section) ([]byte, error) {
 		page("Activity")
 		d.activity(in.Activity, in.Scope)
 	}
+	if chosen[SectionBattles] {
+		page("Battles")
+		d.battles(in.Latest, in.Biggest)
+	}
 	// with the appendix, each doctrine links to its EFT and back
 	links := []doctrineLink{}
 	appendix := chosen[SectionAppendix] && len(in.Doctrines) > 0

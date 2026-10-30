@@ -48,6 +48,9 @@ Every report run on a Corporation or Alliance can also be saved as a PDF with ma
   - *A summary of the target, its affiliates, what range of killmails and how many were gathered*
 - **Activity Chart**
   - *An EVE time chart of activity, displaying kills found by day and hour, and over weeks.*
+- **Battles**
+  - *The 10 latest battles found, then the 10 biggest by pilots, with when and where they happened and their size*
+  - *Each links to the battle report on zKillboard, EVE Tools, and Warbeacon. Battles are estimated from the killmails found, so the sites show the whole fight*
 - **Potential Fleet Doctrines**
   - *A brief summary of anything that might be a Fleet Doctrine - as determined by GoSleuth based on rules regarding number of kills and similar ships in a battle (rolling 15 minute period) and usually in the presence of logi*
   - *Contains an at a glance fit, major resist hole, and its sensor strength. Specialized fits may contain other information, like Neut Pressure or Remote Rep ehp/s*

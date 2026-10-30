@@ -11,7 +11,7 @@ A briefing a fleet commander can read without GoSleuth: what the target flies, w
 - **EVE time always**, whatever the time zone preference, as the PDF is passed between people in other zones.
 - **Built in Go** with `github.com/go-pdf/fpdf`: pure Go, so it cross-builds to Windows with no cgo, and it embeds TTF fonts for UTF-8 names. WebView printing was ruled out: Wails v2 doesn't expose WebView2's PrintToPdf, and `window.print()` gives the Windows print dialog and the screen's layout.
 - **Print colours, not the theme.** White page, dark text, one accent. Kill/loss, security, and wormhole class colours stay as fixed as they are in the app.
-- **No killmails, only counts.** No killmail rows, ids, or zKillboard links anywhere; every section reports totals (a fit's losses, a hull's pilots). The structures stay listed one per row, as they are intel in themselves (where the target has citadels and towers), but without links. A "last seen" date is an aggregate, not a killmail, and stays.
+- **No killmails, only counts.** No killmail rows or ids anywhere, and no zKillboard links but the Biggest Battles' battle report links (asked for 2026-10-30); every section reports totals (a fit's losses, a hull's pilots). The structures stay listed one per row, as they are intel in themselves (where the target has citadels and towers), but without links. A "last seen" date is an aggregate, not a killmail, and stays.
 - **No API calls at export.** The PDF is built from the report the search already made, images included (see Images).
 
 ## Layout (corp or alliance)
