@@ -466,6 +466,8 @@ function tourRestore(saved) {
   setSidebarCollapsed(saved.sidebar);
   setTargetCollapsed(saved.targetCollapsed);
   setHoldingsTucked(saved.holdingsTucked);
+  // with no target saved, the tour's demo would otherwise stay as the last drawn, for the next tour to save and draw again
+  renderedTarget = saved.target;
   el("search-input").value = saved.search;
   searchTypeHint = saved.typeHint;
   searchIdHint = saved.idHint;
@@ -835,8 +837,17 @@ async function endTour() {
   t.ending = true;
   el("tour-box").hidden = true;
   // the stand-in answers at once now, so a step setting up, a search running, and the Members tab's pages all finish before the real backend is back
-  for (let waited = 0; (t.busy || searching || (roster && roster.loading.size > 0)) && waited < 100; waited++) {
-    await new Promise((resolve) => setTimeout(resolve, 30));
+  const settled = () => !(t.busy || searching || (roster && roster.loading.size > 0));
+  const waitSettled = async () => {
+    for (let waited = 0; !settled() && waited < 100; waited++) {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+  };
+  await waitSettled();
+  // one still running is refused from here, rather than reaching the real backend with a demo's id
+  if (!settled()) {
+    tourBackend = new Proxy({}, { get: () => () => Promise.reject(new Error("The tour has ended.")) });
+    await waitSettled();
   }
 
   if (t.observer) t.observer.disconnect();
