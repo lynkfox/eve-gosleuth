@@ -773,7 +773,8 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		report.Systems = buildSystemSummaries(aggregate.GetMostVisitedSystems(systemLimit, collected.SystemsVisted), collected.Killmails, &target)
 	}
 
-	if entityType == types.CORPORATION || entityType == types.ALLIANCE {
+	// a stopped search goes without them, the PDF drawing plain boxes, rather than wait on the image server
+	if (entityType == types.CORPORATION || entityType == types.ALLIANCE) && !a.stopRequested.Load() {
 		comm.ReportProgress("Fetching report images")
 		report.Images = a.fetchReportImages(pdfImageURLs(entityType, targetID, report))
 	}
