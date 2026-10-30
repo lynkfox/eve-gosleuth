@@ -24,6 +24,7 @@ type ZkillPaging struct {
 	Killmails int                       // stop once this many killmails are listed, 0 to page to MaxPages
 	MaxPages  int                       // never page past this, at most ZKILL_MAX_PAGES
 	StartPage int                       // the first page to pull, 0 for page 1, ie to carry on below a list already known
+	Listed    int                       // killmails already listed above StartPage, counted in progress messages
 	NewerThan time.Time                 // stop after a page that reaches a killmail this old or older, the zero time for no date limit
 	Known     func(killmailID int) bool // stop after a page listing a killmail this knows, ie one on a cached list, nil to not
 	For       string                    // whose list it is in progress messages, ie "holding URSA Holdings", empty to not say
@@ -103,7 +104,7 @@ func (z ZkillConnection) GetZkillResults(entityId int, typeOfEntity types.Entity
 		if paging.For != "" {
 			listFor = " for " + paging.For
 		}
-		comm.ReportProgress("Fetching zKillboard page %d%s (live, %d killmails so far)", pageNumber, listFor, len(*allZkillmails))
+		comm.ReportProgress("Fetching zKillboard page %d%s (live, %d killmails so far)", pageNumber, listFor, paging.Listed+len(*allZkillmails))
 
 		listed := len(*allZkillmails)
 		nextPage, err := z.GetZkillPage(endpoint, pageNumber, allZkillmails)

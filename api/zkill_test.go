@@ -345,6 +345,16 @@ func TestGetZkillResults(t *testing.T) {
 		assert.Equal(t, []string{"Fetching zKillboard page 1 for holding Holding Corp (live, 0 killmails so far)"}, messages)
 	})
 
+	t.Run("carrying on below a known list counts what is above it", func(t *testing.T) {
+		messages := []string{}
+		comm.SetProgressReporter(func(message string) { messages = append(messages, message) })
+		defer comm.SetProgressReporter(nil)
+
+		_, err := api.ZkillConnection{Client: fullPages()}.GetZkillResults(98000002, types.CORPORATION, api.ZkillPaging{StartPage: 20, MaxPages: 20, Listed: 3800})
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"Fetching zKillboard page 20 (live, 3800 killmails so far)"}, messages)
+	})
+
 	t.Run("never pages past MaxPages", func(t *testing.T) {
 		client := fullPages()
 		killmails, err := api.ZkillConnection{Client: client}.GetZkillResults(12345, types.PILOT, api.ZkillPaging{MaxPages: 2})
