@@ -40,6 +40,26 @@ A wormhole system also shows the last structure lost there, however long ago.
 
 Every tab has a **?** that explains it, and most rows have a right-click menu: search that pilot, corp, alliance, or system, or open it on zKillboard, EveWho, or Dotlan.
 
+
+## Save that Report as a PDF to Share
+
+Every report run on a Corporation or Alliance can also be saved as a PDF with many notable discoveries for sharing with your Alliance or allies.
+
+- **Summary**
+  - *A summary of the target, its affiliates, what range of killmails and how many were gathered*
+- **Activity Chart**
+  - *An EVE time chart of activity, displaying kills found by day and hour, and over weeks.*
+- **Potential Fleet Doctrines**
+  - *A brief summary of anything that might be a Fleet Doctrine - as determined by GoSleuth based on rules regarding number of kills and similar ships in a battle (rolling 15 minute period) and usually in the presence of logi*
+  - *Contains an at a glance fit, major resist hole, and its sensor strength. Specialized fits may contain other information, like Neut Pressure or Remote Rep ehp/s*
+  - *Links to the EFT version of the fit in the appendix*
+- **Capital Pilots**
+  - *A listing of all seen pilots flying capitals*
+- **Appendix: EFT Fits**
+  - *For easy copy paste into the game or Pyfa*
+  - *Fleet Doctrine summaries link here, and there is a link directly back*
+
+
 ## Fits
 
 - **Every loss as a fit** 
@@ -66,8 +86,7 @@ Every tab has a **?** that explains it, and most rows have a right-click menu: s
   - *A search of the main then includes the affiliates' killmails, and a search of an affiliate goes to its main.*
 - **My Intel** 
   - *shows every affiliate and ignored ally you've set, for editing in one place. Export them to a file to share with your corp, or import someone else's.*
-- **Generate Report** 
-  - *saves a corp or alliance search as a PDF briefing for fleet commanders, readable without GoSleuth: the scope and key findings, activity by hour and week, potential fleet doctrines with their tank and the damage type to shoot, capital pilots, and each doctrine's EFT to paste into Pyfa. All times are EVE time.*
+
 
 ## Making it yours
 
