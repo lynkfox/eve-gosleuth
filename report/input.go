@@ -24,6 +24,7 @@ type Input struct {
 	Losses      Tally     // the target's losses, internal ones included (see aggregate.IsInternal)
 	GeneratedAt time.Time // when the PDF was made, shown in the footer in EVE time
 	AppVersion  string    // ie 0.9.3, shown in the footer as GoSleuth v0.9.3
+	ReleasesURL string    // the app's releases page, which the Summary's note links its version to
 
 	Activity  Activity
 	Latest    []Battle       // the latest battles, newest first, at most 10

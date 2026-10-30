@@ -105,3 +105,15 @@ func TestBuildManyAffiliatesAndLongNames(t *testing.T) {
 		assert.NoError(t, os.WriteFile(p, b, 0o644))
 	}
 }
+
+func TestBuildColophonLinksReleases(t *testing.T) {
+	in := fixture()
+	in.ReleasesURL = "https://github.com/lynkfox/eve-gosleuth/releases"
+	b, err := report.Build(in, nil)
+	assert.NoError(t, err)
+	assert.Contains(t, string(b), "/URI (https://github.com/lynkfox/eve-gosleuth/releases)", "the version links to the releases page")
+	in.ReleasesURL = ""
+	b, err = report.Build(in, nil)
+	assert.NoError(t, err)
+	assert.NotContains(t, string(b), "/releases")
+}

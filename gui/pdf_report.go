@@ -123,6 +123,7 @@ func pdfInput(target TargetResult, rep IntelReport, version string, now time.Tim
 		},
 		GeneratedAt: now,
 		AppVersion:  version,
+		ReleasesURL: api.PROJECT_URL + "/releases",
 	}
 	if entityType, ok := searchTypes[target.Type]; ok {
 		in.Target.Logo = rep.Images[api.EntityImageURL(entityType, target.ID)]
