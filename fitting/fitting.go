@@ -39,11 +39,11 @@ type Stats struct {
 	Hull   Layer   `json:"hull"`
 	EHP    float64 `json:"ehp"` // omni, the three layers together
 
-	LocalRep     Repair  `json:"local_rep"`     // HP per second from its own repairers while all cycle, ancillary ones with paste if loaded
-	PassiveRegen float64 `json:"passive_regen"` // peak shield HP per second from its recharge
-	RemoteRep    Repair  `json:"remote_rep"`    // HP (and GJ of capacitor) per second it gives others
-	Neut         float64 `json:"neut"`
-	Boosted      bool    `json:"boosted,omitempty"` // its own command bursts' buffs are in the numbers, as they reach the ship that runs them          // GJ of capacitor per second its neutralizers and nosferatus take from a target, before the target's resistance
+	LocalRep     Repair  `json:"local_rep"`         // HP per second from its own repairers while all cycle, ancillary ones with paste if loaded
+	PassiveRegen float64 `json:"passive_regen"`     // peak shield HP per second from its recharge
+	RemoteRep    Repair  `json:"remote_rep"`        // HP (and GJ of capacitor) per second it gives others
+	Neut         float64 `json:"neut"`              // GJ of capacitor per second its neutralizers and nosferatus take from a target, before the target's resistance
+	Boosted      bool    `json:"boosted,omitempty"` // its own command bursts' buffs are in the numbers, as they reach the ship that runs them
 
 	Sensor     Sensor             `json:"sensor"`
 	EwarResist map[string]float64 `json:"ewar_resist"` // keyed by the hull's ewar resistance attribute name, ie ECMResistance: the fraction of the ewar that still lands, so 1 is no resistance
@@ -107,7 +107,7 @@ func Compute(in Input) (stats *Stats, err error) {
 
 // finite reports whether every number in the stats is finite
 func (s *Stats) finite() bool {
-	numbers := []float64{s.EHP, s.PassiveRegen, s.Sensor.Strength,
+	numbers := []float64{s.EHP, s.PassiveRegen, s.Neut, s.Sensor.Strength,
 		s.LocalRep.Shield, s.LocalRep.Armor, s.LocalRep.Hull, s.LocalRep.Capacitor,
 		s.RemoteRep.Shield, s.RemoteRep.Armor, s.RemoteRep.Hull, s.RemoteRep.Capacitor}
 	for _, layer := range []Layer{s.Shield, s.Armor, s.Hull} {
