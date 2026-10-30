@@ -6,7 +6,7 @@
   "frontend:build": "",
   "info": {
     "productName": "EVE GoSleuth",
-    "productVersion": "1.0.0",
+    "productVersion": "1.0.1",
     "companyName": "lynkfox",
     "copyright": "lynkfox. EVE Online is a trademark of Fenris Creations.",
     "comments": "EVE Online intel from killmails"
