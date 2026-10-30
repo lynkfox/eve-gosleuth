@@ -45,7 +45,7 @@
             <span class="preference-check"><input id="limit-cached" type="checkbox"></span>
           </label>
           <label class="preference">
-            <span class="preference-name">Include holdings</span>
+            <span class="preference-name">Include affiliates</span>
             <span class="preference-check"><input id="limit-holdings" type="checkbox"></span>
           </label>
           <p id="limits-error" class="preferences-error" role="alert" hidden></p>
@@ -224,7 +224,7 @@
             <p class="row-detail allies-note">Potential allies only: groups seen on this target's kills, not confirmed relationships.</p>
             <!-- a corp or alliance target's holdings, with the kills each shared with it -->
             <p id="allies-holdings" class="allies-holdings" hidden>
-              <span class="row-detail">Holdings:</span>
+              <span class="row-detail">Affiliates:</span>
               <span id="allies-holdings-list"></span>
             </p>
             <table>
@@ -234,7 +234,7 @@
               <tbody id="allies-body"></tbody>
             </table>
             <p id="allies-empty" class="muted" hidden>No alliances or corporations outside the target's alliance were on its kills in the collected killmails.</p>
-            <p id="allies-hint" class="row-detail allies-hint">Right-click an ally to add it to the target's holdings, ignore it for this target, or open it.</p>
+            <p id="allies-hint" class="row-detail allies-hint">Right-click an ally to add it to the target's affiliates, ignore it for this target, or open it.</p>
             <!-- what is left out of the allies: those the Hide killed allies preference hid, then those ignored for this target. The x on one brings it back. -->
             <div id="allies-ignored" class="allies-ignored" hidden>
               <span class="row-detail">Left out:</span>
@@ -562,10 +562,10 @@
       <button id="myintel-close" class="window-close" type="button" aria-label="Close My Intel" title="Close">×</button>
     </div>
     <div class="window-body myintel-body">
-      <p class="preference-help">The holdings and ignored allies you have set, for every target. Changes are saved straight away, and holdings change what the next search collects.</p>
+      <p class="preference-help">The affiliates and ignored allies you have set, for every target. Changes are saved straight away, and affiliates change what the next search collects.</p>
       <div class="myintel-tools">
         <input id="myintel-filter" type="search" placeholder="Filter by name" autocomplete="off" spellcheck="false" aria-label="Filter by name">
-        <button id="myintel-import-button" class="secondary" type="button" title="Add holdings and ignored allies from a file another user exported">Import…</button>
+        <button id="myintel-import-button" class="secondary" type="button" title="Add affiliates and ignored allies from a file another user exported">Import…</button>
       </div>
       <form id="myintel-add" class="myintel-add">
         <select id="myintel-add-type" aria-label="Type">
@@ -586,7 +586,7 @@
         <button id="myintel-delete-button" class="secondary" type="button" title="Remove the ticked cards" disabled>Delete…</button>
       </div>
       <div id="myintel-list" class="myintel-list"></div>
-      <p id="myintel-empty" class="preference-help" hidden>Nothing set yet. Add holdings and ignored allies here, or from a search's target panel and Allies tab.</p>
+      <p id="myintel-empty" class="preference-help" hidden>Nothing set yet. Add affiliates and ignored allies here, or from a search's target panel and Allies tab.</p>
     </div>
   </dialog>
 
@@ -608,7 +608,7 @@
       <p id="myintel-import-title" class="holding-title"></p>
       <ul id="myintel-import-summary" class="myintel-import-summary"></ul>
       <div id="myintel-import-notes" class="myintel-import-notes" hidden>
-        <p class="confirm-detail">These holdings have another note in the file:</p>
+        <p class="confirm-detail">These affiliates have another note in the file:</p>
         <ul id="myintel-import-note-list"></ul>
         <label class="clear-user-data">
           <input id="myintel-import-theirs" type="checkbox">
@@ -656,7 +656,7 @@
         <span class="preference-check"><input id="pref-use-cached" type="checkbox"></span>
       </label>
       <label class="preference">
-        <span class="preference-label" title="A corp or alliance search also collects the killmails of the holdings linked to it on the target panel, and counts them as its own. Each holding's list is read from zKillboard too."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Include holdings in searches</span></span>
+        <span class="preference-label" title="A corp or alliance search also collects the killmails of the affiliates linked to it on the target panel (its holding and alt corps or alliances), and counts them as its own. Each affiliate's list is read from zKillboard too."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Include affiliates in searches</span></span>
         <span class="preference-check"><input id="pref-include-holdings" type="checkbox"></span>
       </label>
       <p class="preference-help">These are your defaults. The search limits button beside the search bar overrides them until the app closes.</p>
@@ -749,7 +749,7 @@
 
   <template id="more-debug-mode" data-title="Debug mode">
     <p>Debug mode logs everything each search does, to send when reporting a problem.</p>
-    <p>Each search's log is saved as a zip of readable text files, the newest 10 kept. It includes the targets searched, your preferences, and a copy of any game data files you edited, but not your user name, recent searches, holdings, or ignored allies.</p>
+    <p>Each search's log is saved as a zip of readable text files, the newest 10 kept. It includes the targets searched, your preferences, and a copy of any game data files you edited, but not your user name, recent searches, affiliates, or ignored allies.</p>
     <p>Crashes are always logged. Debug mode turns itself off when the app closes.</p>
   </template>
 
@@ -782,7 +782,7 @@
       </fieldset>
       <label class="clear-user-data">
         <input id="clear-user-data" type="checkbox">
-        <span><span class="preference-name">Also clear what you set by hand</span><span class="preference-help">Ignored allies and holding links. Otherwise every clear keeps them.</span></span>
+        <span><span class="preference-name">Also clear what you set by hand</span><span class="preference-help">Ignored allies and affiliate links. Otherwise every clear keeps them.</span></span>
       </label>
       <div class="confirm-actions">
         <button class="secondary" value="cancel" autofocus>Cancel</button>
@@ -794,10 +794,10 @@
   <!-- adds a holding to the shown corp or alliance, or changes the note of one it has -->
   <dialog id="holding-dialog" class="confirm holding-dialog" aria-labelledby="holding-title">
     <form id="holding-form" method="dialog">
-      <p id="holding-title" class="holding-title">Add holding</p>
+      <p id="holding-title" class="holding-title">Add affiliate</p>
       <p id="holding-main" class="confirm-target"></p>
       <label class="holding-field">
-        <span class="preference-name">Holding is a</span>
+        <span class="preference-name">Affiliate is a</span>
         <select id="holding-type">
           <option value="ALLIANCE">Alliance</option>
           <option value="CORPORATION">Corporation</option>

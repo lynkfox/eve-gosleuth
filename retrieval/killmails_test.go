@@ -440,7 +440,7 @@ func TestCollectKillmailsWithHoldings(t *testing.T) {
 		_, _, err := collect(recording, retrieval.KillmailLimits{Max: retrieval.AllKillmails})
 
 		assert.NoError(t, err)
-		assert.Equal(t, []string{"Main Alliance (main)", "holding Holding Corp"}, asked)
+		assert.Equal(t, []string{"Main Alliance (main)", "affiliate Holding Corp"}, asked)
 	})
 
 	t.Run("lists zKillboard sent without times are merged by killmail id", func(t *testing.T) {

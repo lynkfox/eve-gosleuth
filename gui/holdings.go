@@ -77,7 +77,7 @@ Returns:
 func (a *App) GetHoldings(targetID int, targetType string) (holdings Holdings, err error) {
 	defer recoverAsError(&err)
 	if !canHold(targetType) {
-		return holdings, errors.New("Only corporations and alliances have holdings")
+		return holdings, errors.New("Only corporations and alliances have affiliates")
 	}
 	return a.holdingsFor(targetType, targetID), nil
 }
@@ -99,10 +99,10 @@ Returns:
 func (a *App) SaveHolding(mainID int, mainType string, mainName string, holdingName string, holdingType string, note string) (holdings Holdings, err error) {
 	defer recoverAsError(&err)
 	if !canHold(mainType) || !canHold(holdingType) {
-		return holdings, errors.New("Only corporations and alliances can be holdings, or have them")
+		return holdings, errors.New("Only corporations and alliances can be affiliates, or have them")
 	}
 	if strings.TrimSpace(holdingName) == "" {
-		return holdings, errors.New("Enter the holding's name")
+		return holdings, errors.New("Enter the affiliate's name")
 	}
 
 	holding, err := a.lookupEntity(holdingName, holdingType, types.CORPORATION, types.ALLIANCE)
@@ -110,7 +110,7 @@ func (a *App) SaveHolding(mainID int, mainType string, mainName string, holdingN
 		return holdings, err
 	}
 	if holding.ID == mainID && holding.Type == mainType {
-		return holdings, fmt.Errorf("%s can not be its own holding", mainName)
+		return holdings, fmt.Errorf("%s can not be its own affiliate", mainName)
 	}
 
 	note = strings.TrimSpace(note)

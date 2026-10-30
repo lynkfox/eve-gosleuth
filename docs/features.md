@@ -56,16 +56,16 @@ Every tab has a **?** that explains it, and most rows have a right-click menu: s
   - *Fits where at least one had a corresponding capsule kill with implants are also marked*
   - *Filter the list by most things - hull, module, pilot or group, or even tags (`tags: logi`) - you can also just click a tag to filter by it*
 
-## Allies and holdings
+## Allies and affiliates
 
 - **Allies?** 
   - *lists the alliances and corps that turn up on a target's kills. They are only possible allies: a third party in the same fight looks the same on a killmail.*
   - *Ignore some or many if you already know they don't count to see others on the list*
-- **Coalitions and Home systems** 
-  - *Link a corp or alliance to its holding or alt corps, and if it's a Wormhole Corp its home system.* 
-  - *A search of the main then includes the holdings' killmails, and a search of a holding goes to its main.*
+- **Affiliates and Home systems** 
+  - *Link a corp or alliance to its affiliates, its holding or alt corps, and if it's a Wormhole Corp its home system.* 
+  - *A search of the main then includes the affiliates' killmails, and a search of an affiliate goes to its main.*
 - **My Intel** 
-  - *shows every holding and ignored ally you've set, for editing in one place. Export them to a file to share with your corp, or import someone else's.*
+  - *shows every affiliate and ignored ally you've set, for editing in one place. Export them to a file to share with your corp, or import someone else's.*
 
 ## Making it yours
 

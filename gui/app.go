@@ -472,7 +472,7 @@ func (a *App) holdingMain(target *retrieval.IntelTarget) (retrieval.HoldingLink,
 		return retrieval.HoldingLink{}, false
 	}
 	if len(heldFor) > 1 {
-		comm.ReportProgress("%s is a holding of %d mains, using %s", heldFor[0].HoldingName, len(heldFor), heldFor[0].MainName)
+		comm.ReportProgress("%s is an affiliate of %d mains, using %s", heldFor[0].HoldingName, len(heldFor), heldFor[0].MainName)
 	}
 	return heldFor[0], true
 }
@@ -553,7 +553,7 @@ func (a *App) SearchTarget(name string, searchType string, id int) (result Targe
 	// a holding is searched as its main, which collects the holding's killmails with its own
 	searchedHolding := ""
 	if main, found := a.holdingMain(&target); found {
-		comm.ReportProgress("%s is a holding of %s, searching %s with its holdings", main.HoldingName, main.MainName, main.MainName)
+		comm.ReportProgress("%s is an affiliate of %s, searching %s with its affiliates", main.HoldingName, main.MainName, main.MainName)
 		if mainTarget, mainEntity, mainErr := a.lookupTargetByID(main.MainID, searchTypes[main.MainType]); mainErr == nil {
 			target, entity, searchedHolding = mainTarget, mainEntity, main.HoldingName
 			searchType = main.MainType

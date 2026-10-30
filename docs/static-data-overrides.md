@@ -259,9 +259,9 @@ Fleet Doctrine is not read from the fit, but from the battles and losses around 
 
 | Field | Meaning |
 |---|---|
-| `battle_hulls` | In one battle, at least this many pilots on the loss's side flew its hull, the pilot who lost it included. Their side is the target and its holdings, and the pilot's own alliance (or corp, outside an alliance). 0 turns this rule off. |
+| `battle_hulls` | In one battle, at least this many pilots on the loss's side flew its hull, the pilot who lost it included. Their side is the target and its affiliates, and the pilot's own alliance (or corp, outside an alliance). 0 turns this rule off. |
 | `battle_logi` | ...and at least this many on that side flew logi, by `logi_groups` and `logi_types` in `ships.json` |
-| `repeat_losses` | Or the same fit was lost at least this many times within one alliance, the target and its holdings counting as one. 0 turns this rule off. |
+| `repeat_losses` | Or the same fit was lost at least this many times within one alliance, the target and its affiliates counting as one. 0 turns this rule off. |
 | `repeat_pilots` | ...by at least this many different pilots |
 
 Hovering the tag shows each count against the number it needed.

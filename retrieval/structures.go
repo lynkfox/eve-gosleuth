@@ -45,7 +45,7 @@ func CollectStructureKillmails(target IntelTarget, limits KillmailLimits) (Struc
 	entities := []entity{{target.TypeOfEntity, target.IDNumber, nil, target.DisplayName()}}
 	for index := range target.Holdings {
 		holding := &target.Holdings[index]
-		entities = append(entities, entity{holding.Type, holding.ID, holding, "holding " + holding.Name})
+		entities = append(entities, entity{holding.Type, holding.ID, holding, "affiliate " + holding.Name})
 	}
 
 	var found StructureKillmails

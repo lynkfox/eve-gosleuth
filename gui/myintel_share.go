@@ -354,7 +354,7 @@ func (a *App) planImport(data []byte) (importPlan, ImportPreview, error) {
 			continue
 		}
 		if holding.Main.Type == holding.Holding.Type && holding.Main.ID == holding.Holding.ID {
-			skip(fmt.Sprintf("%s can not be its own holding", mainName))
+			skip(fmt.Sprintf("%s can not be its own affiliate", mainName))
 			continue
 		}
 		key := intelGroupKey(holding.Main.Type, holding.Main.ID) + ">" + intelGroupKey(holding.Holding.Type, holding.Holding.ID)

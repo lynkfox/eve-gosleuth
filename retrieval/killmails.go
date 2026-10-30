@@ -331,12 +331,12 @@ func listKillmails(target IntelTarget, paging api.ZkillPaging, need int) (*[]api
 	add(own, nil)
 	for index := range target.Holdings {
 		holding := &target.Holdings[index]
-		comm.ReportProgress("Fetching killmail list for holding %s from zKillboard (live)", holding.Name)
+		comm.ReportProgress("Fetching killmail list for affiliate %s from zKillboard (live)", holding.Name)
 		holdingPaging := paging
-		holdingPaging.For = "holding " + holding.Name
+		holdingPaging.For = "affiliate " + holding.Name
 		list, err := listEntity(target, holding.Type, holding.ID, holdingPaging, need)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("holding %s: %w", holding.Name, err))
+			errs = append(errs, fmt.Errorf("affiliate %s: %w", holding.Name, err))
 		}
 		add(list, holding)
 	}

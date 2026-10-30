@@ -489,7 +489,7 @@ function holdingsShown() {
 function describeTargetPull() {
   const bar = el("target-pull");
   bar.setAttribute("aria-expanded", String(!targetCollapsed));
-  const action = targetCollapsed ? "show the target panel" : holdingsShown() ? "hide the holdings" : "hide the target panel";
+  const action = targetCollapsed ? "show the target panel" : holdingsShown() ? "hide the affiliates" : "hide the target panel";
   bar.title = `Click to ${action}`;
   bar.setAttribute("aria-label", action[0].toUpperCase() + action.slice(1));
 }
@@ -574,12 +574,12 @@ function renderHoldings(holdings) {
   const add = document.createElement("button");
   add.type = "button";
   add.className = "secondary holding-add";
-  add.textContent = "+ Add holding";
-  add.title = "Tie a holding corporation or alliance to this target";
+  add.textContent = "+ Add affiliate";
+  add.title = "Tie an affiliate, a holding or alt corporation or alliance, to this target";
   add.addEventListener("click", () => openHoldingDialog());
-  rows.push(row("Holding", [...holdings.holdings.map((holding) => holdingChip(holding, true)), add]));
+  rows.push(row("Affiliates", [...holdings.holdings.map((holding) => holdingChip(holding, true)), add]));
   if (holdings.heldFor.length > 0) {
-    rows.push(row("Holding for", holdings.heldFor.map((main) => holdingChip(main, false))));
+    rows.push(row("Affiliate of", holdings.heldFor.map((main) => holdingChip(main, false))));
   }
 
   strip.replaceChildren(...rows);
@@ -628,8 +628,8 @@ function holdingChip(entity, isHolding) {
   remove.type = "button";
   remove.className = "holding-action";
   remove.textContent = "×";
-  remove.title = isHolding ? "Remove this holding" : "Remove this link";
-  remove.setAttribute("aria-label", `Remove the holding link with ${entity.name}`);
+  remove.title = isHolding ? "Remove this affiliate" : "Remove this link";
+  remove.setAttribute("aria-label", `Remove the affiliate link with ${entity.name}`);
   remove.addEventListener("click", () => removeHolding(entity, isHolding));
   chip.append(remove);
   return withMenu(chip, [entitySection(entity)]);
@@ -638,7 +638,7 @@ function holdingChip(entity, isHolding) {
 // openHoldingDialog opens the add holding popup for the shown target, or with editing set, the popup for that holding's note
 function openHoldingDialog(editing = null, prefill = null) {
   if (!shownTarget) return;
-  el("holding-title").textContent = editing ? "Edit holding note" : "Add holding";
+  el("holding-title").textContent = editing ? "Edit affiliate note" : "Add affiliate";
   el("holding-main").textContent = `For ${searchTypeLabel(shownTarget.type)}: ${shownTarget.name}`;
   // an ally added from its menu comes with its type and name, leaving the note to write
   const given = editing || prefill;
@@ -665,7 +665,7 @@ async function saveHolding() {
       renderHoldings(holdings);
       holdingsChanged();
     }
-    tickerPush(`Saved a holding for ${target.name}`);
+    tickerPush(`Saved an affiliate for ${target.name}`);
   } catch (err) {
     el("holding-error").textContent = String(err);
     el("holding-error").hidden = false;
@@ -686,7 +686,7 @@ async function removeHolding(entity, isHolding) {
     renderHoldings(holdings);
     holdingsChanged();
   }
-  tickerPush(`Removed the holding link between ${main.name} and ${holding.name}`);
+  tickerPush(`Removed the affiliate link between ${main.name} and ${holding.name}`);
 }
 
 // holdingsChanged ranks the shown report's allies again, since holdings are left out of them like the target's own alliance
@@ -802,7 +802,7 @@ async function importMyIntel() {
   const changes = preview.newHoldings + preview.newIgnored + preview.noteChanges.length;
   el("myintel-import-title").textContent = changes ? `Import ${preview.file}?` : `Nothing new in ${preview.file}`;
   const lines = [];
-  if (preview.newHoldings) lines.push(`${plural(preview.newHoldings, "new holding", "new holdings")}`);
+  if (preview.newHoldings) lines.push(`${plural(preview.newHoldings, "new affiliate", "new affiliates")}`);
   if (preview.newIgnored) lines.push(`${plural(preview.newIgnored, "new ignored ally", "new ignored allies")}`);
   if (preview.knownHoldings || preview.knownIgnored) lines.push(`${preview.knownHoldings + preview.knownIgnored} already saved`);
   el("myintel-import-summary").replaceChildren(...lines.map((line) => {
@@ -875,7 +875,7 @@ function myIntelCard(group) {
   const counts = document.createElement("span");
   counts.className = "myintel-card-counts";
   const parts = [];
-  if (group.holdings.length) parts.push(`${group.holdings.length} ${group.holdings.length === 1 ? "holding" : "holdings"}`);
+  if (group.holdings.length) parts.push(`${group.holdings.length} ${group.holdings.length === 1 ? "affiliate" : "affiliates"}`);
   if (group.heldFor.length) parts.push(`holds for ${group.heldFor.length}`);
   if (group.ignoredAllies.length) parts.push(`${group.ignoredAllies.length} ignored`);
   counts.textContent = parts.join(" · ");
@@ -905,15 +905,15 @@ function myIntelCard(group) {
   };
 
   if (HOLDING_TYPES.includes(entity.type)) {
-    const add = myIntelAddRow(`${key}:holdings`, "Holding name", true, (name, type, note) =>
-      myIntelChange(() => backend().SaveHolding(entity.id, entity.type, entity.name, name, type, note), showError, `Saved a holding for ${entity.name}`));
-    body.append(myIntelTitle("Holdings", add, "Add a holding"));
-    if (group.holdings.length === 0) body.append(myIntelNone("No holdings"));
+    const add = myIntelAddRow(`${key}:holdings`, "Affiliate name", true, (name, type, note) =>
+      myIntelChange(() => backend().SaveHolding(entity.id, entity.type, entity.name, name, type, note), showError, `Saved an affiliate for ${entity.name}`));
+    body.append(myIntelTitle("Affiliates", add, "Add an affiliate"));
+    if (group.holdings.length === 0) body.append(myIntelNone("No affiliates"));
     body.append(...group.holdings.map((holding) => myIntelRow(holding, {
       note: holding.note,
       // by its link, so by id, as the ESI can not find every name
       onNote: (note) => myIntelChange(() => backend().SaveHolding(entity.id, entity.type, entity.name, holding.zkillUrl, holding.type, note), showError, `Saved the note on ${holding.name}`),
-      onRemove: () => myIntelChange(() => backend().RemoveHolding(entity.type, entity.id, holding.type, holding.id), showError, `Removed ${holding.name} as a holding of ${entity.name}`),
+      onRemove: () => myIntelChange(() => backend().RemoveHolding(entity.type, entity.id, holding.type, holding.id), showError, `Removed ${holding.name} as an affiliate of ${entity.name}`),
     })));
     body.append(add);
   }
@@ -922,7 +922,7 @@ function myIntelCard(group) {
     body.append(myIntelTitle("Holds for"));
     body.append(...group.heldFor.map((main) => myIntelRow(main, {
       noteText: main.note,
-      onRemove: () => myIntelChange(() => backend().RemoveHolding(main.type, main.id, entity.type, entity.id), showError, `Removed ${entity.name} as a holding of ${main.name}`),
+      onRemove: () => myIntelChange(() => backend().RemoveHolding(main.type, main.id, entity.type, entity.id), showError, `Removed ${entity.name} as an affiliate of ${main.name}`),
     })));
   }
 
@@ -990,7 +990,7 @@ async function confirmMyIntelRemove(groups) {
   const holdings = groups.reduce((total, group) => total + group.holdings.length, 0);
   const allies = groups.reduce((total, group) => total + group.ignoredAllies.length, 0);
   const owned = [];
-  if (holdings) owned.push(plural(holdings, "holding", "holdings"));
+  if (holdings) owned.push(plural(holdings, "affiliate", "affiliates"));
   if (allies) owned.push(plural(allies, "ignored ally", "ignored allies"));
   const one = groups.length === 1;
   el("myintel-remove-title").textContent = one ? `Remove ${groups[0].entity.name} from My Intel?` : `Remove ${plural(groups.length, "card", "cards")} from My Intel?`;
@@ -998,9 +998,9 @@ async function confirmMyIntelRemove(groups) {
   const heldFor = groups.filter((group) => group.heldFor.length);
   if (one && heldFor.length) {
     const mains = groups[0].heldFor.map((main) => main.name);
-    detail += ` It stays a holding of ${mains.join(", ")}, as those links belong to ${mains.length === 1 ? "that main" : "those mains"}.`;
+    detail += ` It stays an affiliate of ${mains.join(", ")}, as those links belong to ${mains.length === 1 ? "that main" : "those mains"}.`;
   } else if (heldFor.length) {
-    detail += ` Links where one is another main's holding stay, as they belong to that main.`;
+    detail += ` Links where one is another main's affiliate stay, as they belong to that main.`;
   }
   el("myintel-remove-detail").textContent = detail;
 
@@ -3095,7 +3095,7 @@ const TAB_HELP = {
     "An overview of this search: the top few rows of each tab. Open goes to the full tab.",
     "The « button at the top of the sidebar shrinks it to its icons.",
     "Drag the tabs, or use Alt+↑/↓, to reorder them. At a glance stays at the top.",
-    "The bar under the target's box pulls it shut, its holdings first if it has any.",
+    "The bar under the target's box pulls it shut, its affiliates first if it has any.",
     "Right-click a row for the same menu it has in its full tab.",
   ],
   "tab-killmails": [
@@ -3124,10 +3124,10 @@ const TAB_HELP = {
   ],
   "tab-allies": [
     "The 10 alliances most on this target's kills, then corps with no alliance.",
-    "Holdings are listed above the table.",
+    "Affiliates are listed above the table.",
     "Left out under the table: ignored allies (× restores one) and, by Preference, allies it also killed.",
     UNIQUE_DAYS_HELP,
-    "Right-click an ally to add it as a holding, ignore it, search it, or open it on an external site.",
+    "Right-click an ally to add it as an affiliate, ignore it, search it, or open it on an external site.",
   ],
   "tab-corps": [
     "The 10 corporations on the most killmails in this system.",
@@ -3148,9 +3148,9 @@ const TAB_HELP = {
     "Right-click a pilot to search them, their corp, or alliance, or a loss to open it on an external site.",
   ],
   "tab-structures": [
-    "Used in Kills: this corp's and its holdings' citadels and POSes seen on its kills, at any age.",
+    "Used in Kills: this corp's and its affiliates' citadels and POSes seen on its kills, at any age.",
     "Destroyed: structures it helped kill on this search's killmails.",
-    "Lost: every citadel and POS it or its holdings lost, at any age.",
+    "Lost: every citadel and POS it or its affiliates lost, at any age.",
     "Right-click a structure to search its system, owner, or killers, or open it on an external site.",
   ],
   "tab-fits": [
@@ -3648,7 +3648,7 @@ function renderKillmailCard(km) {
     outcome = document.createElement("span");
     outcome.className = "outcome";
     outcome.textContent = km.outcome.toUpperCase();
-    if (km.outcome === "internal") outcome.title = "Every attacker and the victim are this target or its holdings";
+    if (km.outcome === "internal") outcome.title = "Every attacker and the victim are this target or its affiliates";
   }
 
   // the date goes in the value column directly, not wrapped like its other lines, so it can be its own small label
@@ -4207,7 +4207,7 @@ function renderAllyHoldings(holdings) {
     const count = document.createElement("span");
     count.className = "row-detail";
     count.textContent = ` (${holding.killmails})`;
-    count.title = "Kills with pilots of both the target and this holding on them";
+    count.title = "Kills with pilots of both the target and this affiliate on them";
     item.append(name, count);
     parts.push(withMenu(item, [entitySection(holding)]));
   });
@@ -4357,7 +4357,7 @@ function allyMenuExtras(ally) {
   const holdingTarget = intelTarget && shownTarget && intelTarget.id === shownTarget.id && intelTarget.type === shownTarget.type
     && (intelTarget.type === "CORPORATION" || intelTarget.type === "ALLIANCE");
   if (holdingTarget) {
-    extras.push({ label: "Add to Holding", forTarget: true, action: () => openHoldingDialog(null, { type: ally.type, name: ally.name }) });
+    extras.push({ label: "Add as Affiliate", forTarget: true, action: () => openHoldingDialog(null, { type: ally.type, name: ally.name }) });
   }
   extras.push({
     label: `Ignore ${ally.name} for this target`,
@@ -4787,7 +4787,7 @@ async function search(event) {
     }
     renderTarget(target);
     // a holding is searched as its main, with the main's holdings
-    if (target.searchedHolding) setStatus(`${target.searchedHolding} is a holding of ${target.display.Name}, so this is ${target.display.Name}'s search, with its holdings.`);
+    if (target.searchedHolding) setStatus(`${target.searchedHolding} is an affiliate of ${target.display.Name}, so this is ${target.display.Name}'s search, with its affiliates.`);
     // SearchTarget cached the found target as a recent search
     loadRecentSearches();
     if (stopRequested) {
