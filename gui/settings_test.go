@@ -27,14 +27,14 @@ func TestSettings(t *testing.T) {
 	})
 
 	t.Run("the defaults collect 20 killmails of any age, or 10 pages for all, with holdings, without labels or extra cached killmails, in EVE time, keeping 5 recent searches, with the caveat warning", func(t *testing.T) {
-		assert.Equal(t, Preferences{MaxKillmails: 20, KillmailPages: 10, TimeZone: "eve", MaxRecentSearches: 5, IncludeHoldings: true, ShowCaveatWarning: true}, defaultSettings().Preferences)
+		assert.Equal(t, Preferences{MaxKillmails: 20, KillmailPages: 10, TimeZone: "eve", MaxRecentSearches: 5, IncludeHoldings: true, ShowCaveatWarning: true, ShowChangelog: true}, defaultSettings().Preferences)
 	})
 
 	t.Run("settings saved before the killmail preferences existed keep their choices and get the default limits", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "settings.json")
 		assert.NoError(t, os.WriteFile(path, []byte(`{"theme": "amarr", "includeZkillLabels": true}`), 0o600))
 
-		assert.Equal(t, Settings{Theme: "amarr", Preferences: Preferences{IncludeZkillLabels: true, MaxKillmails: 20, KillmailPages: 10, TimeZone: "eve", MaxRecentSearches: 5, IncludeHoldings: true, ShowCaveatWarning: true}}, loadSettings(path))
+		assert.Equal(t, Settings{Theme: "amarr", Preferences: Preferences{IncludeZkillLabels: true, MaxKillmails: 20, KillmailPages: 10, TimeZone: "eve", MaxRecentSearches: 5, IncludeHoldings: true, ShowCaveatWarning: true, ShowChangelog: true}}, loadSettings(path))
 	})
 
 	t.Run("debug mode is off again at each start, even if it was saved on", func(t *testing.T) {
@@ -178,5 +178,18 @@ func TestSettings(t *testing.T) {
 		assert.Equal(t, retrieval.KillmailLimits{Max: 20, Pages: 10}, defaultSettings().KillmailLimits(now))
 		assert.Equal(t, retrieval.KillmailLimits{Max: 500, Pages: 5, NewerThan: time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC), IncludeCached: true},
 			Preferences{MaxKillmails: 500, KillmailPages: 5, KillmailsNewerThanDays: 30, UseCachedKillmails: true}.KillmailLimits(now))
+	})
+}
+
+func TestShowChangelogDefault(t *testing.T) {
+	comm.InitLogger(logrus.DebugLevel)
+
+	t.Run("settings saved before What's New existed load with it on, and a saved off stays off", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "settings.json")
+		assert.NoError(t, os.WriteFile(path, []byte(`{"theme": "amarr", "showCaveatWarning": false}`), 0o600))
+		assert.True(t, loadSettings(path).ShowChangelog)
+
+		assert.NoError(t, os.WriteFile(path, []byte(`{"showChangelog": false}`), 0o600))
+		assert.False(t, loadSettings(path).ShowChangelog)
 	})
 }

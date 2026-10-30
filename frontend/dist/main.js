@@ -4970,9 +4970,12 @@ function recentKeydown(event) {
   }
 }
 
-// showCaveatWarning opens the caveat warning as the app launches, while its preference is on
+// showCaveatWarning opens the caveat warning as the app launches, while its preference is on; the update check waits for it to close
 function showCaveatWarning() {
-  if (!preferences.showCaveatWarning) return;
+  if (!preferences.showCaveatWarning) {
+    checkForUpdatesAtLaunch();
+    return;
+  }
   el("caveat-dont-show").checked = false;
   el("caveat-warning").showModal();
 }
@@ -4981,6 +4984,170 @@ function showCaveatWarning() {
 function dismissCaveatWarning() {
   preferences.showCaveatWarning = false;
   backend().DismissCaveatWarning().catch((err) => tickerPush(String(err)));
+}
+
+// renderReleaseNotes draws releases into a container: a release's version, date, and tag line (the version and date only when asked), then its blocks, with items grouped into one list
+function renderReleaseNotes(container, releases, withTitles) {
+  const entries = releases.map((release) => {
+    const entry = document.createElement("div");
+    entry.className = "release-entry";
+    if (withTitles) {
+      const title = document.createElement("p");
+      title.className = "release-title";
+      title.textContent = `Version ${release.version}`;
+      const date = document.createElement("span");
+      date.className = "release-date";
+      date.textContent = release.published;
+      title.append(date);
+      entry.append(title);
+    }
+    if (release.tagline) {
+      const tagline = document.createElement("p");
+      tagline.className = "release-tagline";
+      tagline.textContent = release.tagline;
+      entry.append(tagline);
+    }
+    let list = null;
+    for (const block of release.blocks || []) {
+      const line = document.createElement(block.kind === "heading" ? "h4" : block.kind === "item" ? "li" : "p");
+      for (const span of block.spans || []) {
+        if (span.bold) {
+          const strong = document.createElement("strong");
+          strong.textContent = span.text;
+          line.append(strong);
+        } else {
+          line.append(document.createTextNode(span.text));
+        }
+      }
+      if (block.kind === "item") {
+        if (!list) {
+          list = document.createElement("ul");
+          entry.append(list);
+        }
+        list.append(line);
+      } else {
+        list = null;
+        entry.append(line);
+      }
+    }
+    return entry;
+  });
+  container.replaceChildren(...entries);
+}
+
+// updateShown is the release the update notice is about, null until one is found
+let updateShown = null;
+
+// chipRelease is the release the top bar's chip is about
+let chipRelease = null;
+
+// showUpdateChip puts the chip in the top bar for a release, or takes it away
+function showUpdateChip(release) {
+  chipRelease = release;
+  el("update-chip").hidden = !release;
+  el("brand-box").classList.toggle("has-update", !!release);
+  if (release) el("update-chip").textContent = `Update ${release.version}`;
+}
+
+// openUpdateNotice opens the update popup for a release, closing About first when it asked, as only one window is open at a time
+function openUpdateNotice(release) {
+  updateShown = release;
+  el("update-notice-title").textContent = `Version ${release.version} is out`;
+  renderReleaseNotes(el("update-notice-body"), [release], false);
+  el("update-notice-body").scrollTop = 0;
+  el("update-skip").checked = false;
+  if (el("about").open) el("about").close();
+  el("update-notice").showModal();
+}
+
+// closeUpdateNotice acts on how the update popup closed, by any route: Skip ticked skips the release and drops the chip, otherwise it is put off to the chip
+function closeUpdateNotice() {
+  const release = updateShown;
+  updateShown = null;
+  if (!release) return;
+  if (el("update-skip").checked) {
+    showUpdateChip(null);
+    backend().SkipUpdate(release.version).catch((err) => tickerPush(String(err)));
+  } else {
+    showUpdateChip(release);
+    backend().SnoozeUpdate(release.version).catch((err) => tickerPush(String(err)));
+  }
+}
+
+// whatsNewDone runs once when What's New closes, ie to show the update notice after it at launch
+let whatsNewDone = null;
+
+// openWhatsNew opens What's New with the given releases, closing About first, and runs then once it closes
+function openWhatsNew(releases, then) {
+  whatsNewDone = then || null;
+  renderReleaseNotes(el("whats-new-body"), releases, true);
+  el("whats-new-body").scrollTop = 0;
+  el("whats-new-dont-show").checked = false;
+  if (el("about").open) el("about").close();
+  el("whats-new").showModal();
+}
+
+// openWhatsNewFromAbout lists every release, newest first, or says why it can't
+function openWhatsNewFromAbout() {
+  backend().GetReleaseNotes().then((releases) => {
+    if (releases && releases.length) {
+      openWhatsNew(releases);
+      return;
+    }
+    openWhatsNew([]);
+    const none = document.createElement("p");
+    none.textContent = "No release notes to show.";
+    el("whats-new-body").replaceChildren(none);
+  }).catch((err) => {
+    openWhatsNew([]);
+    const failed = document.createElement("p");
+    failed.textContent = `Could not read the release notes: ${err}`;
+    el("whats-new-body").replaceChildren(failed);
+  });
+}
+
+// dismissChangelog turns What's New off from its Don't show this again box
+function dismissChangelog() {
+  preferences.showChangelog = false;
+  backend().SavePreferences(preferences).catch((err) => tickerPush(String(err)));
+}
+
+// showUpdateNotice shows a found release as its notice says: the popup, the chip, or nothing
+function showUpdateNotice(status) {
+  if (!status.latest) return;
+  if (status.notice === "popup") openUpdateNotice(status.latest);
+  else if (status.notice === "chip") showUpdateChip(status.latest);
+}
+
+// checkForUpdatesAtLaunch asks for a newer release as the app launches, then opens What's New if there are releases unseen, and the notice after it closes; offline it shows nothing
+function checkForUpdatesAtLaunch() {
+  backend().CheckForUpdates(false).then((status) => {
+    if (status.unseen && status.unseen.length) {
+      openWhatsNew(status.unseen, () => showUpdateNotice(status));
+      backend().MarkChangelogSeen(status.unseen[0].version).catch((err) => tickerPush(String(err)));
+    } else {
+      showUpdateNotice(status);
+    }
+  }).catch(() => {});
+}
+
+// checkForUpdatesFromAbout runs About's button: it ignores a skip, opening the notice for anything newer, and says if there is nothing
+function checkForUpdatesFromAbout() {
+  const status = el("about-update-status");
+  status.textContent = "Checking…";
+  el("about-check-updates").disabled = true;
+  backend().CheckForUpdates(true).then((result) => {
+    if (result.latest) {
+      status.textContent = "";
+      openUpdateNotice(result.latest);
+    } else {
+      status.textContent = "Up to date";
+    }
+  }).catch(() => {
+    status.textContent = "Couldn't reach GitHub";
+  }).finally(() => {
+    el("about-check-updates").disabled = false;
+  });
 }
 
 // search looks up the target, then immediately pulls its killmails, since every intel section is built from them
@@ -5396,7 +5563,7 @@ const ALL_KILLMAILS = -1;
 const MAX_RECENT_SEARCHES = 25;
 
 // preferences are the saved Preferences window choices, as the backend's Preferences
-let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailPages: 10, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5, hideKilledAllies: false, includeHoldings: true, collapseTarget: false, showCaveatWarning: true, debugMode: false };
+let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailPages: 10, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5, hideKilledAllies: false, includeHoldings: true, collapseTarget: false, showCaveatWarning: true, showChangelog: true, debugMode: false };
 
 // applySettings sets the saved theme and preferences on the app
 function applySettings(settings) {
@@ -5415,6 +5582,7 @@ function applySettings(settings) {
     includeHoldings: settings.includeHoldings !== false,
     collapseTarget: Boolean(settings.collapseTarget),
     showCaveatWarning: settings.showCaveatWarning !== false,
+    showChangelog: settings.showChangelog !== false,
     debugMode: Boolean(settings.debugMode),
   };
   showKillmailLabels = preferences.includeZkillLabels;
@@ -5448,6 +5616,7 @@ function fillPreferencesForm(chosen) {
   el("pref-include-holdings").checked = chosen.includeHoldings;
   el("pref-collapse-target").checked = chosen.collapseTarget;
   el("pref-caveat-warning").checked = chosen.showCaveatWarning;
+  el("pref-show-changelog").checked = chosen.showChangelog;
   el("pref-debug-mode").checked = chosen.debugMode;
 }
 
@@ -5470,6 +5639,7 @@ function preferencesForm() {
     includeHoldings: el("pref-include-holdings").checked,
     collapseTarget: el("pref-collapse-target").checked,
     showCaveatWarning: el("pref-caveat-warning").checked,
+    showChangelog: el("pref-show-changelog").checked,
     debugMode: el("pref-debug-mode").checked,
   };
 }
@@ -5778,7 +5948,28 @@ el("caveat-understood").addEventListener("click", () => el("caveat-warning").clo
 el("caveat-warning-close").addEventListener("click", () => el("caveat-warning").close());
 el("caveat-warning").addEventListener("close", () => {
   if (el("caveat-dont-show").checked) dismissCaveatWarning();
+  checkForUpdatesAtLaunch();
 });
+el("update-chip").addEventListener("click", () => {
+  if (chipRelease) openUpdateNotice(chipRelease);
+});
+el("update-download").addEventListener("click", () => {
+  if (updateShown) window.runtime.BrowserOpenURL(updateShown.url);
+  el("update-notice").close();
+});
+el("update-later").addEventListener("click", () => el("update-notice").close());
+el("update-notice-close").addEventListener("click", () => el("update-notice").close());
+el("update-notice").addEventListener("close", closeUpdateNotice);
+el("whats-new-done").addEventListener("click", () => el("whats-new").close());
+el("whats-new-close").addEventListener("click", () => el("whats-new").close());
+el("whats-new").addEventListener("close", () => {
+  if (el("whats-new-dont-show").checked) dismissChangelog();
+  const then = whatsNewDone;
+  whatsNewDone = null;
+  if (then) then();
+});
+el("about-check-updates").addEventListener("click", checkForUpdatesFromAbout);
+el("about-whats-new").addEventListener("click", openWhatsNewFromAbout);
 el("search-confirm").addEventListener("close", () => {
   if (el("search-confirm").returnValue === "yes") {
     el("search-form").requestSubmit();

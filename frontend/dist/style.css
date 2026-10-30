@@ -67,6 +67,11 @@ body {
 
 .brand-version { color: var(--muted); font-size: 11px; font-weight: 400; }
 
+/* the update link takes the version line's place under the title: past the 32px bear and the 10px gap */
+.brand-box { position: relative; }
+.update-chip { position: absolute; left: 42px; bottom: 0; font-size: 11px; line-height: 1.2; white-space: nowrap; }
+.brand-box.has-update .brand-version { visibility: hidden; }
+
 .search {
   display: flex;
   flex: 1;
@@ -1493,6 +1498,28 @@ button.text-link {
 .about-list { display: grid; gap: 6px; margin: 0; padding-left: 20px; }
 .about-legal { color: var(--muted); font-size: 12px; }
 .bug-report-steps { display: grid; gap: 4px; margin-bottom: 0; padding-left: 20px; }
+/* the update notice and What's New: a reading width, the box left of the buttons, notes drawn from blocks */
+.update-window { width: min(520px, calc(100vw - 32px)); max-height: 85vh; }
+.update-actions { justify-content: space-between; align-items: center; }
+.update-buttons { display: flex; gap: 8px; }
+.release-notes { gap: 10px; font-size: 13px; line-height: 1.5; }
+.release-notes p,
+.release-notes ul,
+.release-notes h4 { margin: 0; }
+.release-notes ul { display: grid; gap: 4px; padding-left: 20px; }
+.release-notes h4 { color: var(--highlight); font-size: 13px; font-weight: 600; }
+.release-notes .release-tagline { color: var(--highlight); font-size: 14px; font-weight: 600; }
+.release-notes .release-title { margin: 0; font-size: 15px; font-weight: 600; }
+.release-notes .release-date { margin-left: 8px; color: var(--muted); font-size: 12px; font-weight: 400; }
+.release-notes .release-entry { display: grid; gap: 6px; }
+.release-notes .release-entry + .release-entry { padding-top: 10px; border-top: 1px solid var(--border); }
+/* the top bar's reminder of a release put off with Later */
+/* About's footer: the update check at the left, Report a bug at the right */
+/* .window-actions comes later and sets flex-end, so this needs both classes to win */
+.window-actions.about-actions { justify-content: space-between; align-items: center; }
+.about-update { display: flex; align-items: center; gap: 10px; }
+.about-update .preference-help { margin: 0; }
+
 .caveat-dismiss { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
 .caveat-dismiss input { flex: none; margin-top: 4px; padding: 0; accent-color: var(--accent); }
 .caveat-dismiss > span { display: flex; flex-direction: column; gap: 2px; }

@@ -87,7 +87,7 @@ func (c *CachedEveIDs) Entries() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.db == nil {
-		count := len(c.NameLookups) + len(c.Searched) + len(c.IgnoredAllies) + len(c.Holdings) + len(c.ZkillLists) + len(c.Images) + len(c.PendingChecks)
+		count := len(c.NameLookups) + len(c.Searched) + len(c.IgnoredAllies) + len(c.Holdings) + len(c.ZkillLists) + len(c.Images) + len(c.PendingChecks) + len(c.States)
 		for _, entries := range c.idMaps() {
 			count += len(entries.entries)
 		}
@@ -148,7 +148,7 @@ func (c *CachedEveIDs) removeWhere(match func(section, *CacheEntry) bool, where 
 	for _, entries := range []struct {
 		section section
 		entries map[string]*CacheEntry
-	}{{sectionNameLookups, c.NameLookups}, {sectionRecentSearches, c.Searched}, {sectionIgnoredAllies, c.IgnoredAllies}, {sectionHoldings, c.Holdings}, {sectionZkillLists, c.ZkillLists}, {sectionImages, c.Images}, {sectionIntelChecks, c.PendingChecks}} {
+	}{{sectionNameLookups, c.NameLookups}, {sectionRecentSearches, c.Searched}, {sectionIgnoredAllies, c.IgnoredAllies}, {sectionHoldings, c.Holdings}, {sectionZkillLists, c.ZkillLists}, {sectionImages, c.Images}, {sectionIntelChecks, c.PendingChecks}, {sectionAppState, c.States}} {
 		for key, entry := range entries.entries {
 			if match(entries.section, entry) {
 				delete(entries.entries, key)
@@ -215,18 +215,17 @@ func (c *CachedEveIDs) compact() {
 // userSections hold what the user set by hand, not looked up: ignored allies and holding links, and the checks of those imported. Clears leave them unless told to include them.
 var userSections = []section{sectionIgnoredAllies, sectionHoldings, sectionIntelChecks}
 
-// isUserSection reports whether a section is one of userSections
-func isUserSection(s section) bool {
-	return slices.Contains(userSections, s)
-}
+// keptSections are never cleared: what the app remembers about itself, ie the versions What's New has shown, which a clear would only bring back
+var keptSections = []section{sectionAppState}
 
-// keepingUserData narrows a clear to leave userSections out, unless includeUserData, returning its match and SQL condition with args
+// keepingUserData narrows a clear to leave keptSections out, and userSections unless includeUserData, returning its match and SQL condition with args
 func keepingUserData(includeUserData bool, match func(section, *CacheEntry) bool, where string, args ...any) (func(section, *CacheEntry) bool, string, []any) {
-	if includeUserData {
-		return match, where, args
+	kept := keptSections
+	if !includeUserData {
+		kept = append(slices.Clone(userSections), keptSections...)
 	}
-	placeholders, sectionArgs := sectionPlaceholders(userSections...)
-	return func(s section, entry *CacheEntry) bool { return !isUserSection(s) && match(s, entry) },
+	placeholders, sectionArgs := sectionPlaceholders(kept...)
+	return func(s section, entry *CacheEntry) bool { return !slices.Contains(kept, s) && match(s, entry) },
 		fmt.Sprintf("(%s) AND section NOT IN (%s)", where, placeholders), append(args, sectionArgs...)
 }
 

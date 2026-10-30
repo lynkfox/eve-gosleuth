@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,6 +38,16 @@ type App struct {
 	cache        *retrieval.CachedEveIDs
 	sde          api.SDEClient
 	sdeCheckedAt time.Time
+
+	// the update check's client, see CheckForUpdates
+	github api.GitHubClient
+	// neither settings.json nor the cache existed at startup: a new user, who gets no What's New (and later the new user tour)
+	newUser bool
+	// the releases of the last check, kept so About's What's New link need not ask GitHub again, and a lock for changes to the cache's AppState
+	releasesMu      sync.Mutex
+	releases        []api.GitHubRelease
+	releasesFetched bool
+	appStateMu      sync.Mutex
 
 	promptAnswers chan bool // AnswerPrompt hands the frontend's answer to the search waiting in ask
 
@@ -309,16 +321,28 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	a.settingsPath = settingsPath()
+	settingsMissing := fileMissing(a.settingsPath)
 	a.settings = loadSettings(a.settingsPath)
 	a.setupDebug()
 
 	esi := api.NewESIClient()
 	a.esiGuard = esi.Guard()
+	// before LoadCache, which creates the database: a new user has neither file yet
+	a.newUser = settingsMissing && fileMissing(cachePathFor(a.settings))
 	cache, err := retrieval.LoadCache(esi, cachePathFor(a.settings))
 	if err != nil {
 		comm.Logger.WithError(err).Warn("Starting with an empty cache")
 	}
 	a.cache = cache
+	a.github = api.NewGitHubClient()
+	if _, known := parseVersion(a.version); known && a.newUser {
+		// a new user has seen nothing before this version, so their first update shows What's New from here
+		a.changeAppState(func(state *retrieval.AppState) {
+			if state.LastSeenVersion == "" {
+				state.LastSeenVersion = a.version
+			}
+		})
+	}
 
 	// every ESI call goes through the cache, which only reaches the ESI for data it does not have
 	a.clients = retrieval.CollectionClientPool{
@@ -337,6 +361,12 @@ func (a *App) startup(ctx context.Context) {
 		defer comm.RecoverGoroutine("checking imported entities", nil)
 		a.runIntelChecks()
 	}()
+}
+
+// fileMissing is whether no file is at path. A file that can't be read for another reason counts as there.
+func fileMissing(path string) bool {
+	_, err := os.Stat(path)
+	return errors.Is(err, fs.ErrNotExist)
 }
 
 // checkSDERelease drops cached ESI data from before a newer SDE release, at most once per sdeCheckInterval. If the check fails the cache is kept as is.

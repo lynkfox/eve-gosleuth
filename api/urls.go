@@ -30,6 +30,9 @@ const ZKILL_MAX_PAGES = 100
 
 // ZKILL_MAX_KILLMAILS is the most killmails zKillboard lists for one entity
 const ZKILL_MAX_KILLMAILS = ZKILL_PAGE_SIZE * ZKILL_MAX_PAGES
+
+// GITHUB_API_URL is GitHub's REST API, read for the app's own releases
+const GITHUB_API_URL = "https://api.github.com"
 const EVE_WHO_URL = "https://evewho.com"
 const EVE_REF_URL = "https://everef.net"
 const EVE_WHO_API_URL = EVE_WHO_URL + "/api"

@@ -29,6 +29,8 @@ type Settings struct {
 	TabOrder []string `json:"tabOrder,omitempty"` // the intel tabs' ids in the order the user dragged them into, empty for the default order. Changed with SetTabOrder.
 	// the report's tab sidebar was shrunk to its icons when the app last ran, false (shown in full) on a first run. Changed with SetSidebarCollapsed.
 	SidebarCollapsed bool `json:"sidebarCollapsed,omitempty"`
+	// the release the user chose Skip this update for, so the update check shows nothing for it. Changed with SkipUpdate.
+	SkippedVersion string `json:"skippedVersion,omitempty"`
 	Preferences
 }
 
@@ -45,6 +47,7 @@ type Preferences struct {
 	IncludeHoldings        bool   `json:"includeHoldings"`        // a corp or alliance search also collects its holdings' killmails, counted as its own. On by default.
 	CollapseTarget         bool   `json:"collapseTarget"`         // pull the target panel shut at each search, leaving more room for the report. Off by default.
 	ShowCaveatWarning      bool   `json:"showCaveatWarning"`      // warn as the app launches that killmails only show the losses. On by default.
+	ShowChangelog          bool   `json:"showChangelog"`          // open What's New at the first launch of a newer version. On by default.
 	DebugMode              bool   `json:"debugMode"`              // log everything, and zip each search's log into the debug folder to send with a problem report. Off by default, and off again at each start, so it is never left on.
 }
 
@@ -76,7 +79,7 @@ var killmailAgeChoices = []int{0, 7, 30, 90}
 
 // defaultSettings are the settings before the user changes anything
 func defaultSettings() Settings {
-	return Settings{Preferences: Preferences{MaxKillmails: retrieval.DefaultKillmailLimit, KillmailPages: retrieval.DefaultKillmailPages, TimeZone: "eve", MaxRecentSearches: retrieval.DefaultRecentSearches, IncludeHoldings: true, ShowCaveatWarning: true}}
+	return Settings{Preferences: Preferences{MaxKillmails: retrieval.DefaultKillmailLimit, KillmailPages: retrieval.DefaultKillmailPages, TimeZone: "eve", MaxRecentSearches: retrieval.DefaultRecentSearches, IncludeHoldings: true, ShowCaveatWarning: true, ShowChangelog: true}}
 }
 
 // validate returns a user readable error for a preference out of range
