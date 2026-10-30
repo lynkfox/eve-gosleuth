@@ -5996,7 +5996,8 @@ el("about-tour").addEventListener("click", () => {
   el("about").close();
   startTour();
 });
-el("empty-tour").addEventListener("click", startTour);
+// tour.js loads after this file, so startTour is only looked up once clicked
+el("empty-tour").addEventListener("click", () => startTour());
 el("about-whats-new").addEventListener("click", openWhatsNewFromAbout);
 el("search-confirm").addEventListener("close", () => {
   if (el("search-confirm").returnValue === "yes") {
