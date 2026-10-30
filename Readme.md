@@ -96,3 +96,30 @@ Roadmap of planned features.
   * sde dumps is kinda already there as a dev side tool for deployment updates. Debatable if ship with app or just rely on the override system
  * API/MCP for command line and ai integration calls
  * Translation system (Not translated by me but translation dictionaries)
+
+
+# At a Glance: 
+
+![At A Glance](docs/img/at-a-glance.png)
+
+# Killmails
+
+![Killmails](docs/img/killmails.png)
+
+# Activity
+
+![Activity](docs/img/activity.png)
+
+# Structures
+
+![Structures](docs/img/structures.png)
+
+# Fits
+
+![Fits](docs/img/fits.png)
+
+# Themes
+
+![Synthwave](docs/img/synth.png)
+
+![Triglavian](docs/img/trig.png)
