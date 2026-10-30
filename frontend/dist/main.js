@@ -1,5 +1,7 @@
 // Bound Go methods are injected by the Wails runtime as window.go.<package>.<struct>.<method>, each returning a Promise
-const backend = () => window.go.gui.App;
+// while the new user tour runs, tourBackend stands in for it (tour.js), so the tour reaches no API, cache, or setting
+let tourBackend = null;
+const backend = () => tourBackend || window.go.gui.App;
 
 // reportFrontendError sends a JavaScript error to the backend's log, and so to the debug log, as it is otherwise invisible. First, so it catches errors as the rest of this file loads.
 function reportFrontendError(message, error) {
@@ -45,6 +47,9 @@ function setBusy(busy) {
   el("search-button").disabled = busy;
   el("search-input").disabled = busy;
   el("recent-toggle").disabled = busy;
+  // the tour never starts over a running search
+  el("about-tour").disabled = busy;
+  el("empty-tour").disabled = busy;
   if (busy) setRecentOpen(false);
   el("ticker").classList.toggle("busy", busy);
 }
@@ -396,7 +401,11 @@ function detailGrid(rows) {
   return grid;
 }
 
+// renderedTarget is the SearchTarget result renderTarget last drew, so the tour can draw it again when it ends
+let renderedTarget = null;
+
 function renderTarget(result) {
+  renderedTarget = result;
   const display = result.display;
 
   const target = { label: result.type, id: result.id, name: display.Name, type: result.type, imageUrl: display.TargetImageUrl, zkillUrl: display.ZkillUrl, evewhoUrl: display.EveWhoUrl, dotlanUrl: display.DotlanUrl, spaceLabel: display.SpaceLabel, ticker: display.Ticker };
@@ -555,6 +564,8 @@ let shownTarget = null;
   and a button to add one. A pilot or system target has none, holdings being null, and the strip is hidden.
 */
 function renderHoldings(holdings) {
+  // kept with the target, so the tour draws it again as it is now
+  if (renderedTarget) renderedTarget.holdings = holdings;
   const strip = el("target-holdings");
   const count = holdings ? holdings.holdings.length + holdings.heldFor.length : 0;
   // put away, a holding just added to the same target would not show, so they come out again. With none, nothing stays put away.
@@ -4973,11 +4984,18 @@ function recentKeydown(event) {
 // showCaveatWarning opens the caveat warning as the app launches, while its preference is on; the update check waits for it to close
 function showCaveatWarning() {
   if (!preferences.showCaveatWarning) {
-    checkForUpdatesAtLaunch();
+    launchAfterCaveat();
     return;
   }
   el("caveat-dont-show").checked = false;
   el("caveat-warning").showModal();
+}
+
+// launchAfterCaveat runs once the caveat warning is closed or off: a new user is offered the tour (tour.js), the update check waiting for that to close
+async function launchAfterCaveat() {
+  const newUser = await backend().IsNewUser().catch(() => false);
+  if (newUser) offerTour(checkForUpdatesAtLaunch);
+  else checkForUpdatesAtLaunch();
 }
 
 // dismissCaveatWarning turns the caveat warning off from its Don't show this again box
@@ -5948,7 +5966,7 @@ el("caveat-understood").addEventListener("click", () => el("caveat-warning").clo
 el("caveat-warning-close").addEventListener("click", () => el("caveat-warning").close());
 el("caveat-warning").addEventListener("close", () => {
   if (el("caveat-dont-show").checked) dismissCaveatWarning();
-  checkForUpdatesAtLaunch();
+  launchAfterCaveat();
 });
 el("update-chip").addEventListener("click", () => {
   if (chipRelease) openUpdateNotice(chipRelease);
@@ -5969,6 +5987,11 @@ el("whats-new").addEventListener("close", () => {
   if (then) then();
 });
 el("about-check-updates").addEventListener("click", checkForUpdatesFromAbout);
+el("about-tour").addEventListener("click", () => {
+  el("about").close();
+  startTour();
+});
+el("empty-tour").addEventListener("click", startTour);
 el("about-whats-new").addEventListener("click", openWhatsNewFromAbout);
 el("search-confirm").addEventListener("close", () => {
   if (el("search-confirm").returnValue === "yes") {
