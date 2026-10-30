@@ -85,3 +85,9 @@ func TestDoctrinesNone(t *testing.T) {
 func TestDoctrinesManyPages(t *testing.T) {
 	doctrineBuild(t, doctrineFixture(12))
 }
+
+func TestDoctrinesWithoutEFT(t *testing.T) {
+	ds := doctrineFixture(2)
+	ds[1].EFT = ""
+	doctrineBuild(t, ds)
+}

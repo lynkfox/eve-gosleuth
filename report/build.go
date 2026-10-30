@@ -3,6 +3,7 @@ package report
 import (
 	"bytes"
 	"fmt"
+	"strings"
 )
 
 // build makes the PDF: the Summary first, then the chosen sections that exist, in the report's order whatever order they were asked in
@@ -28,8 +29,13 @@ func build(in Input, sections []Section) ([]byte, error) {
 	links := []doctrineLink{}
 	appendix := chosen[SectionAppendix] && len(in.Doctrines) > 0
 	if appendix {
-		for range in.Doctrines {
-			links = append(links, doctrineLink{block: d.AddLink(), eft: d.AddLink()})
+		for _, doctrine := range in.Doctrines {
+			// the appendix leaves out a doctrine with no EFT, so nothing links to it
+			link := doctrineLink{}
+			if strings.TrimSpace(doctrine.EFT) != "" {
+				link = doctrineLink{block: d.AddLink(), eft: d.AddLink()}
+			}
+			links = append(links, link)
 		}
 	}
 	if chosen[SectionDoctrines] {
