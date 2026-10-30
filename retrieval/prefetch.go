@@ -11,6 +11,15 @@ import (
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
 )
 
+// logBulkFailure logs a failed bulk lookup: a warning, or only info for a 404, which a biomassed pilot in the batch causes on every search it is in
+func logBulkFailure(err error, message string) {
+	if api.IsNotFound(err) {
+		comm.Logger.WithError(err).Info(message)
+		return
+	}
+	comm.Logger.WithError(err).Warn(message)
+}
+
 // prefetchWorkers is how many lookups PrefetchKillmailEntities runs at once. The api.RateGuard keeps them within the ESI's limits.
 const prefetchWorkers = 20
 
@@ -52,13 +61,13 @@ func (cached *CachedEveIDs) PrefetchKillmailEntities(killmails []RawKillmail) {
 		wait.Go(func() {
 			var err error
 			if names, err = cached.GetNamesFromEveIDs(needed); err != nil {
-				comm.Logger.WithError(err).Warn("[ESI] Bulk pilot names failed, those pilots are looked up one at a time")
+				logBulkFailure(err, "[ESI] Bulk pilot names failed, those pilots are looked up one at a time")
 			}
 		})
 		wait.Go(func() {
 			var err error
 			if affiliations, err = cached.GetCharacterAffiliations(needed); err != nil {
-				comm.Logger.WithError(err).Warn("[ESI] Bulk pilot affiliations failed, those pilots are looked up one at a time")
+				logBulkFailure(err, "[ESI] Bulk pilot affiliations failed, those pilots are looked up one at a time")
 			}
 		})
 		wait.Wait()

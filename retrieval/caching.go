@@ -660,10 +660,10 @@ func (c *CachedEveIDs) GetIfNotCached(idNumber int, typeOfEntity types.EntityTyp
 		err = fmt.Errorf("%s data is not cached", typeOfEntity)
 	}
 
-	c.countFetched(1, err)
-
-	// a character the ESI no longer has (biomassed) never comes back, so remember that rather than asking again on every killmail it is on
+	// a character the ESI no longer has (biomassed) never comes back, so remember that rather than asking again on every killmail it is on.
+	// That is an answer, not a failed lookup.
 	if typeOfEntity == types.PILOT && api.IsNotFound(err) {
+		c.countFetched(1, nil)
 		comm.Logger.WithError(err).Infof("Character %d no longer exists, caching it as deleted", idNumber)
 		output = &api.ESICharacter{CharacterID: idNumber, Name: api.DELETED_CHARACTER_NAME, Deleted: true}
 		c.mu.Lock()
@@ -677,6 +677,7 @@ func (c *CachedEveIDs) GetIfNotCached(idNumber int, typeOfEntity types.EntityTyp
 		return &output, nil
 	}
 
+	c.countFetched(1, err)
 	if err != nil {
 		// keep using a cached copy that is only missing its id, the next lookup tries the ESI again
 		if found != nil {

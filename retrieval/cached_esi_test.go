@@ -131,6 +131,10 @@ func (m *RawESIClient) GetNamesFromEveIDs(idsNumbers []int) (map[int]string, err
 	m.mu.Unlock()
 	names := map[int]string{}
 	for _, idNumber := range idsNumbers {
+		// one id the ESI does not have fails the whole batch
+		if m.deleted[idNumber] {
+			return map[int]string{}, fmt.Errorf("%w: %w", api.ErrRequestFailedToComplete, &api.StatusError{Host: "esi.evetech.net", Status: 404, Message: "Ensure all IDs are valid before resolving."})
+		}
 		names[idNumber] = "Corp"
 	}
 	return names, nil
@@ -548,7 +552,8 @@ func TestDeletedCharacters(t *testing.T) {
 		character, err := cache.GetCharacterInfo(90000001)
 		assert.NoError(t, err)
 		assert.Equal(t, api.ESICharacter{CharacterID: 90000001, Name: api.DELETED_CHARACTER_NAME, Deleted: true}, *character)
-		assert.Equal(t, "1 from the ESI, 1 failed: esi.evetech.net returned 404 Not Found: Character has been deleted!", cache.Counts().Since(before).Source())
+		// the ESI answered that the character is gone, which is not a failed lookup
+		assert.Equal(t, "1 from the ESI", cache.Counts().Since(before).Source())
 
 		cache.UpdateSDERelease(time.Now().UTC().Add(time.Hour))
 		assert.NoError(t, retrieval.SaveCache(cache))
@@ -559,6 +564,26 @@ func TestDeletedCharacters(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, again.Deleted)
 		assert.Equal(t, 1, raw.Calls("character"), "not asked again after a reload or a new SDE")
+	})
+
+	t.Run("a bulk name lookup a deleted character fails is not counted as failed, as each pilot is then looked up alone", func(t *testing.T) {
+		raw := &RawESIClient{deleted: map[int]bool{90000001: true}}
+		cache := retrieval.NewCache(raw, filepath.Join(t.TempDir(), "cached_data.json"))
+
+		before := cache.Counts()
+		_, err := cache.GetNamesFromEveIDs([]int{90000001, 90000002, 90000003})
+		assert.True(t, api.IsNotFound(err))
+		assert.Equal(t, "3 from the ESI", cache.Counts().Since(before).Source())
+	})
+
+	t.Run("a bulk lookup that fails another way is counted as failed for each id", func(t *testing.T) {
+		raw := &RawESIClient{failing: map[string]bool{"affiliations": true}}
+		cache := retrieval.NewCache(raw, filepath.Join(t.TempDir(), "cached_data.json"))
+
+		before := cache.Counts()
+		_, err := cache.GetCharacterAffiliations([]int{90000002, 90000003})
+		assert.Error(t, err)
+		assert.Equal(t, 2, cache.Counts().Since(before).Failed)
 	})
 
 	t.Run("a deleted pilot keeps their killmail, named as deleted with no corp", func(t *testing.T) {

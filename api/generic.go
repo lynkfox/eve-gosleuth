@@ -239,6 +239,11 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 
 	}
 
-	comm.Logger.WithError(err).Error("Could not complete request")
+	// a 404 is an answer, ie a biomassed pilot, which the caller handles
+	if IsNotFound(err) {
+		comm.Logger.WithFields(logrus.Fields(defaultFields)).WithError(err).Info("Request answered not found")
+	} else {
+		comm.Logger.WithError(err).Error("Could not complete request")
+	}
 	return nil, fmt.Errorf("%w: %w", ErrRequestFailedToComplete, err)
 }

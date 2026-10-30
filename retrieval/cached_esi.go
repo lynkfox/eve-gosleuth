@@ -198,6 +198,15 @@ func cachedApart[T any](c *CachedEveIDs, s section, entries map[int]*CacheEntry,
 	return fetched, nil
 }
 
+// bulkFailure is a bulk lookup's error to count against each of its ids. A 404 only says one id in the batch does not exist, ie a biomassed pilot,
+// so it is not counted: those ids are looked up one at a time, which counts each one's own result.
+func bulkFailure(err error) error {
+	if api.IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
 // GetCharacterAffiliations returns characters' current corp and alliance, looking up only those not already cached, in bulk
 func (c *CachedEveIDs) GetCharacterAffiliations(characterIDs []int) (map[int]api.ESIAffiliation, error) {
 	affiliations := map[int]api.ESIAffiliation{}
@@ -219,7 +228,7 @@ func (c *CachedEveIDs) GetCharacterAffiliations(characterIDs []int) (map[int]api
 	}
 
 	found, err := c.Client.GetCharacterAffiliations(missing)
-	c.countFetched(len(missing), err)
+	c.countFetched(len(missing), bulkFailure(err))
 
 	// earlier batches are kept even when a later one failed
 	c.mu.Lock()
@@ -252,7 +261,7 @@ func (c *CachedEveIDs) GetNamesFromEveIDs(idsNumbers []int) (map[int]string, err
 	}
 
 	found, err := c.Client.GetNamesFromEveIDs(missing)
-	c.countFetched(len(missing), err)
+	c.countFetched(len(missing), bulkFailure(err))
 	if err != nil {
 		return names, err
 	}
