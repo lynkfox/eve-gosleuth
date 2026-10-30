@@ -89,6 +89,21 @@ func TestPrefetchKillmailEntities(t *testing.T) {
 		assert.Equal(t, 1, raw.Calls("character"))
 		assert.Equal(t, "Luxxianna Seraph", pilot.Name)
 	})
+
+	t.Run("a biomassed pilot's 404 fails the bulk names but is not counted as failed, as each pilot is looked up when expanded", func(t *testing.T) {
+		cache, raw := newCache(t)
+		raw.deleted = map[int]bool{103: true}
+
+		before := cache.Counts()
+		cache.PrefetchKillmailEntities(killmails)
+		for _, km := range killmails {
+			km.Expand(nil, cache)
+		}
+
+		assert.Equal(t, 0, cache.Counts().Since(before).Failed)
+		assert.Equal(t, api.DELETED_CHARACTER_NAME, cache.ExpandPilot(103, true).Name)
+		assert.Equal(t, "Luxxianna Seraph", cache.ExpandPilot(101, true).Name, "the others looked up one at a time")
+	})
 }
 
 func TestExpandFailures(t *testing.T) {

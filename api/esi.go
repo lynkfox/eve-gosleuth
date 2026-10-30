@@ -400,8 +400,8 @@ func (e ESIConnection) GetEsiResponse(idNumber int, typeOfEntity types.EntityTyp
 	err := e.getEsiResponseFromEndpointWithID(idNumber, modelDispatch[typeOfEntity], endpointDispatch[typeOfEntity])
 
 	if err != nil {
-		// a 404, ie a biomassed pilot, is logged by the request and handled by the caller
-		if !IsNotFound(err) {
+		// a pilot's 404 is a biomassed character, which the caller handles. Any other 404 is a real failure.
+		if typeOfEntity != types.PILOT || !IsNotFound(err) {
 			comm.Logger.WithError(err).Errorf("GetESI Response for %s failed on %d", typeOfEntity, idNumber)
 		}
 		return nil, err

@@ -60,13 +60,13 @@ func (cached *CachedEveIDs) PrefetchKillmailEntities(killmails []RawKillmail) {
 		var wait sync.WaitGroup
 		wait.Go(func() {
 			var err error
-			if names, err = cached.GetNamesFromEveIDs(needed); err != nil {
+			if names, err = cached.namesFromEveIDs(needed, bulkFailure); err != nil {
 				logBulkFailure(err, "[ESI] Bulk pilot names failed, those pilots are looked up one at a time")
 			}
 		})
 		wait.Go(func() {
 			var err error
-			if affiliations, err = cached.GetCharacterAffiliations(needed); err != nil {
+			if affiliations, err = cached.characterAffiliations(needed, bulkFailure); err != nil {
 				logBulkFailure(err, "[ESI] Bulk pilot affiliations failed, those pilots are looked up one at a time")
 			}
 		})

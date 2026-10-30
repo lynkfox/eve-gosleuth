@@ -198,8 +198,9 @@ func cachedApart[T any](c *CachedEveIDs, s section, entries map[int]*CacheEntry,
 	return fetched, nil
 }
 
-// bulkFailure is a bulk lookup's error to count against each of its ids. A 404 only says one id in the batch does not exist, ie a biomassed pilot,
-// so it is not counted: those ids are looked up one at a time, which counts each one's own result.
+// bulkFailure is the prefetch's bulk lookup error to count against each of its ids. A 404 only says one id in the batch does not exist, ie a biomassed pilot,
+// so it is not counted: those pilots are looked up one at a time when the killmails are expanded, which counts each one's own result.
+// Other callers do not look them up again, so they count every error.
 func bulkFailure(err error) error {
 	if api.IsNotFound(err) {
 		return nil
@@ -207,8 +208,16 @@ func bulkFailure(err error) error {
 	return err
 }
 
+// countEvery counts a bulk lookup's error against each of its ids, whatever it is
+func countEvery(err error) error { return err }
+
 // GetCharacterAffiliations returns characters' current corp and alliance, looking up only those not already cached, in bulk
 func (c *CachedEveIDs) GetCharacterAffiliations(characterIDs []int) (map[int]api.ESIAffiliation, error) {
+	return c.characterAffiliations(characterIDs, countEvery)
+}
+
+// characterAffiliations is GetCharacterAffiliations, counting failure(err) against each id looked up
+func (c *CachedEveIDs) characterAffiliations(characterIDs []int, failure func(error) error) (map[int]api.ESIAffiliation, error) {
 	affiliations := map[int]api.ESIAffiliation{}
 	missing := []int{}
 
@@ -228,7 +237,7 @@ func (c *CachedEveIDs) GetCharacterAffiliations(characterIDs []int) (map[int]api
 	}
 
 	found, err := c.Client.GetCharacterAffiliations(missing)
-	c.countFetched(len(missing), bulkFailure(err))
+	c.countFetched(len(missing), failure(err))
 
 	// earlier batches are kept even when a later one failed
 	c.mu.Lock()
@@ -242,6 +251,11 @@ func (c *CachedEveIDs) GetCharacterAffiliations(characterIDs []int) (map[int]api
 }
 
 func (c *CachedEveIDs) GetNamesFromEveIDs(idsNumbers []int) (map[int]string, error) {
+	return c.namesFromEveIDs(idsNumbers, countEvery)
+}
+
+// namesFromEveIDs is GetNamesFromEveIDs, counting failure(err) against each id looked up
+func (c *CachedEveIDs) namesFromEveIDs(idsNumbers []int, failure func(error) error) (map[int]string, error) {
 	names := map[int]string{}
 	missing := []int{}
 
@@ -261,7 +275,7 @@ func (c *CachedEveIDs) GetNamesFromEveIDs(idsNumbers []int) (map[int]string, err
 	}
 
 	found, err := c.Client.GetNamesFromEveIDs(missing)
-	c.countFetched(len(missing), bulkFailure(err))
+	c.countFetched(len(missing), failure(err))
 	if err != nil {
 		return names, err
 	}

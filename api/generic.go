@@ -239,9 +239,9 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 
 	}
 
-	// a 404 is an answer, ie a biomassed pilot, which the caller handles
+	// a 404 is an answer, ie a biomassed pilot, which the caller handles or logs as a failure itself
 	if IsNotFound(err) {
-		comm.Logger.WithFields(logrus.Fields(defaultFields)).WithError(err).Info("Request answered not found")
+		comm.Logger.WithError(err).Info("Request answered not found")
 	} else {
 		comm.Logger.WithError(err).Error("Could not complete request")
 	}

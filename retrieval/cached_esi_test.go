@@ -566,14 +566,14 @@ func TestDeletedCharacters(t *testing.T) {
 		assert.Equal(t, 1, raw.Calls("character"), "not asked again after a reload or a new SDE")
 	})
 
-	t.Run("a bulk name lookup a deleted character fails is not counted as failed, as each pilot is then looked up alone", func(t *testing.T) {
+	t.Run("a bulk name lookup a deleted character fails is counted as failed for each id, as nothing looks them up again", func(t *testing.T) {
 		raw := &RawESIClient{deleted: map[int]bool{90000001: true}}
 		cache := retrieval.NewCache(raw, filepath.Join(t.TempDir(), "cached_data.json"))
 
 		before := cache.Counts()
 		_, err := cache.GetNamesFromEveIDs([]int{90000001, 90000002, 90000003})
 		assert.True(t, api.IsNotFound(err))
-		assert.Equal(t, "3 from the ESI", cache.Counts().Since(before).Source())
+		assert.Equal(t, 3, cache.Counts().Since(before).Failed)
 	})
 
 	t.Run("a bulk lookup that fails another way is counted as failed for each id", func(t *testing.T) {
