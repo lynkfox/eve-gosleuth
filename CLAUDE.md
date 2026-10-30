@@ -23,7 +23,7 @@ GOOS=windows go vet ./...               # vet including the Wails windows code
 ```
 
 - The GUI is a Wails v2 app targeting **Windows**, developed in WSL. WSL has no GTK/WebKit, so `wails dev` and Linux GUI builds don't work there; cross-build the Windows exe from WSL (Wails on Windows needs no cgo) and run it from Windows. `-skipbindings` is required, since generating bindings builds and runs a Linux binary.
-- The version is `info.productVersion` in `wails.json` (three numbers): bump it there. `main.go` embeds the file, so `App.Version()`, shown under the top bar's title and in About, follows it, and Wails puts it in the exe's file properties.
+- The version is `info.productVersion` in `wails.json` (three numbers): bump it there. Pushing a new version to main releases it: `.github/workflows/release.yml` tests, builds the exe, and publishes GitHub release `vX.Y.Z` (0.x as pre-release) with the zipped exe, `fit_types.json`, and `dogma.json`. A version already tagged is skipped; run the workflow by hand from the Actions tab to retry one. `main.go` embeds the file, so `App.Version()`, shown under the top bar's title and in About, follows it, and Wails puts it in the exe's file properties.
 - A plain `go build` of the root package without Wails build tags produces a binary that refuses to run; always build the GUI with `wails build`.
 - The cache lives at `retrieval.DefaultCachePath()`: `%LocalAppData%\eve-gosleuth\cache.db` (SQLite) on Windows, `~/.cache/eve-gosleuth/` on Linux, unless the user moved it in Preferences (`Settings.CacheDir`).
 
@@ -52,7 +52,7 @@ Data moves through the packages in this order (see `cmd/cli/main.go` or `App.Col
 
 ## Commit messages
 
-Commits follow [Conventional Commits](https://www.conventionalcommits.org/), so the changelog can be built from them (git-cliff, planned with the release workflow for 1.0).
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/), so the release notes are built from them: git-cliff (`cliff.toml`) lists the `feat`, `fix`, `perf`, and `revert` commits since the last tag.
 
 - The first line is `<type>(<area>): <summary>`, ie `feat(fits): merge ECM flavors as one module`. The summary is written as before, plain words saying what changed for the user, lower case first.
 - Types: `feat` (something new for the user), `fix` (a bug), `docs`, `refactor`, `test`, `perf`, `build` (wails, sdegen output, versions), `ci`, `chore` (tooling, hooks, agents), `revert`. A breaking change adds `!` after the area.
