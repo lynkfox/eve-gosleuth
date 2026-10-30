@@ -186,6 +186,25 @@ func TestDebugMode(t *testing.T) {
 		assert.NotContains(t, files, frontendLogName, "the bundle before took it")
 	})
 
+	t.Run("the frontend log keeps its newest whole lines once past its limit", func(t *testing.T) {
+		app := debugApp(t, true)
+		line := strings.Repeat("x", 1000)
+		for range 2 * frontendLogKept / 1000 {
+			app.LogFrontendError(line)
+		}
+		app.LogFrontendError("TypeError: the newest")
+		loose, err := os.ReadFile(filepath.Join(app.debug.dir, frontendLogName))
+		assert.NoError(t, err)
+		assert.LessOrEqual(t, len(loose), 2*frontendLogKept, "trimmed once past twice the limit")
+
+		app.startDebug("URSA.")
+		app.finishDebug(nil)
+		kept := zipFiles(t, filepath.Join(app.debug.dir, app.GetDebugInfo().Latest))[frontendLogName]
+		assert.LessOrEqual(t, len(kept), frontendLogKept)
+		assert.True(t, strings.HasSuffix(kept, "TypeError: the newest\n"))
+		assert.Regexp(t, `^\d{4}-`, kept, "starts at a whole line, with its time")
+	})
+
 	t.Run("frontend errors are not kept with debug mode off", func(t *testing.T) {
 		app := debugApp(t, false)
 		app.LogFrontendError("TypeError: tab is null")

@@ -2,6 +2,7 @@ package gui
 
 import (
 	"archive/zip"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
@@ -299,6 +301,7 @@ Returns:
 func (a *App) writeDebugBundle(logPath string, started time.Time, session debugSession) (string, error) {
 	bundlePath := filepath.Join(a.debug.dir, debugBundlePrefix+started.Format(debugTimeLayout)+".zip")
 	temp := bundlePath + ".tmp"
+	frontendLog := a.takeFrontendLog()
 	out, err := os.Create(temp)
 	if err != nil {
 		return "", err
@@ -343,7 +346,7 @@ func (a *App) writeDebugBundle(logPath string, started time.Time, session debugS
 		}
 
 		// the frontend's errors since the last bundle, ie a tab that stopped working after the search ended
-		if frontendLog, err := os.ReadFile(filepath.Join(a.debug.dir, frontendLogName)); err == nil {
+		if len(frontendLog) > 0 {
 			entry, err = archive.Create(frontendLogName)
 			if err != nil {
 				return err
@@ -381,13 +384,14 @@ func (a *App) writeDebugBundle(logPath string, started time.Time, session debugS
 	closeErr := errors.Join(archive.Close(), out.Close())
 	if err := errors.Join(writeErr, closeErr); err != nil {
 		os.Remove(temp)
+		a.returnFrontendLog(frontendLog)
 		return "", err
 	}
 	if err := os.Rename(temp, bundlePath); err != nil {
 		os.Remove(temp)
+		a.returnFrontendLog(frontendLog)
 		return "", err
 	}
-	os.Remove(filepath.Join(a.debug.dir, frontendLogName))
 	return bundlePath, nil
 }
 
@@ -449,7 +453,12 @@ func (a *App) OpenDebugFolder() error {
 // LogFrontendError logs an error from the frontend's JavaScript, which is otherwise invisible, with its stack. It does not wait for a running search.
 func (a *App) LogFrontendError(message string) {
 	if len(message) > frontendErrorLimit {
-		message = message[:frontendErrorLimit] + "…"
+		// cut at the start of a character, not inside one
+		cut := frontendErrorLimit
+		for cut > 0 && !utf8.RuneStart(message[cut]) {
+			cut--
+		}
+		message = message[:cut] + "…"
 	}
 	message = comm.RedactPaths(message)
 	comm.Logger.WithField("source", "frontend").Error(message)
@@ -470,12 +479,56 @@ func (a *App) keepFrontendError(message string) {
 		return
 	}
 	path := filepath.Join(a.debug.dir, frontendLogName)
-	kept, _ := os.ReadFile(path)
-	kept = append(kept, fmt.Sprintf("%s %s\n", time.Now().UTC().Format(time.RFC3339), message)...)
-	if len(kept) > frontendLogKept {
-		kept = kept[len(kept)-frontendLogKept:]
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
 	}
-	os.WriteFile(path, kept, 0o600)
+	fmt.Fprintf(file, "%s %s\n", time.Now().UTC().Format(time.RFC3339), message)
+	info, statErr := file.Stat()
+	file.Close()
+	// trimmed only once past the limit, so an error repeating in a loop is not a rewrite each time
+	if statErr == nil && info.Size() > 2*frontendLogKept {
+		if kept, err := os.ReadFile(path); err == nil {
+			os.WriteFile(path, newestLines(kept, frontendLogKept), 0o600)
+		}
+	}
+}
+
+// newestLines is the end of a log, at most limit bytes, starting at a whole line
+func newestLines(log []byte, limit int) []byte {
+	if len(log) <= limit {
+		return log
+	}
+	tail := log[len(log)-limit:]
+	if start := bytes.IndexByte(tail, '\n'); start >= 0 {
+		return tail[start+1:]
+	}
+	return tail
+}
+
+// takeFrontendLog moves the frontend log out of the way for a bundle and returns it, so an error logged while the bundle is written starts the next one
+func (a *App) takeFrontendLog() []byte {
+	a.debug.mu.Lock()
+	defer a.debug.mu.Unlock()
+	path := filepath.Join(a.debug.dir, frontendLogName)
+	kept, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	os.Remove(path)
+	return newestLines(kept, frontendLogKept)
+}
+
+// returnFrontendLog puts back a frontend log a bundle that failed took, ahead of any errors logged since
+func (a *App) returnFrontendLog(taken []byte) {
+	if len(taken) == 0 {
+		return
+	}
+	a.debug.mu.Lock()
+	defer a.debug.mu.Unlock()
+	path := filepath.Join(a.debug.dir, frontendLogName)
+	since, _ := os.ReadFile(path)
+	os.WriteFile(path, newestLines(append(taken, since...), frontendLogKept), 0o600)
 }
 
 // SetFrontendInfo keeps the frontend's user agent, which names the WebView2 version, for debug bundles. It does not wait for a running search.
