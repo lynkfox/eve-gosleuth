@@ -24,7 +24,7 @@ Every search opens on **At a glance**: the target's profile (details, corporatio
 |---|:-:|:-:|:-:|
 | **Killmails:** *every killmail collected, newest first* | ✓ | ✓ | ✓ |
 | **Activity:** *when they're active, by weekday and hour* | ✓ | ✓ | ✓ |
-| **Top Fleetmates/Pilots/Corps:** *the pilots most often on killmails, as part of the target* | ✓ | ✓ | ✓ |
+| **Top Fleetmates/Pilots/Corps:** *the pilots (or corps, for a system) most often on its killmails* | ✓ | ✓ | ✓ |
 | **Top Systems:** *where they fight* | ✓ | ✓ | |
 | **Battles:** *fights of 10 or more pilots, with links to their battle reports on zKillboard, EVE Tools, and Warbeacon* | ✓ | ✓ | ✓ |
 | **Capital Pilots:** *who flies their capitals* | | ✓ | |
