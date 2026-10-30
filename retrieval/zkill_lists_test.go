@@ -126,6 +126,21 @@ func TestCachedZkillLists(t *testing.T) {
 		assert.Equal(t, ids(zkill.list[:600]), got)
 	})
 
+	t.Run("paging below a cached list ending mid-page counts only the pages above it", func(t *testing.T) {
+		zkill, target, _ := setup(killmails(100000, 1000, 50))
+		collect(target, retrieval.KillmailLimits{Max: 200})
+		zkill.prepend(killmails(100050, 50, 0)) // the cached 200 now end 50 into page 2
+		zkill.asked()
+
+		messages := []string{}
+		comm.SetProgressReporter(func(message string) { messages = append(messages, message) })
+		defer comm.SetProgressReporter(nil)
+		collect(target, retrieval.KillmailLimits{Max: 600})
+
+		assert.Equal(t, []int{1, 2, 3}, zkill.asked(), "page 1 reaches the cached list, then page 2, which it ends in, is pulled again")
+		assert.Contains(t, messages, "Fetching zKillboard page 2 (live, 200 killmails so far)", "page 1's 200, not the 250 known, as page 2 is counted when pulled")
+	})
+
 	t.Run("a gap left between new killmails and the cached list is paged over, not skipped", func(t *testing.T) {
 		zkill, target, _ := setup(killmails(100000, 1000, 500))
 		collect(target, retrieval.KillmailLimits{Max: 200})

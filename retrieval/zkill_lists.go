@@ -110,7 +110,7 @@ func listEntity(target IntelTarget, entityType types.EntityType, entityID int, p
 			below := paging
 			below.Known = nil
 			below.StartPage = start
-			below.Listed = unbroken
+			below.Listed = (start - 1) * api.ZKILL_PAGE_SIZE // the partial page at start is pulled again and counted then
 			if below.Killmails > 0 {
 				below.Killmails = need - (start-1)*api.ZKILL_PAGE_SIZE
 			}
