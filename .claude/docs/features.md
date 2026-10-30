@@ -150,6 +150,7 @@ The full plan and the decisions behind it are in `.claude/docs/fits-plan.md`.
   - The choice is saved (`Settings.SidebarCollapsed` via `SetSidebarCollapsed`), so a first run starts expanded and later runs open the way it was left.
   - A window under 760 px wide shows icons only whatever was chosen, without changing the saved choice.
 - **At a glance** (`renderGlance`) is the tab shown after each search. Across its top is the target's Profile: its details and its history, member corps, or stargates, filled by `renderTarget`. Profile is not a tab of its own. A search that ends without a report (stopped early, or failed) still shows At a glance with the Profile alone (`showProfileOnly`).
+  - **Scope** is the first card (`GLANCE_CARDS["glance-scope"]`, not a tab): all the killmails with their count and date span, then, when the search had affiliates, the main's and each affiliate's (`IntelReport.Scope.Sources`, from `buildScope` in gui/scope.go, by each killmail's `Via`), and the limits used as its note (`ReportScope.Limits`, `scopeLimits`, worded like the search limits button, with no line for cached killmails or affiliates). When its rows pass `GLANCE_ROWS`, it shows the first ones, its note says how many more, and the card and its All → link open the Scope window (`openScopeWindow`, `#scope-window`) with every row, the limits, and the killmail caveat. Asked for 2026-10-29. The PDF's scope box shows the same.
   - Below it is a card per tab the search has, each with its top two rows (`GLANCE_ROWS`, `GLANCE_CARDS`) and an Open link to the full tab.
   - The cards keep a set order (`GLANCE_ORDER`, the tabs' default order), whatever order the sidebar is in, and are all the same size.
   - A j-space system also gets a Last Structure Lost card after Activity, opening the Activity tab.
@@ -157,4 +158,13 @@ The full plan and the decisions behind it are in `.claude/docs/fits-plan.md`.
   - A row for a pilot, corp, system, ally, or structure loss has the same right-click menu as its row in the tab.
   - It reads only the report already fetched, so it costs no API calls. It is redrawn when the allies or the time zone change.
   - Members has no card, as its rows load page by page.
-  - It could later be the base for the PDF report export on the Readme list.
+
+## PDF report
+
+Plan and phases: `.claude/docs/pdf-report-plan.md`. The PDF is built by the `report` package from a plain `report.Input`, with no API calls.
+
+- **Button.** Generate Report in the top bar (`#export-pdf-top`), its only place: one on At a glance made the panel scroll, so it was removed (2026-10-29). `setExportPDF` shows it once a CORPORATION or ALLIANCE report has rendered, and hides it in `clearIntel` (a new search) and `showProfileOnly`. Pilot and system targets never show it.
+- **Click** (`exportPDF`) disables the button, calls `ExportPDF(["summary"])` (the section picker is phase 3), then puts `Saved <file name>` in the ticker, or the error in the status line and ticker. A closed picker says nothing.
+- **`App.ExportPDF`** (gui/pdf_report.go) takes `a.mu`, needs `lastTarget` and `lastReport`, opens `runtime.SaveFileDialog` (default name `<ticker or name> intel <date>.pdf`, `pdfFileName` swaps characters Windows file names can't hold), builds with `report.Build` and writes the file.
+- **`lastTarget` / `lastReport`** (App, guarded by `mu`): set when `SearchTarget` (not a Choices result) and `CollectIntel` succeed, cleared at the start of `SearchTarget`.
+- **`pdfInput`** is a pure function making `report.Input`: details from the display's `Related` and `DetailRows`, kills and losses counted from `KillmailCard.Outcome` (internal counts as a loss), the scope's oldest and newest, `Stopped`/`RateLimited`, and the report's `Scope` (limits, and each main and affiliate's killmails, shown as indented lines in the scope box).

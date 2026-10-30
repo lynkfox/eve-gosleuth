@@ -789,6 +789,82 @@ async function exportMyIntel() {
   }
 }
 
+// scopeRows are the Scope card's and window's rows: all the search's killmails, then, with affiliates, the main's and each affiliate's, with their counts and date spans
+function scopeRows(report) {
+  const kms = report.killmails || [];
+  const span = (oldest, newest) => {
+    const first = spokenDate(oldest);
+    const last = spokenDate(newest);
+    return first === last ? first : `${first} – ${last}`;
+  };
+  const rows = [];
+  if (kms.length) {
+    rows.push({ name: "All killmails", detail: span(...timeRange(kms.map((km) => km.time))), value: kms.length.toLocaleString("en-US") });
+  } else {
+    rows.push({ name: "All killmails", detail: "None found", value: "0" });
+  }
+  for (const source of (report.scope && report.scope.sources) || []) {
+    const when = source.killmails ? span(source.oldest, source.newest) : "No killmails";
+    rows.push({ name: source.name, detail: source.main ? `Main · ${when}` : when, value: source.killmails.toLocaleString("en-US") });
+  }
+  return rows;
+}
+
+// openScopeWindow shows the whole scope: every list's killmails, the limits the search used, and the caveat every killmail report has
+function openScopeWindow(report) {
+  const list = document.createElement("ul");
+  list.className = "glance-rows";
+  list.append(...scopeRows(report).map((row) => {
+    const item = document.createElement("li");
+    const text = document.createElement("div");
+    text.className = "glance-text";
+    const name = document.createElement("span");
+    name.className = "glance-name";
+    name.textContent = row.name;
+    const detail = document.createElement("span");
+    detail.className = "glance-detail";
+    detail.textContent = row.detail;
+    text.append(name, detail);
+    const value = document.createElement("span");
+    value.className = "glance-value";
+    value.textContent = row.value;
+    item.append(text, value);
+    return item;
+  }));
+  const limits = document.createElement("ul");
+  limits.className = "scope-limits";
+  limits.append(...((report.scope && report.scope.limits) || []).map((limit) => {
+    const item = document.createElement("li");
+    item.textContent = limit;
+    return item;
+  }));
+  const caveat = document.createElement("p");
+  caveat.className = "scope-caveat";
+  caveat.textContent = "Killmails show only deaths: not who survived, objectives, or fights that left no killmail.";
+  el("scope-window-body").replaceChildren(list, limits, caveat);
+  el("scope-window").showModal();
+}
+
+// setExportPDF shows the top bar's Generate Report button, or hides it
+function setExportPDF(shown) {
+  el("export-pdf-top").hidden = !shown;
+}
+
+// exportPDF saves the shown report as a PDF at a place the user picks, the button off while it is made. The section picker comes later, for now only the Summary.
+async function exportPDF() {
+  const button = el("export-pdf-top");
+  button.disabled = true;
+  try {
+    const path = await backend().ExportPDF(["summary"]);
+    if (path) tickerPush(`Saved ${path.split(/[\\/]/).pop()}`);
+  } catch (err) {
+    setStatus(String(err), true);
+    tickerPush(`Error: ${err}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 // importMyIntel asks for a file, shows what it would add, and adds it once the user agrees
 async function importMyIntel() {
   showMyIntelError("");
@@ -1550,6 +1626,7 @@ function showProfileOnly(reason) {
   note.textContent = reason;
   el("glance-cards").replaceChildren(note);
   selectTab("tab-glance");
+  setExportPDF(false);
   el("intel-loading").hidden = true;
   el("intel-tabs").hidden = false;
   el("intel").hidden = false;
@@ -2860,10 +2937,10 @@ function showSidebar() {
 const GLANCE_ROWS = 2;
 
 // GLANCE_ORDER is At a glance's cards in their set order, the tabs' default order whatever order the sidebar is in, with a j-space system's last structure lost after Activity
-const GLANCE_ORDER = DEFAULT_TAB_ORDER.flatMap((id) => (id === "tab-activity" ? [id, "glance-structure-loss"] : [id]));
+const GLANCE_ORDER = ["glance-scope", ...DEFAULT_TAB_ORDER.flatMap((id) => (id === "tab-activity" ? [id, "glance-structure-loss"] : [id]))];
 
 // GLANCE_OPENS is the tab a card that is not a tab's own opens
-const GLANCE_OPENS = { "glance-structure-loss": "tab-activity" };
+const GLANCE_OPENS = { "glance-structure-loss": "tab-activity", "glance-scope": "tab-killmails" };
 
 /*
   renderGlance fills At a glance: a card for each tab this search has, in a set order, with its top few rows and a link to open the full tab.
@@ -2899,12 +2976,23 @@ function glanceCard(id, card) {
   const icon = el(card.iconFrom || id).querySelector(".tab-icon").cloneNode(true);
   const title = document.createElement("h3");
   title.textContent = card.title || el(id).querySelector(".tab-name").textContent;
-  const open = document.createElement("button");
-  open.type = "button";
-  open.className = "link-button glance-open";
-  open.textContent = "Open →";
-  open.addEventListener("click", () => selectTab(id));
-  header.append(icon, title, open);
+  header.append(icon, title);
+  // a card with its own window (card.open) opens it, from its link or anywhere on it, and has no link when it has nothing more to show
+  if (card.open !== null) {
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "link-button glance-open";
+    open.textContent = card.openLabel || "Open →";
+    open.addEventListener("click", (event) => {
+      event.stopPropagation();
+      card.open ? card.open() : selectTab(id);
+    });
+    header.append(open);
+  }
+  if (card.open) {
+    section.classList.add("glance-clickable");
+    section.addEventListener("click", card.open);
+  }
   section.append(header);
 
   if (card.rows.length) {
@@ -2986,6 +3074,19 @@ function lossPilots(pilots) {
   A tab missing here, ie Members, has no card.
 */
 const GLANCE_CARDS = {
+  // what the search covered: all its killmails, then the main's and each affiliate's, with the limits it used. Rows past GLANCE_ROWS are in the Scope window.
+  "glance-scope": (report) => {
+    const rows = scopeRows(report);
+    const more = rows.length > GLANCE_ROWS;
+    return {
+      title: "Scope",
+      iconFrom: "tab-killmails",
+      rows: rows.slice(0, GLANCE_ROWS),
+      note: more ? `${plural(rows.length - GLANCE_ROWS, "more", "more")} · click for all` : ((report.scope && report.scope.limits) || []).join(" · "),
+      open: more ? () => openScopeWindow(report) : null,
+      openLabel: "All →",
+    };
+  },
   "tab-killmails": (report) => {
     const kms = report.killmails || [];
     if (!kms.length) return { rows: [], note: "No killmails found." };
@@ -4574,6 +4675,7 @@ function clearIntel() {
   intelTarget = null;
   roster = null;
   el("report-warning").hidden = true;
+  setExportPDF(false);
   el("intel").hidden = true;
   el("intel-tabs").hidden = true;
 }
@@ -4831,6 +4933,7 @@ async function search(event) {
     if (report) {
       renderIntel(report);
       showReportWarning(report);
+      setExportPDF(target.type === "CORPORATION" || target.type === "ALLIANCE");
       retrievedName = target.display.Name;
     } else {
       showProfileOnly("No report: the search stopped or failed before its killmails were collected.");
@@ -5418,6 +5521,7 @@ async function savePreferences() {
 el("themes-button").addEventListener("click", () => setMenuOpen(el("themes-button"), el("themes-menu"), el("themes-menu").hidden));
 el("limits-button").addEventListener("click", toggleLimitsMenu);
 el("myintel-button").addEventListener("click", openMyIntel);
+el("export-pdf-top").addEventListener("click", exportPDF);
 el("myintel-close").addEventListener("click", () => el("myintel").close());
 el("myintel-filter").addEventListener("input", renderMyIntel);
 el("fits-filter").addEventListener("input", () => fitsShown.filter?.());
@@ -5546,6 +5650,7 @@ el("bug-report-confirm").addEventListener("close", () => {
   if (el("bug-report-confirm").returnValue === "continue") window.runtime.BrowserOpenURL(BUG_REPORT_URL);
 });
 el("about-close").addEventListener("click", () => el("about").close());
+el("scope-window-close").addEventListener("click", () => el("scope-window").close());
 // every About link is a button with data-url, so one handler covers them all; each shows its address on mouseover
 for (const link of el("about-body").querySelectorAll("[data-url]")) link.title = link.dataset.url;
 el("about-body").addEventListener("click", (event) => {

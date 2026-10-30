@@ -52,6 +52,10 @@ type App struct {
 	// the last pilot, corp, or alliance search, so SaveIgnoredAllies can rank its allies again. Guarded by mu.
 	lastAllies *alliesSource
 
+	// the last successful search's target and report, for the PDF report. Guarded by mu.
+	lastTarget *TargetResult
+	lastReport *IntelReport
+
 	// writes each search's log to a file in debug mode, then zips it to send with a problem report. It has its own lock.
 	debug *debugRecorder
 
@@ -119,6 +123,7 @@ type IntelReport struct {
 	JSpace            bool           `json:"jspace"` // a j-space system target, which has the last structure lost box, even empty
 	// the structures lost in a j-space system target besides its last, minor ones too, newest first, for the collapsed list in its box
 	PreviousStructureLosses []StructureLoss `json:"previousStructureLosses"`
+	Scope                   ReportScope     `json:"scope"`   // what the search covered, for At a glance's Scope card and the PDF report
 	Sources                 string          `json:"sources"` // where the search's data came from, ie "9748 hits from cache, 1763 from the ESI; zKillboard live", for the frontend's summary line
 }
 
@@ -510,6 +515,7 @@ func (a *App) SearchTarget(name string, searchType string, id int) (result Targe
 	if name == "" && id == 0 {
 		return result, errors.New("Enter a name to search for")
 	}
+	a.lastTarget, a.lastReport = nil, nil
 	a.startDebug(name)
 	comm.Logger.Infof("Searching for %q as %q, id %d", name, searchType, id)
 
@@ -602,6 +608,8 @@ func (a *App) SearchTarget(name string, searchType string, id int) (result Targe
 		holdings := a.holdingsFor(result.Type, result.ID)
 		result.Holdings = &holdings
 	}
+	kept := result
+	a.lastTarget = &kept
 	return result, nil
 }
 
@@ -699,6 +707,7 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 	collected := aggregate.CollateAllKillmailData(killmails, &a.clients.ESIClient, a.cache)
 	report.Killmails = buildKillmailCards(collected.Killmails, &target)
 	report.LabelNames = labelNames(report.Killmails, a.clients.ESIClient)
+	report.Scope = buildScope(&target, report.Killmails, settings.searchLimits())
 
 	// each target type gets its own sections: who flies with a pilot, who flies for a corp or alliance, and who is active in a system
 	switch entityType {
@@ -779,6 +788,8 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 	// the frontend adds this to its own summary line, with the search's total time
 	report.Sources = strings.Join(sources, "; ")
 
+	kept := report
+	a.lastReport = &kept
 	return report, nil
 }
 

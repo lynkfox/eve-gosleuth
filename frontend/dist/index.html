@@ -60,6 +60,8 @@
     </form>
 
     <nav class="app-menu" aria-label="App menu">
+      <!-- shown once a corporation's or alliance's report is, see setExportPDF -->
+      <button id="export-pdf-top" class="menu-button export-pdf" type="button" title="Save this report as a PDF" hidden>Generate Report</button>
       <button id="myintel-button" class="menu-button" type="button" aria-haspopup="dialog">My Intel</button>
       <div class="menu-anchor">
         <button id="themes-button" class="menu-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="themes-menu">Theme</button>
@@ -556,6 +558,15 @@
       <button id="help-window-close" class="window-close" type="button" aria-label="Close help" title="Close">×</button>
     </div>
     <div id="help-window-body" class="window-body help-window-body help-content"></div>
+  </dialog>
+
+  <!-- the search's whole scope, from At a glance's Scope card when its rows do not all fit. Filled by openScopeWindow. -->
+  <dialog id="scope-window" class="window scope-window" aria-labelledby="scope-window-title">
+    <div class="window-titlebar">
+      <h2 id="scope-window-title">Scope</h2>
+      <button id="scope-window-close" class="window-close" type="button" aria-label="Close" title="Close">×</button>
+    </div>
+    <div id="scope-window-body" class="window-body scope-window-body"></div>
   </dialog>
 
   <!-- the right click menu of a tab's pilot, corp, alliance, or system, its items built each time it opens -->

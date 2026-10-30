@@ -769,6 +769,9 @@ button.secondary {
   margin-left: auto;
 }
 
+/* Generate Report, off while the PDF is made */
+.export-pdf:disabled { opacity: 0.6; cursor: progress; }
+
 /* At a glance: a card per tab, in a set order, every card the same size whatever it holds */
 /* the target's Profile, its two detail panels across the top of At a glance */
 .glance-profile {
@@ -826,8 +829,16 @@ button.secondary {
 .glance-value { flex: none; color: var(--muted); font-size: 13px; }
 .glance-kill { color: var(--kill); }
 .glance-loss { color: var(--error); }
+/* a card that opens its own window, ie Scope with more affiliates than it shows */
+.glance-clickable { cursor: pointer; }
+.glance-clickable:hover { border-color: var(--accent); }
 /* one line, ie Killmails' date span, cut short with an ellipsis if it still does not fit */
 .glance-note { margin: auto 0 0; padding-top: 8px; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* the Scope window: every list's killmails, then the limits and the caveat */
+.scope-window-body { display: block; }
+.scope-limits { margin: 12px 0 0; padding-left: 18px; color: var(--text); font-size: 13px; }
+.scope-caveat { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
 
 /* Tab help: a round ? whose popup, shown on hover or keyboard focus, explains the tab in bullet points and then its colors */
 
