@@ -66,6 +66,8 @@ Every tab has a **?** that explains it, and most rows have a right-click menu: s
   - *A search of the main then includes the affiliates' killmails, and a search of an affiliate goes to its main.*
 - **My Intel** 
   - *shows every affiliate and ignored ally you've set, for editing in one place. Export them to a file to share with your corp, or import someone else's.*
+- **Generate Report** 
+  - *saves a corp or alliance search as a PDF briefing for fleet commanders, readable without GoSleuth: the scope and key findings, activity by hour and week, potential fleet doctrines with their tank and the damage type to shoot, capital pilots, and each doctrine's EFT to paste into Pyfa. All times are EVE time.*
 
 ## Making it yours
 
