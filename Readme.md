@@ -68,34 +68,34 @@ If you dislike AI assited coding then there is absolutely zero issue from me if 
 Roadmap of planned features.
 
 * Next
- * Auto Update-er and Update changelong Splash screen
- * first time user tour
-  * overlay that darkens screen, highlights buttons with descriptions
-  * generates sample search (fake the search?) and shows off the various tabs.
- * Battles that the group has fought (we're already tracking, so just a display update)
-  * needs warnings/reminders that its an estimation and may be wrong
-  * and inclusion in PDF report with links to eve tools, war beacon, and zkill battle pages
+  * Auto Update-er and Update changelong Splash screen
+  * first time user tour
+    * overlay that darkens screen, highlights buttons with descriptions
+    * generates sample search (fake the search?) and shows off the various tabs.
+  * Battles that the group has fought (we're already tracking, so just a display update)
+    * needs warnings/reminders that its an estimation and may be wrong
+    * and inclusion in PDF report with links to eve tools, war beacon, and zkill battle pages
 
 * A bit further out
- * On the battles tab, ability to tag a specific kill as a Fleet Doctrine from the battle pages for future refrence (saved in My Intel)
- * Jspace Home Systems / Nullsec Staging added to Affilliates system
+  * On the battles tab, ability to tag a specific kill as a Fleet Doctrine from the battle pages for future refrence (saved in My Intel)
+  * Jspace Home Systems / Nullsec Staging added to Affilliates system
 
 * Future plans
- * wails v3 upgrade for multiple windows (side tools)
-  * Side Tools
-    * Killtrackers, based on any of the searchable targets in seperate windows
-     * ability to pull killtrackers data since last open
-     * using their rss feed
+  * wails v3 upgrade for multiple windows (side tools)
+    * Side Tools
+      * Killtrackers, based on any of the searchable targets in seperate windows
+      * ability to pull killtrackers data since last open
+      * using their rss feed
     * ZKill search reports - Set up several search parameters that can be quickly run as a report
-     * Ie: every structure kill in jspace since the report was last run
-     * or: every structure kill involving a, b, and c, in jspace in the last day
-     * ect
+      * Ie: every structure kill in jspace since the report was last run
+      * or: every structure kill involving a, b, and c, in jspace in the last day
+      * ect
     * Station ID checker, for date station was anchored (ala trifftools)
     * Live logging debug logs for more advanced users
- * Ability to use killmail dumps to bypass zkill calls, SDE dumps as well
-  * sde dumps is kinda already there as a dev side tool for deployment updates. Debatable if ship with app or just rely on the override system
- * API/MCP for command line and ai integration calls
- * Translation system (Not translated by me but translation dictionaries)
+  * Ability to use killmail dumps to bypass zkill calls, SDE dumps as well
+    * sde dumps is kinda already there as a dev side tool for deployment updates. Debatable if ship with app or just rely on the override system
+  * API/MCP for command line and ai integration calls
+  * Translation system (Not translated by me but translation dictionaries)
 
 
 # At a Glance: 
