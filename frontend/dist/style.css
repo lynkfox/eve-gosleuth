@@ -1600,7 +1600,9 @@ button.text-link {
 
 /* My Intel: a filter, a row to add a card, then a collapsible card per target with its holdings, the mains it holds for, and its ignored allies */
 #myintel { width: min(680px, calc(100vw - 32px)); height: calc(100vh - 32px); }
-.myintel-body { align-content: start; }
+/* everything from the buttons up stays put; only the cards scroll */
+.myintel-body { display: flex; flex-direction: column; overflow: hidden; }
+.myintel-body > * { flex: none; }
 .myintel-warning { margin: 0; padding: 6px 10px; border-radius: 4px; background: rgb(224 160 48 / 18%); color: #e0a030; font-size: 12px; }
 .myintel-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .myintel-bulk { display: flex; gap: 8px; }
@@ -1615,6 +1617,7 @@ button.text-link {
 .myintel-import-notes ul { margin: 8px 0; padding-left: 20px; font-size: 13px; }
 .myintel-import-notes li { overflow-wrap: anywhere; }
 .myintel-add { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; gap: 8px; }
+.myintel-body > .myintel-list { flex: 0 1 auto; min-height: 0; overflow-y: auto; align-content: start; }
 .myintel-list { display: grid; gap: 8px; }
 .myintel-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
 .myintel-card > summary { display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; }
