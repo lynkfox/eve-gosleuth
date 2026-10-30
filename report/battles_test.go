@@ -25,6 +25,7 @@ func TestBuildBattles(t *testing.T) {
 	}
 	in.Biggest[3].ZkillURL, in.Biggest[3].EveToolsURL, in.Biggest[3].WarbeaconURL = "", "", ""
 	in.Latest = in.Biggest
+	in.MinPilots = 10
 	b, err := report.Build(in, []report.Section{report.SectionBattles})
 	assert.NoError(t, err)
 	assert.True(t, bytes.HasPrefix(b, []byte("%PDF")))

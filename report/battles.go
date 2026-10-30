@@ -12,20 +12,20 @@ func battleLinks(b Battle) [][2]string {
 }
 
 // battles draws the Battles page: a note on how battles are estimated, then the Latest Battles and the Biggest Battles, each a table with links to its battle report sites
-func (d *pageDoc) battles(latest, biggest []Battle) {
+func (d *pageDoc) battles(latest, biggest []Battle, minPilots int) {
 	d.heading("Latest Battles")
 	if len(latest) == 0 && len(biggest) == 0 {
 		d.sans("", 9.5)
 		d.text(colMuted)
-		d.CellFormat(bodyWidth, 6, "No battles of 10 or more pilots were found.", "", 1, "L", false, 0, "")
+		d.CellFormat(bodyWidth, 6, fmt.Sprintf("No battles of %d or more pilots were found.", minPilots), "", 1, "L", false, 0, "")
 		d.text(colText)
 		return
 	}
 	d.sans("", 8.5)
 	d.text(colMuted)
-	d.MultiCell(bodyWidth, 4.5, "Battles of 10 or more pilots on the target's killmails, all times EVE. They are estimates: killmails within 15 minutes of each other "+
+	d.MultiCell(bodyWidth, 4.5, fmt.Sprintf("Battles of %d or more pilots on the target's killmails, all times EVE. They are estimates: killmails within 15 minutes of each other "+
 		"that share a system or pilots are taken as one battle, and the counts are from the search's killmails only. The links open the whole fight on each site, "+
-		"for the main system at the hour of the battle's middle.", "", "L", false)
+		"for the main system at the hour of the battle's middle.", minPilots), "", "L", false)
 	d.Ln(2)
 	d.battleTable(latest)
 

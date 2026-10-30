@@ -27,7 +27,7 @@ func build(in Input, sections []Section) ([]byte, error) {
 	}
 	if chosen[SectionBattles] {
 		page("Battles")
-		d.battles(in.Latest, in.Biggest)
+		d.battles(in.Latest, in.Biggest, in.MinPilots)
 	}
 	// with the appendix, each doctrine links to its EFT and back
 	links := []doctrineLink{}

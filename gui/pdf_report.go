@@ -165,6 +165,7 @@ func pdfInput(target TargetResult, rep IntelReport, version string, now time.Tim
 	}
 	in.Activity = pdfActivity(rep.Killmails)
 	in.Latest, in.Biggest = pdfBattles(rep.Battles)
+	in.MinPilots = battleMinPilots
 	in.Doctrines = pdfDoctrines(rep.Fits, rep.Images)
 	in.Capitals = pdfCapitals(target, rep.Capitals, rep.Images)
 	return in

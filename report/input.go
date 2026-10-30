@@ -28,6 +28,7 @@ type Input struct {
 
 	Activity  Activity
 	Latest    []Battle       // the latest battles, newest first, at most 10
+	MinPilots int            // the fewest pilots a battle needs to be listed, which the Battles page says
 	Biggest   []Battle       // the biggest battles, most pilots first, at most 10
 	Doctrines []Doctrine     // the fits tagged Fleet Doctrine, by hull class, largest first, then ship name
 	Capitals  []CapitalClass // in report order: titans first, jump freighters last (ships.json capital_report_classes)
