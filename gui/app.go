@@ -374,6 +374,8 @@ A save is one transaction, so even a process killed while saving keeps the cache
 func (a *App) shutdown(ctx context.Context) {
 	// a check of imported entities stops at its next call, the rest kept for the next start, and none starts
 	a.closing.Store(true)
+	// closed in the moment after launch, startup may not have loaded the settings and cache yet
+	a.waitReady()
 
 	deadline := time.Now().Add(shutdownSearchWait)
 	if !a.mu.TryLock() {

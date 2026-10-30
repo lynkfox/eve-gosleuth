@@ -31,6 +31,34 @@ func TestShutdown(t *testing.T) {
 		return cache.Entries()
 	}
 
+	t.Run("closed before startup is ready, it waits for the cache rather than closing none", func(t *testing.T) {
+		app, path := newApp(t)
+		cache := app.cache
+		app.cache = nil
+		app.ready = make(chan struct{})
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			app.shutdown(context.Background())
+		}()
+		select {
+		case <-done:
+			t.Fatal("shutdown went on before startup was ready")
+		case <-time.After(50 * time.Millisecond):
+		}
+
+		cache.Update(character.CharacterID, character)
+		app.cache = cache
+		app.markReady()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("shutdown still waiting after startup was ready")
+		}
+		assert.Equal(t, 1, savedEntries(t, path))
+	})
+
 	t.Run("with no search running it saves the cache and stops nothing", func(t *testing.T) {
 		app, path := newApp(t)
 		app.cache.Update(character.CharacterID, character)
