@@ -10,6 +10,7 @@ body = """
 {%- if scope == "myintel" -%}My Intel
 {%- elif scope == "holdings" -%}Affiliates
 {%- elif scope == "static-data" -%}Static Data
+{%- elif scope == "report" -%}Report Generation
 {%- elif scope == "gui" or scope == "cli" -%}{{ scope | upper }}
 {%- else -%}{{ scope | capitalize }}
 {%- endif -%}
