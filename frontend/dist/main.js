@@ -3932,7 +3932,7 @@ function showKillmailPage(page) {
 }
 
 /*
-  renderPilotRows fills a ranked pilot table, such as Top Fleetmates or Top Members
+  renderPilotRows fills a ranked pilot table, such as Top Fleetmates or a corp or alliance search's Top Pilots
 
   section: the id prefix of the table body and empty message, ie "fleetmates" for #fleetmates-body and #fleetmates-empty
   pilots: the ranked pilots from the intel report

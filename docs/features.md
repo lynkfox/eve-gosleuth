@@ -25,7 +25,7 @@ Every search opens on **At a glance**: the target's profile (details, corporatio
 | **Killmails:** *every killmail collected, newest first* | ✓ | ✓ | ✓ |
 | **Activity:** *when they're active, by weekday and hour* | ✓ | ✓ | ✓ |
 | **Top Fleetmates:** *the pilots most often on killmails with them* | ✓ | | |
-| **Top Members:** *the pilots on the most of their killmails* | | ✓ | |
+| **Top Pilots:** *the pilots on the most of their killmails* | | ✓ | |
 | **Members:** *the current roster (corp) or member corps (alliance)* | | ✓ | |
 | **Top Pilots/Corps:** *who is most active in the system* | | | ✓ |
 | **Top Systems:** *where they fight* | ✓ | ✓ | |
