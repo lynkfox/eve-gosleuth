@@ -54,7 +54,9 @@
     {"note": "target painters, more on a hull bonused for them", "groups": [379], "weight": 1, "bonused_by": ["Target Painter"], "bonused_weight": 1.5},
     {"note": "sensor dampening, tracking disrupting, and target painting drones, once however many: a nudge", "types": [23506, 23510, 23512, 23713, 23715, 23721, 23723, 23725, 23727, 92461, 92462, 92463, 92464, 92465, 92466, 92467, 92468, 92469], "once": true, "weight": 0.5}
   ]},
-  "Neut": {"meaning": "Three neutralizers or nosferatus, with weights improving for bonused hulls or oversized modules", "threshold": 3, "priority": 10, "role": true, "signals": [
+  "Neut": {"meaning": "Three neutralizers or nosferatus, with weights improving for bonused hulls or oversized modules, never with an entropic disintegrator or vorton projector", "threshold": 3, "priority": 10, "role": true, "forbids": [
+    {"note": "entropic disintegrators and vorton projectors", "groups": [1986, 4060], "weight": 0}
+  ], "signals": [
     {"note": "energy neutralizers and nosferatus, more on a hull bonused for them", "groups": [71, 68], "weight": 1, "bonused_by": ["Energy Neutralizer", "Energy Nosferatu"], "bonused_weight": 1.5},
     {"note": "heavy energy neutralizers on a medium hull", "markets": [691], "hull_sizes": [2], "weight": 3},
     {"note": "energy neutralizer drones, once however many: a nudge", "groups": [544], "types": [92036, 92037, 92038], "once": true, "weight": 1}
