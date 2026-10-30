@@ -6,6 +6,14 @@ In the grand tradition of eve tools like **Py**Fa being coded in **Py**thon and 
 
 [Click Here for a Full Feature List](docs/features.md)
 
+## Installing
+
+* Go to the [release page](https://github.com/lynkfox/eve-gosleuth/releases) and download the zip (you dont need any of the other files)
+* Extract it wherever you wish.
+* Open it
+ * If you get a warning window hit "More Info" and then "Run Anyway"
+  * *the app is safe, its open source, stick it in any virus scanner you want, point an Ai at the repo to analyze it, whatever you feel you need to do.*
+
 ## Always Free, Always Open
 
 GoSleuth will always be free, open source, free of ads, subscriptions, paid feature tiers, ect. This app runs entirely in your local environment and connects to no servers beyond the standard apis that are listed in the Data Sources. This app strives to maintain your privacy - if you feel that it is not for some reason, please submit a bug report on the issues page of this repo. 
@@ -13,8 +21,16 @@ GoSleuth will always be free, open source, free of ads, subscriptions, paid feat
 If you feel this app has been worth your time, feel free to - with no obligation or expectation - donate some Isk or Plex to Luxxianna Seraph in game.
 
 
+# Caveats while using GoSleuth
 
-## Yes. This app used AI in its development
+Eve Killmails are *only* deaths. They show nothing of survivors. ISK lost is only metric of a fights outcome - objectives are not visible on a killmail. And despite our requests, Logi still isnt.
+
+This creates, in effect, the same outcome as Survivor's Bias - you only see one side of the equation. You cannot see the fights that did not result in a killmail. You cannot see the half of the fight that occured on the otherside of a stargate/wormhole. There is a lot of information you do not know.
+
+GoSleuth also only collates data into an easily readable format. Interpreting that data is still up to you. 
+
+
+# Yes. This app used AI in its development
 
 *the following is left as i wrote it, with some mistakes in spelling, punctuation, capitlization so that it is clear that **I** wrote it, not the ai. This readme is my words, my thoughts, my expressed opinions. I'm human damnit, you cant get rid of me that easily you clankers!*
 
@@ -38,32 +54,24 @@ I completely believe that people of experience in designing and building systems
 
 If you dislike AI assited coding then there is absolutely zero issue from me if you choose to never use this tool. I cannot blame you. 
 
-# Caveats while using GoSleuth
 
-Eve Killmails are *only* deaths. They show nothing of survivors. ISK lost is only metric of a fights outcome - objectives are not visible on a killmail. And despite our requests, Logi still isnt.
-
-This creates, in effect, the same outcome as Survivor's Bias - you only see one side of the equation. You cannot see the fights that did not result in a killmail. You cannot see the half of the fight that occured on the otherside of a stargate/wormhole. There is a lot of information you do not know.
-
-GoSleuth also only collates data into an easily readable format. Interpreting that data is still up to you. 
 
 # Things to do
 
-* Pre-Release
+Roadmap of planned features.
+
+* Next
+ * Auto Update-er and Update changelong Splash screen
  * first time user tour
   * overlay that darkens screen, highlights buttons with descriptions
   * generates sample search (fake the search?) and shows off the various tabs.
- * filter killmail tab to loses/kills
-
-* If i feel like it pre-release?
- * Report data to be saved as a PDF for distribution.
- * Jspace Home Systems / Nullsec Staging 
  * Battles that the group has fought (we're already tracking, so just a display update)
   * needs warnings/reminders that its an estimation and may be wrong
-  * ability to tag a specific kill as a Fleet Doctrine from the battle pages for future refrence (saved in My Intel)
+  * and inclusion in PDF report with links to eve tools, war beacon, and zkill battle pages
 
-* Release
- * GitActions workflows to build and release
- * Auto Update-er and Update changelong Splash screen
+* A bit further out
+ * On the battles tab, ability to tag a specific kill as a Fleet Doctrine from the battle pages for future refrence (saved in My Intel)
+ * Jspace Home Systems / Nullsec Staging added to Affilliates system
 
 * Future plans
  * wails v3 upgrade for multiple windows (side tools)
@@ -79,5 +87,5 @@ GoSleuth also only collates data into an easily readable format. Interpreting th
     * Live logging debug logs for more advanced users
  * Ability to use killmail dumps to bypass zkill calls, SDE dumps as well
   * sde dumps is kinda already there as a dev side tool for deployment updates. Debatable if ship with app or just rely on the override system
- * API/MCP for command level calls
-
+ * API/MCP for command line and ai integration calls
+ * Translation system (Not translated by me but translation dictionaries)
