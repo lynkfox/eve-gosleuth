@@ -338,3 +338,39 @@ func TestBuildFitsFleetDoctrine(t *testing.T) {
 		assert.Equal(t, []string{"Ferox in its battle", "Logi in its battle", "Losses of this fit in one alliance", "Pilots who lost it"}, reasons)
 	})
 }
+
+func TestBuildFitsAffiliateTag(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+	assert.NoError(t, comm.InitStaticData(staticdata.Files))
+
+	const main, affiliate = 99000001, 99000002
+	target := &retrieval.IntelTarget{IDNumber: main, TypeOfEntity: types.ALLIANCE, Holdings: []retrieval.TargetGroup{{Type: types.ALLIANCE, ID: affiliate, Name: "Singularity Syndicate"}}}
+	nighthawk := &retrieval.Item{ItemID: 22470, Name: "Nighthawk"}
+	loss := func(id int, allianceID int) *retrieval.Killmail {
+		return &retrieval.Killmail{
+			KillmailID:   id,
+			KillmailTime: time.Date(2026, 8, 12, 2, id, 0, 0, time.UTC),
+			Victim: &retrieval.KillmailVictim{
+				Pilot:          &retrieval.Pilot{CharacterID: id},
+				AllianceAtKill: &retrieval.Alliance{AllianceID: allianceID},
+				Ship:           nighthawk,
+				Fit:            &retrieval.Fit{Hull: nighthawk, Lows: []*retrieval.FittedModule{{Module: &retrieval.Item{ItemID: 2048, Name: "Damage Control II"}}}},
+			},
+		}
+	}
+
+	fits := buildFits([]*retrieval.Killmail{loss(1, main), loss(2, affiliate)}, target, nil, nil)
+
+	affiliateTags := map[int]*retrieval.FitTag{}
+	for _, each := range fits[0].Losses {
+		at := slices.IndexFunc(each.Tags, func(tag retrieval.FitTag) bool { return tag.Name == "Affiliate" })
+		if at >= 0 {
+			affiliateTags[each.KillmailID] = &each.Tags[at]
+		}
+	}
+	assert.NotContains(t, affiliateTags, 1, "the target's own loss")
+	if assert.Contains(t, affiliateTags, 2, "the affiliate's loss") {
+		assert.True(t, affiliateTags[2].Hidden, "hidden like the weapon tags")
+		assert.Contains(t, affiliateTags[2].Meaning, "Singularity Syndicate")
+	}
+}

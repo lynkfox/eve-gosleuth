@@ -2084,7 +2084,7 @@ const FITS_FILTER_HELP = [
   [
     "Hull, pilot, module, corp, or alliance name.",
     'Several words and parts of words, ie "Rifter Web".',
-    'The key word "tag:" or "tags:" followed by tag names, or their first three letters or more, ie "tags: neut" or "tags: imp". Clicking a tag does the same. Weapons and their range are tags too, ie "tags: lasers" or "tags: long", though they are never shown.',
+    'The key word "tag:" or "tags:" followed by tag names, or their first three letters or more, ie "tags: neut" or "tags: imp". Clicking a tag does the same. Weapons and their range are tags too, ie "tags: lasers" or "tags: long", as is Affiliate for a loss flown for one of the target\'s affiliates, though they are only shown in the fitting window.',
     "Any other word after the tags is matched as a name.",
   ],
 ];

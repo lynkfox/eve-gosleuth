@@ -11,6 +11,7 @@ import (
 	"github.com/lynkfox/go_eve_sleuth/aggregate"
 	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm"
+	"github.com/lynkfox/go_eve_sleuth/comm/types"
 	"github.com/lynkfox/go_eve_sleuth/fitting"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
 )
@@ -164,6 +165,9 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 		if doctrine, found := doctrineIn[km.KillmailID]; found {
 			loss.Tags = retrieval.MergeFitTags(loss.Tags, []retrieval.FitTag{doctrine})
 		}
+		if affiliate := affiliateOf(target, km); affiliate != nil {
+			loss.Tags = retrieval.MergeFitTags(loss.Tags, []retrieval.FitTag{affiliateTag(*affiliate)})
+		}
 
 		key := fitKey(km.Victim.Ship.ItemID, km.Victim.Fit)
 		group := byKey[key]
@@ -223,6 +227,32 @@ func buildFits(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, b
 		return b.LastLost.Compare(a.LastLost)
 	})
 	return fits
+}
+
+// affiliateOf is the affiliate (holding, in the code) whose pilot lost a killmail, nil when the target itself lost it
+func affiliateOf(target *retrieval.IntelTarget, km *retrieval.Killmail) *retrieval.TargetGroup {
+	corpID, allianceID := 0, 0
+	if km.Victim.CorpAtKill != nil {
+		corpID = km.Victim.CorpAtKill.CorporationID
+	}
+	if km.Victim.AllianceAtKill != nil {
+		allianceID = km.Victim.AllianceAtKill.AllianceID
+	}
+	// the target's own pilots, though one of its corps may also be listed as an affiliate
+	if (target.TypeOfEntity == types.CORPORATION && corpID == target.IDNumber) || (target.TypeOfEntity == types.ALLIANCE && allianceID == target.IDNumber) {
+		return nil
+	}
+	for index := range target.Holdings {
+		if target.Holdings[index].Includes(corpID, allianceID) {
+			return &target.Holdings[index]
+		}
+	}
+	return nil
+}
+
+// affiliateTag marks a loss flown for one of the target's affiliates, hidden like the weapon and range tags: muted and last in the fitting window, and only found by the filter
+func affiliateTag(affiliate retrieval.TargetGroup) retrieval.FitTag {
+	return retrieval.FitTag{Name: "Affiliate", Meaning: fmt.Sprintf("Lost flying for %s, one of the target's affiliates", affiliate.Name), Hidden: true}
 }
 
 // withDoctrineReasons adds a Fleet Doctrine tag to a loss's tags, or its reasons to the one the loss has from its battle
