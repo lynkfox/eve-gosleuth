@@ -34,7 +34,7 @@ func main() {
 		read(filepath.Join(*raw, "system.json"), &systemDemo)
 	} else {
 		app, done := gui.NewHeadlessApp("tourgen")
-		defer done()
+		atExit = append(atExit, done)
 		limits := gui.SearchLimits{MaxKillmails: *maxKillmails, KillmailPages: 5, KillmailsNewerThanDays: *days, UseCachedKillmails: true, IncludeHoldings: true}
 		must(app.SetSearchLimits(limits))
 		allianceDemo = captureAlliance(app, *alliance)
@@ -53,6 +53,7 @@ func main() {
 	must(os.MkdirAll(*out, 0o755))
 	write(filepath.Join(*out, "alliance.json"), allianceDemo)
 	write(filepath.Join(*out, "system.json"), systemDemo)
+	runAtExit()
 }
 
 // read loads a demo file written by an earlier run
@@ -83,7 +84,7 @@ func captureSystem(app *gui.App, name string) systemDemo {
 	return systemDemo{SearchName: target.Display.Name, Target: target, Report: report}
 }
 
-// search runs SearchTarget then CollectIntel, as the page's search does, and takes the search back out of the user's recent searches unless it was there before
+// search runs SearchTarget then CollectIntel, as the page's search does, and takes the search back out of the user's recent searches at exit unless it was there before
 func search(app *gui.App, name string, searchType string) (gui.TargetResult, gui.IntelReport) {
 	before, err := app.GetRecentSearches()
 	must(err)
@@ -92,15 +93,18 @@ func search(app *gui.App, name string, searchType string) (gui.TargetResult, gui
 	if len(target.Choices) > 0 {
 		must(fmt.Errorf("%q matches more than one %s", name, searchType))
 	}
-	report, err := app.CollectIntel(target.ID, target.Type)
-	must(err)
 	if !slices.ContainsFunc(before, func(recent retrieval.RecentSearch) bool {
 		return recent.Type == target.Type && strings.EqualFold(recent.Name, target.Display.Name)
 	}) {
-		if _, err := app.RemoveRecentSearch(target.Display.Name, target.Type); err != nil {
-			comm.Logger.WithError(err).Warn("Could not remove the search from the recent searches")
-		}
+		// at exit, so a later step failing still takes it out
+		atExit = append(atExit, func() {
+			if _, err := app.RemoveRecentSearch(target.Display.Name, target.Type); err != nil {
+				comm.Logger.WithError(err).Warn("Could not remove the search from the recent searches")
+			}
+		})
 	}
+	report, err := app.CollectIntel(target.ID, target.Type)
+	must(err)
 	return target, report
 }
 
@@ -113,9 +117,21 @@ func write(path string, value any) {
 	fmt.Printf("Wrote %s (%d KB)\n", path, len(data)>>10)
 }
 
+// atExit are the steps to undo or close on the way out, run last first by runAtExit, as os.Exit skips deferred calls
+var atExit []func()
+
+// runAtExit runs the atExit steps, last added first, so the cache closes after the recent searches are put back
+func runAtExit() {
+	for i := len(atExit) - 1; i >= 0; i-- {
+		atExit[i]()
+	}
+	atExit = nil
+}
+
 func must(err error) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		runAtExit()
 		os.Exit(1)
 	}
 }

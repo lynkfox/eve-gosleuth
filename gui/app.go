@@ -426,8 +426,8 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 	// neither lock is let go: the app is closing, and nothing may start after the cache is closed
 
-	// debug mode lasts until the app closes, so no one forgets it is on
-	if a.currentSettings().DebugMode {
+	// debug mode lasts until the app closes, so no one forgets it is on. A headless App is a dev tool, which leaves the user's choice alone.
+	if !a.headless && a.currentSettings().DebugMode {
 		if err := a.updateSettings(func(settings *Settings) { settings.DebugMode = false }); err != nil {
 			comm.Logger.WithError(err).Warn("Could not turn debug mode off")
 		}
