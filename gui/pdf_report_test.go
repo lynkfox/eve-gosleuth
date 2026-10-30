@@ -136,8 +136,10 @@ func TestPDFDoctrines(t *testing.T) {
 					Drones: []FitPart{{Name: "Hobgoblin II", Quantity: 3}, {Name: "Hobgoblin II"}, {Name: "Warrior II", Quantity: 0}},
 				},
 				Stats: []FitStats{{Mode: "Defense", Stats: stats}}},
-			{PilotName: "B", Time: time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC), SystemName: "Amarr"},
-			{PilotName: "A", Time: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), SystemName: "Old"},
+			{PilotName: "B", Time: time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC), SystemName: "Amarr",
+				Fit: FitLayout{Implants: []FitPart{{Name: "High-grade Crystal Alpha"}, {Name: "Zainou 'Gnome' Shield Upgrades SU-603"}}}},
+			{PilotName: "A", Time: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), SystemName: "Old",
+				Fit: FitLayout{Implants: []FitPart{{Name: "High-grade Crystal Alpha"}, {Name: "High-grade Crystal Beta"}}}},
 		},
 	}
 	rare := FitGroup{ShipName: "Rare", Tags: []retrieval.FitTag{{Name: "Fleet Doctrine"}}, Losses: []FitLoss{{PilotName: "Z"}}}
@@ -161,6 +163,9 @@ func TestPDFDoctrines(t *testing.T) {
 	assert.Equal(t, "Jita", first.LastSystem)
 	assert.Equal(t, "[Ferox, x]", first.EFT)
 	assert.Equal(t, "seen with 7 Ferox and 2 logi on one side", first.Reason)
+	assert.Equal(t, 2, first.Implanted)
+	assert.Equal(t, []string{"High-grade Crystal Alpha", "Zainou 'Gnome' Shield Upgrades SU-603", "High-grade Crystal Beta"}, first.Implants, "every implant seen on any loss, once")
+	assert.Empty(t, doctrines[1].Implants)
 	assert.Equal(t, []report.Rack{
 		{Name: "High", Modules: []report.ModuleCount{{Name: "Heavy Missile Launcher II", Count: 2}, {Name: "Scan Probe Launcher", Count: 1}}},
 		{Name: "Mid", Modules: []report.ModuleCount{{Name: "Large Shield Extender II", Count: 1}}},

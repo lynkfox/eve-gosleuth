@@ -324,6 +324,15 @@ func pdfDoctrines(fits []FitGroup, images map[string][]byte) []report.Doctrine {
 		newest := fit.Losses[0]
 		for _, loss := range fit.Losses {
 			pilots[loss.PilotName] = true
+			if len(loss.Fit.Implants) > 0 {
+				doctrine.Implanted++
+			}
+			// losses come most implants first, so the fullest set leads, in slot order
+			for _, implant := range loss.Fit.Implants {
+				if !slices.Contains(doctrine.Implants, implant.Name) {
+					doctrine.Implants = append(doctrine.Implants, implant.Name)
+				}
+			}
 			if loss.Time.After(newest.Time) {
 				newest = loss
 			}

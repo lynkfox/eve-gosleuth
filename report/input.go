@@ -55,6 +55,8 @@ type Doctrine struct {
 	LastSystem string
 	Racks      []Rack      // High, Mid, Low, Rig, Subsystem, Drones, in that order, empty racks left out
 	Fight      *FightStats // nil when the dogma engine had no numbers for it
+	Implants   []string    // the implants seen on any of its losses, by name, empty for none
+	Implanted  int         // how many of its losses had implants
 	Reason     string      // why it is a Fleet Doctrine, in counts, ie "seen with 7 Ferox and 2 logi on one side", empty for none
 	EFT        string      // the fit as EFT text, for the appendix
 }

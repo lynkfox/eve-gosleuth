@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -71,7 +72,16 @@ func (d *pageDoc) doctrineBlock(index int, dc Doctrine, divider string, link doc
 		headH = h
 	}
 	tiles := doctrineTiles(dc.Fight)
-	height := headH + 2 + d.doctrineStrip(tiles, false) + d.doctrineRacks(dc.Racks, false) + 5
+	racks := dc.Racks
+	if len(dc.Implants) > 0 {
+		tiles = append([]doctrineTile{{text: fmt.Sprintf("Implants on %s of %s %s", count(dc.Implanted), count(dc.Losses), doctrinePlural(dc.Losses, "loss", "losses")), col: colWarn, bold: true}}, tiles...)
+		implants := make([]ModuleCount, 0, len(dc.Implants))
+		for _, name := range dc.Implants {
+			implants = append(implants, ModuleCount{Name: name, Count: 1})
+		}
+		racks = append(slices.Clone(racks), Rack{Name: "Implants", Modules: implants})
+	}
+	height := headH + 2 + d.doctrineStrip(tiles, false) + d.doctrineRacks(racks, false) + 5
 	if divider != "" {
 		height += doctrineDividerH
 	}
@@ -135,7 +145,7 @@ func (d *pageDoc) doctrineBlock(index int, dc Doctrine, divider string, link doc
 
 	d.SetXY(pageMargin, y+headH+2)
 	d.doctrineStrip(tiles, true)
-	d.doctrineRacks(dc.Racks, true)
+	d.doctrineRacks(racks, true)
 	d.text(colText)
 	d.SetX(pageMargin)
 	d.Ln(1)

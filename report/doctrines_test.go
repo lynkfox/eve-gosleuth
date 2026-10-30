@@ -71,7 +71,8 @@ func TestDoctrines(t *testing.T) {
 	}
 	ds := []report.Doctrine{
 		doctrineFixture(1)[0],
-		{ShipName: "Guardian", Role: "Logi", Losses: 1, Pilots: 1, Racks: doctrineFixture(1)[0].Racks, Reason: "x"},
+		{ShipName: "Guardian", Role: "Logi", Losses: 1, Pilots: 1, Racks: doctrineFixture(1)[0].Racks, Reason: "x",
+			Implants: []string{"High-grade Crystal Alpha", "High-grade Crystal Beta"}, Implanted: 1},
 		{ShipName: strings.Repeat("Extraordinarily Long Ship Name ", 5), Losses: 9, Pilots: 3, LastSeen: time.Now(),
 			Racks: []report.Rack{{Name: "Rig", Modules: mods}}, Reason: strings.Repeat("seen with many ships ", 20)},
 	}
