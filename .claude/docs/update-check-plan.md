@@ -183,9 +183,9 @@ Neither agent commits; I commit in pieces (`feat(about)`, `ci`, `docs`) once it 
 
 ## Not in this plan: data-only updates
 
-`fit_types.json` and `dogma.json` are embedded in the exe, so a user who updates never needs them. They are attached to each release only for a possible later data-only update: when CCP ships an SDE between app releases, the app could fetch the new files without a new exe. To explore later, as the user asked:
+`fit_types.json` and `dogma.json` are embedded in the exe, so a user who updates never needs them. Releases up to 1.0.1 attached them for a possible later data-only update (dropped 2026-10-30 to avoid confusion; such an update would fetch them from the tag's source instead): when CCP ships an SDE between app releases, the app could fetch the new files without a new exe. To explore later, as the user asked:
 
 - **What it would save.** A stale `fit_types.json` costs only ESI calls for new types. A stale `dogma.json` gives wrong or missing stats for fits with new modules until a new exe. With the update check, a patch release (run sdegen, bump the patch number) already reaches users in one download, so a data-only path saves only that download and the user's click.
 - **It must not use the override folder.** That folder is the user's. A full downloaded file there would mix with their edits and hide later embedded fixes. It needs its own layer: embedded, then downloaded, then the user's overrides.
 - **Schema.** It should take only files from a release with the same major version (the schema rule in CLAUDE.md), and only when their `sde_build` is newer than the embedded one.
-- Until then, an SDE-only change ships as a patch release, and the assets could be dropped from `release.yml` if they are never used.
+- Until then, an SDE-only change ships as a patch release.

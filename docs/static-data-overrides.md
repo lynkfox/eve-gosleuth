@@ -331,9 +331,9 @@ Leave every other entry in your copy as it is. Your whole file then looks like t
 }
 ```
 
-## Updated game data from a GoSleuth release
+## Updated game data without updating the app
 
-When a GoSleuth release has a newer `fit_types.json` or `dogma.json` but you don't want to update the app, you can drop the release's whole file into the `static_data` folder. Take both together, as they come from the same release of CCP's data. A complete file works the same way as a partial one: every entry in it replaces or adds to the built-in data.
+Each GoSleuth release has its game data built in, so updating the app is the easy way to get CCP's latest. If a newer GoSleuth has a newer `fit_types.json` or `dogma.json` but you don't want to update the app, you can take the whole file from the `static_data` folder of that version's source on GitHub (pick its tag, ie `v1.1.0`, on the [code page](https://github.com/lynkfox/eve-gosleuth/tree/main/static_data)) and drop it into your `static_data` folder. Take both together, as they come from the same release of CCP's data, and only from a version with the same first number as yours (1.x for a 1.x app), as the files' layout can change between those. A complete file works the same way as a partial one: every entry in it replaces or adds to the built-in data.
 
 ## Reporting a problem
 
