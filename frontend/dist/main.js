@@ -1643,11 +1643,15 @@ function renderIntelSections(report) {
   renderGlance(report);
 }
 
+// profileOnlyReason is the reason showProfileOnly is showing, null while a report or nothing is
+let profileOnlyReason = null;
+
 /*
   showProfileOnly shows the report area with only At a glance, holding the target's Profile and why there is nothing else,
   for a search that ended without a report, so the target's details are still shown somewhere.
 */
 function showProfileOnly(reason) {
+  profileOnlyReason = reason;
   for (const tab of el("tab-list").querySelectorAll(".tab")) tab.hidden = true;
   const note = document.createElement("p");
   note.className = "muted";
@@ -4793,6 +4797,7 @@ function battleSections(battle) {
 
 function clearIntel() {
   intelReport = null;
+  profileOnlyReason = null;
   intelTarget = null;
   roster = null;
   el("report-warning").hidden = true;

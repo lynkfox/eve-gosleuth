@@ -55,6 +55,7 @@ const TOUR_STEPS = [
     before: async (t) => {
       setRecentOpen(false);
       await tourType(t.demo.alliance.searchName);
+      if (tourStopped(t)) return;
       searchTypeHint = t.demo.alliance.target.type;
       searchIdHint = t.demo.alliance.target.id;
     },
@@ -153,6 +154,7 @@ const TOUR_STEPS = [
     ],
     before: async (t) => {
       await tourType(t.demo.system.searchName);
+      if (tourStopped(t)) return;
       searchTypeHint = t.demo.system.target.type;
       searchIdHint = t.demo.system.target.id;
       t.runMs = 1200;
@@ -231,22 +233,30 @@ function tourCopy(value) {
 
 // tourType types text into the search box a letter at a time, or at once on a replay
 async function tourType(text) {
+  const t = tour;
+  if (tourStopped(t)) return;
   const input = el("search-input");
   input.value = "";
-  for (const letter of text) {
-    if (tour && !tour.quick && !tour.ending) {
+  if (!t.quick) {
+    for (const letter of text) {
       input.value += letter;
       await tourSleep(55);
-    } else {
-      input.value = text;
-      break;
+      // Skip pressed while typing: the search box is the user's again
+      if (tourStopped(t)) return;
     }
   }
   input.value = text;
 }
 
+// tourStopped is whether the tour t has ended or is ending, so a step still setting up leaves the screen alone
+function tourStopped(t) {
+  return !t || tour !== t || t.ending;
+}
+
 // tourRunSearch presses Search, so main.js's own search() runs against the stand-in backend, and waits for it to finish
 async function tourRunSearch() {
+  // once the tour is ending, a search would reach the real backend
+  if (tourStopped(tour)) return;
   el("search-form").requestSubmit();
   // search() starts after a tick of its own
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -298,7 +308,9 @@ function tourStandIn(t) {
     // a slice of the demo's members, as the Members tab asks for them a block at a time
     async GetMembers(id, type, offset, count) {
       const demo = demoFor(id);
-      const members = (demo && demo.members) || { rows: [], corporations: [] };
+      // an empty answer would end the list it is for there
+      if (!demo) throw new Error("The tour has no members for that target.");
+      const members = demo.members || { rows: [], corporations: [] };
       const corporations = type === "ALLIANCE";
       const all = (corporations ? members.corporations : members.rows) || [];
       const page = tourCopy(all.slice(offset, offset + count));
@@ -360,6 +372,10 @@ function tourStash() {
     sidebar: sidebarCollapsed,
     targetCollapsed,
     holdingsTucked,
+    profileOnly: profileOnlyReason,
+    killmailPage,
+    killmailFilter,
+    battlePage,
     collapsePreference: preferences.collapseTarget,
     order: shownTabOrder(),
     status: { text: el("status").textContent, error: el("status").classList.contains("error") },
@@ -395,6 +411,7 @@ function tourClearStage() {
   el("empty").hidden = false;
   setSidebarCollapsed(false);
   setTargetCollapsed(false);
+  setHoldingsTucked(false);
   arrangeTabs(DEFAULT_TAB_ORDER);
   el("ticker-history").replaceChildren();
   el("ticker-message").textContent = "Ready";
@@ -414,6 +431,10 @@ function tourRestore(saved) {
     // as search() draws a finished search
     renderTarget(saved.target);
     renderIntel(saved.report);
+    // the pages and filter the user was on, which renderIntel starts again
+    killmailFilter = saved.killmailFilter;
+    showKillmailPage(saved.killmailPage);
+    showBattlePage(saved.battlePage);
     showReportWarning(saved.report);
     setExportPDF(!saved.pdf);
     intelTarget = saved.intel;
@@ -436,6 +457,8 @@ function tourRestore(saved) {
     el("tab-roster").hidden = saved.hidden.roster;
     intelTarget = saved.intel;
     roster = saved.roster;
+    // a search that ended without a report showed only the target's profile and why, which the tour's report drew over
+    if (saved.profileOnly !== null) showProfileOnly(saved.profileOnly);
   }
 
   arrangeTabs(saved.order);
@@ -616,7 +639,7 @@ async function tourGo(index) {
       for (let i = 0; i < index; i++) {
         await tourRunHook(TOUR_STEPS[i], "before");
         await tourRunHook(TOUR_STEPS[i], "after");
-        if (tour !== t) return;
+        if (tourStopped(t)) return;
       }
       t.quick = false;
     }
@@ -811,8 +834,8 @@ async function endTour() {
   if (!t || t.ending) return;
   t.ending = true;
   el("tour-box").hidden = true;
-  // the stand-in answers at once now, so a search running finishes, and the Members tab's pages arrive, before the real backend is back
-  for (let waited = 0; (searching || (roster && roster.loading.size > 0)) && waited < 100; waited++) {
+  // the stand-in answers at once now, so a step setting up, a search running, and the Members tab's pages all finish before the real backend is back
+  for (let waited = 0; (t.busy || searching || (roster && roster.loading.size > 0)) && waited < 100; waited++) {
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
 
@@ -821,9 +844,9 @@ async function endTour() {
   el("tour-highlight").hidden = true;
   el("tour-box").hidden = false;
   tour = null;
-  // restored while the stand-in is still there, as startRoster looks up a first page of members, which it answers with nothing
-  tourRestore(t.saved);
+  // the real backend is back before the restore, so the user's Members list loads its pages from it
   tourBackend = null;
+  tourRestore(t.saved);
   loadRecentSearches();
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   if (t.onEnd) t.onEnd();
