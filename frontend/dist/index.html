@@ -33,7 +33,7 @@
           </label>
           <label class="preference-field">
             <span class="preference-name">zKillboard pages for all</span>
-            <input id="limit-pages" type="number" min="1" max="100" step="1">
+            <input id="limit-pages" type="number" min="-1" max="100" step="1" title="1 to 100, or -1 for as far as the age limit reaches, up to zKillboard's 100 pages">
           </label>
           <label class="preference-field">
             <span class="preference-name">Killmails newer than</span>
@@ -787,9 +787,9 @@
         <input id="pref-max-killmails" type="number" min="-1" max="20000" step="1">
       </label>
       <label class="preference-field">
-        <span class="preference-label" title="With a max killmail count of -1, how many zKillboard pages of 200 killmails to read, 1 to 100. Each page is one call to zKillboard, about a second."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">zKillboard pages for all</span></span>
-        <!-- 100 is api.ZKILL_MAX_PAGES, which the backend checks again on save -->
-        <input id="pref-killmail-pages" type="number" min="1" max="100" step="1">
+        <span class="preference-label" title="With a max killmail count of -1, how many zKillboard pages of 200 killmails to read, 1 to 100, or -1 for as far as the age limit reaches, up to zKillboard's 100 pages. Each page is one call to zKillboard, about a second."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">zKillboard pages for all</span></span>
+        <!-- 100 is api.ZKILL_MAX_PAGES and -1 retrieval.AllPages, which the backend checks again on save -->
+        <input id="pref-killmail-pages" type="number" min="-1" max="100" step="1">
       </label>
       <label class="preference-field">
         <span class="preference-label" title="Only collect killmails from this far back. A search whose newest killmail is older asks whether to ignore it."><span class="preference-info" aria-hidden="true">i</span><span class="preference-name">Killmails newer than</span></span>

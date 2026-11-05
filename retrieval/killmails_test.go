@@ -378,6 +378,7 @@ func TestCollectKillmailsPaging(t *testing.T) {
 
 	t.Run("all killmails pages as far as Pages, or DefaultKillmailPages", func(t *testing.T) {
 		assert.Equal(t, api.ZkillPaging{MaxPages: 40}, paged(retrieval.KillmailLimits{Max: retrieval.AllKillmails, Pages: 40}))
+		assert.Equal(t, api.ZkillPaging{MaxPages: api.ZKILL_MAX_PAGES}, paged(retrieval.KillmailLimits{Max: retrieval.AllKillmails, Pages: retrieval.AllPages}), "AllPages leaves only the age limit and zKillboard's own")
 		assert.Equal(t, api.ZkillPaging{MaxPages: retrieval.DefaultKillmailPages}, paged(retrieval.KillmailLimits{Max: retrieval.AllKillmails}))
 	})
 

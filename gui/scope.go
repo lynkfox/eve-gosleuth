@@ -69,7 +69,9 @@ func buildScope(target *retrieval.IntelTarget, cards []KillmailCard, limits Sear
 // scopeLimits describes the search limits as plain phrases, worded as the search limits button is. The affiliates are their own Sources, so IncludeHoldings has none.
 func scopeLimits(limits SearchLimits) []string {
 	phrases := []string{}
-	if limits.MaxKillmails == retrieval.AllKillmails {
+	if limits.MaxKillmails == retrieval.AllKillmails && limits.KillmailPages == retrieval.AllPages {
+		phrases = append(phrases, "All killmails zKillboard lists")
+	} else if limits.MaxKillmails == retrieval.AllKillmails {
 		pages := "pages"
 		if limits.KillmailPages == 1 {
 			pages = "page"

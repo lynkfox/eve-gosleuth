@@ -899,7 +899,8 @@ const ZKILL_PAGE_KILLMAILS = 200;
 function largeSearchReason(limits) {
   const reasons = [];
   if (limits.killmailsNewerThanDays === 0) reasons.push("killmails of any age");
-  const count = limits.maxKillmails === ALL_KILLMAILS ? limits.killmailPages * ZKILL_PAGE_KILLMAILS : limits.maxKillmails;
+  const pages = limits.killmailPages === ALL_PAGES ? MAX_KILLMAIL_PAGES : limits.killmailPages;
+  const count = limits.maxKillmails === ALL_KILLMAILS ? pages * ZKILL_PAGE_KILLMAILS : limits.maxKillmails;
   if (count > LARGE_KILLMAILS) reasons.push(`up to ${count.toLocaleString("en-US")} killmails`);
   return reasons.join(" and ");
 }
@@ -6178,7 +6179,8 @@ const limitsDiffer = (first, second) => Object.keys(first).some((key) => first[k
 // showSearchLimits names the limits the next search uses on its button, ie 20 killmails · any age, in the accent while they are not the defaults
 function showSearchLimits() {
   const limits = searchLimits || savedLimits();
-  const count = limits.maxKillmails === ALL_KILLMAILS ? `All on ${limits.killmailPages} ${limits.killmailPages === 1 ? "page" : "pages"}` : `${limits.maxKillmails.toLocaleString("en-US")} killmails`;
+  let count = `${limits.maxKillmails.toLocaleString("en-US")} killmails`;
+  if (limits.maxKillmails === ALL_KILLMAILS) count = limits.killmailPages === ALL_PAGES ? "All" : `All on ${limits.killmailPages} ${limits.killmailPages === 1 ? "page" : "pages"}`;
   const button = el("limits-button");
   button.textContent = `${count} · ${AGE_LABELS[limits.killmailsNewerThanDays] || "any age"}`;
   const changed = searchLimits !== null;
@@ -6273,6 +6275,8 @@ const MAX_KILLMAILS = 20000;
 const MAX_KILLMAIL_PAGES = 100;
 // ALL_KILLMAILS as the max killmail count collects every killmail zKillboard lists (retrieval.AllKillmails)
 const ALL_KILLMAILS = -1;
+// ALL_PAGES as the zKillboard pages reads as far as the age limit reaches, up to MAX_KILLMAIL_PAGES (retrieval.AllPages)
+const ALL_PAGES = -1;
 // MAX_RECENT_SEARCHES is the most recent searches the search bar can keep (retrieval.MaxRecentSearches)
 const MAX_RECENT_SEARCHES = 25;
 
@@ -6473,7 +6477,7 @@ function closePreferences() {
 function killmailLimitError(maxKillmails, killmailPages) {
   const killmailCountOk = maxKillmails === ALL_KILLMAILS || (Number.isInteger(maxKillmails) && maxKillmails >= 1 && maxKillmails <= MAX_KILLMAILS);
   if (!killmailCountOk) return `Max killmail count must be a whole number from 1 to ${MAX_KILLMAILS.toLocaleString("en-US")}, or -1 for all`;
-  if (!Number.isInteger(killmailPages) || killmailPages < 1 || killmailPages > MAX_KILLMAIL_PAGES) return `zKillboard pages for all must be a whole number from 1 to ${MAX_KILLMAIL_PAGES}`;
+  if (killmailPages !== ALL_PAGES && (!Number.isInteger(killmailPages) || killmailPages < 1 || killmailPages > MAX_KILLMAIL_PAGES)) return `zKillboard pages for all must be a whole number from 1 to ${MAX_KILLMAIL_PAGES}, or -1 for as far as the age limit reaches`;
   return "";
 }
 

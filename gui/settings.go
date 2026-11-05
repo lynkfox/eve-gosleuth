@@ -40,7 +40,7 @@ type Settings struct {
 type Preferences struct {
 	IncludeZkillLabels     bool   `json:"includeZkillLabels"`     // show zKillboard's labels, ie solo or ganked, on killmail cards. Off by default.
 	MaxKillmails           int    `json:"maxKillmails"`           // the most killmails collected per search, 1 to api.ZKILL_MAX_KILLMAILS, or retrieval.AllKillmails (-1) for all
-	KillmailPages          int    `json:"killmailPages"`          // how many zKillboard pages of 200 are listed when MaxKillmails is -1, 1 to api.ZKILL_MAX_PAGES
+	KillmailPages          int    `json:"killmailPages"`          // how many zKillboard pages of 200 are listed when MaxKillmails is -1, 1 to api.ZKILL_MAX_PAGES, or retrieval.AllPages (-1) for as far as the age limit reaches
 	KillmailsNewerThanDays int    `json:"killmailsNewerThanDays"` // only collect killmails from the last 7, 30, or 90 days, 0 for any age
 	UseCachedKillmails     bool   `json:"useCachedKillmails"`     // also use the target's cached killmails beyond the limits above
 	TimeZone               string `json:"timeZone"`               // how killmail times are shown: "eve" for EVE time (UTC), the default, or "local"
@@ -89,8 +89,8 @@ func (p Preferences) validate() error {
 	if p.MaxKillmails != retrieval.AllKillmails && (p.MaxKillmails < 1 || p.MaxKillmails > api.ZKILL_MAX_KILLMAILS) {
 		return fmt.Errorf("Max killmail count must be from 1 to %d, or -1 for all", api.ZKILL_MAX_KILLMAILS)
 	}
-	if p.KillmailPages < 1 || p.KillmailPages > api.ZKILL_MAX_PAGES {
-		return fmt.Errorf("zKillboard pages must be from 1 to %d", api.ZKILL_MAX_PAGES)
+	if p.KillmailPages != retrieval.AllPages && (p.KillmailPages < 1 || p.KillmailPages > api.ZKILL_MAX_PAGES) {
+		return fmt.Errorf("zKillboard pages must be from 1 to %d, or -1 for as far as the age limit reaches", api.ZKILL_MAX_PAGES)
 	}
 	if !slices.Contains(killmailAgeChoices, p.KillmailsNewerThanDays) {
 		return fmt.Errorf("Killmails newer than must be 7, 30, or 90 days, or all")

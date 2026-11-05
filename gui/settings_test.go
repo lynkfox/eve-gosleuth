@@ -114,6 +114,7 @@ func TestSettings(t *testing.T) {
 			func(p *Preferences) { p.MaxKillmails = -2 },
 			func(p *Preferences) { p.MaxKillmails = 20001 },
 			func(p *Preferences) { p.KillmailPages = 0 },
+			func(p *Preferences) { p.KillmailPages = -2 },
 			func(p *Preferences) { p.KillmailPages = 101 },
 			func(p *Preferences) { p.KillmailsNewerThanDays = 14 },
 			func(p *Preferences) { p.TimeZone = "mars" },
@@ -133,6 +134,8 @@ func TestSettings(t *testing.T) {
 		app := &App{settingsPath: filepath.Join(t.TempDir(), "settings.json"), settings: defaultSettings()}
 		chosen := defaultSettings().Preferences
 		chosen.MaxKillmails = -1
+		chosen.KillmailPages = retrieval.AllPages
+		assert.NoError(t, chosen.validate(), "-1 pages is as far as the age limit reaches")
 		chosen.KillmailPages = 25
 		chosen.KillmailsNewerThanDays = 7
 

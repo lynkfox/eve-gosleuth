@@ -32,7 +32,7 @@ type KillmailLimits struct {
 	Max           int       // the most killmails to collect from zKillboard's list, newest first, or AllKillmails for every one it lists
 	NewerThan     time.Time // only killmails after this, the zero time for no date limit
 	IncludeCached bool      // also use killmails already in the cache that are beyond Max, Pages, or NewerThan, ie those listed by earlier searches
-	Pages         int       // how many zKillboard pages of killmails to collect when Max is AllKillmails, 1 to api.ZKILL_MAX_PAGES. 0 is DefaultKillmailPages.
+	Pages         int       // how many zKillboard pages of killmails to collect when Max is AllKillmails, 1 to api.ZKILL_MAX_PAGES, or AllPages. 0 is DefaultKillmailPages.
 	// ConfirmIgnoreDate is asked, when the newest killmail is already older than NewerThan, whether to collect without the date limit for this search.
 	// It is given the newest killmail's time, and returns false to keep the limit and collect none. nil always keeps it.
 	ConfirmIgnoreDate func(newest time.Time) bool
@@ -41,16 +41,22 @@ type KillmailLimits struct {
 // AllKillmails as KillmailLimits.Max collects every killmail on the first KillmailLimits.Pages pages zKillboard lists, still stopping at NewerThan
 const AllKillmails = -1
 
+// AllPages as KillmailLimits.Pages reads every page zKillboard serves, so only NewerThan and zKillboard's own limit stop an AllKillmails search
+const AllPages = -1
+
 // DefaultKillmailPages is how many zKillboard pages of 200 are listed for AllKillmails unless the user sets another number in Preferences
 const DefaultKillmailPages = 10
 
 /*
 paging is how far to page through each zKillboard list for these limits, and how many killmails from the top of each the search needs.
-A max count pages until that many are listed, up to every page zKillboard serves. AllKillmails pages to Pages. Either stops at the page reaching NewerThan.
+A max count pages until that many are listed, up to every page zKillboard serves. AllKillmails pages to Pages, or as far as zKillboard serves for AllPages. Either stops at the page reaching NewerThan.
 */
 func (limits KillmailLimits) paging() (api.ZkillPaging, int) {
 	pages := limits.Pages
-	if pages <= 0 {
+	switch {
+	case pages == AllPages:
+		pages = api.ZKILL_MAX_PAGES
+	case pages <= 0:
 		pages = DefaultKillmailPages
 	}
 	if limits.Max == AllKillmails {

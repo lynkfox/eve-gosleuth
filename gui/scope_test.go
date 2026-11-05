@@ -38,5 +38,6 @@ func TestScopeLimits(t *testing.T) {
 	assert.Equal(t, []string{"At most 500 killmails", "Killmails newer than 30 days"},
 		scopeLimits(SearchLimits{MaxKillmails: 500, KillmailsNewerThanDays: 30, UseCachedKillmails: true, IncludeHoldings: true}), "no cache or affiliates line")
 	assert.Equal(t, []string{"All killmails on 10 zKillboard pages", "Killmails newer than 1 week"}, scopeLimits(SearchLimits{MaxKillmails: -1, KillmailPages: 10, KillmailsNewerThanDays: 7}))
+	assert.Equal(t, []string{"All killmails zKillboard lists", "Killmails newer than 30 days"}, scopeLimits(SearchLimits{MaxKillmails: -1, KillmailPages: -1, KillmailsNewerThanDays: 30}))
 	assert.Equal(t, "All killmails on 1 zKillboard page", scopeLimits(SearchLimits{MaxKillmails: -1, KillmailPages: 1})[0])
 }
