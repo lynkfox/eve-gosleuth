@@ -3191,7 +3191,7 @@ table.war-counts { width: auto; margin: 0 auto; border: 1px solid var(--border);
 .war-citadel-types img { width: 18px; height: 18px; margin-right: 6px; vertical-align: middle; border-radius: 3px; }
 .war-reach ul { margin: 6px 0; padding-left: 20px; }
 .war-first-run { border-left-color: var(--highlight); }
-.war-others { display: grid; gap: 8px; }
+section.war-others { display: grid; gap: 8px; }
 .war-added { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .war-added-label { font-size: 12px; font-weight: 600; }
 .war-added-label.war-a, .war-added-label.war-b { padding-left: 6px; border-left: 3px solid var(--war-a); }
