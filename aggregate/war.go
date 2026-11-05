@@ -121,8 +121,9 @@ type WarBattleSide struct {
 type WarBattle struct {
 	ID           string // from FindBattlesOf
 	Start, End   time.Time
-	System       *retrieval.System // the system with the most of its killmails, the first of them on a tie
-	OtherSystems []string          // by name, in the order it reached them
+	System       *retrieval.System   // the system with the most of its killmails, the first of them on a tie
+	OtherSystems []string            // by name, in the order it reached them
+	OtherDetails []*retrieval.System // the same systems, for their menu
 	Pilots       int
 	Killmails    []*retrieval.Killmail // oldest first
 	Skirmish     bool                  // fewer than minPilots pilots
@@ -919,6 +920,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		for _, system := range systemFirst {
 			if system != most && system.SystemID != most.SystemID {
 				wb.OtherSystems = append(wb.OtherSystems, system.Name)
+				wb.OtherDetails = append(wb.OtherDetails, system)
 			}
 		}
 

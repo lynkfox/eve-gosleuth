@@ -5548,7 +5548,7 @@ function battleClock(battle) {
   return `${clockTime(timeParts(battle.start))} – ${clockTime(timeParts(battle.end))} ${zone} · ${length}`;
 }
 
-// battleSections are a battle's menu: its battle report on each site, then its system
+// battleSections are a battle's menu: its battle report on each site, then its system, then the others it spread to
 function battleSections(battle) {
   const reports = [["zKillboard", battle.zkillUrl], ["EVE Tools", battle.evetoolsUrl], ["Warbeacon", battle.warbeaconUrl]]
     .filter(([, url]) => url)
@@ -5556,6 +5556,7 @@ function battleSections(battle) {
   return [
     ...(reports.length ? [{ heading: "Battle report", items: reports }] : []),
     systemSection(battle.system),
+    ...(battle.otherSystemDetails || []).map(systemSection),
   ];
 }
 

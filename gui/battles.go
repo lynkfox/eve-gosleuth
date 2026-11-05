@@ -21,12 +21,14 @@ type Battle struct {
 	System SystemSummary `json:"system"`
 	// the other systems it spread to, by name, in the order it reached them
 	OtherSystems []string `json:"otherSystems"`
-	Pilots       int      `json:"pilots"`    // the pilots on its killmails, victims and attackers, both sides
-	Ships        int      `json:"ships"`     // the ships those pilots flew, each pilot's hull counted once
-	Killmails    int      `json:"killmails"` // the ships destroyed in it
-	ZkillURL     string   `json:"zkillUrl"`
-	EveToolsURL  string   `json:"evetoolsUrl"`
-	WarbeaconURL string   `json:"warbeaconUrl"`
+	// the same systems, for the row's menu. Missing from a tour demo's report, which was saved before it.
+	OtherSystemDetails []SystemSummary `json:"otherSystemDetails"`
+	Pilots             int             `json:"pilots"`    // the pilots on its killmails, victims and attackers, both sides
+	Ships              int             `json:"ships"`     // the ships those pilots flew, each pilot's hull counted once
+	Killmails          int             `json:"killmails"` // the ships destroyed in it
+	ZkillURL           string          `json:"zkillUrl"`
+	EveToolsURL        string          `json:"evetoolsUrl"`
+	WarbeaconURL       string          `json:"warbeaconUrl"`
 }
 
 /*
@@ -59,12 +61,13 @@ func buildBattles(battles map[string]aggregate.BattleFought, killmails []*retrie
 		slices.SortStableFunc(found, func(a, b *retrieval.Killmail) int { return a.KillmailTime.Compare(b.KillmailTime) })
 
 		row := Battle{
-			ID:           id,
-			Start:        found[0].KillmailTime,
-			End:          found[len(found)-1].KillmailTime,
-			OtherSystems: []string{},
-			Pilots:       len(battle.UniquePilots),
-			Killmails:    len(found),
+			ID:                 id,
+			Start:              found[0].KillmailTime,
+			End:                found[len(found)-1].KillmailTime,
+			OtherSystems:       []string{},
+			OtherSystemDetails: []SystemSummary{},
+			Pilots:             len(battle.UniquePilots),
+			Killmails:          len(found),
 		}
 		main := battleSystem(found)
 		row.System = structureSystem(main)
@@ -74,6 +77,7 @@ func buildBattles(battles map[string]aggregate.BattleFought, killmails []*retrie
 			if km.System != nil && (main == nil || km.System.SystemID != main.SystemID) && !seen[km.System.SystemID] {
 				seen[km.System.SystemID] = true
 				row.OtherSystems = append(row.OtherSystems, km.System.Name)
+				row.OtherSystemDetails = append(row.OtherSystemDetails, structureSystem(km.System))
 			}
 			for _, flown := range battleShips(km) {
 				ships[flown] = struct{}{}

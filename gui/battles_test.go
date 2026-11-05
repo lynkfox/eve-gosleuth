@@ -55,6 +55,9 @@ func TestBuildBattles(t *testing.T) {
 	assert.Equal(t, start.Add(20*time.Minute), newest.End)
 	assert.Equal(t, "Perimeter", newest.System.Name, "the system with the most killmails")
 	assert.Equal(t, []string{"Jita"}, newest.OtherSystems)
+	if assert.Len(t, newest.OtherSystemDetails, 1) {
+		assert.Equal(t, "Jita", newest.OtherSystemDetails[0].Name)
+	}
 	assert.Equal(t, 3, newest.Killmails)
 	assert.Equal(t, 10, newest.Pilots, "the NPC is no pilot")
 	assert.Equal(t, 11, newest.Ships, "pilot 2's Rifter and Slasher each count")

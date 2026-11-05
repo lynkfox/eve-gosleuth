@@ -567,6 +567,9 @@ func TestBuildWarTotals(t *testing.T) {
 		assert.Equal(t, warStart.Add(9*time.Minute), battle.End)
 		assert.Equal(t, "Home", battle.System.Name)
 		assert.Equal(t, []string{"Other"}, battle.OtherSystems)
+		if assert.Len(t, battle.OtherDetails, 1) {
+			assert.Equal(t, "Other", battle.OtherDetails[0].Name)
+		}
 		assert.InDelta(t, data.A.ISKLost, battle.A.ISKLost, 0.001)
 		assert.Equal(t, 1, battle.A.StructureLost)
 		assert.Equal(t, 2, battle.B.StructureLost)

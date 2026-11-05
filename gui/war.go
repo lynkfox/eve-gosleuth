@@ -118,22 +118,24 @@ type WarBattleSide struct {
 
 // WarBattle is a row of the Battles tab: one fight, as in the sheet
 type WarBattle struct {
-	ID           string          `json:"id"`
-	Start        time.Time       `json:"start"`
-	End          time.Time       `json:"end"`
-	System       SystemSummary   `json:"system"`       // the system with the most of its killmails, which its links are for
-	OtherSystems []string        `json:"otherSystems"` // never null
-	Class        string          `json:"class"`        // the system's wormhole class, else its security band
-	Pilots       int             `json:"pilots"`
-	Killmails    int             `json:"killmails"`
-	Skirmish     bool            `json:"skirmish"` // marked beside its date
-	A            WarBattleSide   `json:"a"`
-	B            WarBattleSide   `json:"b"`
-	Others       WarBattleSide   `json:"others"`
-	StationRefs  []WarStationRef `json:"stationRefs"` // never null
-	ZkillURL     string          `json:"zkillUrl"`
-	EveToolsURL  string          `json:"evetoolsUrl"`
-	WarbeaconURL string          `json:"warbeaconUrl"`
+	ID           string        `json:"id"`
+	Start        time.Time     `json:"start"`
+	End          time.Time     `json:"end"`
+	System       SystemSummary `json:"system"`       // the system with the most of its killmails, which its links are for
+	OtherSystems []string      `json:"otherSystems"` // never null
+	// the same systems, for the row's menu
+	OtherSystemDetails []SystemSummary `json:"otherSystemDetails"`
+	Class              string          `json:"class"` // the system's wormhole class, else its security band
+	Pilots             int             `json:"pilots"`
+	Killmails          int             `json:"killmails"`
+	Skirmish           bool            `json:"skirmish"` // marked beside its date
+	A                  WarBattleSide   `json:"a"`
+	B                  WarBattleSide   `json:"b"`
+	Others             WarBattleSide   `json:"others"`
+	StationRefs        []WarStationRef `json:"stationRefs"` // never null
+	ZkillURL           string          `json:"zkillUrl"`
+	EveToolsURL        string          `json:"evetoolsUrl"`
+	WarbeaconURL       string          `json:"warbeaconUrl"`
 }
 
 // WarClassCount is how many of a war's systems are of one class, ie 13 C5
@@ -1012,7 +1014,8 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 
 	for _, battle := range data.Battles {
 		row := WarBattle{ID: battle.ID, Start: battle.Start, End: battle.End, System: structureSystem(battle.System), OtherSystems: append([]string{}, battle.OtherSystems...),
-			Class: warClass(battle.System), Pilots: battle.Pilots, Killmails: len(battle.Killmails), Skirmish: battle.Skirmish,
+			OtherSystemDetails: warOtherSystems(battle.OtherDetails),
+			Class:              warClass(battle.System), Pilots: battle.Pilots, Killmails: len(battle.Killmails), Skirmish: battle.Skirmish,
 			A: warBattleSide(battle.A), B: warBattleSide(battle.B), Others: warBattleSide(battle.Others), StationRefs: []WarStationRef{}}
 		for _, ref := range battle.StationRefs {
 			row.StationRefs = append(row.StationRefs, WarStationRef{Side: warSideName(ref.Side), Attempt: ref.Attempt, Structure: ref.Structure})
@@ -1093,4 +1096,13 @@ func (a *App) searchWar(name string, id int) (TargetResult, error) {
 		return TargetResult{}, errNoWar
 	}
 	return a.warResult(war), nil
+}
+
+// warOtherSystems are a battle's other systems for its row's menu, never null
+func warOtherSystems(systems []*retrieval.System) []SystemSummary {
+	out := make([]SystemSummary, 0, len(systems))
+	for _, system := range systems {
+		out = append(out, structureSystem(system))
+	}
+	return out
 }
