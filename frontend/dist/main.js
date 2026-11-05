@@ -2303,7 +2303,8 @@ function renderFitSummary(fit) {
   note.hidden = true;
   note.textContent = "";
   const common = fit.losses[summary.commonLoss] || fit.losses[0];
-  fitCopyButton(common.eft);
+  // the PDF's EFT, so the two can't differ
+  fitCopyButton(summary.eft || common.eft);
   drawFitRing(fit, summary.fit, (slot) => {
     const variants = slot.variants || [];
     const seen = variants.map((variant) => `${variant.name} ×${variant.losses}`);
