@@ -51,7 +51,7 @@ The **War** button sets up two sides and a start date, and GoSleuth follows the 
   - *A listing of fights that may stretch multiple systems. Each line reports the group that had the most pilots for their respective side, and stations killed*
   - *Skirmishes are fewer than 10 pilots in the whole fight*
   - *The listing can be sorted by column and filtered by system class*
-  - *Links to various BR sites are available, but since there is no automated way to generate multi-system reports, it only does so for the system with the most killmails*
+  - *Links to various BR sites are available for the system with the most killmails. There is no automated way to generate multi-system reports, so right-click a battle for the reports of each of its other systems*
 - **Systems**
   - *Similar to the Battles, but showing everything for a given system*
 - **Timeline**

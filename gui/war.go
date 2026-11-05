@@ -123,19 +123,27 @@ type WarBattle struct {
 	End          time.Time     `json:"end"`
 	System       SystemSummary `json:"system"`       // the system with the most of its killmails, which its links are for
 	OtherSystems []string      `json:"otherSystems"` // never null
-	// the same systems, for the row's menu
-	OtherSystemDetails []SystemSummary `json:"otherSystemDetails"`
-	Class              string          `json:"class"` // the system's wormhole class, else its security band
-	Pilots             int             `json:"pilots"`
-	Killmails          int             `json:"killmails"`
-	Skirmish           bool            `json:"skirmish"` // marked beside its date
-	A                  WarBattleSide   `json:"a"`
-	B                  WarBattleSide   `json:"b"`
-	Others             WarBattleSide   `json:"others"`
-	StationRefs        []WarStationRef `json:"stationRefs"` // never null
-	ZkillURL           string          `json:"zkillUrl"`
-	EveToolsURL        string          `json:"evetoolsUrl"`
-	WarbeaconURL       string          `json:"warbeaconUrl"`
+	// the same systems' battle reports, for the row's menu
+	OtherSystemReports []WarSystemReport `json:"otherSystemReports"`
+	Class              string            `json:"class"` // the system's wormhole class, else its security band
+	Pilots             int               `json:"pilots"`
+	Killmails          int               `json:"killmails"`
+	Skirmish           bool              `json:"skirmish"` // marked beside its date
+	A                  WarBattleSide     `json:"a"`
+	B                  WarBattleSide     `json:"b"`
+	Others             WarBattleSide     `json:"others"`
+	StationRefs        []WarStationRef   `json:"stationRefs"` // never null
+	ZkillURL           string            `json:"zkillUrl"`
+	EveToolsURL        string            `json:"evetoolsUrl"`
+	WarbeaconURL       string            `json:"warbeaconUrl"`
+}
+
+// WarSystemReport is the battle report links of one system of a battle
+type WarSystemReport struct {
+	Name         string `json:"name"`
+	ZkillURL     string `json:"zkillUrl"`
+	EveToolsURL  string `json:"evetoolsUrl"`
+	WarbeaconURL string `json:"warbeaconUrl"`
 }
 
 // WarClassCount is how many of a war's systems are of one class, ie 13 C5
@@ -302,7 +310,7 @@ func (a *App) validWarSide(card WarSideCard, label string) (retrieval.WarSide, [
 	if card.Type == coalitionType {
 		coalition, found := a.cache.CoalitionByID(card.ID)
 		if !found {
-			return side, nil, fmt.Errorf("The coalition %s on side %s is no longer saved", card.Name, label)
+			return side, nil, fmt.Errorf("The coalition %s on side %s is no longer saved. Choose another for that side in the War window.", card.Name, label)
 		}
 		side.Name, side.WithAffiliates = coalition.Name, false
 		direct := []retrieval.CoalitionMember{}
@@ -1014,7 +1022,7 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 
 	for _, battle := range data.Battles {
 		row := WarBattle{ID: battle.ID, Start: battle.Start, End: battle.End, System: structureSystem(battle.System), OtherSystems: append([]string{}, battle.OtherSystems...),
-			OtherSystemDetails: warOtherSystems(battle.OtherDetails),
+			OtherSystemReports: warOtherSystemReports(battle),
 			Class:              warClass(battle.System), Pilots: battle.Pilots, Killmails: len(battle.Killmails), Skirmish: battle.Skirmish,
 			A: warBattleSide(battle.A), B: warBattleSide(battle.B), Others: warBattleSide(battle.Others), StationRefs: []WarStationRef{}}
 		for _, ref := range battle.StationRefs {
@@ -1098,11 +1106,31 @@ func (a *App) searchWar(name string, id int) (TargetResult, error) {
 	return a.warResult(war), nil
 }
 
-// warOtherSystems are a battle's other systems for its row's menu, never null
-func warOtherSystems(systems []*retrieval.System) []SystemSummary {
-	out := make([]SystemSummary, 0, len(systems))
-	for _, system := range systems {
-		out = append(out, structureSystem(system))
+// warOtherSystemReports is the battle report links of each of a battle's other systems, each at the hour of the middle of its own killmails there, as a long battle can leave a system hours before it ends
+func warOtherSystemReports(battle *aggregate.WarBattle) []WarSystemReport {
+	first, last := map[int]time.Time{}, map[int]time.Time{}
+	for _, km := range battle.Killmails {
+		if km.System == nil {
+			continue
+		}
+		id := km.System.SystemID
+		if at, seen := first[id]; !seen || km.KillmailTime.Before(at) {
+			first[id] = km.KillmailTime
+		}
+		if at, seen := last[id]; !seen || km.KillmailTime.After(at) {
+			last[id] = km.KillmailTime
+		}
+	}
+
+	out := make([]WarSystemReport, 0, len(battle.OtherDetails))
+	for _, system := range battle.OtherDetails {
+		start, end := battle.Start, battle.End
+		if at, seen := first[system.SystemID]; seen {
+			start, end = at, last[system.SystemID]
+		}
+		middle := start.Add(end.Sub(start) / 2)
+		out = append(out, WarSystemReport{Name: system.Name, ZkillURL: api.ZkillRelatedURL(system.SystemID, middle),
+			EveToolsURL: api.EveToolsRelatedURL(system.SystemID, middle), WarbeaconURL: api.WarbeaconRelatedURL(system.SystemID, middle)})
 	}
 	return out
 }

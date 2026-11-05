@@ -3960,7 +3960,7 @@ const TAB_HELP = {
     "A skirmish is a fight with fewer than 10 pilots, both sides together.",
     "Trash, ref marks, structure counts, and other systems can all be hovered over to show more info.",
     "Click a heading to sort, or a class at the top to filter. Several classes can be on at once.",
-    "Right-click a row to open its battle report, or to search or open any of its systems.",
+    "Right-click a row to open the battle report of any of its systems.",
   ],
   "tab-war-timeline": [
     "A total of the war, either by smaller unit or as a running total.",
@@ -3983,12 +3983,8 @@ const TAB_HELP = {
 
 function selectTab(tabId) {
   if (tabId !== "tab-fits") closeFitKey();
-  // a strip drawn while its tab was hidden has no width to scroll, so it goes to its newest once the tab has opened, however it was opened
-  if (tabId === "tab-war-timeline") {
-    requestAnimationFrame(() => {
-      el("war-timeline-chart").scrollLeft = el("war-timeline-chart").scrollWidth;
-    });
-  }
+  // a strip drawn while its tab was hidden has no width to scroll, so it takes its place once the tab has opened, however it was opened
+  if (tabId === "tab-war-timeline") requestAnimationFrame(placeWarTimelineScroll);
   const points = typeof TAB_HELP[tabId] === "function" ? TAB_HELP[tabId](roster ? roster.type : "") : TAB_HELP[tabId];
   const key = TAB_COLOR_KEYS[tabId];
   const title = el(tabId).querySelector(".tab-name").textContent;
@@ -5744,6 +5740,13 @@ function renderWarVersus(war, report) {
     update.title = "Lists only what is new since the last run";
   }
   if (note.textContent) facts.append(note);
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "secondary war-report-br";
+  edit.textContent = "Change";
+  edit.title = "Change this war's name or start date";
+  edit.disabled = searching;
+  edit.addEventListener("click", () => openWarEdit(war));
   const fromReport = document.createElement("button");
   fromReport.type = "button";
   fromReport.className = "secondary war-report-br";
@@ -5753,10 +5756,46 @@ function renderWarVersus(war, report) {
   fromReport.addEventListener("click", () => openBattleReport(war));
   const run = document.createElement("div");
   run.className = "war-run";
-  run.append(fromReport, update);
+  run.append(edit, fromReport, update);
 
   box.append(title, sides, facts, run);
   el("war-versus-box").replaceChildren(box);
+}
+
+// warEditing is the war the Change window is open on, as the backend's WarCard
+let warEditing = null;
+
+// openWarEdit opens the Change window on a war, from its report's strip
+function openWarEdit(war) {
+  warEditing = war;
+  el("war-edit-name").value = war.name;
+  setAgePicker(el("war-edit-from"), 0, war.fromDate || "");
+  el("war-edit-error").hidden = true;
+  el("war-edit").showModal();
+}
+
+// saveWarEdit saves the Change window's name and start, then draws the report again from what the war holds, on the same tab. Going by the same war's saved sides, it never asks for a run.
+async function saveWarEdit() {
+  const from = agePickerValue(el("war-edit-from"));
+  const shownName = el("search-input").value.trim() === warEditing.name;
+  let saved;
+  try {
+    saved = await backend().SaveWar({ ...warEditing, name: el("war-edit-name").value.trim(), fromDays: from.killmailsNewerThanDays, fromDate: from.killmailsNewerThanDate });
+  } catch (err) {
+    el("war-edit-error").textContent = String(err);
+    el("war-edit-error").hidden = false;
+    return;
+  }
+  // it is saved from here on, so a report that can not be drawn again is not an error of the window's
+  el("war-edit").close();
+  if (shownName) el("search-input").value = saved.name;
+  loadRecentSearches();
+  loadSearchGroups();
+  try {
+    showWarReport(await backend().OpenWar(saved.id));
+  } catch (err) {
+    setStatus(String(err), true);
+  }
 }
 
 /* Running a war */
@@ -5821,6 +5860,7 @@ function showWarReport(report) {
   intelReport = null;
   if (!sameWar) {
     warBattlePage = 0;
+    warTimelineScroll = 1;
     warOthersAll = false;
     warClassFilters.battles.clear();
     warClassFilters.systems.clear();
@@ -6428,6 +6468,26 @@ function warBattleSideCell(side, key) {
   return cell;
 }
 
+// WAR_STRUCTURE_KINDS name the kinds of structure a battle's mark can be for, as its chit titles it and its hover says it
+const WAR_STRUCTURE_KINDS = { citadel: { title: "Citadel", word: "citadel" }, pos: { title: "POS", word: "POS" }, poco: { title: "POCO", word: "POCO" } };
+
+// warRefNoteLine says what marked a battle, ie Fortizar fired in J155928 on 2 killmails
+function warRefNoteLine(note) {
+  const owner = note.owner ? ` of ${note.owner}` : "";
+  const system = note.system ? ` in ${note.system}` : "";
+  return `${note.type}${owner} ${note.lost ? "lost" : "fired"}${system} on ${warPlural(note.killmails, "killmail")}`;
+}
+
+// warBattleSections are a war battle's menu: the battle report on each site for its main system, then for each other system it spread to
+function warBattleSections(battle) {
+  return [{ name: battle.system.name, zkillUrl: battle.zkillUrl, evetoolsUrl: battle.evetoolsUrl, warbeaconUrl: battle.warbeaconUrl }, ...(battle.otherSystemReports || [])].map((system) => ({
+    heading: `Battle report: ${system.name}`,
+    items: [["zKillboard", system.zkillUrl], ["EVE Tools", system.evetoolsUrl], ["Warbeacon", system.warbeaconUrl]]
+      .filter(([, url]) => url)
+      .map(([site, url]) => ({ label: `Open on ${site}`, action: () => window.runtime.BrowserOpenURL(url) })),
+  })).filter((section) => section.items.length > 0);
+}
+
 // renderWarBattlePage draws a page of the Battles tab, a row per fight
 function renderWarBattlePage() {
   const report = warReport;
@@ -6499,7 +6559,7 @@ function renderWarBattlePage() {
     reports.append(siteLinks(`the battle in ${battle.system.name}`, battle));
 
     row.append(whenCell, warClassCell(battle.class, battle.system), systemCell, warBattleSideCell(battle.a, "a"), warBattleSideCell(battle.b, "b"), warBattleSideCell(battle.others, "others"), structures, reports);
-    return withMenu(row, battleSections(battle));
+    return withMenu(row, warBattleSections(battle));
   });
 
   el("war-battles-body").replaceChildren(...rows);
@@ -6566,11 +6626,11 @@ function renderWarSystems(report) {
 // warTimelineMode is what the Timeline shows: day for each period's own figures, running for the totals up to it. warTimelineUnit is its period, day or week.
 let warTimelineMode = "day";
 let warTimelineUnit = "day";
+// warTimelineScroll is how far along the strip its scrollbar is, 0 to 1. The newest are what is usually wanted, so a war's strip starts at its end, and stays where the user put it through a toggle or a change of tab.
+let warTimelineScroll = 1;
 
 // WAR_TIMELINE_SHOWN is how many periods fit the strip's width before it scrolls sideways
 const WAR_TIMELINE_SHOWN = 14;
-// WAR_TIMELINE_LABEL is the strip's first column, the side names, in pixels
-const WAR_TIMELINE_LABEL = 160;
 
 // WAR_TIMELINE_COLUMNS are the Timeline's figures for each side: its heading, how to read it, how to write it, and whether it is the strong column
 const WAR_TIMELINE_COLUMNS = [
@@ -6653,6 +6713,19 @@ function warPeriodName(date) {
   return warTimelineUnit === "week" ? `Week of ${writtenDay(date)}` : writtenDay(date);
 }
 
+// placeWarTimelineScroll puts the strip's scrollbar back where it was. Reading the width lays the page out, so it comes after the table is drawn, or the emptied table would scroll the panel back up.
+function placeWarTimelineScroll() {
+  const chart = el("war-timeline-chart");
+  chart.scrollLeft = warTimelineScroll * (chart.scrollWidth - chart.clientWidth);
+}
+
+// keepWarTimelineScroll notes where the strip's scrollbar is. With nothing to scroll, ie weeks that all fit, or its tab hidden, it keeps the place it had.
+function keepWarTimelineScroll() {
+  const chart = el("war-timeline-chart");
+  const room = chart.scrollWidth - chart.clientWidth;
+  if (room > 0) warTimelineScroll = chart.scrollLeft / room;
+}
+
 // renderWarTimeline draws the Timeline tab: a strip per side with a cell a period, the more ISK lost the stronger, pinned over every category for each period, newest first
 function renderWarTimeline(report) {
   const shown = warTimelinePeriods(report);
@@ -6662,13 +6735,15 @@ function renderWarTimeline(report) {
     const on = button.dataset.mode ? button.dataset.mode === warTimelineMode : button.dataset.unit === warTimelineUnit;
     button.setAttribute("aria-pressed", String(on));
   }
+  keepWarTimelineScroll();
   el("war-timeline-chart").replaceChildren();
+  el("war-timeline-names").replaceChildren();
   el("war-timeline-head").replaceChildren();
   el("war-timeline-body").replaceChildren();
   const empty = el("war-timeline-empty");
   empty.textContent = warEmptyText(report, "No losses on the killmails the war holds.");
   empty.hidden = shown.length > 0;
-  el("war-timeline-chart").hidden = shown.length === 0;
+  el("war-timeline-strip").hidden = shown.length === 0;
   if (shown.length === 0) return;
 
   // the chart: running figures carry through a quiet day, a day's own are simply empty
@@ -6684,16 +6759,17 @@ function renderWarTimeline(report) {
   const grid = document.createElement("div");
   grid.className = "war-timeline-grid";
   // up to WAR_TIMELINE_SHOWN fill the width, and more keep that width and scroll sideways
-  // the grid is as wide as its cells, or the pinned side names would have nothing to stay inside
-  if (dates.length > WAR_TIMELINE_SHOWN) grid.style.width = `calc(${WAR_TIMELINE_LABEL}px + (100% - ${WAR_TIMELINE_LABEL}px) * ${dates.length} / ${WAR_TIMELINE_SHOWN})`;
-  grid.style.gridTemplateColumns = `${WAR_TIMELINE_LABEL}px repeat(${dates.length}, minmax(52px, 1fr))`;
+  if (dates.length > WAR_TIMELINE_SHOWN) grid.style.width = `calc(100% * ${dates.length} / ${WAR_TIMELINE_SHOWN})`;
+  grid.style.gridTemplateColumns = `repeat(${dates.length}, minmax(52px, 1fr))`;
   const cell = (className, content = "") => {
     const div = document.createElement("div");
     div.className = className;
     div.textContent = content;
     return div;
   };
-  grid.append(cell("activity-corner"), ...dates.map((date) => {
+  const names = el("war-timeline-names");
+  names.append(cell("activity-corner"));
+  grid.append(...dates.map((date) => {
     const head = cell("activity-hour", writtenDay(date).split(",")[0]);
     head.title = warPeriodName(date);
     return head;
@@ -6701,7 +6777,7 @@ function renderWarTimeline(report) {
   for (const side of ["a", "b"]) {
     const name = cell(`activity-day war-timeline-side war-label-${side}`, warSideName(report.war, side));
     name.title = warSideName(report.war, side);
-    grid.append(name);
+    names.append(name);
     for (const { date, day } of columns) {
       const lost = day ? day[side].iskLost : 0;
       const block = cell("activity-cell", lost ? warShortIsk(lost) : "");
@@ -6715,8 +6791,6 @@ function renderWarTimeline(report) {
     }
   }
   el("war-timeline-chart").append(grid);
-  // the newest are what is usually wanted, so a strip too long to fit starts at its end
-  el("war-timeline-chart").scrollLeft = el("war-timeline-chart").scrollWidth;
 
   // the table
   const top = document.createElement("tr");
@@ -6768,6 +6842,7 @@ function renderWarTimeline(report) {
     }
     return row;
   }));
+  placeWarTimelineScroll();
 }
 
 /* The setup window */
@@ -7504,6 +7579,13 @@ function wireWarSetup() {
   wireBattleReport();
   el("war-button").addEventListener("click", openWarSetup);
   el("war-setup-close").addEventListener("click", () => el("war-setup").close());
+  el("war-edit-close").addEventListener("click", () => el("war-edit").close());
+  el("war-edit-cancel").addEventListener("click", () => el("war-edit").close());
+  wireAgePicker(el("war-edit-from"));
+  el("war-edit-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveWarEdit();
+  });
   el("war-cancel").addEventListener("click", () => el("war-setup").close());
   el("war-new").addEventListener("click", resetWarForm);
   wireAgePicker(el("war-from"));
@@ -7580,6 +7662,7 @@ function wireWarSetup() {
       if (warReport) renderWarTimeline(warReport);
     });
   }
+  el("war-timeline-chart").addEventListener("scroll", keepWarTimelineScroll);
   for (const radio of el("war-add-form").elements["war-add-from"]) {
     radio.addEventListener("change", () => {
       const off = el("war-add-form").elements["war-add-from"].value !== "date";

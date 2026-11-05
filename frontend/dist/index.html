@@ -109,21 +109,21 @@
       <span class="pull-grip" aria-hidden="true"></span>
     </button>
 
-    <!-- a war's report takes the whole window: this strip replaces the target panel, and its tabs the sidebar, see setWarMode. They are not part of the saved tab order. -->
+    <!-- a war's report takes the whole window: this strip replaces the target panel, and the tabs at the top of the report below it the sidebar, see setWarMode. They are not part of the saved tab order. -->
     <section id="war-strip" class="card war-strip" hidden>
       <div id="war-versus-box"></div>
-      <nav id="war-tab-list" class="war-tabs" role="tablist" aria-label="War report" hidden>
-        <button id="tab-war-overview" class="tab" type="button" role="tab" aria-controls="panel-war-overview" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-glance"/></svg><span class="tab-name">Overview</span><span class="tab-count"></span></button>
-        <button id="tab-war-battles" class="tab" type="button" role="tab" aria-controls="panel-war-battles" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-battles"/></svg><span class="tab-name">Battles</span><span class="tab-count"></span></button>
-        <button id="tab-war-systems" class="tab" type="button" role="tab" aria-controls="panel-war-systems" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-systems"/></svg><span class="tab-name">Systems</span><span class="tab-count"></span></button>
-        <button id="tab-war-timeline" class="tab" type="button" role="tab" aria-controls="panel-war-timeline" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-activity"/></svg><span class="tab-name">Timeline</span><span class="tab-count"></span></button>
-      </nav>
     </section>
 
     <!-- a report built from part of its data: the search was stopped, or the ESI rate limited it -->
     <p id="report-warning" class="status warning" hidden></p>
 
     <section id="intel" class="card intel" hidden>
+      <nav id="war-tab-list" class="war-tabs" role="tablist" aria-label="War report" hidden>
+        <button id="tab-war-overview" class="tab" type="button" role="tab" aria-controls="panel-war-overview" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-glance"/></svg><span class="tab-name">Overview</span><span class="tab-count"></span></button>
+        <button id="tab-war-battles" class="tab" type="button" role="tab" aria-controls="panel-war-battles" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-battles"/></svg><span class="tab-name">Battles</span><span class="tab-count"></span></button>
+        <button id="tab-war-systems" class="tab" type="button" role="tab" aria-controls="panel-war-systems" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-systems"/></svg><span class="tab-name">Systems</span><span class="tab-count"></span></button>
+        <button id="tab-war-timeline" class="tab" type="button" role="tab" aria-controls="panel-war-timeline" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-activity"/></svg><span class="tab-name">Timeline</span><span class="tab-count"></span></button>
+      </nav>
       <p id="intel-loading" class="muted">Pulling killmails from zKillboard and the ESI. This can take a while, progress is shown in the bar below.</p>
 
       <!-- the sidebar's icons, one symbol per tab, drawn in the text color: edit a symbol here to change its tab's icon -->
@@ -475,7 +475,7 @@
                 <button class="secondary" type="button" data-unit="week" aria-pressed="false">Weeks</button>
               </div>
             </div>
-            <div id="war-timeline-chart" class="activity-scroll"></div>
+            <div id="war-timeline-strip" class="war-timeline-strip"><div id="war-timeline-names" class="war-timeline-names"></div><div id="war-timeline-chart" class="activity-scroll"></div></div>
             <div class="panel-scroll">
               <table class="war-table war-timeline-table">
                 <thead id="war-timeline-head"></thead>
@@ -1180,6 +1180,38 @@
   </dialog>
 
   <!-- removing a saved war takes the killmails it holds with it -->
+  <!-- changes a war's name or start from its report's strip -->
+  <dialog id="war-edit" class="window war-edit" aria-labelledby="war-edit-title">
+    <div class="window-titlebar">
+      <h2 id="war-edit-title">Change this war</h2>
+      <button id="war-edit-close" class="window-close" type="button" aria-label="Close" title="Close">×</button>
+    </div>
+    <form id="war-edit-form" class="window-body war-form" autocomplete="off">
+      <div class="war-row">
+        <label class="preference-name war-label" for="war-edit-name">Name</label>
+        <input id="war-edit-name" type="text" maxlength="100" spellcheck="false" placeholder="Filled in as A vs B">
+      </div>
+      <div class="war-row">
+        <span class="preference-name war-label">From</span>
+        <div id="war-edit-from" class="age-picker" data-empty="No start">
+          <span class="age-date" title="Killmails from this date on, in EVE time. Click to pick another."><span class="age-date-text"></span><span class="age-date-arrow" aria-hidden="true">▾</span><input type="date" aria-label="The war's first day, in EVE time"></span>
+          <span class="age-buttons">
+            <button class="secondary age-button" type="button" data-days="7" title="A week back from today" aria-label="A week back">W</button>
+            <button class="secondary age-button" type="button" data-days="30" title="30 days back from today" aria-label="30 days back">30</button>
+            <button class="secondary age-button" type="button" data-days="90" title="90 days back from today" aria-label="90 days back">90</button>
+            <button class="secondary age-button" type="button" data-days="0" title="No start date" aria-label="No start date">∞</button>
+          </span>
+        </div>
+      </div>
+      <p class="row-detail">A later start applies at once. An earlier one needs Update to read the older killmails.</p>
+      <p id="war-edit-error" class="war-warning" hidden></p>
+      <div class="confirm-actions">
+        <button id="war-edit-cancel" class="secondary" type="button">Cancel</button>
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="war-remove-confirm" class="confirm" aria-labelledby="war-remove-title">
     <form method="dialog">
       <p id="war-remove-title" class="confirm-warning">Remove this war?</p>
