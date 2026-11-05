@@ -2,6 +2,7 @@ package retrieval
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -23,16 +24,58 @@ func logBulkFailure(err error, message string) {
 // prefetchWorkers is how many lookups PrefetchKillmailEntities runs at once. The api.RateGuard keeps them within the ESI's limits.
 const prefetchWorkers = 20
 
+const (
+	progressStepPercent  = 5   // a long lookup reports each time it passes another 5%
+	minProgressTotal     = 100 // fewer lookups than this finish too soon to need reports
+	minPilotBatch        = 100 // the fewest pilots asked for in one bulk call, so a small search makes no extra calls
+	pilotBatchesForSteps = 100 / progressStepPercent
+)
+
+// pilotBatchSize is how many pilots to ask for in each bulk call: small enough for a batch to be one progress step, where the ESI's limit and minPilotBatch allow
+func pilotBatchSize(pilots int) int {
+	return min(max(pilots/pilotBatchesForSteps, minPilotBatch), api.ESI_BULK_IDS)
+}
+
+// percentProgress reports how far through a long lookup a search is, safe to add to from several goroutines
+type percentProgress struct {
+	mu       sync.Mutex
+	label    string
+	total    int
+	done     int
+	reported int // the last percent reported
+}
+
+// newPercentProgress starts counting a lookup of total items, label naming it in each report
+func newPercentProgress(label string, total int) *percentProgress {
+	return &percentProgress{label: label, total: total}
+}
+
+// add counts finished items, reporting when they pass another progress step. A short lookup reports nothing.
+func (p *percentProgress) add(items int) {
+	if p.total < minProgressTotal {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.done += items
+	percent := p.done * 100 / p.total / progressStepPercent * progressStepPercent
+	if percent > p.reported {
+		p.reported = percent
+		comm.ReportProgress("%s: %d%% (%d of %d)", p.label, percent, p.done, p.total)
+	}
+}
+
 /*
 	PrefetchKillmailEntities looks up everything the killmails refer to before they are expanded, so expanding them is answered from the cache.
 
-	- Pilots are looked up in bulk, api.ESI_BULK_IDS at a time: their names with universe/names, and their current corp and alliance with characters/affiliation.
+	- Pilots are looked up in bulk, at most api.ESI_BULK_IDS at a time (pilotBatchSize): their names with universe/names, and their current corp and alliance with characters/affiliation.
 	  Pilots either bulk call failed for are left to ExpandPilot, which looks them up one at a time.
 	- Corporations, alliances, ship and weapon types, and systems have no bulk call, so each is looked up on its own, prefetchWorkers at a time.
 	- So are the types of victims' fitted items, drones, fighters, implants, and boosters that fit_types.json does not have, which BuildFit names through the cache.
 	  Cargo and other holds are not: a fit shows only cargo fit_types.json keeps.
 
-	Only what is not already cached is looked up.
+	Only what is not already cached is looked up. A long lookup reports each 5% it passes (percentProgress), so it can't be mistaken for a stopped search.
 
 Parameters:
   - killmails: the killmails about to be expanded
@@ -54,23 +97,31 @@ func (cached *CachedEveIDs) PrefetchKillmailEntities(killmails []RawKillmail) {
 	comm.ReportProgress("Looking up %d pilots in bulk, and the corporations, alliances, ships and systems on %d killmails", len(needed), len(killmails))
 
 	// the two bulk calls do not depend on each other
-	var names map[int]string
-	var affiliations map[int]api.ESIAffiliation
+	names, affiliations := map[int]string{}, map[int]api.ESIAffiliation{}
 	if len(needed) > 0 {
-		var wait sync.WaitGroup
-		wait.Go(func() {
-			var err error
-			if names, err = cached.namesFromEveIDs(needed, bulkFailure); err != nil {
-				logBulkFailure(err, "[ESI] Bulk pilot names failed, those pilots are looked up one at a time")
-			}
-		})
-		wait.Go(func() {
-			var err error
-			if affiliations, err = cached.characterAffiliations(needed, bulkFailure); err != nil {
-				logBulkFailure(err, "[ESI] Bulk pilot affiliations failed, those pilots are looked up one at a time")
-			}
-		})
-		wait.Wait()
+		pilotProgress := newPercentProgress("Looking up pilots", len(needed))
+		var namesFailed, affiliationsFailed bool // logged once, as every batch after a failure tends to fail too
+		for batch := range slices.Chunk(needed, pilotBatchSize(len(needed))) {
+			var wait sync.WaitGroup
+			wait.Go(func() {
+				found, err := cached.namesFromEveIDs(batch, bulkFailure)
+				maps.Copy(names, found)
+				if err != nil && !namesFailed {
+					namesFailed = true
+					logBulkFailure(err, "[ESI] Bulk pilot names failed, those pilots are looked up one at a time")
+				}
+			})
+			wait.Go(func() {
+				found, err := cached.characterAffiliations(batch, bulkFailure)
+				maps.Copy(affiliations, found)
+				if err != nil && !affiliationsFailed {
+					affiliationsFailed = true
+					logBulkFailure(err, "[ESI] Bulk pilot affiliations failed, those pilots are looked up one at a time")
+				}
+			})
+			wait.Wait()
+			pilotProgress.add(len(batch))
+		}
 	}
 
 	// pilots are shown with their current corp and alliance, so those are looked up too
@@ -100,6 +151,13 @@ func (cached *CachedEveIDs) PrefetchKillmailEntities(killmails []RawKillmail) {
 	for systemID := range systems {
 		if !held[System](cached, sectionExpanded, cached.Expanded, systemID) {
 			lookups = append(lookups, func() { cached.prefetchSystem(systemID) })
+		}
+	}
+	lookupProgress := newPercentProgress("Looking up corporations, alliances, ships and systems", len(lookups))
+	for index, lookup := range lookups {
+		lookups[index] = func() {
+			lookup()
+			lookupProgress.add(1)
 		}
 	}
 	runParallel(lookups, prefetchWorkers)

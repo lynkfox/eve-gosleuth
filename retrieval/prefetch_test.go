@@ -2,6 +2,8 @@ package retrieval_test
 
 import (
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/lynkfox/go_eve_sleuth/api"
@@ -103,6 +105,66 @@ func TestPrefetchKillmailEntities(t *testing.T) {
 		assert.Equal(t, 0, cache.Counts().Since(before).Failed)
 		assert.Equal(t, api.DELETED_CHARACTER_NAME, cache.ExpandPilot(103, true).Name)
 		assert.Equal(t, "Luxxianna Seraph", cache.ExpandPilot(101, true).Name, "the others looked up one at a time")
+	})
+}
+
+func TestPrefetchReportsProgress(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+	var mu sync.Mutex
+	messages := []string{}
+	comm.SetProgressReporter(func(message string) {
+		mu.Lock()
+		defer mu.Unlock()
+		messages = append(messages, message)
+	})
+	defer comm.SetProgressReporter(nil)
+
+	lookingUp := func() []string {
+		found := []string{}
+		for _, message := range messages {
+			if strings.HasPrefix(message, "Looking up pilots:") {
+				found = append(found, message)
+			}
+		}
+		return found
+	}
+	attackers := func(count int) []int {
+		ids := make([]int, count)
+		for index := range ids {
+			ids[index] = 100000 + index
+		}
+		return ids
+	}
+
+	t.Run("pilots report each batch, in bulk calls no larger than a step where it can", func(t *testing.T) {
+		messages = nil
+		raw := &RawESIClient{}
+		cache := retrieval.NewCache(raw, filepath.Join(t.TempDir(), "cache.json"))
+
+		cache.PrefetchKillmailEntities([]retrieval.RawKillmail{killmailWith(1, 101, attackers(249)...)})
+
+		assert.Equal(t, 3, raw.Calls("names"), "100 pilots a call")
+		assert.Equal(t, 3, raw.Calls("affiliations"))
+		assert.Equal(t, []string{"Looking up pilots: 40% (100 of 250)", "Looking up pilots: 80% (200 of 250)", "Looking up pilots: 100% (250 of 250)"}, lookingUp())
+	})
+
+	t.Run("a big lookup reports every 5%", func(t *testing.T) {
+		messages = nil
+		cache := retrieval.NewCache(&RawESIClient{}, filepath.Join(t.TempDir(), "cache.json"))
+
+		cache.PrefetchKillmailEntities([]retrieval.RawKillmail{killmailWith(1, 101, attackers(3999)...)})
+
+		assert.Len(t, lookingUp(), 20)
+		assert.Equal(t, "Looking up pilots: 5% (200 of 4000)", lookingUp()[0])
+	})
+
+	t.Run("a small lookup reports nothing", func(t *testing.T) {
+		messages = nil
+		cache := retrieval.NewCache(&RawESIClient{}, filepath.Join(t.TempDir(), "cache.json"))
+
+		cache.PrefetchKillmailEntities([]retrieval.RawKillmail{killmailWith(1, 101, attackers(50)...)})
+
+		assert.Empty(t, lookingUp())
 	})
 }
 
