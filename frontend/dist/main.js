@@ -940,6 +940,19 @@ async function importMyIntel() {
   syncShownTarget();
 }
 
+// searchFromMyIntel closes My Intel and searches for a card's entity by its id, with the search limits every search uses
+function searchFromMyIntel(entity) {
+  if (searching) {
+    showMyIntelError("A search is already running. Stop it or wait for it to finish first.");
+    return;
+  }
+  el("myintel").close();
+  searchTypeHint = entity.type;
+  searchIdHint = entity.id || 0;
+  el("search-input").value = entity.name;
+  el("search-form").requestSubmit();
+}
+
 // myIntelCard is a target's card: its holdings with their notes, the mains it holds for, and its ignored allies, each with an x, and rows to add more
 function myIntelCard(group) {
   const entity = group.entity;
@@ -990,8 +1003,27 @@ function myIntelCard(group) {
   });
   summary.append(pick, icon, name);
   if (entity.ticker) summary.append(tickerTag(entity.type, entity.ticker));
+  const find = document.createElement("button");
+  find.type = "button";
+  find.className = "secondary myintel-card-search";
+  find.title = `Search for ${entity.name}`;
+  find.setAttribute("aria-label", `Search for ${entity.name}`);
+  const findIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  findIcon.setAttribute("class", "tab-icon");
+  findIcon.setAttribute("aria-hidden", "true");
+  const findUse = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  findUse.setAttribute("href", "#icon-search");
+  findIcon.append(findUse);
+  find.append(findIcon);
+  find.addEventListener("click", (event) => {
+    searchFromMyIntel(entity);
+  });
   summary.append(kind, counts, remove);
   withMenu(summary, [entitySection(entity)]);
+
+  const line = document.createElement("div");
+  line.className = "myintel-card-line";
+  line.append(find, card);
 
   const body = document.createElement("div");
   body.className = "myintel-card-body";
@@ -1036,7 +1068,7 @@ function myIntelCard(group) {
 
   body.append(error);
   card.append(summary, body);
-  return card;
+  return line;
 }
 
 // myIntelRemoved are the cards last removed, kept to undo, empty when there is nothing to undo

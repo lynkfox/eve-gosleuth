@@ -1694,6 +1694,11 @@ button.text-link {
 .myintel-row-add select { width: 100%; font-size: 12px; }
 .myintel-card-error { margin: 0; }
 .myintel-card-remove { font-size: 17px; }
+.myintel-card-line { display: flex; align-items: flex-start; gap: 8px; }
+.myintel-card-line > .myintel-card { flex: 1; min-width: 0; }
+/* its own button left of the card, as tall as the card when closed */
+.myintel-card-search { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 46px; height: 46px; padding: 0; }
+.myintel-card-search .tab-icon { width: 18px; height: 18px; margin: 0; }
 .myintel-undo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; padding: 6px 10px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; }
 .myintel-undo[hidden] { display: none; }
 .myintel-undo button { font-size: 12px; }
