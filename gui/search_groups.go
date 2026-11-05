@@ -8,13 +8,14 @@ import (
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
 )
 
-// SearchGroup is a saved group the search bar's list offers: a coalition, or a main with affiliates, which its own search pulls along
+// SearchGroup is a saved group the search bar's list offers: a coalition, a main with affiliates, which its own search pulls along, or a war
 type SearchGroup struct {
-	Name   string `json:"name"`
-	Type   string `json:"type"` // COALITION, CORPORATION, or ALLIANCE
-	ID     int    `json:"id"`
-	Ticker string `json:"ticker,omitempty"` // a corp's or alliance's ticker, from the cache only, empty until looked up
-	Count  int    `json:"count"`            // a coalition's members, or a main's affiliates
+	Name   string   `json:"name"`
+	Type   string   `json:"type"` // COALITION, CORPORATION, ALLIANCE, or WAR
+	ID     int      `json:"id"`
+	Ticker string   `json:"ticker,omitempty"` // a corp's or alliance's ticker, from the cache only, empty until looked up
+	Count  int      `json:"count"`            // a coalition's members, or a main's affiliates
+	Sides  []string `json:"sides,omitempty"`  // a war's two sides, as the w: tag finds it by them too
 }
 
 /*
@@ -22,7 +23,7 @@ type SearchGroup struct {
 	The page asks as it loads, so it waits for startup to load the cache.
 
 Returns:
-  - []SearchGroup: the coalitions with members, by name, then the mains with affiliates, by name
+  - []SearchGroup: the coalitions with members, by name, then the mains with affiliates, by name, then the wars
   - error: a user readable message if something went wrong
 */
 func (a *App) GetSearchGroups() (groups []SearchGroup, err error) {
@@ -50,5 +51,9 @@ func (a *App) GetSearchGroups() (groups []SearchGroup, err error) {
 		mains[index].Count++
 	}
 	slices.SortStableFunc(mains, func(a, b SearchGroup) int { return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
-	return append(groups, mains...), nil
+	groups = append(groups, mains...)
+	for _, war := range a.cache.Wars() {
+		groups = append(groups, SearchGroup{Name: war.Name, Type: warType, ID: war.ID, Sides: []string{war.SideA.Name, war.SideB.Name}})
+	}
+	return groups, nil
 }

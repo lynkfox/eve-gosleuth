@@ -185,6 +185,8 @@ input { flex: 1; }
   color: var(--text);
 }
 
+.recent-more { padding: 0 10px 4px; color: var(--muted); cursor: pointer; line-height: 1; }
+.recent-more:hover { color: var(--text); }
 .recent-empty {
   padding: 6px 10px;
   color: var(--muted);

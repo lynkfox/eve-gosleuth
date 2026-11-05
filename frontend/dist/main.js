@@ -6985,7 +6985,7 @@ function showWarWarning() {
 
 // warSuggestions are the saved groups the typed text matches, for a side box's list
 function warSuggestions(typed) {
-  return matchingRecent(typed.trim().toLowerCase(), searchGroups).slice(0, 30);
+  return matchingRecent(typed.trim().toLowerCase(), searchGroups.filter((group) => group.type !== "WAR")).slice(0, 30);
 }
 
 // showWarSuggest opens a side box's list of coalitions and affiliate groups, filtered as typed
@@ -7059,6 +7059,7 @@ async function resolveWarSide(key) {
   if (warForm[key] && warForm[key].name === text) return warForm[key];
 
   const tag = groupTag(text);
+  if (tag && tag.kind === "w") throw new Error(`${label}: a war can not be a side of a war.`);
   if (tag) {
     await loadSearchGroups();
     const matches = tag.text ? taggedGroups(tag) : [];
@@ -7632,7 +7633,7 @@ function loadRecentSearches() {
   backend().GetRecentSearches().then((recent) => { recentSearches = recent || []; }).catch(() => {});
 }
 
-// searchGroups are the saved groups the list also offers, as the backend's SearchGroup: the coalitions, then the mains with affiliates
+// searchGroups are the saved groups the list also offers, as the backend's SearchGroup: the coalitions, then the mains with affiliates, then the wars
 let searchGroups = [];
 
 // loadSearchGroups reads the saved groups as the search bar is used, as My Intel, a target panel, or an import can change them. It draws an open list again only if they did change.
@@ -7651,16 +7652,21 @@ async function loadSearchGroups() {
 // searchAffiliatesFor is the key (intelKey) of the group asked for as an affiliate group, from the a: tag or the list, whose searches bring its affiliates whatever the Include affiliates limit says. Kept as the group rather than yes or no, so searching it again still does, and a search of anything else never does. Typing clears it.
 let searchAffiliatesFor = "";
 
-// groupTag reads the a: and c: tags typed into the search bar, ie a:ursa, returning { coalition, text } with the text in lower case, or null for anything else. A name in EVE has no colon.
+// groupTag reads the a:, c:, and w: tags typed into the search bar, ie a:ursa, returning { kind, text }, the kind a, c, or w and the text in lower case, or null for anything else. A name in EVE has no colon.
 function groupTag(typed) {
-  const match = /^([ac]):\s*(.*)$/i.exec(typed.trim());
-  return match ? { coalition: match[1].toLowerCase() === "c", text: match[2].toLowerCase() } : null;
+  const match = /^([acw]):\s*(.*)$/i.exec(typed.trim());
+  return match ? { kind: match[1].toLowerCase(), text: match[2].toLowerCase() } : null;
+}
+
+// groupTagKind is the tag letter a saved group answers to
+function groupTagKind(group) {
+  return group.type === "COALITION" ? "c" : group.type === "WAR" ? "w" : "a";
 }
 
 // taggedGroups are the saved groups of a tag's kind that match its text, and only those with exactly its name or ticker when any has
 function taggedGroups(tag) {
-  const kind = searchGroups.filter((group) => (group.type === "COALITION") === tag.coalition);
-  const exact = kind.filter((group) => group.name.toLowerCase() === tag.text || (group.ticker && group.ticker.toLowerCase() === tag.text));
+  const kind = searchGroups.filter((group) => groupTagKind(group) === tag.kind);
+  const exact = kind.filter((group) => group.name.toLowerCase() === tag.text || (group.ticker && group.ticker.toLowerCase() === tag.text) || (group.sides || []).some((side) => side.toLowerCase() === tag.text));
   return exact.length > 0 ? exact : matchingRecent(tag.text, kind);
 }
 
@@ -7673,7 +7679,7 @@ async function resolveGroupTag(tag, typed) {
   await loadSearchGroups();
   const matches = tag.text ? taggedGroups(tag) : [];
   if (matches.length === 0) {
-    const kind = tag.coalition ? "coalition" : "affiliate group";
+    const kind = { a: "affiliate group", c: "coalition", w: "war" }[tag.kind];
     const message = tag.text ? `No ${kind} matches "${tag.text}"` : `Type the name of a ${kind} after the tag`;
     setStatus(message, true);
     tickerPush(message);
@@ -7689,9 +7695,10 @@ function matchingRecent(typed, entries = recentSearches) {
   const containing = [];
   for (const entry of entries) {
     const at = entry.name.toLowerCase().indexOf(typed);
-    // a ticker typed finds its corp or alliance too
-    if (at === 0 || (entry.ticker && entry.ticker.toLowerCase().startsWith(typed))) starting.push(entry);
-    else if (at > 0) containing.push(entry);
+    const sides = (entry.sides || []).map((side) => side.toLowerCase().indexOf(typed));
+    // a ticker typed finds its corp or alliance too, and a side's name its war
+    if (at === 0 || sides.includes(0) || (entry.ticker && entry.ticker.toLowerCase().startsWith(typed))) starting.push(entry);
+    else if (at > 0 || sides.some((place) => place > 0)) containing.push(entry);
   }
   return [...starting, ...containing];
 }
@@ -7705,6 +7712,7 @@ function setRecentOpen(open) {
 
 // groupCount says how much a saved group holds, for its row in the list
 function groupCount(group) {
+  if (group.type === "WAR") return group.sides.join(" vs ");
   const noun = group.type === "COALITION" ? "member" : "affiliate";
   return `${group.count} ${noun}${group.count === 1 ? "" : "s"}`;
 }
@@ -7741,7 +7749,8 @@ function recentOption(entry, index, typed) {
   type.textContent = searchTypeLabel(entry.type);
 
   if (entry.savedGroup) {
-    type.textContent += ` · ${groupCount(entry)}`;
+    // a war named after its sides says it twice otherwise
+    if (entry.type !== "WAR" || entry.name !== groupCount(entry)) type.textContent += ` · ${groupCount(entry)}`;
     option.append(name, type);
     option.addEventListener("mousedown", (event) => event.preventDefault());
     option.addEventListener("click", () => pickRecent(entry));
@@ -7780,6 +7789,24 @@ async function removeRecent(entry) {
   if (active >= 0 && recentShown.length > 0) setRecentActive(Math.min(active, recentShown.length - 1));
 }
 
+// RECENT_GROUPS_SHOWN is how many of each kind of saved group the list shows before its ...
+const RECENT_GROUPS_SHOWN = 3;
+
+// recentMore is the ... under a kind of group with more than the list shows, which types its tag to list them all. It is not an option, so the arrow keys pass it by.
+function recentMore(letter, typed) {
+  const more = document.createElement("li");
+  more.className = "recent-more";
+  more.setAttribute("role", "presentation");
+  more.textContent = "...";
+  more.title = `Show them all with ${letter}:`;
+  more.addEventListener("mousedown", (event) => event.preventDefault());
+  more.addEventListener("click", () => {
+    el("search-input").value = `${letter}:${typed}`;
+    showRecent(false);
+  });
+  return more;
+}
+
 // recentHeading titles a section of the list. It is not an option, so the arrow keys pass it by.
 function recentHeading(title) {
   const heading = document.createElement("li");
@@ -7801,12 +7828,15 @@ function showRecent(all) {
   const recent = tag ? [] : matchingRecent(typed);
   // by type and name, as recent searches saved before ids were have none
   const nameKey = (entry) => `${entry.type}:${entry.name.toLowerCase()}`;
-  const shownAsRecent = new Set(typed ? recent.map(nameKey) : []);
-  const offered = tag ? searchGroups.filter((group) => (group.type === "COALITION") === tag.coalition) : searchGroups;
+  const shownAsRecent = new Set(recent.map(nameKey));
+  const offered = tag ? searchGroups.filter((group) => groupTagKind(group) === tag.kind) : searchGroups;
   const saved = matchingRecent(typed, offered).filter((group) => !shownAsRecent.has(nameKey(group))).map((group) => ({ ...group, savedGroup: true }));
   const coalitions = saved.filter((group) => group.type === "COALITION");
-  const affiliateGroups = saved.filter((group) => group.type !== "COALITION");
-  recentShown = [...recent, ...coalitions, ...affiliateGroups];
+  const affiliateGroups = saved.filter((group) => groupTagKind(group) === "a");
+  const wars = saved.filter((group) => group.type === "WAR");
+  // each kind shows its first few, unless its own tag asks for them all
+  const firstFew = (entries) => (tag ? entries : entries.slice(0, RECENT_GROUPS_SHOWN));
+  recentShown = [...recent, ...firstFew(coalitions), ...firstFew(affiliateGroups), ...firstFew(wars)];
   if (!all && ((!typed && !tag) || recentShown.length === 0)) {
     setRecentOpen(false);
     return;
@@ -7821,11 +7851,13 @@ function showRecent(all) {
   } else {
     const rows = [];
     let index = 0;
-    for (const [title, entries] of [["Recent", recent], ["Coalitions · c:", coalitions], ["Affiliate groups · a:", affiliateGroups]]) {
+    for (const [title, entries, letter] of [["Recent", recent, ""], ["Coalitions · c:", coalitions, "c"], ["Affiliate groups · a:", affiliateGroups, "a"], ["Wars · w:", wars, "w"]]) {
       if (entries.length === 0) continue;
       // recent searches alone need no title, as they always did
       if (saved.length > 0) rows.push(recentHeading(title));
-      for (const entry of entries) rows.push(recentOption(entry, index++, typed));
+      const shown = letter ? firstFew(entries) : entries;
+      for (const entry of shown) rows.push(recentOption(entry, index++, typed));
+      if (shown.length < entries.length) rows.push(recentMore(letter, typed));
     }
     list.replaceChildren(...rows);
   }
@@ -7858,7 +7890,7 @@ function pickRecent(entry) {
   setRecentOpen(false);
   searchTypeHint = entry.type;
   searchIdHint = entry.id || 0;
-  searchAffiliatesFor = entry.savedGroup && entry.type !== "COALITION" ? intelKey(entry) : "";
+  searchAffiliatesFor = entry.savedGroup && groupTagKind(entry) === "a" ? intelKey(entry) : "";
   el("search-input").value = entry.name;
   el("search-form").requestSubmit();
 }
@@ -8084,7 +8116,7 @@ async function search(event) {
     el("search-input").value = name;
     searchTypeHint = group.type;
     searchIdHint = group.id;
-    searchAffiliatesFor = tag.coalition ? "" : intelKey(group);
+    searchAffiliatesFor = tag.kind === "a" ? intelKey(group) : "";
   }
   const searchType = searchTypeHint;
   const searchId = searchIdHint;
