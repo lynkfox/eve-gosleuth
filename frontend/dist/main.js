@@ -5972,12 +5972,15 @@ function warReachWarning(report) {
   const list = document.createElement("ul");
   for (const line of report.reach) {
     const item = document.createElement("li");
-    item.textContent = `${line.group}: reached ${spokenDate(line.oldest)}`;
+    // a list that failed on its first page reached nothing, so it has only the zero time
+    item.textContent = new Date(line.oldest).getUTCFullYear() <= 1 ? `${line.group}: could not be read on the last run` : `${line.group}: reached ${spokenDate(line.oldest)}`;
     list.append(item);
   }
   const note = document.createElement("div");
   note.className = "row-detail";
-  note.textContent = "Killmails older than that are missing from this report. Those the war already held stay.";
+  note.textContent = report.fullRunDue
+    ? "Killmails older than that are missing from this report. Those the war already held stay. Update reads every list again."
+    : "Killmails older than that are missing from this report. Those the war already held stay.";
   box.append(title, list, note);
   return box;
 }
