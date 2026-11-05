@@ -3951,30 +3951,25 @@ const TAB_HELP = {
     PILOT_MENU_HELP,
   ],
   "tab-war-overview": [
-    "Each side's losses over the whole war, with Others: everyone on the killmails who is on neither side.",
-    "Killmails show neither objectives nor survivors, so no battle is called won. Efficiency is a share of ISK lost, not a verdict.",
-    "Right-click a group under Others to add it to a side, from the war's start or from a date, or to ignore it.",
-    "Update at the top lists both sides' killmails again; only what is new unless the sides or start date changed.",
+    "Each side's losses over the whole war.",
+    "Right-click a group under Others to add it to a side or ignore it.",
+    "Update pulls new killmails since the last time this was run.",
   ],
   "tab-war-battles": [
-    "One row per fight, newest first: when, where, each side's largest group, and what each side lost.",
-    "Click When, Class, System, or a side to sort by it, a side by the name of its largest group. Hover over And other systems or a structure count for the details.",
-    "Skirmishes are the smaller fights, marked beside their date. The table at the top counts both as Engagements.",
-    "Station ref or Ref attempt beside a date: a side lost Standup Fighters there, so its station was under attack. It is a Station ref once its structure died within 3 days for a medium, 4 for a large.",
-    "Trash under a side is station trash and asset denial that goes with the structure lost in that fight, not in its other figures.",
-    "Click a class in the table at the top to show only those. Several can be on at once.",
-    "The icons open the battle on zKillboard, EVE Tools, and Warbeacon. Right-click a row for the same.",
+    "Every row is a fight, showing the largest group of pilots on each side.",
+    "A skirmish is a fight with fewer than 10 pilots, both sides together.",
+    "Trash, ref marks, structure counts, and other systems can all be hovered over to show more info.",
+    "Click a heading to sort, or a class at the top to filter. Several classes can be on at once.",
+    "Right-click a row to open its battle report, or to search or open any of its systems.",
   ],
   "tab-war-timeline": [
-    "What each side lost on each day in EVE time, newest first: ISK, ships, and structures, with efficiency.",
-    "The buttons on the left switch between each period's own figures and a running total, which adds up to the Overview's. Those on the right switch between days and weeks, which start on a Monday.",
-    "The strip on top stays in place while the table scrolls: the stronger a cell's color, the more ISK lost. Past 14 cells it scrolls sideways, starting at the newest.",
-    "Trash and asset denial are estimates from killmails. Hover over a Trash figure to see how much is definite and how much probable.",
+    "A total of the war, either by smaller unit or as a running total.",
+    "Weeks start on Monday.",
+    "Stronger color means more lost. Hover Trash figures for more information.",
   ],
   "tab-war-systems": [
-    "Where the war was fought: the count by class, then each system's ISK lost and killmails by side.",
-    "Click a column heading to sort by it. The sides sort by ISK lost.",
-    "Click a class in the table at the top to show only those. Several can be on at once.",
+    "Each system's ISK lost and killmails by side.",
+    "Click a heading to sort, or a class at the top to filter. Several classes can be on at once.",
     "Right-click a system to search it or open it on an external site.",
   ],
   "tab-roster": (type) => type === "ALLIANCE"
@@ -4312,6 +4307,21 @@ function closeFitKey() {
   showSidebar();
 }
 
+// WAR_EFFICIENCY_TIP says what efficiency means wherever it shows
+const WAR_EFFICIENCY_TIP = "The other side's ISK lost as a share of both sides' ISK lost. Not a verdict on who won.";
+
+// WAR_COUNTED_KEY defines the war report's terms, in the Overview's help only: the other tabs explain theirs on hover
+const WAR_COUNTED_KEY = {
+  title: "How a war is counted",
+  items: [
+    { sample: "Efficiency", className: "", meaning: WAR_EFFICIENCY_TIP },
+    { sample: "Station trash", className: "", meaning: "Empty ships shot after a station died in their system." },
+    { sample: "Asset denial", className: "", meaning: "Capitals a side destroyed rather than lose them." },
+    { sample: "Station ref", className: "", meaning: "A side lost Standup Fighters, then its structure there within 3 days (medium) or 4 (large)." },
+    { sample: "Ref attempt", className: "", meaning: "Standup fighters lost, with no structure lost there in that time. Possible ref attempt." },
+  ],
+};
+
 // TAB_COLOR_KEYS is the color key shown for each tab, tabs without colored data have none
 const TAB_COLOR_KEYS = {
   "tab-ratters": [RATTER_KEY],
@@ -4319,7 +4329,7 @@ const TAB_COLOR_KEYS = {
   "tab-killmails": [OUTCOME_KEY, SECURITY_KEY, WORMHOLE_CLASS_KEY],
   "tab-systems": [SECURITY_KEY, WORMHOLE_KEY],
   "tab-battles": [SECURITY_KEY, WORMHOLE_KEY],
-  "tab-war-overview": [WAR_SIDE_KEY],
+  "tab-war-overview": [WAR_COUNTED_KEY, WAR_SIDE_KEY],
   "tab-war-battles": [WAR_SIDE_KEY, SECURITY_KEY, WORMHOLE_KEY],
   "tab-war-systems": [WAR_SIDE_KEY, SECURITY_KEY, WORMHOLE_KEY],
   "tab-war-timeline": [WAR_SIDE_KEY],
@@ -5853,7 +5863,6 @@ function renderWarOverview(report) {
   parts.push(warCountsTable(report));
 
   parts.push(warMeasuresTable(report));
-  parts.push(warParagraph("Efficiency is the other side's ISK lost as a share of both sides' ISK lost, over the whole war.", "row-detail war-note"));
 
   if (report.reach.length > 0) parts.push(warReachWarning(report));
   parts.push(warParagraph("Killmails show neither objectives nor survivors, so these are what was lost, not who won. No battle is called won.", "row-detail war-caveat"));
@@ -5861,16 +5870,29 @@ function renderWarOverview(report) {
   el("war-overview").replaceChildren(...parts);
 }
 
-// WAR_TRASH_TIP, WAR_REF_TIP, and WAR_ATTEMPT_TIP say what these estimates mean wherever they show
-const WAR_TRASH_TIP = "An estimate from killmails. Station trash: empty ships shot after a station died in their system. Asset denial: capitals a side destroyed rather than lose them.";
-const WAR_DEFINITE_TIP = "Station trash: one pilot's ships dying under 2 minutes apart, too fast to reship, with no capsule lost, and any anchorable, ie a mobile warp disruptor. Asset denial: a capital with nothing in its high, mid, or low slots or with its own side's station at top damage, and any ship with only its own side's station on the kill.";
-const WAR_PROBABLE_TIP = "Station trash: other losses within 4 hours of the fight the station died in, with no capsule lost. Asset denial: a capital with its own side's station lower on the kill, or killed by its own side shortly before that side lost a station there.";
-const WAR_REF_TIP = "Fights where this side lost Standup Fighters, and its structure in that system then died: within 3 days for a medium, 4 for a large.";
-const WAR_ATTEMPT_TIP = "Fights where this side lost Standup Fighters, so its station was probably under attack, with no structure of its lost there in the 3 days for a medium or 4 for a large that followed.";
+// These say what the war's estimates mean wherever they show, a line break between station trash and asset denial. The full rules are in .claude/docs/features.md.
+const WAR_TRASH_TIP = "Station Trash: empty ships shot after a station died in their system.\nAsset Denial: capitals a side destroyed rather than lose them.";
+const WAR_PROBABLE_TIP = "Station Trash: multiple ships dying from the same pilot in rapid succession, with no capsule lost. Any anchorable besides tractor units.\nAsset Denial: capitals with nothing fitted outside of rigs, or top damage from the same side's station. Any subcapital whose only attacker is the same side's station.";
+const WAR_UNCERTAIN_TIP = "Station Trash: other losses in the 4 hours after the fight a station died in, with no capsule lost.\nAsset Denial: capitals with the same side's station lower on the kill, or killed by their own side shortly before it lost a station there.";
+const WAR_REF_TIP = "Standup fighters belonging to this side lost, then its structure there within 3 days for a medium, 4 for a large.";
+const WAR_ATTEMPT_TIP = "Standup fighters belonging to this side lost, with no structure of its lost there after. Possible ref attempt.";
+
+// warCollapsedMeasures are the Overview's heading rows closed, by section, kept for the session. Their rows are left out rather than hidden, so the lines still alternate.
+const warCollapsedMeasures = new Set();
+
+// warHelp is a small round ? with its text in a popup, one paragraph to a line, set in a measure's first column
+function warHelp(label, text) {
+  return helpPopup("war-help", `About ${label}`, text.split("\n").map((line) => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = line;
+    return paragraph;
+  })).help;
+}
 
 /*
   warMeasuresTable is the measures of each side and Others, as the sheet's top rows: ISK lost in total, then in fights, trash, and structures indented to add up, ships lost,
-  the structures lost, station refs, and efficiency. Rows for trash and refs are left out while every side has none.
+  the structures lost with station refs under them, not in their total, and efficiency. Rows for trash and refs are left out while every side has none.
+  The first column holds each row's ? or, on a heading row, the triangle that opens and closes the rows under it.
 */
 function warMeasuresTable(report) {
   const war = report.war;
@@ -5880,7 +5902,7 @@ function warMeasuresTable(report) {
   const table = document.createElement("table");
   table.className = "war-table war-measures";
   const head = document.createElement("tr");
-  head.append(document.createElement("th"));
+  head.append(document.createElement("th"), document.createElement("th"));
   for (const [key] of columns) {
     const cell = document.createElement("th");
     cell.className = `num war-head-${key}`;
@@ -5893,16 +5915,38 @@ function warMeasuresTable(report) {
   table.append(thead, body);
 
   const row = (label, read, options = {}) => {
+    if (warCollapsedMeasures.has(options.under)) return;
     const line = document.createElement("tr");
     if (options.strong) line.className = "war-total";
+    const lead = document.createElement("td");
+    lead.className = "war-measure-lead";
+    if (options.help) lead.append(warHelp(label, options.help));
+    if (options.section) {
+      const open = !warCollapsedMeasures.has(options.section);
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "war-collapse";
+      toggle.dataset.section = options.section;
+      toggle.textContent = open ? "▼" : "▶";
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.setAttribute("aria-label", `${open ? "Close" : "Open"} ${label}`);
+      lead.append(toggle);
+      line.classList.add("war-collapsible");
+      line.addEventListener("click", () => {
+        if (open) warCollapsedMeasures.add(options.section);
+        else warCollapsedMeasures.delete(options.section);
+        const redrawn = warMeasuresTable(report);
+        table.replaceWith(redrawn);
+        redrawn.querySelector(`[data-section="${options.section}"]`).focus();
+      });
+    }
     const name = document.createElement("td");
     name.className = options.indent === 2 ? "war-measure war-indent war-indent-two" : options.indent ? "war-measure war-indent" : "war-measure";
-    name.textContent = label;
-    if (options.title) name.title = options.title;
-    line.append(name);
+    name.append(label);
+    line.append(lead, name);
     for (const [key, measures] of columns) {
       const cell = document.createElement("td");
-      cell.className = "num";
+      cell.className = options.top ? "num war-top" : "num";
       const content = read(measures, key);
       if (content instanceof Node) cell.append(content);
       else cell.textContent = content;
@@ -5913,52 +5957,56 @@ function warMeasuresTable(report) {
   };
 
   const count = (value) => value.toLocaleString("en-US");
-  row("Killmails held", (m) => count(m.killmails), { title: "The killmails the war holds that are a loss of this side" });
-  row("ISK lost", (m) => formatIsk(m.iskLost), { strong: true });
-  row("In fights", (m) => formatIsk(m.iskFights), { indent: true });
+  row("Killmails held", (m) => count(m.killmails), { help: "The killmails the war holds that are a loss of this side." });
+  row("ISK lost", (m) => formatIsk(m.iskLost), { strong: true, section: "isk" });
+  row("In fights", (m) => formatIsk(m.iskFights), { indent: true, under: "isk" });
   if (any((m) => m.iskTrash)) {
-    row("Station trash and asset denial", (m) => formatIsk(m.iskTrash), { indent: true, title: WAR_TRASH_TIP });
-    row("Definite", (m) => formatIsk(m.iskTrashDefinite), { indent: 2, title: WAR_DEFINITE_TIP });
-    row("Probable", (m) => formatIsk(m.iskTrash - m.iskTrashDefinite), { indent: 2, title: WAR_PROBABLE_TIP });
+    row("Station trash and asset denial", (m) => formatIsk(m.iskTrash), { indent: true, help: WAR_TRASH_TIP, under: "isk" });
+    row("Probable", (m) => formatIsk(m.iskTrashDefinite), { indent: 2, help: WAR_PROBABLE_TIP, under: "isk" });
+    row("Uncertain", (m) => formatIsk(m.iskTrash - m.iskTrashDefinite), { indent: 2, help: WAR_UNCERTAIN_TIP, under: "isk" });
   }
-  row("Structures", (m) => formatIsk(m.iskStructures), { indent: true });
-  row("Ships lost", (m) => count(m.shipsLost), { strong: true });
-  row("In fights", (m) => count(m.shipsFights), { indent: true });
+  row("Structures", (m) => formatIsk(m.iskStructures), { indent: true, under: "isk" });
+  row("Ships lost", (m) => count(m.shipsLost), { strong: true, section: "ships" });
+  row("In fights", (m) => count(m.shipsFights), { indent: true, under: "ships" });
   if (any((m) => m.shipsTrash)) {
-    row("Station trash and asset denial", (m) => count(m.shipsTrash), { indent: true, title: WAR_TRASH_TIP });
-    row("Definite", (m) => count(m.shipsTrashDefinite), { indent: 2, title: WAR_DEFINITE_TIP });
-    row("Probable", (m) => count(m.shipsTrash - m.shipsTrashDefinite), { indent: 2, title: WAR_PROBABLE_TIP });
+    row("Station trash and asset denial", (m) => count(m.shipsTrash), { indent: true, help: WAR_TRASH_TIP, under: "ships" });
+    row("Probable", (m) => count(m.shipsTrashDefinite), { indent: 2, help: WAR_PROBABLE_TIP, under: "ships" });
+    row("Uncertain", (m) => count(m.shipsTrash - m.shipsTrashDefinite), { indent: 2, help: WAR_UNCERTAIN_TIP, under: "ships" });
   }
 
-  // the citadels' count, with the count of each type under it
-  row("All Citadels", (m) => {
+  row("Structures", (m) => count(m.citadelCount + m.pos), { strong: true, section: "structures" });
+  // the count of each citadel type, with their total under them
+  row("Citadels", (m) => {
     if (m.citadelCount === 0) return "0";
     const figures = document.createDocumentFragment();
-    figures.append(count(m.citadelCount));
     const types = document.createElement("div");
     types.className = "war-citadel-types";
     for (const type of m.citadels) {
-      const line = document.createElement("div");
+      // the grid's columns line the icons, names, and counts up, with or without an icon
+      const icon = document.createElement(type.imageUrl ? "img" : "span");
       if (type.imageUrl) {
-        const icon = document.createElement("img");
         icon.src = type.imageUrl;
         icon.alt = "";
         icon.loading = "lazy";
-        line.append(icon);
       }
-      line.append(`${type.name} × ${type.count}`);
-      types.append(line);
+      const name = document.createElement("span");
+      name.textContent = type.name;
+      const number = document.createElement("span");
+      number.textContent = `× ${type.count}`;
+      types.append(icon, name, number);
     }
-    figures.append(types);
+    const total = document.createElement("div");
+    total.textContent = `Total ${count(m.citadelCount)}`;
+    figures.append(types, total);
     return figures;
-  });
-  row("All POS", (m) => count(m.pos));
-  if (any((m) => m.stationRefs)) row("Station refs", (m) => count(m.stationRefs), { title: WAR_REF_TIP });
-  if (any((m) => m.refAttempts)) row("Ref attempts", (m) => count(m.refAttempts), { title: WAR_ATTEMPT_TIP });
+  }, { indent: true, top: true, under: "structures" });
+  row("POS / POCO", (m) => count(m.pos), { indent: true, under: "structures" });
+  if (any((m) => m.stationRefs)) row("Station refs", (m) => count(m.stationRefs), { indent: true, help: WAR_REF_TIP, under: "structures" });
+  if (any((m) => m.refAttempts)) row("Ref attempts", (m) => count(m.refAttempts), { indent: true, help: WAR_ATTEMPT_TIP, under: "structures" });
 
   const enough = report.a.iskLost + report.b.iskLost > 0;
   row("Efficiency", (m, key) => (key === "others" || !enough ? "—" : `${m.efficiency.toFixed(1)}%`), {
-    title: "The other side's ISK lost as a share of both sides' ISK lost, over the whole war. Not a verdict on who won.",
+    help: WAR_EFFICIENCY_TIP,
   });
   return table;
 }
@@ -5993,7 +6041,7 @@ function warOthersSection(report) {
   section.className = "war-others";
   const heading = document.createElement("h3");
   heading.textContent = "Others";
-  section.append(heading, warParagraph("Groups on the killmails that are on neither side. Right-click one to add it to a side or ignore it.", "row-detail"));
+  section.append(heading, warParagraph("Right-click a group to add it to a side or ignore it.", "row-detail"));
 
   const added = [["a", war.addedA || []], ["b", war.addedB || []], ["ignored", war.ignored || []]].filter(([, groups]) => groups.length > 0);
   for (const [key, groups] of added) {
@@ -6367,7 +6415,7 @@ function warBattleSideCell(side, key) {
     const trash = document.createElement("div");
     trash.className = "row-detail war-trash-line";
     trash.textContent = `Trash ${formatIsk(side.trashIsk)} · ${warPlural(side.trashShips, "ship")}`;
-    trash.title = `${trash.textContent}: ${formatIsk(side.trashDefiniteIsk)} and ${warPlural(side.trashDefiniteShips, "ship")} definite, ${formatIsk(side.trashIsk - side.trashDefiniteIsk)} and ${warPlural(side.trashShips - side.trashDefiniteShips, "ship")} probable. Not in the figures above. ${WAR_TRASH_TIP}`;
+    trash.title = `${trash.textContent}: ${formatIsk(side.trashDefiniteIsk)} and ${warPlural(side.trashDefiniteShips, "ship")} probable, ${formatIsk(side.trashIsk - side.trashDefiniteIsk)} and ${warPlural(side.trashShips - side.trashDefiniteShips, "ship")} uncertain. Not in the figures above.\n${WAR_TRASH_TIP}`;
     cell.append(trash);
   }
   return cell;
@@ -6400,7 +6448,7 @@ function renderWarBattlePage() {
       tag.textContent = ref.attempt ? "Ref attempt" : "Station ref";
       const name = warSideName(report.war, ref.side);
       tag.title = ref.attempt
-        ? `${name} lost Standup Fighters here. ${WAR_ATTEMPT_TIP}`
+        ? `Standup fighters belonging to ${name} lost here. Possible ref attempt.`
         : `${name} lost Standup Fighters here, and then its ${ref.structure} in this system.`;
       date.append(tag);
     }
@@ -6421,7 +6469,7 @@ function renderWarBattlePage() {
       const others = document.createElement("div");
       others.className = "war-other-systems";
       const words = document.createElement("span");
-      words.textContent = "And other systems";
+      words.textContent = `And ${warPlural(battle.otherSystems.length, "other system")}`;
       words.title = battle.otherSystems.join(", ");
       others.append(words);
       systemCell.append(others);
@@ -6686,7 +6734,7 @@ function renderWarTimeline(report) {
     const share = document.createElement("th");
     share.className = "num";
     share.textContent = "Eff.";
-    share.title = "Efficiency: the other side's ISK lost as a share of both sides' ISK lost. Not a verdict on who won.";
+    share.title = `Efficiency: ${WAR_EFFICIENCY_TIP}`;
     bottom.append(share);
   }
   el("war-timeline-head").append(top, bottom);
@@ -6705,7 +6753,7 @@ function renderWarTimeline(report) {
         if (column.strong) figure.classList.add("war-timeline-strong-cell");
         if (column.definite && column.read(day[side])) {
           const definite = column.definite(day[side]);
-          figure.title = `${column.write(definite)} definite, ${column.write(column.read(day[side]) - definite)} probable`;
+          figure.title = `${column.write(definite)} probable, ${column.write(column.read(day[side]) - definite)} uncertain`;
         }
         row.append(figure);
       }
