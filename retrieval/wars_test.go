@@ -267,3 +267,55 @@ func TestWarSideGroups(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestWarEdits(t *testing.T) {
+	comm.InitLogger(logrus.ErrorLevel)
+	path := filepath.Join(t.TempDir(), "cache.db")
+	load := func() *retrieval.CachedEveIDs {
+		cache, err := retrieval.LoadCache(nil, path)
+		assert.NoError(t, err)
+		return cache
+	}
+	save := func(cache *retrieval.CachedEveIDs) {
+		assert.NoError(t, retrieval.SaveCache(cache))
+		assert.NoError(t, cache.Close())
+	}
+	cache := load()
+	war := cache.SaveWar(testWar())
+	assert.Empty(t, cache.WarEditsOf(war.ID).Edits)
+
+	edits := retrieval.WarEdits{}
+	edits.AddEdit(retrieval.WarEditMerge, [][]int{{1}, {2}})
+	edits.AddEdit(retrieval.WarEditSplit, [][]int{{3}, {4}})
+	assert.Equal(t, []int{1, 2}, []int{edits.Edits[0].ID, edits.Edits[1].ID})
+	cache.SaveWarEdits(war.ID, edits)
+
+	// what comes back is a copy
+	got := cache.WarEditsOf(war.ID)
+	got.Edits[0].Groups[0][0] = 99
+	assert.Equal(t, 1, cache.WarEditsOf(war.ID).Edits[0].Groups[0][0])
+
+	// across sessions
+	save(cache)
+	cache = load()
+	got = cache.WarEditsOf(war.ID)
+	assert.Len(t, got.Edits, 2)
+	assert.True(t, got.RemoveEdit(1))
+	assert.False(t, got.RemoveEdit(1))
+	got.AddEdit(retrieval.WarEditMerge, [][]int{{5}, {6}})
+	assert.Equal(t, 3, got.Edits[1].ID, "an id is not given twice while later ones remain")
+
+	// a clear leaves them, unless told not to
+	cache.ClearAll(false)
+	assert.Len(t, cache.WarEditsOf(war.ID).Edits, 2)
+
+	// and they go with the war, also from the database
+	save(cache)
+	cache = load()
+	cache.RemoveWar(war.ID)
+	assert.Empty(t, cache.WarEditsOf(war.ID).Edits)
+	save(cache)
+	cache = load()
+	assert.Empty(t, cache.WarEditsOf(war.ID).Edits)
+	assert.NoError(t, cache.Close())
+}

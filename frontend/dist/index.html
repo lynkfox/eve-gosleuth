@@ -1212,6 +1212,40 @@
     </form>
   </dialog>
 
+  <dialog id="war-merge" class="window war-pick" aria-labelledby="war-merge-title">
+    <div class="window-titlebar">
+      <h2 id="war-merge-title">Merge battles</h2>
+      <button id="war-merge-close" class="window-close" type="button" aria-label="Close" title="Close">×</button>
+    </div>
+    <div class="war-pick-head">
+      <p id="war-merge-battle" class="war-pick-battle"></p>
+      <input id="war-merge-filter" type="text" spellcheck="false" placeholder="Filter by system" aria-label="Filter the battles by system">
+    </div>
+    <div id="war-merge-list" class="window-body war-pick-list"></div>
+    <div class="window-actions">
+      <button id="war-merge-cancel" class="secondary" type="button">Cancel</button>
+      <button id="war-merge-save" type="button" disabled>Merge</button>
+    </div>
+  </dialog>
+
+  <dialog id="war-split" class="window war-pick war-split" aria-labelledby="war-split-title">
+    <div class="window-titlebar">
+      <h2 id="war-split-title">Split battle</h2>
+      <button id="war-split-close" class="window-close" type="button" aria-label="Close" title="Close">×</button>
+    </div>
+    <div class="war-pick-head">
+      <p id="war-split-battle" class="war-pick-battle"></p>
+      <div id="war-split-systems" class="war-split-systems"></div>
+      <p class="row-detail">Tick the killmails to move, or click a time to tick that one and all after it.  </p>
+    </div>
+    <div id="war-split-list" class="window-body war-pick-list"></div>
+    <div class="window-actions">
+      <span id="war-split-count" class="row-detail war-split-count"></span>
+      <button id="war-split-cancel" class="secondary" type="button">Cancel</button>
+      <button id="war-split-save" type="button" disabled>Move to a new battle</button>
+    </div>
+  </dialog>
+
   <dialog id="war-remove-confirm" class="confirm" aria-labelledby="war-remove-title">
     <form method="dialog">
       <p id="war-remove-title" class="confirm-warning">Remove this war?</p>

@@ -753,3 +753,71 @@ func TestWarSearchGroups(t *testing.T) {
 		assert.Equal(t, SearchGroup{Name: "The Big One", Type: warType, ID: card.ID, Sides: []string{"Alpha", "Beta"}}, groups[0])
 	}
 }
+
+func TestWarBattleEdits(t *testing.T) {
+	comm.InitLogger(logrus.PanicLevel)
+	now := time.Now().UTC()
+	// two fights three hours apart
+	lists := map[int][]api.ZkbResponse{warAlpha: {
+		coalitionKillmail(10, now.Add(-5*time.Hour), 98000100, warAlpha, warBeta),
+		coalitionKillmail(11, now.Add(-5*time.Hour+5*time.Minute), 98000100, warAlpha, warBeta),
+		coalitionKillmail(12, now.Add(-2*time.Hour), 98000100, warAlpha, warBeta),
+	}}
+	app, _ := warApp(t, lists)
+	card := savedWar(t, app, "")
+	before, err := app.CollectWar(card.ID)
+	assert.NoError(t, err)
+	if !assert.Len(t, before.Battles, 2) {
+		return
+	}
+	newer, older := before.Battles[0], before.Battles[1]
+
+	t.Run("refusals save nothing", func(t *testing.T) {
+		_, err := app.MergeWarBattles(card.ID, []string{newer.ID})
+		assert.Error(t, err)
+		_, err = app.MergeWarBattles(card.ID, []string{newer.ID, "gone"})
+		assert.ErrorIs(t, err, errNoWarBattle)
+		_, err = app.SplitWarBattle(card.ID, older.ID, nil)
+		assert.Error(t, err)
+		_, err = app.SplitWarBattle(card.ID, older.ID, []int{10, 11})
+		assert.Error(t, err, "not all of them")
+		_, err = app.GetWarBattleKillmails(card.ID, "gone")
+		assert.ErrorIs(t, err, errNoWarBattle)
+		assert.Empty(t, app.cache.WarEditsOf(card.ID).Edits)
+	})
+
+	t.Run("merge, split, and undo keep the totals and outlast opening it again", func(t *testing.T) {
+		merged, err := app.MergeWarBattles(card.ID, []string{newer.ID, older.ID})
+		assert.NoError(t, err)
+		assert.Len(t, merged.Battles, 1)
+		assert.Equal(t, before.A, merged.A)
+		assert.Equal(t, []WarEditMark{{ID: 1, Kind: "merge"}}, merged.Battles[0].Edits)
+
+		kms, err := app.GetWarBattleKillmails(card.ID, merged.Battles[0].ID)
+		assert.NoError(t, err)
+		assert.Len(t, kms, 3)
+		assert.Equal(t, 10, kms[0].ID, "oldest first")
+		split, err := app.SplitWarBattle(card.ID, merged.Battles[0].ID, []int{kms[2].ID})
+		assert.NoError(t, err)
+		assert.Len(t, split.Battles, 2)
+		assert.Equal(t, before.A, split.A)
+
+		opened, err := app.OpenWar(card.ID)
+		assert.NoError(t, err)
+		assert.Len(t, opened.Battles, 2)
+		assert.Len(t, opened.Battles[0].Edits, 2, "the piece keeps the merge it came from")
+
+		_, err = app.UndoWarEdit(card.ID, 2)
+		assert.NoError(t, err)
+		undone, err := app.UndoWarEdit(card.ID, 1)
+		assert.NoError(t, err)
+		assert.Equal(t, before.Battles, undone.Battles)
+	})
+
+	t.Run("an edit can start from a war whose report was not the last built", func(t *testing.T) {
+		app.lastWar = nil
+		merged, err := app.MergeWarBattles(card.ID, []string{newer.ID, older.ID})
+		assert.NoError(t, err)
+		assert.Len(t, merged.Battles, 1)
+	})
+}

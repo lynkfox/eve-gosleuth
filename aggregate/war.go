@@ -148,6 +148,8 @@ type WarBattle struct {
 	OtherDetails []*retrieval.System // the same systems, for their menu
 	Pilots       int
 	Killmails    []*retrieval.Killmail // oldest first
+	KillmailIDs  []int                 // every killmail it holds, oldest first, which those of an ignored group or with no expanded form are in but Killmails is not
+	Edits        []WarEditMark         // what the user did to it
 	Skirmish     bool                  // fewer than minPilots pilots
 	A, B, Others WarBattleSide
 	StationRefs  []WarStationRef // side A's first
@@ -216,12 +218,13 @@ Parameters:
   - expanded: each killmail's expanded form by id. A killmail not in it is left out, and logged.
   - sides: the war's sides
   - minPilots: the fewest pilots a battle needs not to be a skirmish
+  - edits: what the user changed by hand, see warEditedBattles
 
 Returns:
   - *WarData: the figures, never nil
 */
-func BuildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail, sides WarSides, minPilots int) *WarData {
-	return buildWar(raw, expanded, sides, minPilots)
+func BuildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail, sides WarSides, minPilots int, edits retrieval.WarEdits) *WarData {
+	return buildWar(raw, expanded, sides, minPilots, edits)
 }
 
 // how a group came to list a corp, the lower the stronger
@@ -381,6 +384,19 @@ type warKill struct {
 	parties  []warParty // the victim first
 	sameSide bool
 	highsec  bool // only known once the killmail is expanded, for a station's timers
+	// beside is the side each third party group fought beside, as the automatic battle it was found in decided, so an edit moves no group's ISK. See warFoughtBeside.
+	beside map[warGroupKey]WarSideKey
+}
+
+// effective is the side a party on this killmail counts for: its own, or for a third party the side it fought beside
+func (kill *warKill) effective(p warParty) WarSideKey {
+	if p.side != WarSideNone {
+		return p.side
+	}
+	if p.hasGroup && !p.forced && !p.ignored {
+		return kill.beside[p.group]
+	}
+	return WarSideNone
 }
 
 func intOf(value *int) int {
@@ -432,8 +448,11 @@ func analyseWarKills(raw []retrieval.RawKillmail, idx *warSideIndex) []*warKill 
 
 // warBattleOf is a battle found among a war's killmails that are not same-side
 type warBattleOf struct {
-	fought *BattleFought
-	kills  []*warKill // oldest first
+	fought *BattleFought // nil for a piece of a split
+	kills  []*warKill    // oldest first
+	id     string        // set by warEditedBattles
+	edited bool          // merged or split by the user
+	marks  []WarEditMark // what the user did to it
 }
 
 // counted is whether one side killed the other on any of the battle's killmails
@@ -665,7 +684,7 @@ func newWarSideAbout() *warSideAbout {
 	return &warSideAbout{pilots: map[int]struct{}{}, groupPilots: map[warGroupKey]map[int]struct{}{}, structGroups: map[warGroupKey]int{}}
 }
 
-func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail, sides WarSides, minPilots int) *WarData {
+func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail, sides WarSides, minPilots int, edits retrieval.WarEdits) *WarData {
 	data := &WarData{Battles: []*WarBattle{}, Systems: []WarSystem{}, Killmails: []WarKillmail{}, OtherGroups: []WarOther{}}
 	npcPilots := &warMeasureBuilder{}
 	idx := sides.index()
@@ -748,56 +767,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 	trash := findWarTrash(kills)
 	battleOfStation := map[int]*WarBattle{} // the battle each station with trash died in
 
-	for _, battle := range trash.battles {
-		if !trash.counts(battle) {
-			continue
-		}
-
-		// third parties: the side each group fought beside
-		against := map[warGroupKey]*[3]int{}
-		for _, kill := range battle.kills {
-			counted := map[[2]int]bool{}
-			add := func(group warGroupKey, x WarSideKey) {
-				mark := [2]int{int(group.Type)*1_000_000_000 + group.ID, int(x)}
-				if counted[mark] {
-					return
-				}
-				counted[mark] = true
-				if against[group] == nil {
-					against[group] = &[3]int{}
-				}
-				against[group][x]++
-			}
-			victim := kill.parties[0]
-			for _, attacker := range kill.parties[1:] {
-				if attacker.hasGroup && attacker.side == WarSideNone && victim.side != WarSideNone {
-					add(attacker.group, victim.side)
-				}
-				if victim.hasGroup && victim.side == WarSideNone && attacker.side != WarSideNone {
-					add(victim.group, attacker.side)
-				}
-			}
-		}
-		fought := func(group warGroupKey) WarSideKey {
-			tally := against[group]
-			switch {
-			case tally == nil, tally[WarSideA] == tally[WarSideB]:
-				return WarSideNone
-			case tally[WarSideA] > tally[WarSideB]:
-				return WarSideB
-			}
-			return WarSideA
-		}
-		effective := func(p warParty) WarSideKey {
-			if p.side != WarSideNone {
-				return p.side
-			}
-			if p.hasGroup && !p.forced && !p.ignored {
-				return fought(p.group)
-			}
-			return WarSideNone
-		}
-
+	for _, battle := range warEditedBattles(trash, edits.Edits) {
 		about := map[WarSideKey]*warSideAbout{WarSideA: newWarSideAbout(), WarSideB: newWarSideAbout(), WarSideNone: newWarSideAbout()}
 		battleOthers := map[warGroupKey]bool{}
 		for _, kill := range battle.kills {
@@ -805,7 +775,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 				if p.ignored {
 					continue
 				}
-				side := effective(p)
+				side := kill.effective(p)
 				if side == WarSideNone && p.hasGroup {
 					battleOthers[p.group] = true
 				}
@@ -836,7 +806,8 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 
 		// the losses
 		wb := &WarBattle{
-			ID:        battle.fought.BattleIDReference,
+			ID:        battle.id,
+			Edits:     slices.Clone(battle.marks),
 			Start:     battle.kills[0].at,
 			End:       battle.kills[len(battle.kills)-1].at,
 			Pilots:    len(pilots),
@@ -872,7 +843,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		destroyedIn := map[WarSideKey]map[int]bool{}
 		for _, kill := range battle.kills {
 			victim := kill.parties[0]
-			if side := effective(victim); side != WarSideNone && !victim.ignored && comm.UpwellStructureGroups.ContainsGroupOf(warVictimType(kill)) {
+			if side := kill.effective(victim); side != WarSideNone && !victim.ignored && comm.UpwellStructureGroups.ContainsGroupOf(warVictimType(kill)) {
 				if destroyedIn[side] == nil {
 					destroyedIn[side] = map[int]bool{}
 				}
@@ -890,6 +861,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 			}
 		}
 		for _, kill := range battle.kills {
+			wb.KillmailIDs = append(wb.KillmailIDs, kill.id)
 			if trash.anchors[kill.id] {
 				battleOfStation[kill.id] = wb
 			}
@@ -899,7 +871,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 				continue
 			}
 			victim := kill.parties[0]
-			side := effective(victim)
+			side := kill.effective(victim)
 			loss := warLossOf(kill, km)
 
 			if !victim.ignored {
@@ -930,7 +902,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 				noted := map[warRefFired]bool{}
 				for index, attacker := range kill.raw.ESIKillmail.Attackers {
 					shooter := kill.parties[index+1]
-					shooterSide := effective(shooter)
+					shooterSide := kill.effective(shooter)
 					fired := warRefFired{shooterSide, attacker.ShipTypeID}
 					isFighter := comm.StandupFighterGroups.ContainsGroupOf(attacker.ShipTypeID)
 					if shooterSide != WarSideNone && !noted[fired] && !(isFighter && destroyedIn[shooterSide][system]) && warStationFiring(attacker.ShipTypeID, stationDied[shooter.group]) {

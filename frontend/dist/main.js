@@ -3960,7 +3960,7 @@ const TAB_HELP = {
     "A skirmish is a fight with fewer than 10 pilots, both sides together.",
     "Trash, ref marks, structure counts, and other systems can all be hovered over to show more info.",
     "Click a heading to sort, or a class at the top to filter. Several classes can be on at once.",
-    "Right-click a row to open the battle report of any of its systems.",
+    "Right-click a row to open the battle report of any of its systems, or to merge or split it.",
   ],
   "tab-war-timeline": [
     "A total of the war, either by smaller unit or as a running total.",
@@ -6492,6 +6492,182 @@ function warBattleSections(battle) {
   })).filter((section) => section.items.length > 0);
 }
 
+// WAR_EDIT_KINDS say what a battle's edits are on its chit, its hover, and its menu
+const WAR_EDIT_KINDS = {
+  merge: { chit: "Merged", title: "You merged this from separate battles. The war's totals are unchanged.", undo: "Undo merge" },
+  split: { chit: "Split", title: "You split this out of a larger battle. The war's totals are unchanged.", undo: "Undo split" },
+};
+
+// warBattleEditSection is the part of a war battle's menu that changes it: merging and splitting it, and undoing what was done to it
+function warBattleEditSection(battle) {
+  const items = [{ label: "Merge with…", action: () => openWarMerge(battle) }];
+  if (battle.killmails > 1) items.push({ label: "Split…", action: () => openWarSplit(battle) });
+  for (const edit of battle.edits) {
+    const about = WAR_EDIT_KINDS[edit.kind];
+    if (about) items.push({ label: about.undo, action: () => applyWarEdit(() => backend().UndoWarEdit(warReport.war.id, edit.id), about.undo.replace("Undo", "Undid")) });
+  }
+  return { heading: "This battle", items };
+}
+
+// applyWarEdit makes a change to the war's battles, then draws what comes back on the same tab and page
+async function applyWarEdit(call, done) {
+  if (!warReport) return;
+  const war = warReport.war;
+  const report = await runBackend(call);
+  if (report && warReport && warReport.war.id === war.id) {
+    showWarReport(report);
+    tickerPush(`${done} in ${war.name}`);
+  }
+}
+
+// warBattleTitle is how the Merge and Split windows name a battle, ie J110117, Nov 4th, 2026, 20:01 – 20:48 EVE · 47 min
+function warBattleTitle(battle) {
+  return `${battle.system.name}, ${spokenDate(battle.start)}, ${battleClock(battle)}`;
+}
+
+// warBattleGap says when one battle was from another, and how far apart in minutes, 0 when they overlap
+function warBattleGap(battle, from) {
+  const after = new Date(battle.start) - new Date(from.end);
+  const before = new Date(from.start) - new Date(battle.end);
+  const minutes = Math.max(after, before, 0) / 60000;
+  if (minutes === 0) return { minutes, text: "at the same time" };
+  const size = minutes >= 2880 ? `${Math.round(minutes / 1440)} days` : minutes >= 60 ? `${Math.round(minutes / 60)} h` : `${Math.round(minutes)} min`;
+  return { minutes, text: `${size} ${after > 0 ? "after" : "before"}` };
+}
+
+let warMerging = null; // the battle the Merge window is open on
+
+// openWarMerge opens the Merge window on a battle, with the others nearest in time first
+function openWarMerge(battle) {
+  warMerging = battle;
+  el("war-merge-battle").textContent = warBattleTitle(battle);
+  el("war-merge-filter").value = "";
+  renderWarMergeList();
+  el("war-merge").showModal();
+  el("war-merge-filter").focus();
+}
+
+// renderWarMergeList lists what the battle can merge with, keeping those already ticked as the filter changes
+function renderWarMergeList() {
+  const list = el("war-merge-list");
+  const ticked = new Set([...list.querySelectorAll("input:checked")].map((box) => box.value));
+  const typed = el("war-merge-filter").value.trim().toLowerCase();
+  const others = warReport.battles
+    .filter((battle) => battle.id !== warMerging.id)
+    .map((battle) => ({ battle, gap: warBattleGap(battle, warMerging) }))
+    .filter(({ battle }) => !typed || ticked.has(battle.id) || battle.system.name.toLowerCase().includes(typed) || battle.otherSystems.some((name) => name.toLowerCase().includes(typed)))
+    .sort((a, b) => a.gap.minutes - b.gap.minutes);
+  const rows = others.map(({ battle, gap }) => {
+    const row = document.createElement("label");
+    row.className = "war-pick-row";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.value = battle.id;
+    box.checked = ticked.has(battle.id);
+    box.addEventListener("change", showWarMergeReady);
+    const main = document.createElement("span");
+    main.className = "war-pick-main";
+    main.textContent = `${battle.system.name}, ${spokenDate(battle.start)}, ${clockTime(timeParts(battle.start))} · ${warPlural(battle.pilots, "pilot")}`;
+    main.title = main.textContent;
+    const when = document.createElement("span");
+    when.className = "war-pick-side";
+    when.textContent = gap.text;
+    row.append(box, main, when);
+    return row;
+  });
+  if (rows.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "war-pick-empty";
+    empty.textContent = "No other battles to merge with.";
+    rows.push(empty);
+  }
+  list.replaceChildren(...rows);
+  showWarMergeReady();
+}
+
+function showWarMergeReady() {
+  el("war-merge-save").disabled = !el("war-merge-list").querySelector("input:checked");
+}
+
+function saveWarMerge() {
+  const picked = [...el("war-merge-list").querySelectorAll("input:checked")].map((box) => box.value);
+  const battle = warMerging;
+  if (picked.length === 0 || !battle) return;
+  el("war-merge").close();
+  applyWarEdit(() => backend().MergeWarBattles(warReport.war.id, [battle.id, ...picked]), `Merged ${warPlural(picked.length + 1, "battle")}`);
+}
+
+let warSplitting = null; // the battle the Split window is open on
+
+// openWarSplit opens the Split window on a battle, once its killmails have been read
+async function openWarSplit(battle) {
+  const killmails = await runBackend(() => backend().GetWarBattleKillmails(warReport.war.id, battle.id));
+  if (!killmails) return;
+  warSplitting = battle;
+  el("war-split-battle").textContent = warBattleTitle(battle);
+
+  const systems = [...new Set(killmails.map((km) => km.system))];
+  el("war-split-systems").replaceChildren(...(systems.length < 2 ? [] : systems.map((system) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary";
+    button.textContent = `Tick ${system}`;
+    button.title = `Tick every killmail in ${system}, and untick the rest`;
+    button.addEventListener("click", () => {
+      el("war-split-list").querySelectorAll("input").forEach((box) => { box.checked = box.dataset.system === system; });
+      showWarSplitReady();
+    });
+    return button;
+  })));
+
+  el("war-split-list").replaceChildren(...killmails.map((km, index) => {
+    const row = document.createElement("label");
+    row.className = `war-pick-row war-${km.side}`;
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.value = km.id;
+    box.dataset.system = km.system;
+    box.addEventListener("change", showWarSplitReady);
+    const time = document.createElement("button");
+    time.type = "button";
+    time.className = "war-pick-time";
+    time.textContent = clockTime(timeParts(km.time));
+    time.title = `${spokenDate(km.time)}. Click to tick this killmail and all after it, and untick those before.`;
+    time.addEventListener("click", (event) => {
+      event.preventDefault();
+      el("war-split-list").querySelectorAll("input").forEach((other, at) => { other.checked = at >= index; });
+      showWarSplitReady();
+    });
+    const main = document.createElement("span");
+    main.className = "war-pick-main";
+    main.textContent = [km.system, km.ship, km.victim].filter(Boolean).join(" · ");
+    main.title = main.textContent;
+    const side = document.createElement("span");
+    side.className = "war-pick-side";
+    side.textContent = formatIsk(km.isk);
+    row.append(box, time, main, side);
+    return row;
+  }));
+  showWarSplitReady();
+  el("war-split").showModal();
+}
+
+// showWarSplitReady says how many are ticked, and allows moving some but not all
+function showWarSplitReady() {
+  const boxes = el("war-split-list").querySelectorAll("input");
+  const ticked = el("war-split-list").querySelectorAll("input:checked").length;
+  el("war-split-count").textContent = `${ticked.toLocaleString("en-US")} of ${warPlural(boxes.length, "killmail")} ticked`;
+  el("war-split-save").disabled = ticked === 0 || ticked === boxes.length;
+}
+
+function saveWarSplit() {
+  const moved = [...el("war-split-list").querySelectorAll("input:checked")].map((box) => Number(box.value));
+  const battle = warSplitting;
+  if (moved.length === 0 || !battle) return;
+  el("war-split").close();
+  applyWarEdit(() => backend().SplitWarBattle(warReport.war.id, battle.id, moved), `Split ${warPlural(moved.length, "killmail")} out of a battle`);
+}
+
 // renderWarBattlePage draws a page of the Battles tab, a row per fight
 function renderWarBattlePage() {
   const report = warReport;
@@ -6511,6 +6687,15 @@ function renderWarBattlePage() {
       const tag = document.createElement("span");
       tag.className = "war-chit";
       tag.textContent = "Skirmish";
+      date.append(tag);
+    }
+    for (const kind of new Set(battle.edits.map((edit) => edit.kind))) {
+      const about = WAR_EDIT_KINDS[kind];
+      if (!about) continue;
+      const tag = document.createElement("span");
+      tag.className = "war-chit war-edited";
+      tag.textContent = about.chit;
+      tag.title = about.title;
       date.append(tag);
     }
     // on a line of their own, as they would not fit beside the date
@@ -6573,7 +6758,7 @@ function renderWarBattlePage() {
     reports.append(siteLinks(`the battle in ${battle.system.name}`, battle));
 
     row.append(whenCell, warClassCell(battle.class, battle.system), systemCell, warBattleSideCell(battle.a, "a"), warBattleSideCell(battle.b, "b"), warBattleSideCell(battle.others, "others"), structures, reports);
-    return withMenu(row, warBattleSections(battle));
+    return withMenu(row, () => [warBattleEditSection(battle), ...warBattleSections(battle)]);
   });
 
   el("war-battles-body").replaceChildren(...rows);
@@ -7591,6 +7776,11 @@ function wireBattleReport() {
 // wireWarSetup connects the War window's boxes, buttons, and pickers
 function wireWarSetup() {
   wireBattleReport();
+  for (const id of ["war-merge-close", "war-merge-cancel"]) el(id).addEventListener("click", () => el("war-merge").close());
+  el("war-merge-filter").addEventListener("input", renderWarMergeList);
+  el("war-merge-save").addEventListener("click", saveWarMerge);
+  for (const id of ["war-split-close", "war-split-cancel"]) el(id).addEventListener("click", () => el("war-split").close());
+  el("war-split-save").addEventListener("click", saveWarSplit);
   el("war-button").addEventListener("click", openWarSetup);
   el("war-setup-close").addEventListener("click", () => el("war-setup").close());
   el("war-edit-close").addEventListener("click", () => el("war-edit").close());

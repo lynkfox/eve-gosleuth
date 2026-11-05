@@ -260,19 +260,23 @@ func (c *CachedEveIDs) SaveWar(war War) War {
 	return war.copyOf()
 }
 
-// RemoveWar removes a war and every killmail it holds, from this session and the database. One that is not saved changes nothing.
+// RemoveWar removes a war, its edits, and every killmail it holds, from this session and the database. One that is not saved changes nothing.
 func (c *CachedEveIDs) RemoveWar(id int) {
 	key := warKey(id)
 	prefix := warKillmailPrefix(id)
 	c.mu.Lock()
 	c.loadWars()
 	entry := c.SavedWars[key]
+	cachedAs[WarEdits](c, sectionWarEdits, c.WarEdits, key) // so a saved row is in the map for removeWhere
+	edits := c.WarEdits[key]
 	c.mu.Unlock()
 
 	c.removeWhere(
-		func(s section, candidate *CacheEntry) bool { return s == sectionWars && candidate == entry },
-		"(section = ? AND key = ?) OR (section = ? AND substr(key, 1, ?) = ?)",
-		string(sectionWars), key, string(sectionWarKillmails), len(prefix), prefix)
+		func(s section, candidate *CacheEntry) bool {
+			return s == sectionWars && candidate == entry || s == sectionWarEdits && candidate == edits
+		},
+		"(section = ? AND key = ?) OR (section = ? AND key = ?) OR (section = ? AND substr(key, 1, ?) = ?)",
+		string(sectionWars), key, string(sectionWarEdits), key, string(sectionWarKillmails), len(prefix), prefix)
 
 	// rows added since removeWhere flushed, or never flushed for want of a database
 	c.mu.Lock()

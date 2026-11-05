@@ -253,7 +253,7 @@ func TestClassifyRawWar(t *testing.T) {
 		// the same-side one does not join the battle: alone in the system it is not counted by its own
 		alone := []retrieval.RawKillmail{kms[0]}
 		assert.Equal(t, []int{1}, ids(aggregate.ClassifyRawWar(alone, sides)), "still held")
-		data := aggregate.BuildWar(alone, expand(alone...), sides, 10)
+		data := aggregate.BuildWar(alone, expand(alone...), sides, 10, retrieval.WarEdits{})
 		assert.Empty(t, data.Battles)
 		assert.Zero(t, data.A.Killmails)
 	})
@@ -264,7 +264,7 @@ func TestClassifyRawWar(t *testing.T) {
 			raw(2, 10, sysHome, pA1(1), rifter, pA2(1)), // between the two, which it would bridge
 			raw(3, 24, sysHome, pB(4), rifter, pA1(5)),
 		}
-		data := aggregate.BuildWar(kms, expand(kms...), sides, 1)
+		data := aggregate.BuildWar(kms, expand(kms...), sides, 1, retrieval.WarEdits{})
 		assert.Equal(t, 2, data.BattleCount)
 		assert.Equal(t, 2, data.B.Killmails)
 		assert.Zero(t, data.A.Killmails, "the same-side loss counts for nothing")
@@ -299,7 +299,7 @@ func TestBuildWarStructures(t *testing.T) {
 
 	t.Run("a lone structure kill is a skirmish naming its owner when its side has no pilot", func(t *testing.T) {
 		kms := []retrieval.RawKillmail{raw(1, 0, sysHome, wp{corp: corpA1, ally: allyA}, astrahus, pB(2))}
-		data := aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		data := aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 		if assert.Len(t, data.Battles, 1) {
 			battle := data.Battles[0]
 			assert.True(t, battle.Skirmish)
@@ -328,7 +328,7 @@ func TestBuildWarStructures(t *testing.T) {
 			raw(2, 1, sysHome, wp{corp: corpA1, ally: allyA}, tower, pB(2)),
 			raw(3, 2, sysHome, wp{corp: corpA1, ally: allyA}, tower, pB(2)),
 		}
-		data := aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		data := aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 		if assert.Len(t, data.Battles, 1) {
 			assert.Equal(t, 3, data.Battles[0].A.StructureLost)
 			assert.Equal(t, []aggregate.WarStructureKind{{Name: "POS", Count: 2}, {Name: "Astrahus", Count: 1}}, data.Battles[0].A.StructureKinds)
@@ -342,7 +342,7 @@ func TestBuildWarStructures(t *testing.T) {
 			raw(2, 1, sysHome, wp{corp: corpA1, ally: allyA}, customs, pB(2)),
 			raw(3, 2, sysHome, pA1(5), rifter, pB(2)),
 		}
-		data := aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		data := aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 		assert.Equal(t, 2, data.A.POS)
 		assert.Empty(t, data.A.Citadels)
 		if assert.Len(t, data.Battles, 1) {
@@ -364,7 +364,7 @@ func TestBuildWarThirdParties(t *testing.T) {
 			raw(1, 0, sysHome, pB(2), rifter, pC(10), pA1(1)),
 			raw(2, 1, sysHome, pC(10), rifter, pB(2)),
 		}
-		data := aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		data := aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 		if assert.Len(t, data.Battles, 1) {
 			battle := data.Battles[0]
 			assert.Equal(t, 2, battle.A.Pilots, "A's pilot and C's")
@@ -389,7 +389,7 @@ func TestBuildWarThirdParties(t *testing.T) {
 			raw(1, 0, sysHome, pC(10), rifter, pA1(1)),
 			raw(2, 1, sysHome, pA1(1), rifter, pB(2)),
 		}
-		data := aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		data := aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 		assert.Equal(t, 1, data.B.Killmails, "C's loss counts for B")
 		assert.Equal(t, 1, data.A.Killmails)
 		assert.Zero(t, data.Others.Killmails)
@@ -403,7 +403,7 @@ func TestBuildWarThirdParties(t *testing.T) {
 			raw(4, 3, sysHome, wp{corp: npcCorp}, rifter, pB(2)),
 			raw(6, 4, sysHome, pB(3), rifter, pA1(1)), // the sides fight, so the battle counts
 		}
-		data := aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		data := aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 		assert.Equal(t, 4, data.Others.Killmails, "C twice, D, and the NPC corp")
 		assert.Zero(t, data.A.Killmails)
 		assert.Equal(t, 1, data.B.Killmails)
@@ -422,7 +422,7 @@ func TestBuildWarThirdParties(t *testing.T) {
 			raw(1, 0, sysHome, wp{corp: corpLone, char: 30}, rifter, pA1(1)),
 			raw(2, 1, sysHome, pB(2), rifter, pA1(1)),
 		}
-		data := aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		data := aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 		assert.Equal(t, 2, data.B.Killmails, "the lone corp, shot by A, fought beside B")
 		assert.Zero(t, data.Others.Killmails)
 	})
@@ -434,7 +434,7 @@ func TestBuildWarThirdParties(t *testing.T) {
 			raw(1, 0, sysHome, pC(10), rifter, pD(20)),
 			raw(2, 1, sysHome, pB(2), rifter, pA1(1)),
 		}
-		data := aggregate.BuildWar(kms, expand(kms...), withAdded, 10)
+		data := aggregate.BuildWar(kms, expand(kms...), withAdded, 10, retrieval.WarEdits{})
 		assert.Equal(t, 1, data.A.Killmails, "C's loss")
 		assert.Equal(t, 1, data.B.Killmails)
 		assert.Zero(t, data.Others.Killmails)
@@ -452,7 +452,7 @@ func TestBuildWarThirdParties(t *testing.T) {
 			raw(2, 1, sysHome, pD(20), rifter, pC(10)), // C kills D, which does not count toward D's side
 			raw(3, 2, sysHome, pB(3), rifter, pA1(1)),
 		}
-		data := aggregate.BuildWar(kms, expand(kms...), dated, 10)
+		data := aggregate.BuildWar(kms, expand(kms...), dated, 10, retrieval.WarEdits{})
 		assert.Zero(t, data.A.Killmails)
 		assert.Equal(t, 1, data.B.Killmails)
 		assert.Equal(t, 2, data.Others.Killmails, "C's loss, and D's")
@@ -464,7 +464,7 @@ func TestBuildWarThirdParties(t *testing.T) {
 			km.ESIKillmail = &esi
 			later[i] = km
 		}
-		data = aggregate.BuildWar(later, expand(later...), dated, 10)
+		data = aggregate.BuildWar(later, expand(later...), dated, 10, retrieval.WarEdits{})
 		assert.Equal(t, 1, data.A.Killmails, "C's loss, for A")
 		assert.Equal(t, 2, data.B.Killmails, "its own, and D's, shot by A's C")
 		assert.Zero(t, data.Others.Killmails)
@@ -478,7 +478,7 @@ func TestBuildWarThirdParties(t *testing.T) {
 			raw(2, 1, sysHome, pD(21), rifter, pC(10)),         // D's loss to C alone tells nothing of D
 			raw(3, 2, sysHome, pB(3), rifter, pA1(1)),
 		}
-		data := aggregate.BuildWar(kms, expand(kms...), dated, 10)
+		data := aggregate.BuildWar(kms, expand(kms...), dated, 10, retrieval.WarEdits{})
 		assert.Equal(t, 1, data.A.Killmails)
 		assert.Equal(t, 2, data.B.Killmails, "its own, and D's, as D fought beside B")
 		assert.Zero(t, data.Others.Killmails)
@@ -494,7 +494,7 @@ func TestBuildWarIgnored(t *testing.T) {
 		raw(2, 1, sysHome, pB(3), rifter, pA1(1), pC(11)),
 	}
 
-	data := aggregate.BuildWar(kms, expand(kms...), ignoring, 10)
+	data := aggregate.BuildWar(kms, expand(kms...), ignoring, 10, retrieval.WarEdits{})
 
 	assert.Zero(t, data.A.Killmails, "its loss counts nowhere")
 	assert.Equal(t, 1, data.B.Killmails, "its shots do not take the killmail from the side that lost it")
@@ -507,7 +507,7 @@ func TestBuildWarIgnored(t *testing.T) {
 	}
 
 	t.Run("it does not hold a fight above the battle size", func(t *testing.T) {
-		data := aggregate.BuildWar(kms, expand(kms...), ignoring, 5)
+		data := aggregate.BuildWar(kms, expand(kms...), ignoring, 5, retrieval.WarEdits{})
 		assert.Equal(t, 1, data.Skirmishes, "5 pilots with C's, 3 without")
 		assert.Zero(t, data.BattleCount)
 	})
@@ -515,7 +515,7 @@ func TestBuildWarIgnored(t *testing.T) {
 	t.Run("a member of a side can not be ignored", func(t *testing.T) {
 		onSide := baseSides()
 		onSide.Ignored = []retrieval.WarAddedGroup{{Type: "ALLIANCE", ID: onSide.B[0].ID}}
-		data := aggregate.BuildWar(kms, expand(kms...), onSide, 10)
+		data := aggregate.BuildWar(kms, expand(kms...), onSide, 10, retrieval.WarEdits{})
 		assert.Equal(t, 1, data.B.Killmails)
 	})
 }
@@ -534,7 +534,7 @@ func TestBuildWarTotals(t *testing.T) {
 		raw(7, 8, sysHome, pA1(6), 99999999, pB(2)),
 		raw(8, 9, sysHome, structure(corpA2, allyA), 99999998, pB(2)),
 	}
-	data := aggregate.BuildWar(kms, expand(kms...), sides, 10)
+	data := aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 
 	assert.Equal(t, 5, data.A.Killmails)
 	assert.InDelta(t, 100+300+400+700+800, data.A.ISKLost, 0.001)
@@ -586,7 +586,7 @@ func TestBuildWarTotals(t *testing.T) {
 	assert.Equal(t, 0, data.BattleCount)
 	assert.Equal(t, 1, data.Skirmishes)
 
-	again := aggregate.BuildWar(kms, expand(kms...), sides, 10)
+	again := aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 	assert.Equal(t, data, again, "deterministic")
 }
 
@@ -600,7 +600,7 @@ func TestBuildWarBattleSides(t *testing.T) {
 			raw(1, 0, sysHome, pB(2), rifter, pA1(1), pC(10), pC(11)),
 			raw(2, 1, sysHome, pB(3), rifter, pA1(1)),
 		}
-		data := aggregate.BuildWar(kms, expand(kms...), withAdded, 10)
+		data := aggregate.BuildWar(kms, expand(kms...), withAdded, 10, retrieval.WarEdits{})
 		assert.Equal(t, "Charlie", data.Battles[0].A.Group.Name)
 		assert.Equal(t, 3, data.Battles[0].A.Pilots)
 		assert.Equal(t, 2, data.Battles[0].B.Pilots)
@@ -609,8 +609,8 @@ func TestBuildWarBattleSides(t *testing.T) {
 
 	t.Run("a battle of minPilots pilots is not a skirmish", func(t *testing.T) {
 		kms := []retrieval.RawKillmail{raw(1, 0, sysHome, pB(2), rifter, pA1(1), pA1(3))}
-		assert.False(t, aggregate.BuildWar(kms, expand(kms...), baseSides(), 3).Battles[0].Skirmish)
-		assert.True(t, aggregate.BuildWar(kms, expand(kms...), baseSides(), 4).Battles[0].Skirmish)
+		assert.False(t, aggregate.BuildWar(kms, expand(kms...), baseSides(), 3, retrieval.WarEdits{}).Battles[0].Skirmish)
+		assert.True(t, aggregate.BuildWar(kms, expand(kms...), baseSides(), 4, retrieval.WarEdits{}).Battles[0].Skirmish)
 	})
 
 	t.Run("missing expanded killmails and nil parts never panic", func(t *testing.T) {
@@ -624,11 +624,11 @@ func TestBuildWarBattleSides(t *testing.T) {
 		expanded[2].System = nil
 		expanded[2].Victim = nil
 		expanded[3].Attackers = []*retrieval.KillmailAttacker{nil}
-		data := aggregate.BuildWar(kms, expanded, baseSides(), 10)
+		data := aggregate.BuildWar(kms, expanded, baseSides(), 10, retrieval.WarEdits{})
 		assert.NotNil(t, data)
 		assert.Len(t, data.Killmails, 2)
-		assert.NotPanics(t, func() { aggregate.BuildWar(nil, nil, baseSides(), 10) })
-		assert.NotPanics(t, func() { aggregate.BuildWar([]retrieval.RawKillmail{{}}, nil, baseSides(), 10) })
+		assert.NotPanics(t, func() { aggregate.BuildWar(nil, nil, baseSides(), 10, retrieval.WarEdits{}) })
+		assert.NotPanics(t, func() { aggregate.BuildWar([]retrieval.RawKillmail{{}}, nil, baseSides(), 10, retrieval.WarEdits{}) })
 	})
 }
 
@@ -660,7 +660,7 @@ func TestWarBattlesMatchFindBattles(t *testing.T) {
 		}
 	}
 	assert.Equal(t, fromExpanded, fromRaw)
-	assert.Len(t, aggregate.BuildWar(kms, expanded, baseSides(), 1).Battles, 3)
+	assert.Len(t, aggregate.BuildWar(kms, expanded, baseSides(), 1, retrieval.WarEdits{}).Battles, 3)
 }
 
 // standup fighters and structures for the trash tests: a Raitaru is a medium, a Fortizar a large
@@ -691,7 +691,7 @@ func TestWarStationTrash(t *testing.T) {
 	owner := wp{corp: corpA1, ally: allyA}
 	const hour = 60
 	build := func(kms ...retrieval.RawKillmail) *aggregate.WarData {
-		return aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		return aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 	}
 
 	t.Run("a repeat victim's losses are trash and the battle ends without them", func(t *testing.T) {
@@ -918,7 +918,7 @@ func TestWarEscapeFleet(t *testing.T) {
 	owner := wp{corp: corpA1, ally: allyA}
 	const hour = 60
 	build := func(kms ...retrieval.RawKillmail) *aggregate.WarData {
-		return aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		return aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 	}
 	fitted := func(km retrieval.RawKillmail) retrieval.RawKillmail {
 		km.ESIKillmail.Victim.Items = []api.ESIKillmailItem{{ItemTypeID: 2873, Flag: 27}}
@@ -954,7 +954,7 @@ func TestWarAssetDenial(t *testing.T) {
 	const day = 24 * 60
 	const naglfar = 19722
 	build := func(kms ...retrieval.RawKillmail) *aggregate.WarData {
-		return aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		return aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 	}
 	// fitted gives a killmail's victim a module in a high slot
 	fitted := func(km retrieval.RawKillmail) retrieval.RawKillmail {
@@ -1171,7 +1171,7 @@ func TestWarAnchorables(t *testing.T) {
 	owner := wp{corp: corpA1, ally: allyA}
 	const bubble = 12200
 	build := func(kms ...retrieval.RawKillmail) *aggregate.WarData {
-		return aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		return aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 	}
 
 	t.Run("shot by the other side with no station anywhere, it is definite trash, makes no battle, and is not a ship", func(t *testing.T) {
@@ -1223,7 +1223,7 @@ func TestWarStationRef(t *testing.T) {
 	owner := wp{corp: corpA1, ally: allyA}
 	const day = 24 * 60
 	build := func(kms ...retrieval.RawKillmail) *aggregate.WarData {
-		return aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		return aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 	}
 	// a station's reinforcement timers outside a wormhole, in minutes, from sysHome being neither
 	const (
@@ -1453,7 +1453,7 @@ func TestWarStationRef(t *testing.T) {
 		}
 		held := aggregate.ClassifyRawWar(kms, sides)
 		assert.Equal(t, []int{1, 2, 3}, ids(held))
-		data := aggregate.BuildWar(held, expand(held...), sides, 10)
+		data := aggregate.BuildWar(held, expand(held...), sides, 10, retrieval.WarEdits{})
 		if refs := ref(data); assert.Len(t, refs, 1) {
 			assert.False(t, refs[0].Attempt)
 		}
@@ -1471,7 +1471,7 @@ func TestWarDays(t *testing.T) {
 		raw(3, 24*60+60, sysHome, pC(7), rifter, pB(2)),
 		raw(4, 48*60, sysOther, pB(3), rifter, pC(8)), // no side fought: forgotten
 	}
-	data := aggregate.BuildWar(kms, expand(kms...), sides, 10)
+	data := aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
 	if assert.Len(t, data.Days, 2) {
 		assert.Equal(t, "2026-10-01", data.Days[0].Date)
 		assert.Equal(t, 1, data.Days[0].A.ShipsFights)
@@ -1483,4 +1483,125 @@ func TestWarDays(t *testing.T) {
 	}
 	sum := data.Days[0].A.ISKLost + data.Days[1].A.ISKLost
 	assert.InDelta(t, data.A.ISKLost, sum, 0.001, "the days add up to the war")
+}
+
+// warFiguresOf is what an edit that only regroups rows must leave alone
+func warFiguresOf(data *aggregate.WarData) map[string]any {
+	systems := map[string]aggregate.WarSystem{}
+	for _, system := range data.Systems {
+		system.Battles = 0 // a row's count, which regrouping does change
+		systems[system.System.Name] = system
+	}
+	strip := func(m aggregate.WarMeasures) aggregate.WarMeasures {
+		m.StationRefs, m.RefAttempts, m.RefAttemptsUnsure = 0, 0, 0 // marks are read per row
+		return m
+	}
+	days := []aggregate.WarDay{}
+	for _, day := range data.Days {
+		day.A, day.B = strip(day.A), strip(day.B)
+		days = append(days, day)
+	}
+	return map[string]any{"a": strip(data.A), "b": strip(data.B), "others": strip(data.Others), "days": days, "systems": systems, "groups": data.OtherGroups, "npc": data.NPCPilots}
+}
+
+func TestWarBattleEdits(t *testing.T) {
+	comm.InitLogger(logrus.ErrorLevel)
+	assert.NoError(t, comm.InitStaticData(staticdata.Files))
+	sides := baseSides()
+	// two fights an hour apart at home, then one elsewhere. C is beside B in the first, as A kills it, and beside A in the third, shooting B twice: merged and counted afresh, it would be beside A in both, moving its loss.
+	kms := []retrieval.RawKillmail{
+		raw(1, 0, sysHome, pA1(1), rifter, pB(2)),
+		raw(2, 5, sysHome, pB(2), rifter, pA1(3)),
+		raw(7, 2, sysHome, pC(9), rifter, pA1(3)),
+		raw(3, 60, sysHome, pA1(4), rifter, pB(5)),
+		raw(4, 65, sysHome, pC(9), rifter, pA1(4)),
+		raw(5, 120, sysOther, pB(6), rifter, pA1(7), pC(8)),
+		raw(8, 121, sysOther, pB(10), rifter, pA1(7), pC(8)),
+	}
+	expanded := expand(kms...)
+	build := func(edits ...retrieval.WarBattleEdit) *aggregate.WarData {
+		return aggregate.BuildWar(kms, expanded, sides, 1, retrieval.WarEdits{Edits: edits})
+	}
+	plain := build()
+	assert.Len(t, plain.Battles, 3)
+
+	merge := retrieval.WarBattleEdit{ID: 1, Kind: retrieval.WarEditMerge, Groups: [][]int{{1, 2, 7}, {5, 8}}}
+
+	t.Run("merging moves no total, and keeps each third party on the side it had", func(t *testing.T) {
+		data := build(merge)
+		assert.Len(t, data.Battles, 2)
+		assert.Equal(t, warFiguresOf(plain), warFiguresOf(data))
+		var merged *aggregate.WarBattle
+		for _, battle := range data.Battles {
+			if len(battle.KillmailIDs) == 5 {
+				merged = battle
+			}
+		}
+		if assert.NotNil(t, merged) {
+			assert.Equal(t, []int{1, 7, 2, 5, 8}, merged.KillmailIDs)
+			assert.Equal(t, []aggregate.WarEditMark{{ID: 1, Kind: "merge"}}, merged.Edits)
+			assert.Equal(t, "Home", merged.System.Name)
+			assert.Equal(t, []string{"Other"}, merged.OtherSystems)
+		}
+	})
+
+	t.Run("splitting moves no total, even a piece with no kill between the sides", func(t *testing.T) {
+		// 4 alone is A killing a third party, which would not count by itself
+		data := build(retrieval.WarBattleEdit{ID: 1, Kind: retrieval.WarEditSplit, Groups: [][]int{{3}, {4}}})
+		assert.Len(t, data.Battles, 4)
+		assert.Equal(t, warFiguresOf(plain), warFiguresOf(data))
+		seen := map[string]bool{}
+		for _, battle := range data.Battles {
+			assert.False(t, seen[battle.ID], "ids stay unique")
+			seen[battle.ID] = true
+		}
+	})
+
+	t.Run("two pieces starting the same minute in a system get their own ids", func(t *testing.T) {
+		same := []retrieval.RawKillmail{raw(1, 0, sysHome, pA1(1), rifter, pB(2)), raw(2, 0, sysHome, pB(3), rifter, pA1(4))}
+		data := aggregate.BuildWar(same, expand(same...), sides, 1, retrieval.WarEdits{Edits: []retrieval.WarBattleEdit{{ID: 1, Kind: retrieval.WarEditSplit, Groups: [][]int{{1}, {2}}}}})
+		if assert.Len(t, data.Battles, 2) {
+			assert.NotEqual(t, data.Battles[0].ID, data.Battles[1].ID)
+		}
+	})
+
+	t.Run("an edit follows the battle holding most of its killmails, whose first killmail changed", func(t *testing.T) {
+		later := append([]retrieval.RawKillmail{raw(6, -2, sysHome, pA1(1), rifter, pB(2))}, kms...)
+		data := aggregate.BuildWar(later, expand(later...), sides, 1, retrieval.WarEdits{Edits: []retrieval.WarBattleEdit{merge}})
+		assert.Len(t, data.Battles, 2)
+		ids := [][]int{}
+		for _, battle := range data.Battles {
+			ids = append(ids, battle.KillmailIDs)
+		}
+		assert.Contains(t, ids, []int{6, 1, 7, 2, 5, 8})
+	})
+
+	t.Run("a killmail new since a split goes where the nearest one in its system went", func(t *testing.T) {
+		split := retrieval.WarBattleEdit{ID: 1, Kind: retrieval.WarEditSplit, Groups: [][]int{{1}, {2}}}
+		later := append([]retrieval.RawKillmail{raw(6, 4, sysHome, pA1(1), rifter, pB(2))}, kms...)
+		data := aggregate.BuildWar(later, expand(later...), sides, 1, retrieval.WarEdits{Edits: []retrieval.WarBattleEdit{split}})
+		ids := [][]int{}
+		for _, battle := range data.Battles {
+			ids = append(ids, battle.KillmailIDs)
+		}
+		assert.Contains(t, ids, []int{1, 7})
+		assert.Contains(t, ids, []int{6, 2})
+	})
+
+	t.Run("an edit that finds nothing changes nothing, and comes back with its killmails", func(t *testing.T) {
+		held := kms[3:] // the war's dates no longer reach the first fight
+		data := aggregate.BuildWar(held, expand(held...), sides, 1, retrieval.WarEdits{Edits: []retrieval.WarBattleEdit{merge}})
+		assert.Len(t, data.Battles, 2)
+		for _, battle := range data.Battles {
+			assert.Empty(t, battle.Edits)
+		}
+		assert.Len(t, build(merge).Battles, 2)
+	})
+
+	t.Run("undoing an earlier edit keeps the later one", func(t *testing.T) {
+		split := retrieval.WarBattleEdit{ID: 2, Kind: retrieval.WarEditSplit, Groups: [][]int{{3}, {4}}}
+		both := build(merge, split)
+		assert.Len(t, both.Battles, 3)
+		assert.Len(t, build(split).Battles, 4)
+	})
 }

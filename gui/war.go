@@ -144,6 +144,7 @@ type WarBattle struct {
 	Pilots             int               `json:"pilots"`
 	Killmails          int               `json:"killmails"`
 	Skirmish           bool              `json:"skirmish"` // marked beside its date
+	Edits              []WarEditMark     `json:"edits"`    // what the user did to it, never null
 	A                  WarBattleSide     `json:"a"`
 	B                  WarBattleSide     `json:"b"`
 	Others             WarBattleSide     `json:"others"`
@@ -999,7 +1000,8 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 		}
 	}
 	comm.ReportProgress("Working out the war's figures")
-	data := aggregate.BuildWar(held, expanded, sides, battleMinPilots)
+	data := aggregate.BuildWar(held, expanded, sides, battleMinPilots, a.cache.WarEditsOf(war.ID))
+	a.lastWar = &builtWar{id: war.ID, data: data}
 
 	efficiency := func(other, own float64) float64 {
 		if total := other + own; total > 0 {
@@ -1039,7 +1041,10 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 		row := WarBattle{ID: battle.ID, Start: battle.Start, End: battle.End, System: structureSystem(battle.System), OtherSystems: append([]string{}, battle.OtherSystems...),
 			OtherSystemReports: warOtherSystemReports(battle),
 			Class:              warClass(battle.System), Pilots: battle.Pilots, Killmails: len(battle.Killmails), Skirmish: battle.Skirmish,
-			A: warBattleSide(battle.A), B: warBattleSide(battle.B), Others: warBattleSide(battle.Others), StationRefs: []WarStationRef{}}
+			A: warBattleSide(battle.A), B: warBattleSide(battle.B), Others: warBattleSide(battle.Others), StationRefs: []WarStationRef{}, Edits: []WarEditMark{}}
+		for _, edit := range battle.Edits {
+			row.Edits = append(row.Edits, WarEditMark(edit))
+		}
 		for _, ref := range battle.StationRefs {
 			mark := WarStationRef{Side: warSideName(ref.Side), Kind: ref.Kind, Destroyed: ref.Destroyed, Attempt: ref.Attempt, Unsure: ref.Unsure, Structure: ref.Structure, StructureAt: ref.DiedAt, Notes: []WarRefNote{}}
 			for _, note := range ref.Notes {
@@ -1048,7 +1053,12 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 			row.StationRefs = append(row.StationRefs, mark)
 		}
 		if battle.System != nil {
-			middle := battle.Start.Add(battle.End.Sub(battle.Start) / 2)
+			first, last := warSystemSpans(battle)
+			start, end := battle.Start, battle.End
+			if at, seen := first[battle.System.SystemID]; seen {
+				start, end = at, last[battle.System.SystemID]
+			}
+			middle := start.Add(end.Sub(start) / 2)
 			row.ZkillURL = api.ZkillRelatedURL(battle.System.SystemID, middle)
 			row.EveToolsURL = api.EveToolsRelatedURL(battle.System.SystemID, middle)
 			row.WarbeaconURL = api.WarbeaconRelatedURL(battle.System.SystemID, middle)
@@ -1125,9 +1135,9 @@ func (a *App) searchWar(name string, id int) (TargetResult, error) {
 	return a.warResult(war), nil
 }
 
-// warOtherSystemReports is the battle report links of each of a battle's other systems, each at the hour of the middle of its own killmails there, as a long battle can leave a system hours before it ends
-func warOtherSystemReports(battle *aggregate.WarBattle) []WarSystemReport {
-	first, last := map[int]time.Time{}, map[int]time.Time{}
+// warSystemSpans is the first and last killmail of a battle in each of its systems, by system id
+func warSystemSpans(battle *aggregate.WarBattle) (first, last map[int]time.Time) {
+	first, last = map[int]time.Time{}, map[int]time.Time{}
 	for _, km := range battle.Killmails {
 		if km.System == nil {
 			continue
@@ -1140,7 +1150,12 @@ func warOtherSystemReports(battle *aggregate.WarBattle) []WarSystemReport {
 			last[id] = km.KillmailTime
 		}
 	}
+	return first, last
+}
 
+// warOtherSystemReports is the battle report links of each of a battle's other systems, each at the hour of the middle of its own killmails there, as a long battle can leave a system hours before it ends
+func warOtherSystemReports(battle *aggregate.WarBattle) []WarSystemReport {
+	first, last := warSystemSpans(battle)
 	out := make([]WarSystemReport, 0, len(battle.OtherDetails))
 	for _, system := range battle.OtherDetails {
 		start, end := battle.Start, battle.End
