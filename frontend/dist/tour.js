@@ -336,6 +336,7 @@ function tourStandIn(t) {
     async SaveHolding() { return tourCopy(noHoldings); },
     async SaveIgnoredAllies() { return null; },
     async LookupEntity() { throw new Error("Not available in the tour."); },
+    async ReadBattleReport() { throw new Error("Not available in the tour."); },
   };
 
   // PASS_THROUGH are the read-only methods the real backend answers: the page's own settings and version, and the page's error log

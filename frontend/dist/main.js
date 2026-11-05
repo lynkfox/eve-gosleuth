@@ -46,7 +46,7 @@ function setBusy(busy) {
   else stopSearchTimer();
   el("search-button").disabled = busy;
   el("war-button").disabled = busy;
-  for (const update of document.querySelectorAll(".war-update")) update.disabled = busy;
+  for (const update of document.querySelectorAll(".war-update, .war-report-br")) update.disabled = busy;
   el("search-input").disabled = busy;
   el("recent-toggle").disabled = busy;
   // the tour never starts over a running search
@@ -5744,9 +5744,16 @@ function renderWarVersus(war, report) {
     update.title = "Lists only what is new since the last run";
   }
   if (note.textContent) facts.append(note);
+  const fromReport = document.createElement("button");
+  fromReport.type = "button";
+  fromReport.className = "secondary war-report-br";
+  fromReport.textContent = "From battle report";
+  fromReport.title = "Read both sides from an EVE Tools battle report, and add them to this war";
+  fromReport.disabled = searching;
+  fromReport.addEventListener("click", () => openBattleReport(war));
   const run = document.createElement("div");
   run.className = "war-run";
-  run.append(update);
+  run.append(fromReport, update);
 
   box.append(title, sides, facts, run);
   el("war-versus-box").replaceChildren(box);
@@ -7129,8 +7136,371 @@ async function saveAndRunWar() {
   }
 }
 
+/* From battle report: reads both sides from a saved EVE Tools battle report, to save as coalitions */
+
+// brState is the open window's: where it was opened from (a war report's war, or null for the setup form), the sides now, the report read, the saved coalitions,
+// which team each side shows, each side's coalition choice, and each group's tick by brKey
+let brState = null;
+// brReading counts reads, so one answered after the window closed or another began is dropped
+let brReading = 0;
+
+function brKey(group) {
+  return `${group.type}:${group.id}`;
+}
+
+// brSideNow is a side as it stands where the window was opened from, null while the form has none chosen
+function brSideNow(key) {
+  if (brState.war) return key === "a" ? brState.war.sideA : brState.war.sideB;
+  return warForm[key];
+}
+
+// brCoalition is a saved coalition by id
+function brCoalition(id) {
+  return brState.coalitions.find((coalition) => coalition.id === id) || null;
+}
+
+// brCoalitionHas is whether a coalition already brings a group, as a member or a member's affiliate
+function brCoalitionHas(coalition, group) {
+  return !!coalition && [...coalition.members, ...coalition.affiliates].some((other) => other.type === group.type && other.id === group.id);
+}
+
+// brSideEntity is the corporation or alliance a side is now, null for a coalition or none. It stays on the side when the side becomes a coalition.
+function brSideEntity(key) {
+  const side = brSideNow(key);
+  return side && side.id && side.type !== "COALITION" ? side : null;
+}
+
+// brSideHas is whether a side as it stands has a group, for working out which team goes where
+function brSideHas(key, group) {
+  const side = brSideNow(key);
+  if (!side) return false;
+  if (side.type === "COALITION") return brCoalitionHas(brCoalition(side.id), group);
+  return side.type === group.type && side.id === group.id;
+}
+
+// brPickTeams puts on each side the team sharing the most groups with it, the first two in the report's order when nothing tells them apart
+function brPickTeams() {
+  const teams = brState.card.teams;
+  const shared = (key, team) => team.filter((group) => brSideHas(key, group)).length;
+  let best = { a: 0, b: 1, score: -1 };
+  for (let a = 0; a < teams.length; a++) {
+    for (let b = 0; b < teams.length; b++) {
+      if (a === b) continue;
+      const score = shared("a", teams[a]) + shared("b", teams[b]);
+      if (score > best.score) best = { a, b, score };
+    }
+  }
+  brState.team = { a: best.a, b: best.b };
+}
+
+// brDefaultChoice is the coalition a side starts on: the coalition it is now, else the saved one sharing two or more of the team's groups and most of them, else a new one named for the corporation or alliance the side is now, or the team's largest group
+function brDefaultChoice(key, taken) {
+  const team = brState.card.teams[brState.team[key]];
+  const side = brSideNow(key);
+  let id = side && side.type === "COALITION" && brCoalition(side.id) ? side.id : 0;
+  if (!id) {
+    let most = 1;
+    for (const coalition of brState.coalitions) {
+      if (coalition.id === taken) continue;
+      const count = team.filter((group) => brCoalitionHas(coalition, group)).length;
+      if (count > most) {
+        most = count;
+        id = coalition.id;
+      }
+    }
+  }
+  return { id, newName: `${(brSideEntity(key) || team[0]).name} side`.slice(0, 100), edited: false };
+}
+
+// brResetChoices sets both sides' coalitions to their defaults, keeping any the user chose
+function brResetChoices() {
+  const edited = (key) => (brState.choice[key] && brState.choice[key].edited ? brState.choice[key] : null);
+  const a = edited("a") || brDefaultChoice("a", edited("b") ? edited("b").id : 0);
+  const b = edited("b") || brDefaultChoice("b", a.id);
+  brState.choice = { a, b };
+}
+
+/*
+  brGroupState is how a side's row for a group stands, given both sides' coalitions and the war's groups.
+  Returns { locked, checked, keep, note }: a locked row can't be changed, its checked says whether it is on this side, and keep that it is sent all the same, as the side's own group.
+*/
+function brGroupState(key, group) {
+  const other = key === "a" ? "b" : "a";
+  const same = (added) => added.type === group.type && added.id === group.id;
+  const coalition = brCoalition(brState.choice[key].id);
+  const otherCoalition = brCoalition(brState.choice[other].id);
+  const entity = brSideEntity(key);
+  const otherEntity = brSideEntity(other);
+  if (entity && entity.type === group.type && entity.id === group.id) return { locked: true, checked: true, keep: true, note: "On this side now" };
+  if (brCoalitionHas(coalition, group)) return { locked: true, checked: true, note: `Already in ${coalition.name}` };
+  if (otherEntity && otherEntity.type === group.type && otherEntity.id === group.id) return { locked: true, checked: false, note: "On the other side now" };
+  if (brCoalitionHas(otherCoalition, group)) return { locked: true, checked: false, note: `In ${otherCoalition.name}, on the other side` };
+  if (brState.war) {
+    const added = key === "a" ? brState.war.addedA : brState.war.addedB;
+    const otherAdded = key === "a" ? brState.war.addedB : brState.war.addedA;
+    if ((added || []).some(same)) return { locked: true, checked: true, note: "Added to this side by hand" };
+    if ((otherAdded || []).some(same)) return { locked: true, checked: false, note: "Added to the other side by hand" };
+    if ((brState.war.ignored || []).some(same)) return { locked: false, checked: !!brState.ticks[brKey(group)], note: "Ignored in this war" };
+  }
+  return { locked: false, checked: !!brState.ticks[brKey(group)], note: "" };
+}
+
+// brSideGroups are the rows of a side: the corporation or alliance it is now if the team lacks it, then the team's groups
+function brSideGroups(key) {
+  const team = brState.card.teams[brState.team[key]];
+  const entity = brSideEntity(key);
+  if (!entity || team.some((group) => group.type === entity.type && group.id === entity.id)) return team;
+  return [{ type: entity.type, id: entity.id, name: entity.name, pilots: 0, absent: true }, ...team];
+}
+
+// brTeamName names a team for its dropdown when a report has more than two
+function brTeamName(index) {
+  const team = brState.card.teams[index];
+  return `Team ${index + 1}: ${team.slice(0, 2).map((group) => group.name).join(", ")}`;
+}
+
+// brSideNote says what saving does to the side, when it changes what the side is now
+function brSideNote(key) {
+  const side = brSideNow(key);
+  if (!side || !side.id) return "";
+  const choice = brState.choice[key];
+  if (side.type === "COALITION" && side.id === choice.id) return "";
+  const to = choice.id ? brCoalition(choice.id).name : choice.newName.trim() || "the new coalition";
+  if (side.type === "COALITION") return `This side changes from ${side.name} to ${to}. ${side.name} stays saved, but its groups leave this side unless ticked here.`;
+  return `This side changes from ${side.name} alone to ${to}, with ${side.name} in it.`;
+}
+
+function renderBattleReportSide(key) {
+  const side = document.createElement("section");
+  side.className = `br-side br-side-${key}`;
+  const heading = document.createElement("h3");
+  const now = brSideNow(key);
+  heading.textContent = now && now.name ? `Side ${key.toUpperCase()}: ${now.name}` : `Side ${key.toUpperCase()}`;
+  side.append(heading);
+
+  if (brState.card.teams.length > 2) {
+    const teamPick = document.createElement("select");
+    teamPick.setAttribute("aria-label", `Team on side ${key.toUpperCase()}`);
+    brState.card.teams.forEach((_, index) => teamPick.add(new Option(brTeamName(index), String(index), false, index === brState.team[key])));
+    teamPick.addEventListener("change", () => {
+      const other = key === "a" ? "b" : "a";
+      const picked = Number(teamPick.value);
+      // the other side's team comes here, with what was chosen for it
+      if (brState.team[other] === picked) {
+        brState.team[other] = brState.team[key];
+        brState.choice = { a: brState.choice.b, b: brState.choice.a };
+      } else {
+        brState.choice[key] = null;
+      }
+      brState.team[key] = picked;
+      brResetChoices();
+      renderBattleReportSides();
+    });
+    side.append(teamPick);
+  }
+
+  const choice = brState.choice[key];
+  const coalitionPick = document.createElement("select");
+  coalitionPick.setAttribute("aria-label", `Coalition for side ${key.toUpperCase()}`);
+  coalitionPick.add(new Option("New coalition", "0", false, choice.id === 0));
+  for (const coalition of brState.coalitions) coalitionPick.add(new Option(`Add to ${coalition.name}`, String(coalition.id), false, coalition.id === choice.id));
+  coalitionPick.addEventListener("change", () => {
+    choice.id = Number(coalitionPick.value);
+    choice.edited = true;
+    renderBattleReportSides();
+  });
+  side.append(coalitionPick);
+
+  if (choice.id === 0) {
+    const name = document.createElement("input");
+    name.type = "text";
+    name.maxLength = 100;
+    name.spellcheck = false;
+    name.placeholder = "The new coalition's name";
+    name.setAttribute("aria-label", `New coalition's name for side ${key.toUpperCase()}`);
+    name.value = choice.newName;
+    name.addEventListener("input", () => {
+      choice.newName = name.value;
+      choice.edited = true;
+      const shown = side.querySelector(".br-side-note");
+      const text = brSideNote(key);
+      shown.textContent = text;
+      shown.hidden = !text;
+    });
+    side.append(name);
+  }
+
+  const note = document.createElement("p");
+  note.className = "row-detail br-side-note";
+  note.textContent = brSideNote(key);
+  note.hidden = !note.textContent;
+  side.append(note);
+
+  const list = document.createElement("div");
+  list.className = "br-groups";
+  for (const group of brSideGroups(key)) {
+    const state = brGroupState(key, group);
+    const row = document.createElement("label");
+    row.className = "br-group";
+    row.classList.toggle("br-group-locked", state.locked);
+    const tick = document.createElement("input");
+    tick.type = "checkbox";
+    tick.checked = state.checked;
+    tick.disabled = state.locked;
+    tick.addEventListener("change", () => {
+      brState.ticks[brKey(group)] = tick.checked;
+    });
+    const name = document.createElement("span");
+    name.className = "br-group-name";
+    name.textContent = group.name;
+    name.title = group.name;
+    const pilots = document.createElement("span");
+    pilots.className = "row-detail";
+    const kind = group.type === "CORPORATION" ? "Corp" : "Alliance";
+    pilots.textContent = group.absent ? kind : `${kind} · ${warPlural(group.pilots, "pilot")}`;
+    row.append(tick, name, pilots);
+    if (state.note) {
+      const why = document.createElement("span");
+      why.className = "row-detail br-group-note";
+      why.textContent = state.note;
+      row.append(why);
+    }
+    list.append(row);
+  }
+  side.append(list);
+  return side;
+}
+
+function renderBattleReportSides() {
+  el("br-sides").replaceChildren(renderBattleReportSide("a"), renderBattleReportSide("b"));
+}
+
+function showBattleReportError(message) {
+  el("br-error").textContent = message;
+  el("br-error").hidden = !message;
+}
+
+/*
+  openBattleReport opens the window.
+  war is the WarCard of the report it was opened from, null for the setup form.
+*/
+function openBattleReport(war) {
+  if (searching) return;
+  brReading++;
+  brState = { war, card: null, coalitions: [], team: { a: 0, b: 1 }, choice: { a: null, b: null }, ticks: {} };
+  el("br-link").value = "";
+  el("br-review").hidden = true;
+  el("br-save").disabled = true;
+  el("br-save").textContent = war ? "Save to this war" : "Use as the sides";
+  el("br-read").disabled = false;
+  showBattleReportError("");
+  el("br-dialog").showModal();
+  el("br-link").focus();
+}
+
+// readBattleReport reads the pasted link and the saved coalitions, and shows the sides to review
+async function readBattleReport() {
+  const link = el("br-link").value.trim();
+  if (!link) {
+    showBattleReportError("Paste a link to a battle report.");
+    return;
+  }
+  const reading = ++brReading;
+  el("br-read").disabled = true;
+  el("br-save").disabled = true;
+  showBattleReportError("");
+  try {
+    const [card, coalitions] = await Promise.all([backend().ReadBattleReport(link), backend().GetCoalitions()]);
+    if (reading !== brReading) return;
+    brState.card = card;
+    brState.coalitions = coalitions || [];
+    brState.ticks = {};
+    for (const team of card.teams) for (const group of team) brState.ticks[brKey(group)] = group.ticked;
+    brState.choice = { a: null, b: null };
+    brPickTeams();
+    brResetChoices();
+    el("br-swap").hidden = card.teams.length > 2;
+    el("br-npc").textContent = card.npcCorps ? `${warPlural(card.npcCorps, "NPC corporation")} left out, as naming one would read the killmails of everyone in it.` : "";
+    el("br-npc").hidden = !card.npcCorps;
+    renderBattleReportSides();
+    el("br-review").hidden = false;
+    el("br-save").disabled = false;
+  } catch (err) {
+    if (reading !== brReading) return;
+    el("br-review").hidden = true;
+    showBattleReportError(String(err));
+  } finally {
+    if (reading === brReading) el("br-read").disabled = false;
+  }
+}
+
+// brChoiceToSave is what goes to the backend for a side: its coalition, the ticked groups it does not already bring, and the corporation or alliance it is now
+function brChoiceToSave(key) {
+  const choice = brState.choice[key];
+  const groups = brSideGroups(key).filter((group) => {
+    const state = brGroupState(key, group);
+    return state.keep || (state.checked && !state.locked);
+  });
+  return {
+    coalitionId: choice.id,
+    newName: choice.id ? "" : choice.newName.trim(),
+    groups: groups.map((group) => ({ type: group.type, id: group.id, name: group.name, fromDate: "" })),
+  };
+}
+
+// saveBattleReport saves both coalitions, then puts them on the form's sides or the war's. The backend's refusals show in the window.
+async function saveBattleReport() {
+  if (!brState || !brState.card) return;
+  const button = el("br-save");
+  button.disabled = true;
+  showBattleReportError("");
+  const war = brState.war;
+  const choiceA = brChoiceToSave("a");
+  const choiceB = brChoiceToSave("b");
+  try {
+    if (war) {
+      const report = await backend().SaveBattleReportToWar(war.id, choiceA, choiceB);
+      el("br-dialog").close();
+      if (warReport && warReport.war.id === war.id) showWarReport(report);
+      tickerPush("Saved the battle report's sides. The next Update reads every list, to bring in their killmails.");
+    } else {
+      const sides = await backend().SaveBattleReportSides(choiceA, choiceB);
+      el("br-dialog").close();
+      for (const [key, side] of [["a", sides.a], ["b", sides.b]]) {
+        setWarSide(key, { type: side.type, id: side.id, name: side.name, withAffiliates: false, count: side.count });
+      }
+      showWarError("");
+    }
+    loadSearchGroups();
+  } catch (err) {
+    showBattleReportError(String(err));
+    button.disabled = false;
+  }
+}
+
+// wireBattleReport connects the window. Its Read is a form so Enter in the link box reads.
+function wireBattleReport() {
+  el("war-from-br").addEventListener("click", () => openBattleReport(null));
+  el("br-close").addEventListener("click", () => el("br-dialog").close());
+  el("br-cancel").addEventListener("click", () => el("br-dialog").close());
+  el("br-dialog").addEventListener("close", () => brReading++);
+  el("br-read-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!el("br-read").disabled) readBattleReport();
+  });
+  el("br-swap").addEventListener("click", () => {
+    // what was chosen for a team goes with it
+    brState.team = { a: brState.team.b, b: brState.team.a };
+    brState.choice = { a: brState.choice.b, b: brState.choice.a };
+    brResetChoices();
+    renderBattleReportSides();
+  });
+  el("br-save").addEventListener("click", saveBattleReport);
+}
+
 // wireWarSetup connects the War window's boxes, buttons, and pickers
 function wireWarSetup() {
+  wireBattleReport();
   el("war-button").addEventListener("click", openWarSetup);
   el("war-setup-close").addEventListener("click", () => el("war-setup").close());
   el("war-cancel").addEventListener("click", () => el("war-setup").close());

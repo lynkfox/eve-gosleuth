@@ -3116,6 +3116,39 @@ p.tour-text { margin: 0; }
 .war-saved-row button.war-remove:hover { color: var(--error); }
 
 .war-form { display: grid; gap: 12px; padding-top: 14px; border-top: 1px solid var(--border); }
+.war-form-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.war-form-head h3 { margin: 0; }
+
+/* reading a war's sides from a battle report */
+.br-dialog { width: min(780px, calc(100vw - 32px)); }
+.br-body { display: grid; gap: 12px; align-content: start; }
+.br-read { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.br-read input { width: 100%; }
+.br-review { display: grid; gap: 12px; }
+.br-review[hidden] { display: none; }
+.br-review-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.br-review-head p { margin: 0; }
+.br-review-head button { flex: none; }
+.br-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.br-side { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 10px; background: var(--panel); border-top: 3px solid var(--border); border-radius: var(--radius); }
+.br-side-a { border-top-color: var(--war-a); }
+.br-side-b { border-top-color: var(--war-b); }
+.br-side h3 { margin: 0; font-size: 14px; }
+.br-side-a h3 { color: var(--war-a); }
+.br-side-b h3 { color: var(--war-b); }
+.br-side select, .br-side input[type="text"] { width: 100%; }
+.br-side-note { margin: 0; }
+.br-groups { display: grid; gap: 2px; }
+.br-group { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 2px 8px; padding: 3px 4px; border-radius: var(--radius); cursor: pointer; }
+.br-group:hover { background: var(--panel-raised); }
+.br-group input { width: auto; margin: 0; }
+.br-group-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.br-group-note { grid-column: 2 / -1; }
+.br-group-locked { cursor: default; }
+.br-group-locked .br-group-name { color: var(--muted); }
+@media (max-width: 640px) {
+  .br-sides { grid-template-columns: minmax(0, 1fr); }
+}
 .war-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: start; gap: 12px; }
 .war-row > input { width: 100%; }
 .war-label { padding-top: 8px; }
@@ -3167,7 +3200,7 @@ button.war-side-card:hover { background: color-mix(in srgb, var(--text) 10%, var
 .war-side-card.war-b { border-left-color: var(--war-b); }
 .war-vs { align-self: center; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
 .war-facts { min-width: 0; }
-.war-run { flex: none; margin-left: auto; }
+.war-run { display: flex; flex: none; gap: 6px; margin-left: auto; }
 
 /* the war report */
 /* one centered column, so the tables don't leave the right of a wide window empty */

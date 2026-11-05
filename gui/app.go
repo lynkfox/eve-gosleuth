@@ -31,13 +31,14 @@ type App struct {
 	version string // from wails.json, see ProjectVersion
 	// closed once startup has loaded the settings, debug recorder, and cache. Wails on Windows runs startup alongside the page loading,
 	// so the calls the page makes as it loads wait on it (waitReady). nil in tests, which build the App themselves.
-	ready        chan struct{}
-	readyOnce    sync.Once
-	mu           sync.Mutex // Wails runs each frontend call in its own goroutine, one search runs at a time
-	clients      retrieval.CollectionClientPool
-	cache        *retrieval.CachedEveIDs
-	sde          api.SDEClient
-	sdeCheckedAt time.Time
+	ready         chan struct{}
+	readyOnce     sync.Once
+	mu            sync.Mutex // Wails runs each frontend call in its own goroutine, one search runs at a time
+	clients       retrieval.CollectionClientPool
+	cache         *retrieval.CachedEveIDs
+	sde           api.SDEClient
+	battleReports api.BattleReportClient
+	sdeCheckedAt  time.Time
 
 	// the update check's client, see CheckForUpdates
 	github api.GitHubClient
@@ -377,6 +378,7 @@ func (a *App) load() {
 	// the SDE check may wait on the network, the page need not
 	a.markReady()
 
+	a.battleReports = api.NewBattleReportClient()
 	a.sde = api.NewSDEClient()
 	a.checkSDERelease()
 }

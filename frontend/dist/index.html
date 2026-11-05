@@ -630,7 +630,7 @@
           <li><button class="text-link" type="button" data-url="https://developers.eveonline.com">Fenris Creations' ESI and Static Data Export</button>: names, affiliations, ships, items, systems, and any killmail zKillboard lacks</li>
           <li><button class="text-link" type="button" data-url="https://images.evetech.net">Fenris Creations' image server</button>: portraits, logos, and ship pictures</li>
           <li><button class="text-link" type="button" data-url="https://evewho.com">EveWho</button>, <button class="text-link" type="button" data-url="https://evemaps.dotlan.net">Dotlan</button>, and <button class="text-link" type="button" data-url="https://everef.net">EVE Ref</button>: linked from the right click menus for more detail</li>
-          <li><button class="text-link" type="button" data-url="https://br.evetools.org">EVE Tools</button> and <button class="text-link" type="button" data-url="https://warbeacon.net">Warbeacon</button>: battle reports, linked from battles</li>
+          <li><button class="text-link" type="button" data-url="https://br.evetools.org">EVE Tools</button> and <button class="text-link" type="button" data-url="https://warbeacon.net">Warbeacon</button>: battle reports, linked from battles, and a war's sides read from one</li>
         </ul>
       </details>
 
@@ -1097,7 +1097,10 @@
         <p id="war-saved-empty" class="muted war-saved-empty">No wars saved yet.</p>
       </section>
       <form id="war-form" class="war-form" autocomplete="off">
-        <h3 id="war-form-title">New war</h3>
+        <div class="war-form-head">
+          <h3 id="war-form-title">New war</h3>
+          <button id="war-from-br" class="secondary" type="button" title="Read both sides from an EVE Tools battle report">From battle report</button>
+        </div>
         <div class="war-row">
           <span class="preference-name war-label war-label-a">Side A</span>
           <div class="war-side">
@@ -1146,6 +1149,33 @@
     <div class="window-actions">
       <button id="war-cancel" class="secondary" type="button">Close</button>
       <button id="war-save" type="submit" form="war-form">Save and run</button>
+    </div>
+  </dialog>
+
+  <!-- reads a war's sides from a battle report, for the war setup window or a war's report -->
+  <dialog id="br-dialog" class="window br-dialog" aria-labelledby="br-title">
+    <div class="window-titlebar">
+      <h2 id="br-title">From battle report</h2>
+      <button id="br-close" class="window-close" type="button" aria-label="Close" title="Close">×</button>
+    </div>
+    <div class="window-body br-body">
+      <form id="br-read-form" class="br-read" autocomplete="off">
+        <input id="br-link" type="text" spellcheck="false" placeholder="https://br.evetools.org/br/..." aria-label="Battle report link">
+        <button id="br-read" class="secondary" type="submit">Read</button>
+      </form>
+      <div id="br-review" class="br-review" hidden>
+        <div class="br-review-head">
+          <p class="row-detail">An alliance with 3 pilots or fewer on the report, or a corp with 5 or fewer, starts unticked. Saving only adds to a coalition: unticking a group never takes it out of one.</p>
+          <button id="br-swap" class="secondary" type="button" title="Swap which team is on which side">Swap sides</button>
+        </div>
+        <div id="br-sides" class="br-sides"></div>
+        <p id="br-npc" class="row-detail" hidden></p>
+      </div>
+      <p id="br-error" class="preferences-error" role="alert" hidden></p>
+    </div>
+    <div class="window-actions">
+      <button id="br-cancel" class="secondary" type="button">Cancel</button>
+      <button id="br-save" type="button" disabled>Save</button>
     </div>
   </dialog>
 
