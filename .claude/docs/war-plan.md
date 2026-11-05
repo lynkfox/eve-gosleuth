@@ -143,7 +143,7 @@ These may fall outside any counted battle, the one exception to that rule, and j
 
 **Station being reffed:** a fight where one side lost or used Standup Fighters (user, 2026-11-04), or a station or battery of its fired without that station dying in the fight (user, 2026-11-05, on reviewing docs/war_report.md), is probably that side's station under attack, as only structures launch them. A carrier's fighters don't count. The battle gets an automatic mark on its row, naming that side, and the Overview counts them:
 
-- **Station ref** when that side's upwell structure in that system then dies within its reinforcement timers (`warStationTimers`, from the wiki's Vulnerability page, user, 2026-11-05, replacing 3 days for a medium and 4 for a large). The fight it dies in no longer counts: that fight is marked Destroyed. `medium_structure_types` in `structures.json` lists the mediums, as size has no group of its own; everything else, Keepstars and Sotiyos too, takes 4 days.
+- **Station ref** when that side's upwell structure in that system then dies within 3 days for a medium structure, 4 days for a large (user, 2026-11-05). The fight it dies in counts. `medium_structure_types` in `structures.json` lists the mediums, as size has no group of its own; everything else, Keepstars and Sotiyos too, takes 4 days.
 - **Ref attempt** otherwise, so a mark can move from one to the other at a later Update.
 
 Standup Fighters never count as ships lost, only in ISK lost, under structures (user, 2026-11-04). They are their own groups, 4777, 4778, and 4779 (`category` 87 in `fit_types.json`), apart from carrier fighters' 1537, 1652, and 1653. They go in a new `standup_fighter_groups` section of `structures.json`, read with `ContainsGroupOf`, so a minor bump at most. Fights are found on killmails, so a station reffed that neither fires on a killmail nor has a fighter on one is not marked. In Stage 4 either mark starts the For Timer flag ticked, and the user can clear it.
@@ -154,14 +154,31 @@ Standup Fighters never count as ships lost, only in ISK lost, under structures (
 
 ## Stage 4: notes, flags, and battle edits
 
-Added after a report is generated, from a battle's row, and saved with the war.
+Added after a report is generated, from a battle's row. Reordered by the user on 2026-11-05: merge, split, and ignore first, then notes and system nicknames.
 
-- **Flags, the sheet's:** One Fight, Not war, 3rd Party, For Timer, Timer defended, Defence succeeded. Plus a free-text note.
-- **Flags change no totals**, as in the sheet, which counts flagged rows too.
-- **Merge or split battles** by hand. An edit is saved as the killmail ids it moved, and applied after `FindBattles` at each build.
-- **Keeping them through updates:** a battle's id comes from its first killmail, which a later run can change. Notes and flags are saved with the battle's killmail ids, and go to whichever battle now holds most of those.
+**Saving them.** All of it has to outlast closing the app, an Update, and a new version, so it is saved as the user's own data and applied again at every build: its own cache section beside the war, one of `userSections` so a clear leaves it, removed with the war. Not in the `War` record, which every save rewrites.
+
+**Keeping them through updates:** a battle's id comes from its first killmail, which a later run can change. Every edit is saved with the battle's killmail ids, and goes to whichever battle now holds most of those. If two edited battles end up as one, both notes are kept. An edit whose battle falls outside the war's dates (the Change window can do that) stays saved, and comes back if the dates do.
+
+### 1. Merge, split, and ignore (the important part)
+
+- **Merge or split battles** by hand. An edit is saved as the killmail ids it moved, and applied after `FindBattles` at each build. A killmail new since the edit joins a battle as usual, and the edit then applies on top.
+- **Ignore a battle:** it leaves the war's totals, and stays on the lists grayed out, so it can be taken back (user, 2026-11-05). The Ahbazon tower's fight (J121959, Nov 4) is the first case. It is the one edit that changes totals, so decide when building how the Timeline, Systems, marks, and trash go with it: the same killmails should leave all of them.
+- **Merging and splitting change no totals:** they should apply after trash is decided, only regrouping rows and their pilot and ISK lines, though the count of battles changes. Trash and battles are found together in `findWarTrash`, and re-running it on an edit could move trash figures.
+
+### 2. Notes and system nicknames
+
+- **A notes field** on any battle, merged ones too.
+- **A nickname for a system** that follows it, ie "J110117 - Ursa Home" (user, 2026-11-05). Settle when building whether it is the war's or the whole app's; following the system suggests it is saved by system id and shown wherever its name is.
+
+### Not decided or held back
+
+- **User assigned markers** (a mark added or dismissed by hand): wanted, but probably a future version (user, 2026-11-05). So a wrong mark like the Ahbazon tower's is dealt with by ignoring its battle for now. When built, one added by hand should say so in its hover, as killmails don't show everything.
+- **The sheet's flags** (One Fight, Not war, 3rd Party, For Timer, Timer defended, Defence succeeded): the older plan had them changing no totals, with For Timer starting ticked on a mark. The user's order of 2026-11-05 leaves them out, so ask before building them.
 
 ### Multi-system battle reports
+
+After the above, unless the user says otherwise. Its `systems` list should replace `OtherSystemReports` (2026-11-05), which holds much the same.
 
 The app never makes a battle report itself (user, 2026-11-05). The related links show one system each, and a fight that moved through a gate needs a report built by hand on the user's site of choice. EVE Tools (`/create`) and WarBeacon (`/br/create`) can build one; zKillboard has no way to. Their create endpoints are internal and undocumented, and using them would add public reports to someone else's site, so the user makes the report there and brings the link back.
 
