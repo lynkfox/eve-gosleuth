@@ -4,7 +4,8 @@ GoSleuth is an Eve Online Intel tool. Give it a target and it will pull killmail
 
 In the grand tradition of eve tools like **Py**Fa being coded in **Py**thon and using **Py** in its name, **Go**Sleuth is coded in **Go**-lang.
 
-[Click Here for a Full Feature List](docs/features.md)
+[Click Here for a list of Intel Features](docs/features.md)
+[Click Here for an overview of the War Report feature](docs/war_report.md)
 
 ## Installing
 
@@ -69,10 +70,6 @@ Roadmap of planned features.
 
 * Next
   * Jspace Home Systems / Nullsec Staging added to Affilliates system
-  * Custom Collation searches (generated in My Intel)
-    * unlike affiliates, these wont necessarily have a "main"
-    * affiliate searches that cross over into a collation wont pull its other collation members
-    * Run search straight from there
   * Small scope searches - run a narrow search and check just those killmails
     * Ie: All MSF + Machariel
   

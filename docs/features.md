@@ -95,27 +95,7 @@ Every report run on a Corporation or Alliance can also be saved as a PDF with ma
   - *Export them to a file to share with your corp, or import someone else's.*
 
 
-## Tracking a war
 
-The **War** button sets up two sides and a start date, and GoSleuth follows the fighting between them. Each side can be a coalition, an affiliate group, or one corp or alliance. Wars are saved, and open again with no searching at all.
-
-- **Update**
-  - *Reads only what is new since the last run, unless the sides or the start date changed. Search limits don't apply: a war reads everything from its start date*
-- **What counts**
-  - *A fight counts when one side killed the other on at least one of its killmails. Every killmail in that fight then counts. 10 or more pilots is a battle, anything smaller a skirmish*
-  - *A third party counts, per battle, for the side it fought beside. If that can't be told, it shows under Others, and from there you can right-click a group to add it to a side, from the start of the war or from a date, or to ignore it*
-- **Station trash and asset denial**
-  - *Estimates from killmails, kept apart from the fighting, and graded definite or probable. Station trash is empty ships shot around a station after it falls: one pilot's ships dying too fast to reship and any anchorable such as a mobile warp disruptor, though never a mobile tractor unit (definite), and anything else there in the 4 hours after the fight ends (probable), unless the owner came back and shot. If the pilot's capsule dies within a few minutes, they were in the ship, so it isn't trash*
-  - *Asset denial is capital ships only. A capital with nothing in its high, mid, or low slots, or with its own side's station at top damage, is definite. Its own station lower on the kill is probable, as is a fitted one its own side killed in the 3 days (medium) or 4 days (large) before that side loses a station there. A smaller ship is denial only with nothing but its own station on the kill, which is definite. Capsules are never trash or denial, and one only its own station shot is left out of the war altogether*
-- **Station ref and Ref attempt**
-  - *A fight where a side lost Standup Fighters means its station was probably under attack. It is marked a Station ref if that side's structure then died there within 3 days for a medium or 4 for a large, and a Ref attempt until then*
-- **The report takes the whole window**
-  - *Overview: each side's ISK, ships, and structures lost, and how far back zKillboard's lists reached*
-  - *Battles: one row per fight, with what each side lost and links to its battle reports, sortable by date, class, system, or side, and filtered by clicking classes in the table above it*
-  - *Systems: where the war was fought, by class, sortable by any column, and filtered the same way*
-  - *Timeline: what each side lost by day or by week, as that period's figures or running totals*
-
-Killmails can't show objectives or survivors, so GoSleuth never calls a battle won.
 
 ## Making it yours
 
