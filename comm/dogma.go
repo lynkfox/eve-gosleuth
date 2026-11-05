@@ -168,6 +168,23 @@ func DogmaTypeOf(typeID int) *DogmaType {
 }
 
 /*
+	FighterSquadronSize looks up how many of a fighter type fill one squadron in dogma.json
+
+Parameters:
+  - typeID: the fighter type
+
+Returns:
+  - int: its squadron size, 0 if dogma.json does not have it
+*/
+func FighterSquadronSize(typeID int) int {
+	dogmaType, attribute := dogma.Types[typeID], dogmaAttributeNames["fighterSquadronMaxSize"]
+	if dogmaType == nil || attribute == nil {
+		return 0
+	}
+	return int(dogmaType.Attributes[attribute.AttributeID])
+}
+
+/*
 	DogmaAttributeOf looks up a dogma attribute in dogma.json
 
 Parameters:

@@ -3,6 +3,7 @@ package retrieval_test
 import (
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
@@ -131,6 +132,34 @@ Scourge Heavy Missile x1000`,
 			assert.Equal(t, want, (&retrieval.Fit{Hull: hull, Drones: order}).EFT("T"))
 		}
 	})
+}
+
+func TestFitEFTFightersOnePerSquadron(t *testing.T) {
+	comm.InitLogger(logrus.InfoLevel)
+	loadFitFixtures(t)
+	files := fstest.MapFS{"dogma.json": {Data: []byte(`{
+		"attributes": {"2215": {"name": "fighterSquadronMaxSize"}},
+		"types": {"40556": {"group": 1652, "category": 87, "attributes": {"2215": 6}}}
+	}`)}}
+	assert.NoError(t, comm.LoadDogma(files, "dogma.json"))
+
+	tests := []struct {
+		name     string
+		quantity int
+		want     string
+	}{
+		{"one squadron", 6, "Templar II x6"},
+		{"several full squadrons", 18, "Templar II x6\nTemplar II x6\nTemplar II x6"},
+		{"a part squadron comes last", 8, "Templar II x6\nTemplar II x2"},
+		{"less than a squadron", 3, "Templar II x3"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cache := retrieval.NewCache(&RawESIClient{}, filepath.Join(t.TempDir(), "cache.db"))
+			fit := cache.BuildFit(23, fitItems([4]int{158, 40556, test.quantity, 0}))
+			assert.Equal(t, "[Cargo Container, GoSleuth - Pilot - 1]\n\n"+test.want, fit.EFT("GoSleuth - Pilot - 1"))
+		})
+	}
 }
 
 func TestEFTTitle(t *testing.T) {

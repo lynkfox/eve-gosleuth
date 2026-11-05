@@ -105,7 +105,7 @@ How victim fits are read, shown, exported, tagged, and (later) analysed. The pha
 
 **To update:**
 - ~~**Implants into cargo.**~~ Done 2026-10-28: `Fit.EFT` writes implants into cargo as `Name x1`, as it does boosters, and a ship's export carries its capsule's implants.
-- **Fighters one squadron per line.** A Thanatos export wrote one stack per type, tubes and bay added together (`Templar II x36`). pyfa imported one full squadron (9/9) of each type, Templars, Firbolgs and Dragonflies, dropping the rest of each stack. pyfa's exporter writes one `Name xN` line per squadron, so split each fighter stack into squadron-sized lines. That needs each fighter's squadron size (dogma attribute `fighterSquadronMaxSize`) in the sdegen extract.
+- ~~**Fighters one squadron per line.**~~ Done 2026-11-04: `eftSquadrons` splits by `comm.FighterSquadronSize` (dogma attribute 2215, the part squadron last). No SDE effect changes the attribute, and today's SDE has Templar II at 6, not the 9 pyfa showed below, so re-check this if an import looks short. A Thanatos export wrote one stack per type, tubes and bay added together (`Templar II x36`). pyfa imported one full squadron (9/9) of each type, Templars, Firbolgs and Dragonflies, dropping the rest of each stack. pyfa's exporter writes one `Name xN` line per squadron, so split each fighter stack into squadron-sized lines. That needs each fighter's squadron size (dogma attribute `fighterSquadronMaxSize`) in the sdegen extract.
 
 ## Phase 2b: finding and folding fits
 

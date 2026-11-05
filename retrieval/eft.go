@@ -14,7 +14,7 @@ import (
 	sections are two blank lines apart, the slot groups within the modules one blank line apart.
 
 	- The header, then lows, mids, highs, rigs, subsystems and services, each slot on its own line. A group the hull has no slots for is left out.
-	- Drones then fighters, as Name xN.
+	- Drones, as Name xN, then fighters, one line per squadron as pyfa writes them.
 	- Cargo as Name xN, with the boosters and implants in it, since the in-game importer is fussier about separate booster and implant sections.
 
 Parameters:
@@ -60,7 +60,7 @@ func (f *Fit) EFT(title string) string {
 	if drones := eftStacks(f.Drones); drones != "" {
 		minions = append(minions, drones)
 	}
-	if fighters := eftStacks(f.Fighters); fighters != "" {
+	if fighters := eftStacks(eftSquadrons(f.Fighters)); fighters != "" {
 		minions = append(minions, fighters)
 	}
 	if len(minions) > 0 {
@@ -80,6 +80,22 @@ func (f *Fit) EFT(title string) string {
 	}
 
 	return header + "\n\n" + strings.Join(sections, "\n\n\n")
+}
+
+// eftSquadrons splits fighter stacks into a stack per squadron, the last with what is left over. A type whose squadron size is not known stays whole.
+func eftSquadrons(stacks []*FitCargo) []*FitCargo {
+	squadrons := []*FitCargo{}
+	for _, stack := range stacks {
+		size := comm.FighterSquadronSize(stack.Item.ItemID)
+		if size <= 0 {
+			squadrons = append(squadrons, stack)
+			continue
+		}
+		for left := stack.Quantity; left > 0; left -= size {
+			squadrons = append(squadrons, &FitCargo{Item: stack.Item, Quantity: min(left, size)})
+		}
+	}
+	return squadrons
 }
 
 // eftStacks writes stacks as Name xN, one per line, sorted the way pyfa sorts cargo: by category, group, then name
