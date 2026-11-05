@@ -23,6 +23,7 @@ var keptCategories = []int{
 	8,  // Charge
 	18, // Drone
 	20, // Implant (and boosters)
+	22, // Deployable, which a war's report counts as trash
 	23, // Starbase: control towers, for comm.TypeGroup
 	32, // Subsystem
 	65, // Structure
