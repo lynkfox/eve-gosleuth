@@ -821,3 +821,35 @@ func TestWarBattleEdits(t *testing.T) {
 		assert.Len(t, merged.Battles, 1)
 	})
 }
+
+func TestIgnoreWarBattle(t *testing.T) {
+	comm.InitLogger(logrus.PanicLevel)
+	now := time.Now().UTC()
+	app, _ := warApp(t, map[int][]api.ZkbResponse{warAlpha: {
+		coalitionKillmail(10, now.Add(-5*time.Hour), 98000100, warAlpha, warBeta),
+		coalitionKillmail(12, now.Add(-2*time.Hour), 98000100, warAlpha, warBeta),
+	}})
+	card := savedWar(t, app, "")
+	before, err := app.CollectWar(card.ID)
+	assert.NoError(t, err)
+	assert.Len(t, before.Battles, 2)
+
+	_, err = app.IgnoreWarBattle(card.ID, "gone")
+	assert.ErrorIs(t, err, errNoWarBattle)
+
+	ignored, err := app.IgnoreWarBattle(card.ID, before.Battles[1].ID)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, ignored.IgnoredBattles)
+	assert.Len(t, ignored.Battles, 2)
+	assert.True(t, ignored.Battles[1].Ignored)
+	assert.Equal(t, 1, ignored.KillmailCount)
+	assert.Less(t, ignored.A.Killmails+ignored.B.Killmails, before.A.Killmails+before.B.Killmails)
+	assert.Equal(t, 2, app.cache.WarKillmailCount(card.ID), "they stay held")
+
+	back, err := app.UndoWarEdit(card.ID, ignored.Battles[1].Edits[0].ID)
+	assert.NoError(t, err)
+	assert.Equal(t, before.A, back.A)
+	assert.Equal(t, before.B, back.B)
+	assert.Equal(t, before.Battles, back.Battles)
+	assert.Zero(t, back.IgnoredBattles)
+}

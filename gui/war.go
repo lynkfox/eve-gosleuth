@@ -145,6 +145,7 @@ type WarBattle struct {
 	Killmails          int               `json:"killmails"`
 	Skirmish           bool              `json:"skirmish"` // marked beside its date
 	Edits              []WarEditMark     `json:"edits"`    // what the user did to it, never null
+	Ignored            bool              `json:"ignored"`  // set aside by the user: grayed out, its figures its row's alone
 	A                  WarBattleSide     `json:"a"`
 	B                  WarBattleSide     `json:"b"`
 	Others             WarBattleSide     `json:"others"`
@@ -214,26 +215,27 @@ type WarReachLine struct {
 
 // WarReport is what a war's report shows. New categories join WarMeasures and WarBattleSide, which have room for Stage 3's.
 type WarReport struct {
-	War           WarCard         `json:"war"`
-	A             WarMeasures     `json:"a"`
-	B             WarMeasures     `json:"b"`
-	Others        WarMeasures     `json:"others"`
-	Battles       []WarBattle     `json:"battles"`     // newest first, skirmishes among them. Never null, as all the lists here.
-	BattleCount   int             `json:"battleCount"` // those not Skirmish
-	Skirmishes    int             `json:"skirmishes"`
-	SystemCount   int             `json:"systemCount"`
-	Classes       []WarClassCount `json:"classes"` // most systems first
-	Systems       []WarSystem     `json:"systems"` // most killmails first
-	Killmails     []WarKillmail   `json:"-"`
-	KillmailCount int             `json:"killmailCount"`
-	OtherGroups   []WarOtherGroup `json:"otherGroups"` // most ISK lost first
-	NPCPilots     WarNPCPilots    `json:"npcPilots"`
-	Days          []WarDay        `json:"days"` // oldest first, only days with a loss on either side
-	Reach         []WarReachLine  `json:"reach"`
-	FullRunDue    bool            `json:"fullRunDue"` // the sides or start changed since its last full run, so its next run reads every list from its start. Also true before its first run.
-	Stopped       bool            `json:"stopped"`
-	RateLimited   bool            `json:"rateLimited"`
-	Sources       string          `json:"sources"` // as IntelReport's, empty on opening with nothing collected
+	War            WarCard         `json:"war"`
+	A              WarMeasures     `json:"a"`
+	B              WarMeasures     `json:"b"`
+	Others         WarMeasures     `json:"others"`
+	Battles        []WarBattle     `json:"battles"`     // newest first, skirmishes among them. Never null, as all the lists here.
+	BattleCount    int             `json:"battleCount"` // those not Skirmish
+	Skirmishes     int             `json:"skirmishes"`
+	IgnoredBattles int             `json:"ignoredBattles"` // set aside by the user, in Battles but not in BattleCount or Skirmishes
+	SystemCount    int             `json:"systemCount"`
+	Classes        []WarClassCount `json:"classes"` // most systems first
+	Systems        []WarSystem     `json:"systems"` // most killmails first
+	Killmails      []WarKillmail   `json:"-"`
+	KillmailCount  int             `json:"killmailCount"`
+	OtherGroups    []WarOtherGroup `json:"otherGroups"` // most ISK lost first
+	NPCPilots      WarNPCPilots    `json:"npcPilots"`
+	Days           []WarDay        `json:"days"` // oldest first, only days with a loss on either side
+	Reach          []WarReachLine  `json:"reach"`
+	FullRunDue     bool            `json:"fullRunDue"` // the sides or start changed since its last full run, so its next run reads every list from its start. Also true before its first run.
+	Stopped        bool            `json:"stopped"`
+	RateLimited    bool            `json:"rateLimited"`
+	Sources        string          `json:"sources"` // as IntelReport's, empty on opening with nothing collected
 }
 
 // warDateLayout is how a war's dates are saved and sent
@@ -1010,20 +1012,21 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 		return 0
 	}
 	report := WarReport{
-		War:         a.warCard(war),
-		A:           warMeasures(data.A, efficiency(data.B.ISKLost, data.A.ISKLost)),
-		B:           warMeasures(data.B, efficiency(data.A.ISKLost, data.B.ISKLost)),
-		Others:      warMeasures(data.Others, 0),
-		Battles:     []WarBattle{},
-		BattleCount: data.BattleCount,
-		Skirmishes:  data.Skirmishes,
-		Classes:     []WarClassCount{},
-		Systems:     []WarSystem{},
-		Killmails:   []WarKillmail{},
-		OtherGroups: []WarOtherGroup{},
-		Days:        []WarDay{},
-		Reach:       []WarReachLine{},
-		FullRunDue:  war.RunKey != war.RunKeyFor(sides.A, sides.B),
+		War:            a.warCard(war),
+		A:              warMeasures(data.A, efficiency(data.B.ISKLost, data.A.ISKLost)),
+		B:              warMeasures(data.B, efficiency(data.A.ISKLost, data.B.ISKLost)),
+		Others:         warMeasures(data.Others, 0),
+		Battles:        []WarBattle{},
+		BattleCount:    data.BattleCount,
+		Skirmishes:     data.Skirmishes,
+		IgnoredBattles: data.IgnoredBattles,
+		Classes:        []WarClassCount{},
+		Systems:        []WarSystem{},
+		Killmails:      []WarKillmail{},
+		OtherGroups:    []WarOtherGroup{},
+		Days:           []WarDay{},
+		Reach:          []WarReachLine{},
+		FullRunDue:     war.RunKey != war.RunKeyFor(sides.A, sides.B),
 	}
 	for _, reach := range war.Reach {
 		if !reach.Complete {
@@ -1040,7 +1043,7 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 	for _, battle := range data.Battles {
 		row := WarBattle{ID: battle.ID, Start: battle.Start, End: battle.End, System: structureSystem(battle.System), OtherSystems: append([]string{}, battle.OtherSystems...),
 			OtherSystemReports: warOtherSystemReports(battle),
-			Class:              warClass(battle.System), Pilots: battle.Pilots, Killmails: len(battle.Killmails), Skirmish: battle.Skirmish,
+			Class:              warClass(battle.System), Pilots: battle.Pilots, Killmails: len(battle.Killmails), Skirmish: battle.Skirmish, Ignored: battle.Ignored,
 			A: warBattleSide(battle.A), B: warBattleSide(battle.B), Others: warBattleSide(battle.Others), StationRefs: []WarStationRef{}, Edits: []WarEditMark{}}
 		for _, edit := range battle.Edits {
 			row.Edits = append(row.Edits, WarEditMark(edit))

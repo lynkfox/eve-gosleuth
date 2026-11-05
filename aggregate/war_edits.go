@@ -210,6 +210,11 @@ func warEditedBattles(trash *warTrash, edits []retrieval.WarBattleEdit) []*warBa
 			battles = warMerge(battles, edit)
 		case retrieval.WarEditSplit:
 			battles = warSplit(battles, edit)
+		case retrieval.WarEditIgnore:
+			if battle := warHolding(battles, slices.Concat(edit.Groups...)); battle != nil {
+				battle.ignored = true
+				battle.marks = append(battle.marks, WarEditMark{ID: edit.ID, Kind: edit.Kind})
+			}
 		}
 	}
 
@@ -235,4 +240,63 @@ func warEditedBattles(trash *warTrash, edits []retrieval.WarBattleEdit) []*warBa
 		}
 	}
 	return battles
+}
+
+/*
+	warIgnoring finds a war's battles and trash with the battles the user ignored set aside: those killmails and whatever trash or asset denial went with a station among them.
+	Trash and battles are found again on what is left, so a station in an ignored battle stops confirming a mark or ending asset denial elsewhere.
+
+Parameters:
+  - kills: the war's killmails
+  - edits: the user's edits, oldest first
+
+Returns:
+  - *warTrash: the trash of what is left
+  - []*warBattleOf: the battles, the ignored among them
+  - map[int]warTrashMark: the marks of the trash that went with an ignored battle, by killmail id
+*/
+func warIgnoring(kills []*warKill, edits []retrieval.WarBattleEdit) (*warTrash, []*warBattleOf, map[int]warTrashMark) {
+	trash := findWarTrash(kills)
+	battles := warEditedBattles(trash, edits)
+	ignored := slices.DeleteFunc(slices.Clone(battles), func(battle *warBattleOf) bool { return !battle.ignored })
+	if len(ignored) == 0 {
+		return trash, battles, nil
+	}
+
+	gone := map[int]bool{}
+	for _, battle := range ignored {
+		for _, kill := range battle.kills {
+			gone[kill.id] = true
+		}
+	}
+	stations := map[int]bool{}
+	marks := map[int]warTrashMark{}
+	for id, mark := range trash.marks {
+		if gone[mark.anchor] {
+			marks[id] = mark
+			stations[mark.anchor] = true
+		}
+	}
+	for id := range marks {
+		gone[id] = true
+	}
+
+	rest := slices.DeleteFunc(slices.Clone(kills), func(kill *warKill) bool { return gone[kill.id] })
+	trash = findWarTrash(rest)
+	// their ignore edits have done their work, and must not catch a battle of what is left
+	battles = warEditedBattles(trash, slices.DeleteFunc(slices.Clone(edits), func(edit retrieval.WarBattleEdit) bool { return edit.Kind == retrieval.WarEditIgnore }))
+	taken := map[string]bool{}
+	for _, battle := range battles {
+		taken[battle.id] = true
+	}
+	for _, battle := range ignored {
+		if taken[battle.id] {
+			battle.id = fmt.Sprintf("%s-%d", battle.id, battle.kills[0].id)
+		}
+		taken[battle.id] = true
+	}
+	for id := range stations {
+		trash.anchors[id] = true // so its trash finds the row it died on
+	}
+	return trash, append(battles, ignored...), marks
 }

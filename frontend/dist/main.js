@@ -3960,7 +3960,7 @@ const TAB_HELP = {
     "A skirmish is a fight with fewer than 10 pilots, both sides together.",
     "Trash, ref marks, structure counts, and other systems can all be hovered over to show more info.",
     "Click a heading to sort, or a class at the top to filter. Several classes can be on at once.",
-    "Right-click a row to open the battle report of any of its systems, or to merge or split it.",
+    "Right-click a row to open the battle report of any of its systems, or to merge, split, or ignore it.",
   ],
   "tab-war-timeline": [
     "A total of the war, either by smaller unit or as a running total.",
@@ -5636,6 +5636,7 @@ function warCountsTable(report) {
   return warCounts([
     ["Battles", report.battleCount],
     ["Skirmishes", report.skirmishes],
+    ...(report.ignoredBattles > 0 ? [["Ignored", report.ignoredBattles]] : []),
     ["Systems", report.systemCount],
     ...report.classes.map((entry) => [warClassChip(entry.class), entry.count]),
   ]);
@@ -5879,7 +5880,7 @@ function showWarReport(report) {
     }
   }
   renderWarOverview(report);
-  renderWarClassFilter("battles", "Engagements", report.battles);
+  renderWarClassFilter("battles", "Engagements", report.battles.filter((battle) => !battle.ignored));
   renderWarClassFilter("systems", "Systems", report.systems);
   showWarCounts("battles");
   showWarCounts("systems");
@@ -6272,7 +6273,7 @@ function showWarCounts(name, flash = false) {
   const shown = el(tab).querySelector(".tab-count");
   const total = el(`war-${name}-classes`).querySelector("tbody td");
   const before = shown.dataset.count;
-  const count = warFiltered(name, warReport[name]).length;
+  const count = warFiltered(name, warReport[name]).filter((row) => !row.ignored).length;
   setTabCount(tab, count);
   total.textContent = count.toLocaleString("en-US");
   if (!flash || shown.dataset.count === before) return;
@@ -6496,15 +6497,20 @@ function warBattleSections(battle) {
 const WAR_EDIT_KINDS = {
   merge: { chit: "Merged", title: "You merged this from separate battles. The war's totals are unchanged.", undo: "Undo merge" },
   split: { chit: "Split", title: "You split this out of a larger battle. The war's totals are unchanged.", undo: "Undo split" },
+  ignore: { chit: "Ignored", title: "You ignored this battle. It and any trash or asset denial shown on it are in no other figure of the war.", undo: "Take back" },
 };
 
 // warBattleEditSection is the part of a war battle's menu that changes it: merging and splitting it, and undoing what was done to it
 function warBattleEditSection(battle) {
-  const items = [{ label: "Merge with…", action: () => openWarMerge(battle) }];
-  if (battle.killmails > 1) items.push({ label: "Split…", action: () => openWarSplit(battle) });
+  const items = [];
+  if (!battle.ignored) {
+    items.push({ label: "Merge with…", action: () => openWarMerge(battle) });
+    if (battle.killmails > 1) items.push({ label: "Split…", action: () => openWarSplit(battle) });
+    items.push({ label: "Ignore this battle", action: () => applyWarEdit(() => backend().IgnoreWarBattle(warReport.war.id, battle.id), `Ignoring the battle in ${battle.system.name}`) });
+  }
   for (const edit of battle.edits) {
     const about = WAR_EDIT_KINDS[edit.kind];
-    if (about) items.push({ label: about.undo, action: () => applyWarEdit(() => backend().UndoWarEdit(warReport.war.id, edit.id), about.undo.replace("Undo", "Undid")) });
+    if (about) items.push({ label: about.undo, action: () => applyWarEdit(() => backend().UndoWarEdit(warReport.war.id, edit.id), edit.kind === "ignore" ? `Took back the battle in ${battle.system.name}` : about.undo.replace("Undo", "Undid")) });
   }
   return { heading: "This battle", items };
 }
@@ -6553,7 +6559,7 @@ function renderWarMergeList() {
   const ticked = new Set([...list.querySelectorAll("input:checked")].map((box) => box.value));
   const typed = el("war-merge-filter").value.trim().toLowerCase();
   const others = warReport.battles
-    .filter((battle) => battle.id !== warMerging.id)
+    .filter((battle) => battle.id !== warMerging.id && !battle.ignored)
     .map((battle) => ({ battle, gap: warBattleGap(battle, warMerging) }))
     .filter(({ battle }) => !typed || ticked.has(battle.id) || battle.system.name.toLowerCase().includes(typed) || battle.otherSystems.some((name) => name.toLowerCase().includes(typed)))
     .sort((a, b) => a.gap.minutes - b.gap.minutes);
@@ -6678,7 +6684,7 @@ function renderWarBattlePage() {
 
   const rows = list.slice(start, start + BATTLES_PER_PAGE).map((battle) => {
     const row = document.createElement("tr");
-    row.className = battle.skirmish ? "war-battle war-skirmish" : "war-battle";
+    row.className = `war-battle${battle.skirmish ? " war-skirmish" : ""}${battle.ignored ? " war-battle-ignored" : ""}`;
 
     const whenCell = document.createElement("td");
     const date = document.createElement("div");

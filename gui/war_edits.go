@@ -20,7 +20,7 @@ type builtWar struct {
 // WarEditMark is an edit a battle's row shows, which can be undone from it
 type WarEditMark struct {
 	ID   int    `json:"id"`
-	Kind string `json:"kind"` // merge or split
+	Kind string `json:"kind"` // merge, split, or ignore
 }
 
 // WarBattleKillmail is a battle's killmail in the Split window
@@ -153,6 +153,28 @@ func (a *App) SplitWarBattle(id int, battleID string, moved []int) (WarReport, e
 			return errors.New("Tick some of the battle's killmails to move, but not all of them")
 		}
 		edits.AddEdit(retrieval.WarEditSplit, [][]int{stays, leaving})
+		return nil
+	})
+}
+
+/*
+	IgnoreWarBattle sets a battle of a war's report aside: it stays on the lists, and leaves every total with whatever trash and asset denial went with it. UndoWarEdit takes it back.
+
+Parameters:
+  - id: the war
+  - battleID: the row
+
+Returns:
+  - WarReport: the report as it is now
+  - error: errNoWarBattle if the row has gone, or a user readable message
+*/
+func (a *App) IgnoreWarBattle(id int, battleID string) (WarReport, error) {
+	return a.changeWarEdits(id, func(edits *retrieval.WarEdits, data *aggregate.WarData) error {
+		battle := warBattleOf(data, battleID)
+		if battle == nil {
+			return errNoWarBattle
+		}
+		edits.AddEdit(retrieval.WarEditIgnore, [][]int{slices.Clone(battle.KillmailIDs)})
 		return nil
 	})
 }

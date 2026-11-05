@@ -150,6 +150,7 @@ type WarBattle struct {
 	Killmails    []*retrieval.Killmail // oldest first
 	KillmailIDs  []int                 // every killmail it holds, oldest first, which those of an ignored group or with no expanded form are in but Killmails is not
 	Edits        []WarEditMark         // what the user did to it
+	Ignored      bool                  // set aside by the user: its figures are its row's alone
 	Skirmish     bool                  // fewer than minPilots pilots
 	A, B, Others WarBattleSide
 	StationRefs  []WarStationRef // side A's first
@@ -193,14 +194,16 @@ type WarKillmail struct {
 // WarData is what a war's report is built from
 type WarData struct {
 	A, B, Others WarMeasures
-	Battles      []*WarBattle // newest first, skirmishes among them
-	BattleCount  int          // those not Skirmish
+	Battles      []*WarBattle // newest first, skirmishes and ignored ones among them
+	BattleCount  int          // those neither Skirmish nor Ignored
 	Skirmishes   int
-	Systems      []WarSystem   // most killmails first
-	Killmails    []WarKillmail // newest first
-	OtherGroups  []WarOther    // most ISK lost first
-	NPCPilots    WarMeasures   // the part of Others lost by pilots in NPC corps, who have no group and can not join a side
-	Days         []WarDay      // oldest first, only days with a loss on either side
+	// IgnoredBattles are those the user set aside, on the list but in no other figure
+	IgnoredBattles int
+	Systems        []WarSystem   // most killmails first
+	Killmails      []WarKillmail // newest first
+	OtherGroups    []WarOther    // most ISK lost first
+	NPCPilots      WarMeasures   // the part of Others lost by pilots in NPC corps, who have no group and can not join a side
+	Days           []WarDay      // oldest first, only days with a loss on either side
 }
 
 /*
@@ -448,11 +451,12 @@ func analyseWarKills(raw []retrieval.RawKillmail, idx *warSideIndex) []*warKill 
 
 // warBattleOf is a battle found among a war's killmails that are not same-side
 type warBattleOf struct {
-	fought *BattleFought // nil for a piece of a split
-	kills  []*warKill    // oldest first
-	id     string        // set by warEditedBattles
-	edited bool          // merged or split by the user
-	marks  []WarEditMark // what the user did to it
+	fought  *BattleFought // nil for a piece of a split
+	kills   []*warKill    // oldest first
+	id      string        // set by warEditedBattles
+	edited  bool          // merged or split by the user
+	marks   []WarEditMark // what the user did to it
+	ignored bool          // set aside by the user
 }
 
 // counted is whether one side killed the other on any of the battle's killmails
@@ -684,9 +688,28 @@ func newWarSideAbout() *warSideAbout {
 	return &warSideAbout{pilots: map[int]struct{}{}, groupPilots: map[warGroupKey]map[int]struct{}{}, structGroups: map[warGroupKey]int{}}
 }
 
+// warTally is every figure the report adds up apart from its rows
+type warTally struct {
+	measures    map[WarSideKey]*warMeasureBuilder
+	otherGroups map[warGroupKey]*warMeasureBuilder
+	npcPilots   *warMeasureBuilder
+	systems     map[int]*WarSystem
+	systemOrder []int
+	days        map[string]map[WarSideKey]*warMeasureBuilder // what each side lost each day, EVE time
+}
+
+func newWarTally() *warTally {
+	return &warTally{
+		measures:    map[WarSideKey]*warMeasureBuilder{WarSideA: {}, WarSideB: {}, WarSideNone: {}},
+		otherGroups: map[warGroupKey]*warMeasureBuilder{},
+		npcPilots:   &warMeasureBuilder{},
+		systems:     map[int]*WarSystem{},
+		days:        map[string]map[WarSideKey]*warMeasureBuilder{},
+	}
+}
+
 func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail, sides WarSides, minPilots int, edits retrieval.WarEdits) *WarData {
 	data := &WarData{Battles: []*WarBattle{}, Systems: []WarSystem{}, Killmails: []WarKillmail{}, OtherGroups: []WarOther{}}
-	npcPilots := &warMeasureBuilder{}
 	idx := sides.index()
 	kills := analyseWarKills(raw, idx)
 
@@ -727,28 +750,25 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		return WarGroup{Type: key.Type.String(), ID: key.ID, Name: names[key]}
 	}
 
-	measures := map[WarSideKey]*warMeasureBuilder{WarSideA: {}, WarSideB: {}, WarSideNone: {}}
-	otherGroups := map[warGroupKey]*warMeasureBuilder{}
-	systems := map[int]*WarSystem{}
-	systemOrder := []int{}
+	// an ignored battle's figures go to their own tally, as its row shows them but nothing else counts them
+	totals, ignoredTotals := newWarTally(), newWarTally()
+	tally := totals
 	missing := 0
 
-	// what each side lost each day, EVE time
-	days := map[string]map[WarSideKey]*warMeasureBuilder{}
 	dayOf := func(at time.Time, side WarSideKey) *warMeasureBuilder {
 		date := at.UTC().Format("2006-01-02")
-		if days[date] == nil {
-			days[date] = map[WarSideKey]*warMeasureBuilder{WarSideA: {}, WarSideB: {}, WarSideNone: {}}
+		if tally.days[date] == nil {
+			tally.days[date] = map[WarSideKey]*warMeasureBuilder{WarSideA: {}, WarSideB: {}, WarSideNone: {}}
 		}
-		return days[date][side]
+		return tally.days[date][side]
 	}
 	// systemBucket is a side's part of a system in the Systems tab
 	systemBucket := func(system *retrieval.System, side WarSideKey) (*WarSystem, *WarSystemSide) {
-		entry := systems[system.SystemID]
+		entry := tally.systems[system.SystemID]
 		if entry == nil {
 			entry = &WarSystem{System: system}
-			systems[system.SystemID] = entry
-			systemOrder = append(systemOrder, system.SystemID)
+			tally.systems[system.SystemID] = entry
+			tally.systemOrder = append(tally.systemOrder, system.SystemID)
 		}
 		switch side {
 		case WarSideA:
@@ -764,10 +784,14 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 			kill.highsec = true
 		}
 	}
-	trash := findWarTrash(kills)
+	trash, battles, ignoredMarks := warIgnoring(kills, edits.Edits)
 	battleOfStation := map[int]*WarBattle{} // the battle each station with trash died in
 
-	for _, battle := range warEditedBattles(trash, edits.Edits) {
+	for _, battle := range battles {
+		tally = totals
+		if battle.ignored {
+			tally = ignoredTotals
+		}
 		about := map[WarSideKey]*warSideAbout{WarSideA: newWarSideAbout(), WarSideB: newWarSideAbout(), WarSideNone: newWarSideAbout()}
 		battleOthers := map[warGroupKey]bool{}
 		for _, kill := range battle.kills {
@@ -793,8 +817,8 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 			}
 		}
 		for group := range battleOthers {
-			if otherGroups[group] == nil {
-				otherGroups[group] = &warMeasureBuilder{}
+			if tally.otherGroups[group] == nil {
+				tally.otherGroups[group] = &warMeasureBuilder{}
 			}
 		}
 
@@ -808,6 +832,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		wb := &WarBattle{
 			ID:        battle.id,
 			Edits:     slices.Clone(battle.marks),
+			Ignored:   battle.ignored,
 			Start:     battle.kills[0].at,
 			End:       battle.kills[len(battle.kills)-1].at,
 			Pilots:    len(pilots),
@@ -876,7 +901,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 
 			if !victim.ignored {
 				wb.Killmails = append(wb.Killmails, km)
-				measures[side].add(loss)
+				tally.measures[side].add(loss)
 				dayOf(kill.at, side).add(loss)
 				system := kill.raw.ESIKillmail.SolarSystemID
 				if loss.fighter && side != WarSideNone && !destroyedIn[side][system] {
@@ -911,11 +936,11 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 						noteRef(kill, km, shooterSide, shooter, attacker.ShipTypeID, false, sure)
 					}
 				}
-				if side == WarSideNone && victim.hasGroup && otherGroups[victim.group] != nil {
-					otherGroups[victim.group].add(loss)
+				if side == WarSideNone && victim.hasGroup && tally.otherGroups[victim.group] != nil {
+					tally.otherGroups[victim.group].add(loss)
 				}
 				if side == WarSideNone && !victim.hasGroup {
-					npcPilots.add(loss)
+					tally.npcPilots.add(loss)
 				}
 				target := inBattle[side]
 				target.ISKLost += loss.isk
@@ -926,7 +951,9 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 					target.addStructureKind(loss.structureKind())
 				}
 
-				data.Killmails = append(data.Killmails, WarKillmail{Killmail: km, VictimSide: side, BattleID: wb.ID})
+				if !battle.ignored {
+					data.Killmails = append(data.Killmails, WarKillmail{Killmail: km, VictimSide: side, BattleID: wb.ID})
+				}
 			}
 
 			if km.System != nil {
@@ -977,11 +1004,11 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 				if confirmed != nil {
 					ref.Structure = warLossOf(confirmed, warExpandedOrEmpty(expanded, confirmed)).structureKind()
 					ref.DiedAt = confirmed.at
-					measures[side].StationRefs++
+					tally.measures[side].StationRefs++
 				} else if ref.Unsure {
-					measures[side].RefAttemptsUnsure++
+					tally.measures[side].RefAttemptsUnsure++
 				} else {
-					measures[side].RefAttempts++
+					tally.measures[side].RefAttempts++
 				}
 				wb.StationRefs = append(wb.StationRefs, ref)
 			}
@@ -1048,8 +1075,12 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 	// station trash and asset denial, in their own bucket
 	for _, kill := range kills {
 		mark, marked := trash.marks[kill.id]
+		tally = totals
 		if !marked {
-			continue
+			if mark, marked = ignoredMarks[kill.id]; !marked {
+				continue
+			}
+			tally = ignoredTotals
 		}
 		km := expanded[kill.id]
 		if km == nil {
@@ -1066,16 +1097,16 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 			side = mark.owner
 		}
 		loss := warLossOf(kill, km)
-		measures[side].addTrash(loss, mark.definite)
+		tally.measures[side].addTrash(loss, mark.definite)
 		dayOf(kill.at, side).addTrash(loss, mark.definite)
 		if side == WarSideNone {
 			if victim.hasGroup {
-				if otherGroups[victim.group] == nil {
-					otherGroups[victim.group] = &warMeasureBuilder{}
+				if tally.otherGroups[victim.group] == nil {
+					tally.otherGroups[victim.group] = &warMeasureBuilder{}
 				}
-				otherGroups[victim.group].addTrash(loss, mark.definite)
+				tally.otherGroups[victim.group].addTrash(loss, mark.definite)
 			} else {
-				npcPilots.addTrash(loss, mark.definite)
+				tally.npcPilots.addTrash(loss, mark.definite)
 			}
 		}
 		battleID := ""
@@ -1099,7 +1130,9 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 			bucket.Killmails++
 			bucket.ISKLost += loss.isk
 		}
-		data.Killmails = append(data.Killmails, WarKillmail{Killmail: km, VictimSide: side, BattleID: battleID, Trash: true, Definite: mark.definite})
+		if tally == totals {
+			data.Killmails = append(data.Killmails, WarKillmail{Killmail: km, VictimSide: side, BattleID: battleID, Trash: true, Definite: mark.definite})
+		}
 	}
 
 	if missing > 0 {
@@ -1107,9 +1140,12 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 	}
 
 	// the war as a whole
+	tally = totals
 	slices.SortFunc(data.Battles, func(a, b *WarBattle) int { return cmp.Or(b.Start.Compare(a.Start), cmp.Compare(a.ID, b.ID)) })
 	for _, battle := range data.Battles {
-		if battle.Skirmish {
+		if battle.Ignored {
+			data.IgnoredBattles++
+		} else if battle.Skirmish {
 			data.Skirmishes++
 		} else {
 			data.BattleCount++
@@ -1119,25 +1155,25 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		return cmp.Or(b.Killmail.KillmailTime.Compare(a.Killmail.KillmailTime), cmp.Compare(b.Killmail.KillmailID, a.Killmail.KillmailID))
 	})
 
-	for _, id := range systemOrder {
-		data.Systems = append(data.Systems, *systems[id])
+	for _, id := range tally.systemOrder {
+		data.Systems = append(data.Systems, *tally.systems[id])
 	}
 	total := func(s WarSystem) int { return s.A.Killmails + s.B.Killmails + s.Others.Killmails }
 	slices.SortStableFunc(data.Systems, func(a, b WarSystem) int {
 		return cmp.Or(cmp.Compare(total(b), total(a)), cmp.Compare(strings.ToLower(a.System.Name), strings.ToLower(b.System.Name)), cmp.Compare(a.System.SystemID, b.System.SystemID))
 	})
 
-	data.A, data.B, data.Others = measures[WarSideA].result(), measures[WarSideB].result(), measures[WarSideNone].result()
-	data.NPCPilots = npcPilots.result()
+	data.A, data.B, data.Others = tally.measures[WarSideA].result(), tally.measures[WarSideB].result(), tally.measures[WarSideNone].result()
+	data.NPCPilots = tally.npcPilots.result()
 	data.Days = []WarDay{}
-	for date, sides := range days {
+	for date, sides := range tally.days {
 		day := WarDay{Date: date, A: sides[WarSideA].result(), B: sides[WarSideB].result()}
 		if day.A.Killmails > 0 || day.B.Killmails > 0 {
 			data.Days = append(data.Days, day)
 		}
 	}
 	slices.SortFunc(data.Days, func(a, b WarDay) int { return cmp.Compare(a.Date, b.Date) })
-	for group, builder := range otherGroups {
+	for group, builder := range tally.otherGroups {
 		data.OtherGroups = append(data.OtherGroups, WarOther{Group: groupOf(group), Measures: builder.result()})
 	}
 	slices.SortFunc(data.OtherGroups, func(a, b WarOther) int {

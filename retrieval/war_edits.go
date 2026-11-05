@@ -7,8 +7,9 @@ import (
 
 // the kinds of edit, see WarBattleEdit
 const (
-	WarEditMerge = "merge" // Groups: one list of killmail ids per battle
-	WarEditSplit = "split" // Groups: what stays, then what moved
+	WarEditMerge  = "merge"  // Groups: one list of killmail ids per battle
+	WarEditSplit  = "split"  // Groups: what stays, then what moved
+	WarEditIgnore = "ignore" // Groups: the battle's killmails
 )
 
 // WarBattleEdit is one change the user made to a war's battles. It is saved as killmail ids, not a battle's id, as a later run can change those. See .claude/docs/war-plan.md's Stage 4.

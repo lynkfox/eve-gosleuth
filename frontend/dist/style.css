@@ -3282,6 +3282,8 @@ section.war-others { display: grid; gap: 8px; }
 .war-table > tbody > tr:nth-child(even) { background: color-mix(in srgb, var(--text) 3%, transparent); }
 .war-table > tbody > tr.war-battle:hover { background: var(--panel-raised); }
 .war-skirmish { color: var(--muted); }
+.war-battle-ignored > td { opacity: 0.45; }
+.war-table > tbody > tr.war-battle-ignored:hover > td { opacity: 0.7; }
 .war-side-cell { border-left: 3px solid var(--border); }
 .war-side-cell.war-a { border-left-color: var(--war-a); }
 .war-side-cell.war-b { border-left-color: var(--war-b); }

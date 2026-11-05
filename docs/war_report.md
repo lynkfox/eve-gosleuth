@@ -57,6 +57,7 @@ The **War** button sets up two sides and a start date, and GoSleuth follows the 
   - *The listing can be sorted by column and filtered by system class*
   - *Links to various BR sites are available for the system with the most killmails. There is no automated way to generate multi-system reports, so right-click a battle for the reports of each of its other systems*
   - *Right-click a battle to merge it with others or split killmails out of it, if the tool grouped them wrong. This only regroups the rows: ISK and ship totals don't change, and each can be undone from the same menu. These are kept through updates*
+  - *A battle that isn't part of the war can be ignored from the same menu. It stays on the list, grayed out, and it leaves everything else in the report, along with any trash or asset denial attached to it, until it's taken back. If only part of a fight doesn't belong, split that part off first and ignore just the piece*
 - **Systems**
   - *Similar to the Battles, but showing everything for a given system*
 - **Timeline**

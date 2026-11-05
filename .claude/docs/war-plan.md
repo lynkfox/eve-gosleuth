@@ -172,7 +172,7 @@ Added after a report is generated, from a battle's row. Reordered by the user on
 
 ### Ignore a battle
 
-It leaves the war's totals and stays on the lists grayed out, with its own figures, to be taken back (user, 2026-11-05). The Ahbazon tower's fight (J121959, Nov 4) is the first case.
+It leaves the war's totals and stays on the lists grayed out, with its own figures, to be taken back (user, 2026-11-05). **The Ahbazon tower is the first case, and it takes a split first:** its row is a real 185 pilot fight of 36.6B in J121959 that spread to Ahbazon on one killmail, a 14K shuttle. Ticking Ahbazon in Split and ignoring that piece takes only the shuttle and the tower's mark, checked on a copy of the user's cache on 2026-11-05.
 
 - **What the row shows leaves with it (user):** its killmails and any trash or asset denial attached to its stations, from the Overview, Timeline, Systems, Others, and marks.
 - **Trash is found again without them,** so a station in it stops confirming a Ref'd mark or ending asset denial elsewhere.

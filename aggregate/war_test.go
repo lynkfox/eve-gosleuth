@@ -1605,3 +1605,89 @@ func TestWarBattleEdits(t *testing.T) {
 		assert.Len(t, build(split).Battles, 4)
 	})
 }
+
+func TestWarIgnoreBattle(t *testing.T) {
+	comm.InitLogger(logrus.ErrorLevel)
+	assert.NoError(t, comm.InitStaticData(staticdata.Files))
+	sides := baseSides()
+	ignore := func(ids ...int) retrieval.WarEdits {
+		return retrieval.WarEdits{Edits: []retrieval.WarBattleEdit{{ID: 1, Kind: retrieval.WarEditIgnore, Groups: [][]int{ids}}}}
+	}
+
+	t.Run("its killmails leave every figure as if never held, and its row stays with its own", func(t *testing.T) {
+		kept := []retrieval.RawKillmail{raw(1, 0, sysHome, pA1(1), rifter, pB(2)), raw(2, 120, sysHome, pC(9), rifter, pA1(3)), raw(4, 122, sysHome, pB(4), rifter, pA1(3))}
+		apart := raw(3, 300, sysOther, pB(5), rifter, pA1(6), pC(7))
+		all := append(append([]retrieval.RawKillmail{}, kept...), apart)
+
+		data := aggregate.BuildWar(all, expand(all...), sides, 1, ignore(3))
+		never := aggregate.BuildWar(kept, expand(kept...), sides, 1, retrieval.WarEdits{})
+		assert.Equal(t, warFiguresOf(never), warFiguresOf(data))
+		assert.Equal(t, never.BattleCount, data.BattleCount)
+		assert.Equal(t, 1, data.IgnoredBattles)
+		assert.Len(t, data.Killmails, 3)
+		if assert.Len(t, data.Battles, 3) {
+			row := data.Battles[0]
+			assert.True(t, row.Ignored)
+			assert.Equal(t, []int{3}, row.KillmailIDs)
+			assert.Equal(t, 300.0, row.B.ISKLost, "its row keeps its own figures")
+			assert.Equal(t, []aggregate.WarEditMark{{ID: 1, Kind: "ignore"}}, row.Edits)
+		}
+	})
+
+	t.Run("a killmail new since it was ignored goes with it", func(t *testing.T) {
+		all := []retrieval.RawKillmail{raw(1, 0, sysHome, pB(1), rifter, pA1(2)), raw(2, 3, sysHome, pB(3), rifter, pA1(2))}
+		data := aggregate.BuildWar(all, expand(all...), sides, 1, ignore(1))
+		assert.Zero(t, data.B.Killmails)
+		assert.Equal(t, 1, data.IgnoredBattles)
+	})
+
+	t.Run("the trash of its station leaves with it, and shows on its row", func(t *testing.T) {
+		all := []retrieval.RawKillmail{
+			raw(1, 0, sysHome, pB(1), astrahus, pA1(2)),
+			raw(2, 30, sysHome, pB(5), rifter, pA1(2)), // in the 4 hour window, one attacker
+			raw(3, 500, sysOther, pB(6), rifter, pA1(7)),
+		}
+		plain := aggregate.BuildWar(all, expand(all...), sides, 1, retrieval.WarEdits{})
+		assert.NotZero(t, plain.B.ISKTrash)
+
+		data := aggregate.BuildWar(all, expand(all...), sides, 1, ignore(1))
+		assert.Zero(t, data.B.ISKTrash)
+		assert.Equal(t, 1, data.B.Killmails, "only the fight elsewhere is left")
+		assert.Len(t, data.Killmails, 1)
+		assert.Len(t, data.Systems, 1)
+		var row *aggregate.WarBattle
+		for _, battle := range data.Battles {
+			if battle.Ignored {
+				row = battle
+			}
+		}
+		if assert.NotNil(t, row) {
+			assert.Equal(t, 200.0, row.B.TrashISK)
+		}
+	})
+
+	t.Run("a station in it no longer confirms a mark elsewhere", func(t *testing.T) {
+		templar := standupTemplar
+		fight := raw(1, 0, sysHome, pB(1), templar, pA1(2))
+		fall := raw(2, 5000, sysHome, pB(3), raitaru, pA1(4)) // within a medium's timer
+		all := []retrieval.RawKillmail{fight, fall}
+
+		marked := func(data *aggregate.WarData) (int, int) { return data.B.StationRefs, data.B.RefAttempts }
+		confirmed, attempts := marked(aggregate.BuildWar(all, expand(all...), sides, 1, retrieval.WarEdits{}))
+		assert.Equal(t, []int{1, 0}, []int{confirmed, attempts})
+		confirmed, attempts = marked(aggregate.BuildWar(all, expand(all...), sides, 1, ignore(2)))
+		assert.Equal(t, []int{0, 1}, []int{confirmed, attempts})
+	})
+
+	t.Run("a split's piece can be ignored, leaving the other", func(t *testing.T) {
+		all := []retrieval.RawKillmail{raw(1, 0, sysHome, pB(1), rifter, pA1(2)), raw(2, 5, sysHome, pB(3), rifter, pA1(2))}
+		data := aggregate.BuildWar(all, expand(all...), sides, 1, retrieval.WarEdits{Edits: []retrieval.WarBattleEdit{
+			{ID: 1, Kind: retrieval.WarEditSplit, Groups: [][]int{{1}, {2}}},
+			{ID: 2, Kind: retrieval.WarEditIgnore, Groups: [][]int{{2}}},
+		}})
+		assert.Equal(t, 1, data.B.Killmails)
+		assert.Equal(t, 1, data.IgnoredBattles)
+		assert.Len(t, data.Battles, 2)
+		assert.NotEqual(t, data.Battles[0].ID, data.Battles[1].ID)
+	})
+}
