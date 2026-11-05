@@ -87,7 +87,7 @@ func (c *CachedEveIDs) Entries() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.db == nil {
-		count := len(c.NameLookups) + len(c.Searched) + len(c.IgnoredAllies) + len(c.Holdings) + len(c.ZkillLists) + len(c.Images) + len(c.PendingChecks) + len(c.States)
+		count := len(c.NameLookups) + len(c.Searched) + len(c.IgnoredAllies) + len(c.Holdings) + len(c.SavedCoalitions) + len(c.ZkillLists) + len(c.Images) + len(c.PendingChecks) + len(c.States)
 		for _, entries := range c.idMaps() {
 			count += len(entries.entries)
 		}
@@ -148,7 +148,7 @@ func (c *CachedEveIDs) removeWhere(match func(section, *CacheEntry) bool, where 
 	for _, entries := range []struct {
 		section section
 		entries map[string]*CacheEntry
-	}{{sectionNameLookups, c.NameLookups}, {sectionRecentSearches, c.Searched}, {sectionIgnoredAllies, c.IgnoredAllies}, {sectionHoldings, c.Holdings}, {sectionZkillLists, c.ZkillLists}, {sectionImages, c.Images}, {sectionIntelChecks, c.PendingChecks}, {sectionAppState, c.States}} {
+	}{{sectionNameLookups, c.NameLookups}, {sectionRecentSearches, c.Searched}, {sectionIgnoredAllies, c.IgnoredAllies}, {sectionHoldings, c.Holdings}, {sectionCoalitions, c.SavedCoalitions}, {sectionZkillLists, c.ZkillLists}, {sectionImages, c.Images}, {sectionIntelChecks, c.PendingChecks}, {sectionAppState, c.States}} {
 		for key, entry := range entries.entries {
 			if match(entries.section, entry) {
 				delete(entries.entries, key)
@@ -212,8 +212,8 @@ func (c *CachedEveIDs) compact() {
 	}
 }
 
-// userSections hold what the user set by hand, not looked up: ignored allies and holding links, and the checks of those imported. Clears leave them unless told to include them.
-var userSections = []section{sectionIgnoredAllies, sectionHoldings, sectionIntelChecks}
+// userSections hold what the user set by hand, not looked up: ignored allies, holding links, and coalitions, and the checks of those imported. Clears leave them unless told to include them.
+var userSections = []section{sectionIgnoredAllies, sectionHoldings, sectionCoalitions, sectionIntelChecks}
 
 // keptSections are never cleared: what the app remembers about itself, ie the versions What's New has shown, which a clear would only bring back
 var keptSections = []section{sectionAppState}

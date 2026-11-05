@@ -23,7 +23,7 @@ import (
 
 /*
 	ExportPDF saves the last search's report as a PDF to a file the user picks. It takes a.mu only to copy the report, so the file picker never holds up a search.
-	The frontend shows it only for a corporation or alliance.
+	The frontend shows it only for a corporation, alliance, or coalition.
 
 Parameters:
   - sections: the sections to include beyond the Summary, which is always first, ie summary
@@ -37,7 +37,7 @@ func (a *App) ExportPDF(sections []string) (path string, err error) {
 
 	input, found := a.lastPDFInput()
 	if !found {
-		return "", errors.New("Search for a corporation or alliance first, then export its report")
+		return "", errors.New("Search for a corporation, alliance, or coalition first, then export its report")
 	}
 
 	name := input.Target.Ticker
@@ -115,7 +115,7 @@ func pdfInput(target TargetResult, rep IntelReport, version string, now time.Tim
 		Target: report.Target{
 			Name:   display.Name,
 			Ticker: display.Ticker,
-			Type:   target.Type,
+			Type:   pdfTargetType(target.Type),
 		},
 		Scope: report.Scope{
 			Killmails:   len(rep.Killmails),
@@ -173,6 +173,14 @@ func pdfInput(target TargetResult, rep IntelReport, version string, now time.Tim
 	return in
 }
 
+// pdfTargetType is the target's type as the PDF's first page words it, ie Coalition: the report package words the EVE types itself and passes others through
+func pdfTargetType(typeName string) string {
+	if typeName == coalitionType {
+		return "Coalition"
+	}
+	return typeName
+}
+
 // fleetDoctrineTag is the fit tag that makes a fit one of the PDF's Fleet Doctrines (static_data/fit_tag_rules.json)
 const fleetDoctrineTag = "Fleet Doctrine"
 
@@ -187,7 +195,7 @@ func inPDFDoctrines(fit FitGroup) bool {
 }
 
 /*
-	pdfImageURLs lists the images the PDF report of a corp or alliance draws, so the search can fetch them: the target's logo, each Fleet Doctrine hull's render, and each capital hull's icon
+	pdfImageURLs lists the images the PDF report of a corp, alliance, or coalition draws, so the search can fetch them: the target's logo (a coalition has none), each Fleet Doctrine hull's render, and each capital hull's icon
 
 Parameters:
   - targetType: the target's type

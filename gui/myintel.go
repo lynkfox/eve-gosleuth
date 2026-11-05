@@ -61,7 +61,8 @@ func (a *App) GetMyIntel() (groups []IntelGroup, err error) {
 	}
 
 	// ignored allies are saved without the target's name, which is looked up for all of them at once
-	ignored := a.cache.AllIgnoredAllies()
+	// a coalition has no allies, and its negative id is no eve id to look up, should a row ever name one
+	ignored := slices.DeleteFunc(a.cache.AllIgnoredAllies(), func(target retrieval.TargetIgnoredAllies) bool { return target.TargetType == coalitionType })
 	unnamed := []int{}
 	for _, target := range ignored {
 		if _, found := byKey[intelGroupKey(target.TargetType, target.TargetID)]; !found {
@@ -184,7 +185,7 @@ Returns:
 */
 func (a *App) AddIgnoredAlly(targetType string, targetID int, allyName string, allyType string) (err error) {
 	defer recoverAsError(&err)
-	if entityType, ok := searchTypes[targetType]; !ok || entityType == types.SYSTEM {
+	if entityType, ok := searchTypes[targetType]; !ok || entityType == types.SYSTEM || entityType == types.COALITION {
 		return errors.New("Only pilots, corporations, and alliances have allies")
 	}
 	if !canHold(allyType) {
@@ -251,7 +252,7 @@ Parameters:
 */
 func (a *App) RemoveMyIntelGroup(entityType string, entityID int) (err error) {
 	defer recoverAsError(&err)
-	if entityTypeOf, ok := searchTypes[entityType]; !ok || entityTypeOf == types.SYSTEM {
+	if entityTypeOf, ok := searchTypes[entityType]; !ok || entityTypeOf == types.SYSTEM || entityTypeOf == types.COALITION {
 		return errors.New("Only pilots, corporations, and alliances have cards")
 	}
 	a.removeMyIntelGroup(entityType, entityID)
@@ -261,8 +262,8 @@ func (a *App) RemoveMyIntelGroup(entityType string, entityID int) (err error) {
 
 // removeMyIntelGroup removes a card's holdings and ignored allies, leaving saving to the caller
 func (a *App) removeMyIntelGroup(entityType string, entityID int) {
-	if entityTypeOf, ok := searchTypes[entityType]; !ok || entityTypeOf == types.SYSTEM {
-		return
+	if entityTypeOf, ok := searchTypes[entityType]; !ok || entityTypeOf == types.SYSTEM || entityTypeOf == types.COALITION {
+		return // a coalition's card is removed by RemoveCoalitions
 	}
 	if canHold(entityType) {
 		holdings, _ := a.cache.HoldingLinks(entityType, entityID)

@@ -1,5 +1,7 @@
 # Coalition grouping and searches
 
+Built 2026-11-04. Changed after the plan, at the user's call: a coalition has no Allies tab and no ignored allies, so read what follows with those parts gone. `.claude/docs/features.md` has how it works now.
+
 Plan of 2026-11-04, decisions settled with the user the same night. This is the Readme's "Custom Collation searches" item; the name in everything users see is **Coalition**.
 
 ## What it is

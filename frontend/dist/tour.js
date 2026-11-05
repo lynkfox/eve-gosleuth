@@ -330,6 +330,8 @@ function tourStandIn(t) {
     async RemoveRecentSearch() { return tourCopy(sample); },
     // nothing saved is shown, or added to
     async GetMyIntel() { return []; },
+    async GetCoalitions() { return []; },
+    async GetSearchLimits() { return { maxKillmails: 20, killmailPages: 10, killmailsNewerThanDays: 90 }; },
     async SaveHolding() { return tourCopy(noHoldings); },
     async SaveIgnoredAllies() { return null; },
     async LookupEntity() { throw new Error("Not available in the tour."); },

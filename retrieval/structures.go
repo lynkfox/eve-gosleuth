@@ -25,7 +25,7 @@ type StructureKillmails struct {
 	Each killmail is the cache's copy, else zKillboard's, else fetched from the ESI.
 
 Parameters:
-  - target: the corp or alliance IntelTarget, with any Holdings
+  - target: the corp, alliance, or coalition IntelTarget, with any Holdings. A coalition's lists are its Holdings' only.
   - limits: the search's limits, of which Max, Pages, and IncludeCached are used
 
 Returns:
@@ -42,10 +42,17 @@ func CollectStructureKillmails(target IntelTarget, limits KillmailLimits) (Struc
 		via        *TargetGroup
 		whose      string
 	}
-	entities := []entity{{target.TypeOfEntity, target.IDNumber, nil, target.DisplayName()}}
+	entities := []entity{}
+	if target.TypeOfEntity != types.COALITION { // a coalition has no list of its own, only its members' and their affiliates'
+		entities = append(entities, entity{target.TypeOfEntity, target.IDNumber, nil, target.DisplayName()})
+	}
 	for index := range target.Holdings {
 		holding := &target.Holdings[index]
-		entities = append(entities, entity{holding.Type, holding.ID, holding, "affiliate " + holding.Name})
+		whose := "affiliate " + holding.Name
+		if target.TypeOfEntity == types.COALITION && holding.Member {
+			whose = "member " + holding.Name
+		}
+		entities = append(entities, entity{holding.Type, holding.ID, holding, whose})
 	}
 
 	var found StructureKillmails

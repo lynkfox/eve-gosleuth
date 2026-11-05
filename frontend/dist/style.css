@@ -1628,6 +1628,25 @@ button.text-link {
 
 /* My Intel: a filter, a row to add a card, then a collapsible card per target with its holdings, the mains it holds for, and its ignored allies */
 #myintel { width: min(680px, calc(100vw - 32px)); height: calc(100vh - 32px); }
+.myintel-panes { display: flex; flex: 1 1 auto; gap: 12px; min-height: 0; }
+.myintel-pane { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; min-height: 0; }
+.myintel-pane[hidden] { display: none; }
+.myintel-pane-title,
+.myintel-split-only { display: none; }
+.myintel-pane-actions { display: flex; align-items: center; gap: 8px; }
+.myintel-pane-actions .myintel-dock { padding: 2px 10px; font-size: 12px; }
+/* pulled out: the dialog is only a frame, and each pane looks like a window of its own */
+#myintel.split { width: min(1320px, calc(100vw - 32px)); background: none; border: none; box-shadow: none; }
+#myintel.split .myintel-tabbed-title,
+#myintel.split .myintel-tab-row { display: none; }
+#myintel.split .myintel-pane { background: var(--panel-raised); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 12px 32px rgb(0 0 0 / 0.5); }
+#myintel.split .myintel-pane-title { display: flex; }
+#myintel.split .myintel-split-only { display: inline; }
+.myintel-tab-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.myintel-pull-out { padding: 4px 10px; font-size: 12px; }
+/* what can be dragged to a coalition, and the coalition under it */
+.myintel-draggable { cursor: grab; }
+.myintel-card-line.drop-target > .myintel-card { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 /* everything from the buttons up stays put; only the cards scroll */
 .myintel-body { display: flex; flex-direction: column; overflow: hidden; }
 .myintel-body > * { flex: none; }
@@ -1636,7 +1655,51 @@ button.text-link {
 .myintel-bulk { display: flex; gap: 8px; }
 .myintel-bulk[hidden] { display: none; }
 .myintel-bulk button { font-size: 12px; }
-#myintel-delete-button:not(:disabled) { border-color: var(--error); color: var(--error); }
+/* folded, only the Filter row stays; Import hides too, and a message about a change (the error) stays in view */
+.myintel-body.folded .myintel-fold,
+.myintel-body.folded .myintel-import-button { display: none; }
+.myintel-body.folded .myintel-tools { grid-template-columns: minmax(0, 1fr); }
+/* its place in the window's flow, not the overlap the target panel's has */
+.myintel-pull { margin: 0; cursor: pointer; touch-action: auto; }
+.myintel-warning[hidden] { display: none; }
+/* the Affiliates and Coalitions tabs, joined like the Killmails tab's Kills, Losses, All buttons */
+.myintel-tabs { display: flex; }
+.myintel-tabs button {
+  padding: 4px 18px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: normal;
+  cursor: pointer;
+}
+.myintel-tabs button + button { margin-left: -1px; }
+.myintel-tabs button:first-child { border-radius: 4px 0 0 4px; }
+.myintel-tabs button:last-child { border-radius: 0 4px 4px 0; }
+.myintel-tabs button[aria-selected="true"] { border-color: var(--accent); background: var(--panel-raised); color: var(--text); }
+.myintel-add.coalition-add { grid-template-columns: minmax(0, 1fr) auto; }
+.myintel-structures { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.myintel-structures input { margin-top: 3px; accent-color: var(--accent); }
+.myintel-structures .preference-help { display: block; margin: 0; }
+.myintel-rename { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.myintel-rename input { width: 100%; font-size: 12px; }
+.myintel-row.read-only .myintel-spacer { width: 8px; }
+.myintel-emblem { width: 28px; height: 28px; padding: 3px; flex: none; border-radius: 4px; stroke: var(--muted); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.myintel-card > summary .myintel-emblem { stroke: var(--muted); }
+
+/* a coalition target: a generic emblem in a portrait's place, then its members as chips */
+.coalition-emblem { padding: 10px; box-sizing: border-box; stroke: var(--muted); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; background: var(--panel-raised); }
+.coalition-members { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; max-width: 760px; }
+.coalition-members .holding-label { min-width: 0; }
+.coalition-picker { width: min(400px, calc(100vw - 32px)); }
+.coalition-picker .window-body { display: grid; gap: 10px; align-content: start; }
+.coalition-picker-list { display: grid; gap: 6px; max-height: 40vh; overflow-y: auto; }
+.coalition-picker-list button { text-align: left; }
+.coalition-picker-new { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.coalition-picker-new input { width: 100%; }
+
+.myintel-delete:not(:disabled) { border-color: var(--error); color: var(--error); }
 .myintel-tools input,
 .myintel-add input { width: 100%; }
 .myintel-card-pick { flex: none; margin: 0; accent-color: var(--accent); }
@@ -3004,3 +3067,5 @@ p.tour-text { margin: 0; }
 @media (max-width: 760px) {
   .tour-dots { display: none; }
 }
+.myintel-coalition-note .myintel-note-cell { justify-content: flex-start; }
+.myintel-coalition-note .myintel-note-text { text-align: left; }

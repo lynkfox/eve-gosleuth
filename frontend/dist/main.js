@@ -144,7 +144,7 @@ function toggleTickerHistory() {
 }
 
 // SEARCH_TYPES are the kinds of entity a search finds, with their names, ie Pilot for PILOT
-const SEARCH_TYPES = { PILOT: "Pilot", CORPORATION: "Corporation", ALLIANCE: "Alliance", SYSTEM: "System" };
+const SEARCH_TYPES = { PILOT: "Pilot", CORPORATION: "Corporation", ALLIANCE: "Alliance", SYSTEM: "System", COALITION: "Coalition" };
 
 // isSearchable returns true if a search can find the entity type, ie PILOT
 function isSearchable(type) {
@@ -406,8 +406,24 @@ let renderedTarget = null;
 
 function renderTarget(result) {
   renderedTarget = result;
-  const display = result.display;
+  const display = result.display || {};
+  coalitionMembersBox = null;
 
+  if (result.type === "COALITION") drawCoalitionTarget(result, display);
+  else drawEntityTarget(result, display);
+
+  shownTarget = { id: result.id, type: result.type, name: display.Name, imageUrl: display.TargetImageUrl };
+  renderHoldings(result.holdings);
+
+  el("empty").hidden = true;
+  el("target-wrap").hidden = false;
+  el("target-pull").hidden = false;
+  // a panel pulled shut stays so for the next search, its bar naming the new target. The Collapse target preference shuts it at each search.
+  setTargetCollapsed(targetCollapsed || preferences.collapseTarget);
+}
+
+// drawEntityTarget fills the target panel and the Profile for a pilot, corp, alliance, or system
+function drawEntityTarget(result, display) {
   const target = { label: result.type, id: result.id, name: display.Name, type: result.type, imageUrl: display.TargetImageUrl, zkillUrl: display.ZkillUrl, evewhoUrl: display.EveWhoUrl, dotlanUrl: display.DotlanUrl, spaceLabel: display.SpaceLabel, ticker: display.Ticker };
   const related = (display.Related || []).map((entity) => ({
     label: entity.Title, id: entity.ID, name: entity.Name, type: entity.TypeName, imageUrl: entity.ImageUrl, zkillUrl: entity.ZkillUrl, evewhoUrl: entity.EveWhoUrl, ticker: entity.Ticker,
@@ -440,15 +456,82 @@ function renderTarget(result) {
   } else {
     el("right-details-value").textContent = display.RightDetailsValue;
   }
+}
 
-  shownTarget = { id: result.id, type: result.type, name: display.Name, imageUrl: display.TargetImageUrl };
-  renderHoldings(result.holdings);
+/*
+  drawCoalitionTarget fills the target panel for a coalition: its name beside a generic emblem, then its members as chips, each opening a search for it.
+  It has no zKillboard or EveWho page, so no links, and no affiliate buttons. result.coalition is the CoalitionCard, display may have few fields.
+*/
+function drawCoalitionTarget(result, display) {
+  const card = result.coalition || { id: result.id, name: display.Name, note: "", members: [] };
+  const name = display.Name || card.name;
 
-  el("empty").hidden = true;
-  el("target-wrap").hidden = false;
-  el("target-pull").hidden = false;
-  // a panel pulled shut stays so for the next search, its bar naming the new target. The Collapse target preference shuts it at each search.
-  setTargetCollapsed(targetCollapsed || preferences.collapseTarget);
+  const block = document.createElement("div");
+  block.className = "entity entity-target";
+  const side = document.createElement("div");
+  side.className = "entity-side";
+  const emblem = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  emblem.setAttribute("class", "portrait coalition-emblem");
+  emblem.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", "#icon-coalition");
+  emblem.append(use);
+  side.append(emblem);
+  const text = document.createElement("div");
+  text.className = "entity-text";
+  const label = document.createElement("span");
+  label.className = "badge";
+  label.textContent = "Coalition";
+  const title = document.createElement("h1");
+  title.className = "entity-name";
+  title.textContent = name;
+  text.append(label, title);
+  block.append(side, text);
+
+  coalitionMembersBox = document.createElement("div");
+  coalitionMembersBox.className = "coalition-members";
+  fillCoalitionMembers(card);
+  el("target-entities").replaceChildren(block, coalitionMembersBox);
+
+  const count = card.members.length;
+  el("left-details-title").textContent = display.LeftDetailsTitle || "Members";
+  el("left-details-value").textContent = display.LeftDetailsValue || `${plural(count, "corporation or alliance", "corporations and alliances")}`;
+  el("right-details-title").textContent = display.RightDetailsTitle || "Note";
+  el("right-details-value").textContent = display.RightDetailsValue || card.note || "None";
+}
+
+// coalitionMembersBox is the shown coalition target's row of member chips, null when another target is shown
+let coalitionMembersBox = null;
+
+// fillCoalitionMembers draws a coalition's members as chips in the target panel: logo, name (click to search it), and its right click menu
+function fillCoalitionMembers(card) {
+  if (!coalitionMembersBox) return;
+  const title = document.createElement("span");
+  title.className = "holding-label";
+  title.textContent = "Members";
+  const chips = card.members.map((member) => {
+    const chip = document.createElement("span");
+    chip.className = "holding";
+    const logo = document.createElement("img");
+    logo.src = member.iconUrl;
+    logo.alt = "";
+    const name = document.createElement("button");
+    name.type = "button";
+    name.className = "link-button";
+    name.textContent = member.name;
+    name.title = "Search for this";
+    name.addEventListener("click", () => offerSearch({ type: member.type, name: member.name, id: member.id }));
+    chip.append(logo, name);
+    if (member.ticker) chip.append(tickerTag(member.type, member.ticker));
+    return withMenu(chip, [entitySection(member)]);
+  });
+  if (chips.length === 0) {
+    const none = document.createElement("span");
+    none.className = "row-detail";
+    none.textContent = "No members yet";
+    chips.push(none);
+  }
+  coalitionMembersBox.replaceChildren(title, ...chips);
 }
 
 // targetCollapsed is true while the pull bar has the target panel pulled shut
@@ -730,63 +813,186 @@ function openMyIntel() {
   closeThemesMenu();
   closeLimitsMenu();
   showMyIntelError("");
+  foldMyIntel(myIntelFolded);
+  applyMyIntelLayout();
+  refreshLimitsWarning();
   // an undo lasts only while the window it was offered in is open
   myIntelRemoved = [];
-  el("myintel-undo").hidden = true;
+  showMyIntelUndo("");
   el("myintel").showModal();
   loadMyIntel();
 }
 
 async function loadMyIntel() {
-  const groups = await runBackend(() => backend().GetMyIntel());
-  if (!groups) return;
-  myIntel = groups;
-  // a card added here stays until it has something saved, when it is one of the backend's
-  myIntelAdded = myIntelAdded.filter((added) => !groups.some((group) => intelKey(group.entity) === intelKey(added.entity)));
+  const [groups, coalitions] = await Promise.all([runBackend(() => backend().GetMyIntel()), runBackend(() => backend().GetCoalitions())]);
+  if (coalitions) myIntelCoalitions = coalitions.map(coalitionGroup);
+  if (groups) {
+    myIntel = groups;
+    // a card added here stays until it has something saved, when it is one of the backend's
+    myIntelAdded = myIntelAdded.filter((added) => !groups.some((group) => intelKey(group.entity) === intelKey(added.entity)));
+  }
+  if (groups || coalitions) renderMyIntel();
+}
+
+// myIntelTab is the tab shown while the lists are tabbed, affiliates or coalitions, and myIntelFolded whether the top of each list is folded to its Filter row. myIntelSplit is whether Coalitions is pulled out, saved in the settings.
+let myIntelTab = "affiliates";
+let myIntelFolded = false;
+let myIntelSplit = false;
+// myIntelCoalitions are the Coalitions list's cards as groups, { entity: { type: "COALITION", id, name }, coalition: the backend's CoalitionCard }, so they tick, open, and export like any other card
+let myIntelCoalitions = [];
+
+const coalitionGroup = (card) => ({ entity: { type: "COALITION", id: card.id, name: card.name }, coalition: card });
+
+// isSavedCard is true for a card the backend has, not one only added here and still empty
+const isSavedCard = (group) => Boolean(group.coalition) || myIntel.includes(group);
+
+// MY_INTEL_TABS are the two lists, and myIntelPart one of a list's elements by the end of its id: the Affiliates list's are myintel-*, the Coalitions list's myintel-c-*
+const MY_INTEL_TABS = ["affiliates", "coalitions"];
+const myIntelPart = (tab, part) => el(`${tab === "coalitions" ? "myintel-c" : "myintel"}-${part}`);
+// the panes only sit side by side where they both have room, else they stay tabbed until the window is wider
+const MY_INTEL_ROOM_TO_SPLIT = window.matchMedia("(min-width: 900px)");
+const myIntelIsSplit = () => myIntelSplit && MY_INTEL_ROOM_TO_SPLIT.matches;
+
+// foldMyIntel folds the top of each list away down to its Filter row, or opens them again
+function foldMyIntel(folded) {
+  myIntelFolded = folded;
+  const action = folded ? "Show the top of this window again" : "Fold the top of this window away, leaving the filter";
+  for (const tab of MY_INTEL_TABS) myIntelPart(tab, "body").classList.toggle("folded", folded);
+  for (const button of document.querySelectorAll(".myintel-pull")) {
+    button.setAttribute("aria-expanded", String(!folded));
+    button.title = action;
+    button.setAttribute("aria-label", action);
+  }
+}
+
+// applyMyIntelLayout shows the lists tabbed or side by side, and draws the cards again, as only side by side can they be dragged
+function applyMyIntelLayout() {
+  const split = myIntelIsSplit();
+  el("myintel").classList.toggle("split", split);
+  for (const tab of MY_INTEL_TABS) myIntelPart(tab, "pane").hidden = !split && tab !== myIntelTab;
+  for (const button of document.querySelectorAll(".myintel-tabs button")) button.setAttribute("aria-selected", String(button.dataset.tab === myIntelTab));
+  // on a window too narrow for two, pulling out would look like nothing happened
+  for (const button of document.querySelectorAll(".myintel-pull-out")) button.hidden = !MY_INTEL_ROOM_TO_SPLIT.matches;
   renderMyIntel();
 }
 
-function showMyIntelError(message) {
-  el("myintel-error").textContent = message;
-  el("myintel-error").hidden = !message;
+// setMyIntelTab shows the Affiliates or Coalitions tab
+function setMyIntelTab(tab) {
+  myIntelTab = tab;
+  showMyIntelError("");
+  applyMyIntelLayout();
 }
 
-// renderMyIntel draws the cards that match the filter, by any name on them, those added here first
+// setMyIntelSplit pulls Coalitions out beside Affiliates, or docks it again, and remembers it for each time My Intel opens
+function setMyIntelSplit(split) {
+  myIntelSplit = split;
+  showMyIntelError("");
+  applyMyIntelLayout();
+  backend().SetMyIntelSplit(split).catch((err) => showMyIntelError(String(err)));
+}
+
+// LARGE_KILLMAILS is the killmail count past which a coalition search is called large, and ZKILL_PAGE_KILLMAILS how many killmails a zKillboard page holds
+const LARGE_KILLMAILS = 2000;
+const ZKILL_PAGE_KILLMAILS = 200;
+
+// largeSearchReason says why the limits the next search uses are large, or "" when they are not: any age, or more than LARGE_KILLMAILS killmails (the pages' worth when all are asked for)
+function largeSearchReason(limits) {
+  const reasons = [];
+  if (limits.killmailsNewerThanDays === 0) reasons.push("killmails of any age");
+  const count = limits.maxKillmails === ALL_KILLMAILS ? limits.killmailPages * ZKILL_PAGE_KILLMAILS : limits.maxKillmails;
+  if (count > LARGE_KILLMAILS) reasons.push(`up to ${count.toLocaleString("en-US")} killmails`);
+  return reasons.join(" and ");
+}
+
+// largeSearchWarning is the warning for a coalition search under the limits the next search uses, or "" when they are small or can not be read. It only warns.
+async function largeSearchWarning() {
+  let limits;
+  try {
+    limits = await backend().GetSearchLimits();
+  } catch {
+    return "";
+  }
+  const reason = limits && largeSearchReason(limits);
+  return reason ? `The search limits are large (${reason}), and a coalition search pages each member on its own, so this may take a long time. The limits button changes them.` : "";
+}
+
+// refreshLimitsWarning shows the Coalitions tab's second warning when the search limits are large, as the tab opens
+async function refreshLimitsWarning() {
+  const message = await largeSearchWarning();
+  const box = el("myintel-c-limits-warning");
+  box.textContent = message;
+  box.hidden = !message;
+}
+
+// showMyIntelError puts a message at the top of a list, or clears both with none. Without a list it goes on the one in front, the left while they are side by side.
+function showMyIntelError(message, tab = myIntelIsSplit() ? "affiliates" : myIntelTab) {
+  for (const each of MY_INTEL_TABS) {
+    const box = myIntelPart(each, "error");
+    box.textContent = each === tab ? message : "";
+    box.hidden = !box.textContent;
+  }
+}
+
+// showMyIntelUndo offers to bring back what was removed, on the list it was removed from, or hides the offer with nothing removed
+function showMyIntelUndo(what, tab = "affiliates") {
+  for (const each of MY_INTEL_TABS) {
+    myIntelPart(each, "undo-text").textContent = each === tab ? `Removed ${what}` : "";
+    myIntelPart(each, "undo").hidden = !what || each !== tab;
+  }
+}
+
+// renderMyIntel draws both lists' cards that match their filters, by any name on them, those added here first
 function renderMyIntel() {
-  const filter = el("myintel-filter").value.trim().toLowerCase();
-  const groups = [...myIntelAdded, ...myIntel];
-  const matches = (group) => !filter || [group.entity, ...group.holdings, ...group.heldFor, ...group.ignoredAllies].some((entity) => entity.name.toLowerCase().includes(filter));
-  const shown = groups.filter(matches);
-  myIntelShown = shown;
-  el("myintel-list").replaceChildren(...shown.map(myIntelCard));
-  el("myintel-empty").hidden = groups.length > 0;
-  el("myintel-bulk").hidden = groups.length === 0;
+  const lists = {
+    affiliates: {
+      groups: [...myIntelAdded, ...myIntel],
+      named: (group) => [group.entity, ...group.holdings, ...group.heldFor, ...group.ignoredAllies],
+      card: myIntelCard,
+    },
+    coalitions: {
+      groups: myIntelCoalitions,
+      named: (group) => [group.entity, ...group.coalition.members, ...group.coalition.affiliates],
+      card: coalitionCard,
+    },
+  };
+  for (const tab of MY_INTEL_TABS) {
+    const { groups, named, card } = lists[tab];
+    const filter = myIntelPart(tab, "filter").value.trim().toLowerCase();
+    const shown = groups.filter((group) => !filter || named(group).some((entity) => entity.name.toLowerCase().includes(filter)));
+    myIntelShown[tab] = shown;
+    myIntelPart(tab, "list").replaceChildren(...shown.map(card));
+    myIntelPart(tab, "empty").hidden = groups.length > 0;
+    myIntelPart(tab, "bulk").hidden = groups.length === 0;
+  }
   showPickedCount();
 }
 
-// myIntelShown are the cards the filter shows, which Check all ticks
-let myIntelShown = [];
+// myIntelShown are each list's cards the filter shows, which its Check all ticks
+const myIntelShown = { affiliates: [], coalitions: [] };
 
-// pickedCards are the ticked cards the filter shows, those added here first. A ticked card the filter hides is left out, so Export and Delete never act on cards out of sight.
-function pickedCards() {
-  return myIntelShown.filter((group) => myIntelPicked.has(intelKey(group.entity)));
+// pickedCards are a list's ticked cards the filter shows, those added here first. A ticked card the filter hides is left out, so Export and Delete never act on cards out of sight.
+function pickedCards(tab) {
+  return myIntelShown[tab].filter((group) => myIntelPicked.has(intelKey(group.entity)));
 }
 
-// showPickedCount names how many cards Export and Delete act on, and whether Check all ticks or unticks the cards shown
+// showPickedCount names how many cards each list's Export and Delete act on, and whether its Check all ticks or unticks the cards shown
 function showPickedCount() {
-  const picked = pickedCards();
-  const savedPicked = picked.filter((group) => myIntel.includes(group)).length;
-  el("myintel-export-button").textContent = savedPicked ? `Export ${savedPicked}…` : "Export…";
-  el("myintel-export-button").disabled = savedPicked === 0;
-  el("myintel-delete-button").textContent = picked.length ? `Delete ${picked.length}…` : "Delete…";
-  el("myintel-delete-button").disabled = picked.length === 0;
-  const allShownPicked = myIntelShown.length > 0 && myIntelShown.every((group) => myIntelPicked.has(intelKey(group.entity)));
-  el("myintel-pick-all").textContent = allShownPicked ? "Uncheck all" : "Check all";
+  for (const tab of MY_INTEL_TABS) {
+    const picked = pickedCards(tab);
+    const savedPicked = picked.filter(isSavedCard).length;
+    myIntelPart(tab, "export-button").textContent = savedPicked ? `Export ${savedPicked}…` : "Export…";
+    myIntelPart(tab, "export-button").disabled = savedPicked === 0;
+    myIntelPart(tab, "delete-button").textContent = picked.length ? `Delete ${picked.length}…` : "Delete…";
+    myIntelPart(tab, "delete-button").disabled = picked.length === 0;
+    const shown = myIntelShown[tab];
+    const allShownPicked = shown.length > 0 && shown.every((group) => myIntelPicked.has(intelKey(group.entity)));
+    myIntelPart(tab, "pick-all").textContent = allShownPicked ? "Uncheck all" : "Check all";
+  }
 }
 
-// pickAllShown ticks every card the filter shows, or unticks them if they all are
-function pickAllShown() {
-  const keys = myIntelShown.map((group) => intelKey(group.entity));
+// pickAllShown ticks every card a list's filter shows, or unticks them if they all are
+function pickAllShown(tab) {
+  const keys = myIntelShown[tab].map((group) => intelKey(group.entity));
   const allPicked = keys.length > 0 && keys.every((key) => myIntelPicked.has(key));
   for (const key of keys) {
     if (allPicked) myIntelPicked.delete(key);
@@ -795,15 +1001,15 @@ function pickAllShown() {
   renderMyIntel();
 }
 
-// exportMyIntel saves the ticked cards to a file the user picks
-async function exportMyIntel() {
+// exportMyIntel saves a list's ticked cards to a file the user picks
+async function exportMyIntel(tab) {
   showMyIntelError("");
-  const cards = pickedCards().filter((group) => myIntel.includes(group)).map((group) => intelKey(group.entity));
+  const cards = pickedCards(tab).filter(isSavedCard).map((group) => intelKey(group.entity));
   try {
     const file = await backend().ExportMyIntel(cards);
     if (file) tickerPush(`Exported ${cards.length} My Intel ${cards.length === 1 ? "card" : "cards"} to ${file}`);
   } catch (err) {
-    showMyIntelError(String(err));
+    showMyIntelError(String(err), tab);
   }
 }
 
@@ -898,11 +1104,15 @@ async function importMyIntel() {
   }
   if (preview.cancelled) return;
 
-  const changes = preview.newHoldings + preview.newIgnored + preview.noteChanges.length;
+  const newCoalitions = preview.coalitions || 0;
+  const newCoalitionMembers = preview.coalitionMembers || 0;
+  const changes = preview.newHoldings + preview.newIgnored + preview.noteChanges.length + newCoalitions + newCoalitionMembers;
   el("myintel-import-title").textContent = changes ? `Import ${preview.file}?` : `Nothing new in ${preview.file}`;
   const lines = [];
   if (preview.newHoldings) lines.push(`${plural(preview.newHoldings, "new affiliate", "new affiliates")}`);
   if (preview.newIgnored) lines.push(`${plural(preview.newIgnored, "new ignored ally", "new ignored allies")}`);
+  if (newCoalitions) lines.push(`${plural(newCoalitions, "new coalition", "new coalitions")}`);
+  if (newCoalitionMembers) lines.push(`${plural(newCoalitionMembers, "new coalition member", "new coalition members")}`);
   if (preview.knownHoldings || preview.knownIgnored) lines.push(`${preview.knownHoldings + preview.knownIgnored} already saved`);
   el("myintel-import-summary").replaceChildren(...lines.map((line) => {
     const item = document.createElement("li");
@@ -951,6 +1161,24 @@ function searchFromMyIntel(entity) {
   searchIdHint = entity.id || 0;
   el("search-input").value = entity.name;
   el("search-form").requestSubmit();
+}
+
+// myIntelSearchButton is the magnifying glass left of a card, which closes My Intel and searches for the card's entity
+function myIntelSearchButton(entity) {
+  const find = document.createElement("button");
+  find.type = "button";
+  find.className = "secondary myintel-card-search";
+  find.title = `Search for ${entity.name}`;
+  find.setAttribute("aria-label", `Search for ${entity.name}`);
+  const findIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  findIcon.setAttribute("class", "tab-icon");
+  findIcon.setAttribute("aria-hidden", "true");
+  const findUse = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  findUse.setAttribute("href", "#icon-search");
+  findIcon.append(findUse);
+  find.append(findIcon);
+  find.addEventListener("click", () => searchFromMyIntel(entity));
+  return find;
 }
 
 // myIntelCard is a target's card: its holdings with their notes, the mains it holds for, and its ignored allies, each with an x, and rows to add more
@@ -1003,26 +1231,14 @@ function myIntelCard(group) {
   });
   summary.append(pick, icon, name);
   if (entity.ticker) summary.append(tickerTag(entity.type, entity.ticker));
-  const find = document.createElement("button");
-  find.type = "button";
-  find.className = "secondary myintel-card-search";
-  find.title = `Search for ${entity.name}`;
-  find.setAttribute("aria-label", `Search for ${entity.name}`);
-  const findIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  findIcon.setAttribute("class", "tab-icon");
-  findIcon.setAttribute("aria-hidden", "true");
-  const findUse = document.createElementNS("http://www.w3.org/2000/svg", "use");
-  findUse.setAttribute("href", "#icon-search");
-  findIcon.append(findUse);
-  find.append(findIcon);
-  find.addEventListener("click", (event) => {
-    searchFromMyIntel(entity);
-  });
+  const find = myIntelSearchButton(entity);
   summary.append(kind, counts, remove);
   withMenu(summary, [entitySection(entity)]);
+  myIntelDraggable(summary, entity);
 
   const line = document.createElement("div");
   line.className = "myintel-card-line";
+  line.dataset.card = key;
   line.append(find, card);
 
   const body = document.createElement("div");
@@ -1030,9 +1246,11 @@ function myIntelCard(group) {
   const error = document.createElement("p");
   error.className = "preferences-error myintel-card-error";
   error.hidden = true;
+  // at the top of the card, brought into view, as the row that failed can be far below it
   const showError = (message) => {
     error.textContent = message;
     error.hidden = !message;
+    if (message) error.scrollIntoView({ block: "nearest" });
   };
 
   if (HOLDING_TYPES.includes(entity.type)) {
@@ -1040,12 +1258,12 @@ function myIntelCard(group) {
       myIntelChange(() => backend().SaveHolding(entity.id, entity.type, entity.name, name, type, note), showError, `Saved an affiliate for ${entity.name}`));
     body.append(myIntelTitle("Affiliates", add, "Add an affiliate"));
     if (group.holdings.length === 0) body.append(myIntelNone("No affiliates"));
-    body.append(...group.holdings.map((holding) => myIntelRow(holding, {
+    body.append(...group.holdings.map((holding) => myIntelDraggable(myIntelRow(holding, {
       note: holding.note,
       // by its link, so by id, as the ESI can not find every name
       onNote: (note) => myIntelChange(() => backend().SaveHolding(entity.id, entity.type, entity.name, holding.zkillUrl, holding.type, note), showError, `Saved the note on ${holding.name}`),
       onRemove: () => myIntelChange(() => backend().RemoveHolding(entity.type, entity.id, holding.type, holding.id), showError, `Removed ${holding.name} as an affiliate of ${entity.name}`),
-    })));
+    }), holding)));
     body.append(add);
   }
 
@@ -1066,7 +1284,141 @@ function myIntelCard(group) {
   })));
   body.append(addAlly);
 
-  body.append(error);
+  body.prepend(error);
+  card.append(summary, body);
+  return line;
+}
+
+/*
+  coalitionCard is a coalition's card: a magnifying glass beside it, then a tick, its emblem, name, member count, and x. Its body has the members with a row to add one, its note,
+  the members' own affiliates (read only, as they are set on the members' cards), whether its search includes structures, and a rename.
+*/
+function coalitionCard(group) {
+  const coalition = group.coalition;
+  const entity = group.entity;
+  const key = intelKey(entity);
+  const card = document.createElement("details");
+  card.className = "myintel-card";
+  card.open = myIntelOpen.has(key);
+  card.addEventListener("toggle", () => (card.open ? myIntelOpen.add(key) : myIntelOpen.delete(key)));
+
+  const summary = document.createElement("summary");
+  const pick = document.createElement("input");
+  pick.type = "checkbox";
+  pick.className = "myintel-card-pick";
+  pick.checked = myIntelPicked.has(key);
+  pick.title = "Tick to export or delete";
+  pick.setAttribute("aria-label", `Pick ${entity.name}`);
+  pick.addEventListener("change", () => {
+    if (pick.checked) myIntelPicked.add(key);
+    else myIntelPicked.delete(key);
+    showPickedCount();
+  });
+  const emblem = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  emblem.setAttribute("class", "myintel-emblem");
+  emblem.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", "#icon-coalition");
+  emblem.append(use);
+  const name = document.createElement("span");
+  name.className = "myintel-card-name";
+  name.textContent = entity.name;
+  const counts = document.createElement("span");
+  counts.className = "myintel-card-counts";
+  counts.textContent = plural(coalition.members.length, "member", "members");
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "allies-ignored-remove myintel-card-remove";
+  remove.textContent = "×";
+  remove.title = `Remove ${entity.name} from My Intel`;
+  remove.setAttribute("aria-label", `Remove ${entity.name} from My Intel`);
+  remove.addEventListener("click", (event) => {
+    event.preventDefault(); // not a toggle of the card
+    removeMyIntelCards([group]);
+  });
+  summary.append(pick, emblem, name, counts, remove);
+  withMenu(summary, [entitySection(entity)]);
+
+  const line = document.createElement("div");
+  line.className = "myintel-card-line";
+  line.dataset.card = key;
+  line.append(myIntelSearchButton(entity), card);
+
+  const body = document.createElement("div");
+  body.className = "myintel-card-body";
+  const error = document.createElement("p");
+  error.className = "preferences-error myintel-card-error";
+  error.hidden = true;
+  // at the top of the card, brought into view, as the row that failed can be far below it
+  const showError = (message) => {
+    error.textContent = message;
+    error.hidden = !message;
+    if (message) error.scrollIntoView({ block: "nearest" });
+  };
+  coalitionDropTarget(line, coalition, showError);
+  const change = (save, message) => myIntelChange(save, showError, message);
+
+  const addMember = myIntelAddRow(`${key}:members`, "Name, or a zKillboard or EveWho link", false, (memberName, type) =>
+    change(() => backend().AddCoalitionMember(coalition.id, memberName, type), `Added ${memberName} to ${coalition.name}`));
+  body.append(myIntelTitle("Members", addMember, "Add a member"));
+  if (coalition.members.length === 0) body.append(myIntelNone("No members"));
+  body.append(...coalition.members.map((member) => myIntelRow(member, {
+    onRemove: () => change(() => backend().RemoveCoalitionMember(coalition.id, member.type, member.id), `Removed ${member.name} from ${coalition.name}`),
+  })));
+  body.append(addMember);
+
+  body.append(myIntelTitle("Note"));
+  const note = document.createElement("div");
+  note.className = "myintel-coalition-note";
+  note.append(myIntelNote(entity, coalition.note, (text) => change(() => backend().SetCoalitionNote(coalition.id, text), `Saved the note on ${coalition.name}`)));
+  body.append(note);
+
+  body.append(myIntelTitle("Members' affiliates"));
+  if (coalition.affiliates.length === 0) body.append(myIntelNone("None. Set a member's affiliates on its own card."));
+  body.append(...coalition.affiliates.map((affiliate) => myIntelRow(affiliate, { readOnly: true })));
+
+  body.append(myIntelTitle("Structures"));
+  const structures = document.createElement("label");
+  structures.className = "myintel-structures";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = coalition.includeStructures;
+  const words = document.createElement("span");
+  const wordsName = document.createElement("span");
+  wordsName.className = "preference-name";
+  wordsName.textContent = "Include structures in its search";
+  const wordsHelp = document.createElement("span");
+  wordsHelp.className = "preference-help";
+  wordsHelp.textContent = "Off by default. It adds a Structures tab, but looks up structure killmails for every member and affiliate, so the search takes much longer.";
+  words.append(wordsName, wordsHelp);
+  structures.append(box, words);
+  box.addEventListener("change", () => change(() => backend().SetCoalitionStructures(coalition.id, box.checked), `${box.checked ? "Including" : "Not including"} structures in ${coalition.name}`));
+  body.append(structures);
+
+  body.append(myIntelTitle("Rename"));
+  const rename = document.createElement("form");
+  rename.className = "myintel-rename";
+  const renameBox = document.createElement("input");
+  renameBox.type = "text";
+  renameBox.maxLength = 100;
+  renameBox.value = coalition.name;
+  renameBox.autocomplete = "off";
+  renameBox.spellcheck = false;
+  renameBox.setAttribute("aria-label", `New name for ${coalition.name}`);
+  const renameButton = document.createElement("button");
+  renameButton.type = "submit";
+  renameButton.className = "secondary";
+  renameButton.textContent = "Rename";
+  rename.append(renameBox, renameButton);
+  rename.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const next = renameBox.value.trim();
+    if (!next || next === coalition.name) return;
+    change(() => backend().RenameCoalition(coalition.id, next), `Renamed ${coalition.name} to ${next}`);
+  });
+  body.append(rename);
+
+  body.prepend(error);
   card.append(summary, body);
   return line;
 }
@@ -1081,6 +1433,10 @@ const plural = (count, one, many) => `${count.toLocaleString("en-US")} ${count =
   that main's card, so they stay. Cards added here with nothing saved just go.
 */
 async function removeMyIntelCards(groups) {
+  if (groups.some((group) => group.coalition)) {
+    await removeCoalitionCards(groups);
+    return;
+  }
   const addedKeys = new Set(myIntelAdded.map((added) => intelKey(added.entity)));
   const saved = groups.filter((group) => !addedKeys.has(intelKey(group.entity)));
   const dropAdded = () => {
@@ -1109,8 +1465,29 @@ async function removeMyIntelCards(groups) {
   }
   myIntelRemoved = saved;
   const what = saved.length === 1 ? saved[0].entity.name : plural(saved.length, "card", "cards");
-  el("myintel-undo-text").textContent = `Removed ${what}`;
-  el("myintel-undo").hidden = false;
+  showMyIntelUndo(what);
+  tickerPush(`Removed ${what} from My Intel`);
+  await loadMyIntel();
+  syncShownTarget();
+}
+
+// removeCoalitionCards asks, then removes coalitions, offering to undo it
+async function removeCoalitionCards(groups) {
+  if (!(await confirmMyIntelRemove(groups))) return;
+  for (const group of groups) {
+    myIntelOpen.delete(intelKey(group.entity));
+    myIntelPicked.delete(intelKey(group.entity));
+  }
+  showMyIntelError("");
+  try {
+    await backend().RemoveCoalitions(groups.map((group) => group.coalition.id));
+  } catch (err) {
+    showMyIntelError(String(err), "coalitions");
+    return;
+  }
+  myIntelRemoved = groups;
+  const what = groups.length === 1 ? groups[0].entity.name : plural(groups.length, "coalition", "coalitions");
+  showMyIntelUndo(what, "coalitions");
   tickerPush(`Removed ${what} from My Intel`);
   await loadMyIntel();
   syncShownTarget();
@@ -1118,6 +1495,13 @@ async function removeMyIntelCards(groups) {
 
 // confirmMyIntelRemove asks before cards are removed, saying what goes with them and what stays, resolving true to remove them
 async function confirmMyIntelRemove(groups) {
+  if (groups.some((group) => group.coalition)) {
+    const one = groups.length === 1;
+    const members = groups.reduce((total, group) => total + group.coalition.members.length, 0);
+    el("myintel-remove-title").textContent = one ? `Remove ${groups[0].entity.name} from My Intel?` : `Remove ${plural(groups.length, "coalition", "coalitions")} from My Intel?`;
+    el("myintel-remove-detail").textContent = `${one ? "Its" : "Their"} ${plural(members, "member", "members")} and note will be removed. The corporations and alliances themselves, and their own affiliates, stay.`;
+    return askMyIntelRemove();
+  }
   const holdings = groups.reduce((total, group) => total + group.holdings.length, 0);
   const allies = groups.reduce((total, group) => total + group.ignoredAllies.length, 0);
   const owned = [];
@@ -1134,7 +1518,11 @@ async function confirmMyIntelRemove(groups) {
     detail += ` Links where one is another main's affiliate stay, as they belong to that main.`;
   }
   el("myintel-remove-detail").textContent = detail;
+  return askMyIntelRemove();
+}
 
+// askMyIntelRemove shows the remove confirmation as it is worded, resolving true if Remove was pressed
+async function askMyIntelRemove() {
   const dialog = el("myintel-remove-confirm");
   dialog.returnValue = "";
   dialog.showModal();
@@ -1147,9 +1535,17 @@ async function undoMyIntelRemove() {
   const groups = myIntelRemoved;
   if (groups.length === 0) return;
   myIntelRemoved = [];
-  el("myintel-undo").hidden = true;
+  showMyIntelUndo("");
   const failed = [];
-  for (const group of groups) {
+  const coalitions = groups.filter((group) => group.coalition);
+  if (coalitions.length) {
+    try {
+      await backend().RestoreCoalitions(coalitions.map((group) => group.coalition));
+    } catch (err) {
+      failed.push(String(err));
+    }
+  }
+  for (const group of groups.filter((candidate) => !candidate.coalition)) {
     const entity = group.entity;
     try {
       // by their links, so by id, as the ESI can not find every name
@@ -1238,13 +1634,20 @@ function myIntelRow(entity, options) {
     note.textContent = options.noteText || "";
   }
 
-  const remove = document.createElement("button");
-  remove.type = "button";
-  remove.className = "allies-ignored-remove";
-  remove.textContent = "×";
-  remove.title = "Remove";
-  remove.setAttribute("aria-label", `Remove ${entity.name}`);
-  remove.addEventListener("click", options.onRemove);
+  let remove;
+  if (options.readOnly) {
+    remove = document.createElement("span");
+    remove.className = "myintel-spacer";
+    row.classList.add("read-only");
+  } else {
+    remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "allies-ignored-remove";
+    remove.textContent = "×";
+    remove.title = "Remove";
+    remove.setAttribute("aria-label", `Remove ${entity.name}`);
+    remove.addEventListener("click", options.onRemove);
+  }
 
   row.append(remove, icon, who, note);
   return withMenu(row, [entitySection(entity)]);
@@ -1360,6 +1763,11 @@ async function syncShownTarget() {
     const holdings = await runBackend(() => backend().GetHoldings(target.id, target.type));
     if (holdings && shownTarget === target) renderHoldings(holdings);
   }
+  // a coalition's members change from its card in My Intel, or from an Allies row
+  if (target && target.type === "COALITION") {
+    const group = myIntelCoalitions.find((candidate) => candidate.entity.id === target.id);
+    if (group && shownTarget === target) fillCoalitionMembers(group.coalition);
+  }
   rankAlliesAgain();
 }
 
@@ -1373,17 +1781,85 @@ async function addMyIntelCard(event) {
   try {
     entity = await backend().LookupEntity(name, el("myintel-add-type").value);
   } catch (err) {
-    showMyIntelError(String(err));
+    showMyIntelError(String(err), "affiliates");
     return;
   }
   const key = intelKey(entity);
   if (![...myIntel, ...myIntelAdded].some((group) => intelKey(group.entity) === key)) {
     myIntelAdded.unshift({ entity, holdings: [], heldFor: [], ignoredAllies: [] });
   }
-  myIntelOpen.add(key);
   el("myintel-add-name").value = "";
   el("myintel-filter").value = "";
+  showOnlyMyIntelCard("affiliates", key);
+}
+
+// showOnlyMyIntelCard shuts a list's open cards, opens the one just added, and brings it into view. The list is drawn from what the app has by then.
+function showOnlyMyIntelCard(tab, key) {
+  const groups = tab === "coalitions" ? myIntelCoalitions : [...myIntelAdded, ...myIntel];
+  for (const group of groups) myIntelOpen.delete(intelKey(group.entity));
+  myIntelOpen.add(key);
   renderMyIntel();
+  const line = [...myIntelPart(tab, "list").children].find((child) => child.dataset.card === key);
+  if (line) line.scrollIntoView({ block: "nearest" });
+}
+
+// addCoalitionCard makes a coalition by the name typed and opens its card
+async function addCoalitionCard(event) {
+  event.preventDefault();
+  showMyIntelError("");
+  const name = el("myintel-c-add-name").value.trim();
+  if (!name) return;
+  let card;
+  try {
+    card = await backend().CreateCoalition(name);
+  } catch (err) {
+    showMyIntelError(String(err), "coalitions");
+    return;
+  }
+  el("myintel-c-add-name").value = "";
+  el("myintel-c-filter").value = "";
+  tickerPush(`Made the coalition ${card.name}`);
+  await loadMyIntel();
+  showOnlyMyIntelCard("coalitions", intelKey({ type: "COALITION", id: card.id }));
+}
+
+// MY_INTEL_DRAG is the drag data of a corp or alliance dragged from the Affiliates list
+const MY_INTEL_DRAG = "application/x-gosleuth-entity";
+
+// myIntelDraggable lets a corp or alliance be dragged onto a coalition, while the lists are side by side
+function myIntelDraggable(node, entity) {
+  if (!myIntelIsSplit() || !HOLDING_TYPES.includes(entity.type)) return node;
+  node.draggable = true;
+  node.classList.add("myintel-draggable");
+  node.addEventListener("dragstart", (event) => {
+    event.stopPropagation(); // a row's own drag, not its card's
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData(MY_INTEL_DRAG, JSON.stringify({ type: entity.type, name: entity.name, link: entity.zkillUrl || entity.name }));
+  });
+  return node;
+}
+
+// coalitionDropTarget adds what is dropped on a coalition's card to its members
+function coalitionDropTarget(node, coalition, showError) {
+  const accepts = (event) => event.dataTransfer.types.includes(MY_INTEL_DRAG);
+  node.addEventListener("dragover", (event) => {
+    if (!accepts(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    node.classList.add("drop-target");
+  });
+  node.addEventListener("dragleave", (event) => {
+    if (!node.contains(event.relatedTarget)) node.classList.remove("drop-target");
+  });
+  node.addEventListener("drop", (event) => {
+    if (!accepts(event)) return;
+    event.preventDefault();
+    node.classList.remove("drop-target");
+    const dropped = JSON.parse(event.dataTransfer.getData(MY_INTEL_DRAG));
+    // opened, so a refusal at the top of the card is seen
+    node.querySelector("details").open = true;
+    myIntelChange(() => backend().AddCoalitionMember(coalition.id, dropped.link, dropped.type), showError, `Added ${dropped.name} to ${coalition.name}`);
+  });
 }
 
 const MEMBERS_PER_PAGE = 50;
@@ -3400,7 +3876,7 @@ const TAB_HELP = {
     "Affiliates are listed above the table.",
     "Left out under the table: ignored allies (× restores one) and, by Preference, allies it also killed.",
     UNIQUE_DAYS_HELP,
-    "Right-click an ally to add it as an affiliate, ignore it, search it, or open it on an external site.",
+    "Right-click an ally to add it as an affiliate or to a coalition, ignore it, search it, or link out.",
   ],
   "tab-corps": [
     "The 10 corporations on the most killmails in this system.",
@@ -4662,6 +5138,9 @@ function allyMenuExtras(ally) {
   if (holdingTarget) {
     extras.push({ label: "Add as Affiliate", forTarget: true, action: () => openHoldingDialog(null, { type: ally.type, name: ally.name }) });
   }
+  if (HOLDING_TYPES.includes(ally.type)) {
+    extras.push({ label: "Add to Coalition…", action: () => openCoalitionPicker(ally) });
+  }
   extras.push({
     label: `Ignore ${ally.name} for this target`,
     forTarget: true,
@@ -4672,6 +5151,82 @@ function allyMenuExtras(ally) {
     },
   });
   return extras;
+}
+
+/*
+  openCoalitionPicker opens the Add to Coalition popup for an Allies row's corp or alliance: a button for each coalition made, and a name field for a new one.
+  The member is added by its link when it has one, so by id.
+*/
+async function openCoalitionPicker(ally) {
+  const entity = { type: ally.type, id: ally.id, name: ally.name, link: ally.zkillUrl || ally.name };
+  const cards = await runBackend(() => backend().GetCoalitions());
+  if (!cards) return;
+  el("coalition-picker-who").textContent = `${searchTypeLabel(entity.type)}: ${entity.name}`;
+  el("coalition-picker-name").value = "";
+  showPickerError("");
+  const done = async (card, message) => {
+    el("coalition-picker").close();
+    tickerPush(message || `Added ${entity.name} to ${card.name}`);
+    const fresh = await runBackend(() => backend().GetCoalitions());
+    if (fresh) myIntelCoalitions = fresh.map(coalitionGroup);
+    syncShownTarget();
+  };
+  const buttons = cards.map((card) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary";
+    const already = card.members.some((member) => member.type === entity.type && member.id === entity.id);
+    button.textContent = already ? `${card.name} (already a member)` : card.name;
+    button.disabled = already;
+    button.addEventListener("click", async () => {
+      showPickerError("");
+      try {
+        await backend().AddCoalitionMember(card.id, entity.link, entity.type);
+      } catch (err) {
+        showPickerError(String(err));
+        return;
+      }
+      done(card);
+    });
+    return button;
+  });
+  if (buttons.length === 0) {
+    const none = document.createElement("p");
+    none.className = "myintel-none";
+    none.textContent = "No coalitions yet. Name a new one below.";
+    buttons.push(none);
+  }
+  el("coalition-picker-list").replaceChildren(...buttons);
+  coalitionPickerSubmit = async (event) => {
+    event.preventDefault();
+    const name = el("coalition-picker-name").value.trim();
+    if (!name) return;
+    showPickerError("");
+    let card;
+    try {
+      card = await backend().CreateCoalition(name);
+    } catch (err) {
+      showPickerError(String(err));
+      return;
+    }
+    try {
+      await backend().AddCoalitionMember(card.id, entity.link, entity.type);
+    } catch (err) {
+      showPickerError(`${card.name} was made, but ${entity.name} was not added: ${err}`);
+      return;
+    }
+    done(card, `Made the coalition ${card.name} with ${entity.name}`);
+  };
+  el("coalition-picker").showModal();
+  el("coalition-picker-name").focus();
+}
+
+// coalitionPickerSubmit is the picker's new name form for the ally it is open for
+let coalitionPickerSubmit = null;
+
+function showPickerError(message) {
+  el("coalition-picker-error").textContent = message;
+  el("coalition-picker-error").hidden = !message;
 }
 
 // rankAlliesAgain shows the target's allies ranked again by the backend, ie after the hide killed allies preference changed. showKilled shows, for this search only, those it left out.
@@ -5324,6 +5879,7 @@ async function search(event) {
   let target = null;
   let report = null;
   let cancelled = false; // the user closed the choice between the name's matches
+  let coalitionWarning = ""; // the large search warning shown in the status line, if any
 
   try {
     target = await runBackend(() => backend().SearchTarget(name, searchType, searchId));
@@ -5344,6 +5900,11 @@ async function search(event) {
       return;
     }
     renderTarget(target);
+    // a large coalition search is warned of in the status line, set after the status was cleared above and before any later line, and cleared with the report
+    if (target.type === "COALITION") {
+      coalitionWarning = await largeSearchWarning();
+      if (coalitionWarning) setStatus(coalitionWarning);
+    }
     // a holding is searched as its main, with the main's holdings
     if (target.searchedHolding) setStatus(`${target.searchedHolding} is an affiliate of ${target.display.Name}, so this is ${target.display.Name}'s search, with its affiliates.`);
     // SearchTarget cached the found target as a recent search
@@ -5361,12 +5922,14 @@ async function search(event) {
     if (report) {
       renderIntel(report);
       showReportWarning(report);
-      setExportPDF(target.type === "CORPORATION" || target.type === "ALLIANCE");
+      setExportPDF(target.type === "CORPORATION" || target.type === "ALLIANCE" || target.type === "COALITION");
       retrievedName = target.display.Name;
     } else {
       showProfileOnly("No report: the search stopped or failed before its killmails were collected.");
     }
   } finally {
+    // the warning was for the start of the search
+    if (coalitionWarning && el("status").textContent === coalitionWarning) setStatus("");
     const took = formatDuration(performance.now() - started);
     if (retrievedName) tickerPush(searchSummary(retrievedName, took, report));
     else tickerPush(cancelled ? `Search for ${name} cancelled` : `Search for ${name} stopped after ${took}`);
@@ -5721,6 +6284,7 @@ function applySettings(settings) {
   applyTheme(settings.theme);
   arrangeTabs(tabOrderFrom(settings.tabOrder || []));
   setSidebarCollapsed(Boolean(settings.sidebarCollapsed));
+  myIntelSplit = Boolean(settings.myIntelSplit);
   preferences = {
     includeZkillLabels: Boolean(settings.includeZkillLabels),
     maxKillmails: settings.maxKillmails || 20,
@@ -5955,14 +6519,28 @@ el("myintel-button").addEventListener("click", openMyIntel);
 el("export-pdf-top").addEventListener("click", exportPDF);
 el("myintel-close").addEventListener("click", () => el("myintel").close());
 el("myintel-filter").addEventListener("input", renderMyIntel);
+el("myintel-c-filter").addEventListener("input", renderMyIntel);
 el("fits-filter").addEventListener("input", () => fitsShown.filter?.());
 el("fits-filter-help").replaceWith(filterHelp(...FITS_FILTER_HELP));
 el("myintel-add").addEventListener("submit", addMyIntelCard);
-el("myintel-undo-button").addEventListener("click", undoMyIntelRemove);
-el("myintel-export-button").addEventListener("click", exportMyIntel);
-el("myintel-pick-all").addEventListener("click", pickAllShown);
-el("myintel-delete-button").addEventListener("click", () => removeMyIntelCards(pickedCards()));
-el("myintel-import-button").addEventListener("click", importMyIntel);
+el("myintel-c-add").addEventListener("submit", addCoalitionCard);
+for (const button of document.querySelectorAll(".myintel-undo-button")) button.addEventListener("click", undoMyIntelRemove);
+for (const tab of MY_INTEL_TABS) {
+  myIntelPart(tab, "export-button").addEventListener("click", () => exportMyIntel(tab));
+  myIntelPart(tab, "pick-all").addEventListener("click", () => pickAllShown(tab));
+  myIntelPart(tab, "delete-button").addEventListener("click", () => removeMyIntelCards(pickedCards(tab)));
+}
+for (const button of document.querySelectorAll(".myintel-import-button")) button.addEventListener("click", importMyIntel);
+for (const button of document.querySelectorAll(".myintel-pull")) button.addEventListener("click", () => foldMyIntel(!myIntelFolded));
+for (const button of document.querySelectorAll(".myintel-tabs button")) button.addEventListener("click", () => setMyIntelTab(button.dataset.tab));
+for (const button of document.querySelectorAll(".myintel-pull-out")) button.addEventListener("click", () => setMyIntelSplit(true));
+for (const button of document.querySelectorAll(".myintel-dock")) button.addEventListener("click", () => setMyIntelSplit(false));
+for (const button of document.querySelectorAll(".myintel-close-both")) button.addEventListener("click", () => el("myintel").close());
+MY_INTEL_ROOM_TO_SPLIT.addEventListener("change", () => {
+  if (el("myintel").open) applyMyIntelLayout();
+});
+el("coalition-picker-close").addEventListener("click", () => el("coalition-picker").close());
+el("coalition-picker-new").addEventListener("submit", (event) => coalitionPickerSubmit && coalitionPickerSubmit(event));
 el("debug-open").addEventListener("click", () => backend().OpenDebugFolder().catch((err) => tickerPush(`Error: ${err}`)));
 el("static-export").addEventListener("click", exportStaticData);
 // a Preferences group's i opens its description, copied from the template its data-more names

@@ -137,7 +137,7 @@ type CapitalPilot struct {
 type Target struct {
 	Name    string
 	Ticker  string   // a corp's or alliance's, ie URSA., empty for others
-	Type    string   // PILOT, CORPORATION, ALLIANCE, or SYSTEM
+	Type    string   // PILOT, CORPORATION, ALLIANCE, SYSTEM, or Coalition
 	Details []Detail // shown under the name, ie Alliance, CEO, Members, Founded
 	Logo    []byte   // a PNG or JPEG of its logo or portrait, nil for none (filled in phase 2)
 }

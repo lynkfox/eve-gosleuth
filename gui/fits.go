@@ -304,6 +304,10 @@ func affiliateOf(target *retrieval.IntelTarget, km *retrieval.Killmail) *retriev
 	}
 	for index := range target.Holdings {
 		if target.Holdings[index].Includes(corpID, allianceID) {
+			// a coalition's members are the target itself, only the affiliates of them are not
+			if target.TypeOfEntity == types.COALITION && target.Holdings[index].Member {
+				return nil
+			}
 			return &target.Holdings[index]
 		}
 	}

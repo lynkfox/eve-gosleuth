@@ -86,8 +86,13 @@ Every report run on a Corporation or Alliance can also be saved as a PDF with ma
 - **Affiliates and Home systems** 
   - *Link a corp or alliance to its affiliates, its holding or alt corps, and if it's a Wormhole Corp its home system.* 
   - *A search of the main then includes the affiliates' killmails, and a search of an affiliate goes to its main.*
+- **Coalitions** 
+  - *Group any corps and alliances under a name and search them as one target, with no main. Each member's own affiliates come along.*
+  - *Structures are a checkbox on each coalition, off by default, as they take many more calls. Each member is paged on its own, so a large coalition takes a while.*
 - **My Intel** 
-  - *shows every affiliate and ignored ally you've set, for editing in one place. Export them to a file to share with your corp, or import someone else's.*
+  - *shows every affiliate, ignored ally, and coalition you've set, for editing in one place, in an Affiliates tab and a Coalitions tab. A magnifying glass beside each one searches it straight away.*
+  - *Pull Coalitions out to sit beside Affiliates, each time My Intel opens, and drag a corp, alliance, or affiliate from the left straight onto a coalition.*
+  - *Export them to a file to share with your corp, or import someone else's.*
 
 
 ## Making it yours

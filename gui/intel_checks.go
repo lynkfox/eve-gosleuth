@@ -114,7 +114,7 @@ Parameters:
   - names: each checked entity's name as EVE spells it, by intelGroupKey, or "" for one that does not exist as that type
 
 Returns:
-  - int: how many holdings, ignored allies, and targets' lists of them were removed
+  - int: how many holdings, ignored allies, targets' lists of them, and coalition members were removed
 */
 func (a *App) correctIntel(names map[string]string) int {
 	removed := 0
@@ -170,6 +170,32 @@ func (a *App) correctIntel(names map[string]string) int {
 		}
 		if changed {
 			a.cache.SetIgnoredAllies(target.TargetType, target.TargetID, kept)
+		}
+	}
+
+	// a coalition's members are checked like any other imported entity, without a change to the coalition in between
+	a.coalitionMu.Lock()
+	defer a.coalitionMu.Unlock()
+	for _, coalition := range a.cache.Coalitions() {
+		kept := make([]retrieval.CoalitionMember, 0, len(coalition.Members))
+		changed := false
+		for _, member := range coalition.Members {
+			name, checked, ok := exists(member.Type, member.ID)
+			switch {
+			case !ok:
+				removed++
+				changed = true
+			case checked && name != member.Name:
+				member.Name = name
+				kept = append(kept, member)
+				changed = true
+			default:
+				kept = append(kept, member)
+			}
+		}
+		if changed {
+			coalition.Members = kept
+			a.cache.SaveCoalition(coalition)
 		}
 	}
 	return removed

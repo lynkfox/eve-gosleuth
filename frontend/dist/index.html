@@ -119,6 +119,7 @@
         <symbol id="icon-fleetmates" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2c3 .2 5.5 2.6 5.5 5.8"/></symbol>
         <symbol id="icon-members" viewBox="0 0 24 24"><circle cx="12" cy="7" r="3"/><path d="M6 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="5" cy="9" r="2"/><circle cx="19" cy="9" r="2"/><path d="M2 18c0-2 1.3-3.5 3-3.8M22 18c0-2-1.3-3.5-3-3.8"/></symbol>
         <symbol id="icon-pilots" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></symbol>
+        <symbol id="icon-coalition" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><ellipse cx="12" cy="12" rx="10.5" ry="4.2" transform="rotate(-25 12 12)"/><circle cx="20.6" cy="7.2" r="1.9" fill="currentColor"/><circle cx="4.2" cy="16.2" r="1.3" fill="currentColor"/></symbol>
         <symbol id="icon-corps" viewBox="0 0 24 24"><path d="M4 21V5l8-3v19M12 9h8v12M2 21h20M7 8h2M7 12h2M7 16h2M15 13h2M15 17h2"/></symbol>
         <symbol id="icon-pi" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><ellipse cx="12" cy="12" rx="10.5" ry="3.5" transform="rotate(-20 12 12)"/></symbol>
         <symbol id="icon-ratters" viewBox="0 0 24 24"><path d="M7 17c0-3.9 2.7-7 6.5-7 2.4 0 4.3 1.2 5.5 3l3 3.2-3.2.8H7z"/><path d="M13.5 10.2a2 2 0 1 1 3-1.2"/><circle cx="19" cy="14" r="0.4"/><path d="M10 17v2M16 17v2M7 16c-3 0-5 1-5.5 4"/></symbol>
@@ -646,37 +647,95 @@
 
   <!-- every holding and ignored ally the user has set, for every target, to look over and change -->
   <dialog id="myintel" class="window" aria-labelledby="myintel-title">
-    <div class="window-titlebar">
+    <div class="window-titlebar myintel-tabbed-title">
       <h2 id="myintel-title">My Intel</h2>
       <button id="myintel-close" class="window-close" type="button" aria-label="Close My Intel" title="Close">×</button>
     </div>
-    <div class="window-body myintel-body">
-      <p class="preference-help">The affiliates and ignored allies you have set, for every target. Changes are saved straight away, and affiliates change what the next search collects.</p>
-      <p class="myintel-warning">Affiliates may draw in kills older than where the main's own cut off. A busy main reaches its page limit sooner than a quiet affiliate, so its oldest battles can show only the affiliates' side.</p>
-      <div class="myintel-tools">
-        <input id="myintel-filter" type="search" placeholder="Filter by name" autocomplete="off" spellcheck="false" aria-label="Filter by name">
-        <button id="myintel-import-button" class="secondary" type="button" title="Add affiliates and ignored allies from a file another user exported">Import…</button>
-      </div>
-      <form id="myintel-add" class="myintel-add">
-        <select id="myintel-add-type" aria-label="Type">
-          <option value="ALLIANCE">Alliance</option>
-          <option value="CORPORATION">Corporation</option>
-          <option value="PILOT">Pilot</option>
-        </select>
-        <input id="myintel-add-name" type="text" placeholder="Exact name or a zKillboard link, to add a card for it" autocomplete="off" spellcheck="false" aria-label="Name">
-        <button type="submit">Add</button>
-      </form>
-      <p id="myintel-error" class="preferences-error" role="alert" hidden></p>
-      <!-- the card last removed with its x, to bring back until the next is removed or the window closes -->
-      <p id="myintel-undo" class="myintel-undo" role="status" hidden><span id="myintel-undo-text"></span><button id="myintel-undo-button" class="secondary" type="button">Undo</button></p>
-      <!-- what the ticked cards can have done to them all at once -->
-      <div id="myintel-bulk" class="myintel-bulk" hidden>
-        <button id="myintel-pick-all" class="secondary" type="button" title="Tick, or untick, every card the filter shows">Check all</button>
-        <button id="myintel-export-button" class="secondary" type="button" title="Save the ticked cards to a file to give to other users" disabled>Export…</button>
-        <button id="myintel-delete-button" class="secondary" type="button" title="Remove the ticked cards" disabled>Delete…</button>
-      </div>
-      <div id="myintel-list" class="myintel-list"></div>
-      <p id="myintel-empty" class="preference-help" hidden>Nothing set yet. Add affiliates and ignored allies here, or from a search's target panel and Allies tab.</p>
+    <!-- a pane for each list. Tabbed, only the chosen one shows; pulled out, they sit side by side as two windows, each with its own title bar -->
+    <div class="myintel-panes">
+      <section id="myintel-pane" class="myintel-pane">
+        <div class="window-titlebar myintel-pane-title">
+          <h2>Affiliates</h2>
+          <button class="window-close myintel-close-both" type="button" aria-label="Close My Intel" title="Close">×</button>
+        </div>
+        <div id="myintel-body" class="window-body myintel-body">
+          <!-- everything down to the cards folds away to the Filter row -->
+          <p id="myintel-help" class="preference-help myintel-fold">The affiliates and ignored allies you have set, for every target. Changes are saved straight away, and affiliates change what the next search collects.</p>
+          <p id="myintel-warning" class="myintel-warning myintel-fold">Affiliates may draw in kills older than where the main's own cut off. A busy main reaches its page limit sooner than a quiet affiliate, so its oldest battles can show only the affiliates' side.</p>
+          <div class="myintel-tools">
+            <input id="myintel-filter" type="search" placeholder="Filter by name" autocomplete="off" spellcheck="false" aria-label="Filter by name">
+            <button class="secondary myintel-import-button" type="button" title="Add affiliates, ignored allies, and coalitions from a file another user exported">Import…</button>
+          </div>
+          <form id="myintel-add" class="myintel-add myintel-fold">
+            <select id="myintel-add-type" aria-label="Type">
+              <option value="ALLIANCE">Alliance</option>
+              <option value="CORPORATION">Corporation</option>
+              <option value="PILOT">Pilot</option>
+            </select>
+            <input id="myintel-add-name" type="text" placeholder="Exact name or a zKillboard link, to add a card for it" autocomplete="off" spellcheck="false" aria-label="Name">
+            <button type="submit">Add</button>
+          </form>
+          <p id="myintel-error" class="preferences-error" role="alert" hidden></p>
+          <!-- the card last removed with its x, to bring back until the next is removed or the window closes -->
+          <p id="myintel-undo" class="myintel-undo myintel-fold" role="status" hidden><span id="myintel-undo-text"></span><button class="secondary myintel-undo-button" type="button">Undo</button></p>
+          <!-- what the ticked cards can have done to them all at once -->
+          <div id="myintel-bulk" class="myintel-bulk myintel-fold" hidden>
+            <button id="myintel-pick-all" class="secondary" type="button" title="Tick, or untick, every card the filter shows">Check all</button>
+            <button id="myintel-export-button" class="secondary" type="button" title="Save the ticked cards to a file to give to other users" disabled>Export…</button>
+            <button id="myintel-delete-button" class="secondary myintel-delete" type="button" title="Remove the ticked cards" disabled>Delete…</button>
+          </div>
+          <!-- folds everything above but the filter away, like the target panel's pull bar -->
+          <button class="pull-bar myintel-pull" type="button" aria-expanded="true" title="Fold the top of this window away, leaving the filter" aria-label="Fold the top of this window away, leaving the filter"><span class="pull-grip" aria-hidden="true"></span></button>
+          <div class="myintel-tab-row">
+            <div class="myintel-tabs" role="tablist" aria-label="My Intel">
+              <button type="button" role="tab" data-tab="affiliates">Affiliates</button>
+              <button type="button" role="tab" data-tab="coalitions">Coalitions</button>
+            </div>
+            <button class="secondary myintel-pull-out" type="button" title="Show Affiliates and Coalitions side by side, each time My Intel opens, and drag affiliates into a coalition">Pull out Coalitions</button>
+          </div>
+          <div id="myintel-list" class="myintel-list"></div>
+          <p id="myintel-empty" class="preference-help" hidden>Nothing set yet. Add affiliates and ignored allies here, or from a search's target panel and Allies tab.</p>
+        </div>
+      </section>
+      <section id="myintel-c-pane" class="myintel-pane" hidden>
+        <div class="window-titlebar myintel-pane-title">
+          <h2>Coalitions</h2>
+          <div class="myintel-pane-actions">
+            <button class="secondary myintel-dock" type="button" title="Put Coalitions back in a tab of one window">Dock</button>
+            <button class="window-close myintel-close-both" type="button" aria-label="Close My Intel" title="Close">×</button>
+          </div>
+        </div>
+        <div id="myintel-c-body" class="window-body myintel-body">
+          <p class="preference-help myintel-fold">The coalitions you made: groups of corporations and alliances that are searched as one target, with no main. Changes are saved straight away.<span class="myintel-split-only"> Drag an affiliate or a card from the left onto a coalition to add it.</span></p>
+          <p class="myintel-warning myintel-fold">Each member is paged on its own, so a large coalition takes long, and its members reach back to different dates.</p>
+          <p id="myintel-c-limits-warning" class="myintel-warning myintel-fold" hidden></p>
+          <div class="myintel-tools">
+            <input id="myintel-c-filter" type="search" placeholder="Filter by name, member, or affiliate" autocomplete="off" spellcheck="false" aria-label="Filter by name, member, or affiliate">
+            <button class="secondary myintel-import-button" type="button" title="Add affiliates, ignored allies, and coalitions from a file another user exported">Import…</button>
+          </div>
+          <form id="myintel-c-add" class="myintel-add coalition-add myintel-fold">
+            <input id="myintel-c-add-name" type="text" placeholder="A name for a new coalition" autocomplete="off" spellcheck="false" aria-label="Name">
+            <button type="submit">Create</button>
+          </form>
+          <p id="myintel-c-error" class="preferences-error" role="alert" hidden></p>
+          <p id="myintel-c-undo" class="myintel-undo myintel-fold" role="status" hidden><span id="myintel-c-undo-text"></span><button class="secondary myintel-undo-button" type="button">Undo</button></p>
+          <div id="myintel-c-bulk" class="myintel-bulk myintel-fold" hidden>
+            <button id="myintel-c-pick-all" class="secondary" type="button" title="Tick, or untick, every card the filter shows">Check all</button>
+            <button id="myintel-c-export-button" class="secondary" type="button" title="Save the ticked cards to a file to give to other users" disabled>Export…</button>
+            <button id="myintel-c-delete-button" class="secondary myintel-delete" type="button" title="Remove the ticked cards" disabled>Delete…</button>
+          </div>
+          <button class="pull-bar myintel-pull" type="button" aria-expanded="true" title="Fold the top of this window away, leaving the filter" aria-label="Fold the top of this window away, leaving the filter"><span class="pull-grip" aria-hidden="true"></span></button>
+          <div class="myintel-tab-row">
+            <div class="myintel-tabs" role="tablist" aria-label="My Intel">
+              <button type="button" role="tab" data-tab="affiliates">Affiliates</button>
+              <button type="button" role="tab" data-tab="coalitions">Coalitions</button>
+            </div>
+            <button class="secondary myintel-pull-out" type="button" title="Show Affiliates and Coalitions side by side, each time My Intel opens, and drag affiliates into a coalition">Pull out Coalitions</button>
+          </div>
+          <div id="myintel-c-list" class="myintel-list"></div>
+          <p id="myintel-c-empty" class="preference-help" hidden>No coalitions yet. Create one above, then add its corporations and alliances, or add an ally from a search's Allies tab.</p>
+        </div>
+      </section>
     </div>
   </dialog>
 
@@ -883,6 +942,23 @@
         <button class="danger" value="clear">Clear cache</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- adds an Allies row's corp or alliance to a coalition: one of those made, or a new one -->
+  <dialog id="coalition-picker" class="window coalition-picker" aria-labelledby="coalition-picker-title">
+    <div class="window-titlebar">
+      <h2 id="coalition-picker-title">Add to Coalition</h2>
+      <button id="coalition-picker-close" class="window-close" type="button" aria-label="Close" title="Close">×</button>
+    </div>
+    <div class="window-body">
+      <p id="coalition-picker-who" class="confirm-target"></p>
+      <div id="coalition-picker-list" class="coalition-picker-list"></div>
+      <form id="coalition-picker-new" class="coalition-picker-new">
+        <input id="coalition-picker-name" type="text" maxlength="100" placeholder="Or a new coalition's name" autocomplete="off" spellcheck="false" aria-label="New coalition name">
+        <button type="submit">Create and add</button>
+      </form>
+      <p id="coalition-picker-error" class="preferences-error" role="alert" hidden></p>
+    </div>
   </dialog>
 
   <!-- adds a holding to the shown corp or alliance, or changes the note of one it has -->

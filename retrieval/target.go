@@ -23,6 +23,9 @@ var ErrTooManyTargets = &TargetError{Message: "too many targets"}
 // ErrNoSuchTarget is a target looked up by id that does not exist as the type asked for, rather than one the ESI could not be asked about
 var ErrNoSuchTarget = &TargetError{Message: "no such target"}
 
+// ErrLocalID is an id below 0, which a coalition has and no eve entity does, asked of zKillboard or the ESI
+var ErrLocalID = &TargetError{Message: "a local id is not an eve id"}
+
 type IntelTarget struct {
 	IDNumber       int
 	Name           string
@@ -32,14 +35,15 @@ type IntelTarget struct {
 	Error          error
 	DisplayMessage string
 	Expanded       interface{}
-	Holdings       []TargetGroup // a corp or alliance target's holdings, whose killmails are collected and counted as the target's own
+	Holdings       []TargetGroup // a corp or alliance target's holdings, whose killmails are collected and counted as the target's own. A coalition's members and their affiliates.
 }
 
 // TargetGroup is a corporation or alliance searched along with a target, ie one of its holdings
 type TargetGroup struct {
-	Type types.EntityType // CORPORATION or ALLIANCE
-	ID   int
-	Name string
+	Type   types.EntityType // CORPORATION or ALLIANCE
+	ID     int
+	Name   string
+	Member bool // of a coalition target, a member of it rather than an affiliate of one, only for labels
 }
 
 /*
@@ -70,7 +74,8 @@ func (t *IntelTarget) DisplayName() string {
 }
 
 /*
-	IsGroup reports whether a corporation or alliance on a killmail is a corp or alliance target, or one of its Holdings. Always false for pilot and system targets.
+	IsGroup reports whether a corporation or alliance on a killmail is a corp or alliance target, or one of its Holdings. For a coalition target only its Holdings
+	count, as its own id is not an eve id. Always false for pilot and system targets.
 
 Parameters:
   - corporationID, allianceID: the corp and alliance on the killmail, 0 when there is none
@@ -85,6 +90,7 @@ func (t *IntelTarget) IsGroup(corporationID int, allianceID int) bool {
 		if allianceID != 0 && allianceID == t.IDNumber {
 			return true
 		}
+	case types.COALITION:
 	default:
 		return false
 	}
@@ -92,6 +98,15 @@ func (t *IntelTarget) IsGroup(corporationID int, allianceID int) bool {
 		if holding.Includes(corporationID, allianceID) {
 			return true
 		}
+	}
+	return false
+}
+
+// IsGroupTarget reports whether the target is a corporation, an alliance, or a coalition: one that is counted with its Holdings by IsGroup
+func (t *IntelTarget) IsGroupTarget() bool {
+	switch t.TypeOfEntity {
+	case types.CORPORATION, types.ALLIANCE, types.COALITION:
+		return true
 	}
 	return false
 }

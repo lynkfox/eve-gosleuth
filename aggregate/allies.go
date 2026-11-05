@@ -75,7 +75,7 @@ Each ally also counts the target's kills its own members were the victim of.
 Parameters:
   - limit: the maximum number of allies to return
   - killmails: the expanded killmails from CollectedData
-  - target: a PILOT, CORPORATION, or ALLIANCE target
+  - target: a PILOT, CORPORATION, ALLIANCE, or COALITION target
   - ignored: allies the user chose to leave out for this target, so the next ones take their places. nil for none.
   - skipKilled: also leave out every ally the target killed one of on these killmails, its Killed above 0
 
@@ -203,7 +203,7 @@ func targetGroupOnKill(km *retrieval.Killmail, target *retrieval.IntelTarget) (a
 		switch target.TypeOfEntity {
 		case types.PILOT:
 			attacked = attacker.Pilot != nil && !attacker.Pilot.NPC && attacker.Pilot.CharacterID == target.IDNumber
-		case types.CORPORATION, types.ALLIANCE:
+		case types.CORPORATION, types.ALLIANCE, types.COALITION:
 			attacked = target.IsGroup(groupIDs(corp, alliance))
 		}
 		if !attacked {
@@ -226,13 +226,17 @@ func targetGroupOnKill(km *retrieval.Killmail, target *retrieval.IntelTarget) (a
 
 Parameters:
   - killmails: the expanded killmails from CollectedData
-  - target: a CORPORATION or ALLIANCE target, its own Holdings not counted as itself here
+  - target: a CORPORATION or ALLIANCE target, its own Holdings not counted as itself here. A COALITION has no main, so it gets nothing.
   - holdings: the holdings to count, whether or not their killmails were collected
 
 Returns:
   - map[AllyKey]int: the kills together by holding, those with none left out
 */
 func HoldingKillsTogether(killmails []*retrieval.Killmail, target *retrieval.IntelTarget, holdings []retrieval.TargetGroup) map[AllyKey]int {
+	// a coalition has no main to have fought beside
+	if target.TypeOfEntity == types.COALITION {
+		return map[AllyKey]int{}
+	}
 	main := retrieval.IntelTarget{IDNumber: target.IDNumber, TypeOfEntity: target.TypeOfEntity}
 	counts := map[AllyKey]int{}
 	for _, km := range killmails {

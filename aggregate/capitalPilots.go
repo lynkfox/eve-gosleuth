@@ -110,7 +110,7 @@ or leaving the corp itself when it has no alliance.
 
 Parameters:
   - pilot: the pilot, with their current corporation and its alliance
-  - target: a corporation or alliance target. A corporation target's Expanded is its *retrieval.Corporation, with its current alliance.
+  - target: a corporation, alliance, or coalition target. A corporation target's Expanded is its *retrieval.Corporation, with its current alliance.
 
 Returns:
   - bool: true if they have left. False when their current corp is not known, ie a deleted character.
@@ -137,6 +137,9 @@ func HasLeftTarget(pilot *retrieval.Pilot, target *retrieval.IntelTarget) bool {
 			return allianceID != targetCorp.Alliance.AllianceID
 		}
 		return corp.CorporationID != target.IDNumber
+	case types.COALITION:
+		// in none of its members or their affiliates
+		return true
 	}
 	return false
 }

@@ -148,14 +148,14 @@ func TestPrefetchReportsProgress(t *testing.T) {
 		assert.Equal(t, []string{"Looking up pilots: 40% (100 of 250)", "Looking up pilots: 80% (200 of 250)", "Looking up pilots: 100% (250 of 250)"}, lookingUp())
 	})
 
-	t.Run("a big lookup reports every 5%", func(t *testing.T) {
+	t.Run("a big pilot lookup reports every 10%", func(t *testing.T) {
 		messages = nil
 		cache := retrieval.NewCache(&RawESIClient{}, filepath.Join(t.TempDir(), "cache.json"))
 
 		cache.PrefetchKillmailEntities([]retrieval.RawKillmail{killmailWith(1, 101, attackers(3999)...)})
 
-		assert.Len(t, lookingUp(), 20)
-		assert.Equal(t, "Looking up pilots: 5% (200 of 4000)", lookingUp()[0])
+		assert.Len(t, lookingUp(), 10)
+		assert.Equal(t, "Looking up pilots: 10% (400 of 4000)", lookingUp()[0])
 	})
 
 	t.Run("a small lookup reports nothing", func(t *testing.T) {

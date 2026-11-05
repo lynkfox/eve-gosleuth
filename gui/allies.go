@@ -168,7 +168,7 @@ func (a *App) SaveIgnoredAllies(targetID int, targetType string, ignored []retri
 	defer a.mu.Unlock()
 	defer recoverAsError(&err)
 
-	if entityType, ok := searchTypes[targetType]; !ok || entityType == types.SYSTEM {
+	if entityType, ok := searchTypes[targetType]; !ok || entityType == types.SYSTEM || entityType == types.COALITION {
 		return update, errors.New("Only pilots, corporations, and alliances have allies")
 	}
 	kept := []retrieval.IgnoredAlly{}

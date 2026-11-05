@@ -1,6 +1,8 @@
 package retrieval
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/lynkfox/go_eve_sleuth/api"
@@ -172,6 +174,9 @@ func (c *CachedEveIDs) GetAllianceHistory(corporationID int) (*api.ESIAllianceHi
 
 // cachedApart answers a lookup from one of the cache's own maps, or fetches and caches it. A copy missing its id is refetched, and kept if that fails.
 func cachedApart[T any](c *CachedEveIDs, s section, entries map[int]*CacheEntry, idNumber int, fetch func(int) (*T, error)) (*T, error) {
+	if idNumber < 0 {
+		return nil, fmt.Errorf("%w: %d", ErrLocalID, idNumber)
+	}
 	c.mu.Lock()
 	cached := cachedAs[T](c, s, entries, idNumber)
 	if cached != nil {
@@ -218,6 +223,9 @@ func (c *CachedEveIDs) GetCharacterAffiliations(characterIDs []int) (map[int]api
 
 // characterAffiliations is GetCharacterAffiliations, counting failure(err) against each id looked up
 func (c *CachedEveIDs) characterAffiliations(characterIDs []int, failure func(error) error) (map[int]api.ESIAffiliation, error) {
+	if slices.ContainsFunc(characterIDs, func(id int) bool { return id < 0 }) {
+		return nil, fmt.Errorf("%w: in a character affiliation lookup", ErrLocalID)
+	}
 	affiliations := map[int]api.ESIAffiliation{}
 	missing := []int{}
 
@@ -256,6 +264,9 @@ func (c *CachedEveIDs) GetNamesFromEveIDs(idsNumbers []int) (map[int]string, err
 
 // namesFromEveIDs is GetNamesFromEveIDs, counting failure(err) against each id looked up
 func (c *CachedEveIDs) namesFromEveIDs(idsNumbers []int, failure func(error) error) (map[int]string, error) {
+	if slices.ContainsFunc(idsNumbers, func(id int) bool { return id < 0 }) {
+		return nil, fmt.Errorf("%w: in a name lookup", ErrLocalID)
+	}
 	names := map[int]string{}
 	missing := []int{}
 
@@ -339,6 +350,9 @@ func peekKnown[T any](c *CachedEveIDs, idNumber int) *T {
 
 // GetEntitiesFromEveIDs asks the ESI for eve IDs' names and kinds every time, uncached, as it checks what other sources claim, ie a My Intel import
 func (c *CachedEveIDs) GetEntitiesFromEveIDs(idsNumbers []int) (map[int]api.EntityIDAndName, error) {
+	if slices.ContainsFunc(idsNumbers, func(id int) bool { return id < 0 }) {
+		return nil, fmt.Errorf("%w: in an entity lookup", ErrLocalID)
+	}
 	found, err := c.Client.GetEntitiesFromEveIDs(idsNumbers)
 	c.countFetched(1, err)
 	return found, err

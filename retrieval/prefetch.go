@@ -25,15 +25,15 @@ func logBulkFailure(err error, message string) {
 const prefetchWorkers = 20
 
 const (
-	progressStepPercent  = 5   // a long lookup reports each time it passes another 5%
-	minProgressTotal     = 100 // fewer lookups than this finish too soon to need reports
-	minPilotBatch        = 100 // the fewest pilots asked for in one bulk call, so a small search makes no extra calls
-	pilotBatchesForSteps = 100 / progressStepPercent
+	pilotProgressStep  = 10 // pilot lookups report each time they pass another 10%, the others each 5%
+	lookupProgressStep = 5
+	minProgressTotal   = 100 // fewer lookups than this finish too soon to need reports
+	minPilotBatch      = 100 // the fewest pilots asked for in one bulk call, so a small search makes no extra calls
 )
 
 // pilotBatchSize is how many pilots to ask for in each bulk call: small enough for a batch to be one progress step, where the ESI's limit and minPilotBatch allow
 func pilotBatchSize(pilots int) int {
-	return min(max(pilots/pilotBatchesForSteps, minPilotBatch), api.ESI_BULK_IDS)
+	return min(max(pilots*pilotProgressStep/100, minPilotBatch), api.ESI_BULK_IDS)
 }
 
 // percentProgress reports how far through a long lookup a search is, safe to add to from several goroutines
@@ -41,13 +41,14 @@ type percentProgress struct {
 	mu       sync.Mutex
 	label    string
 	total    int
+	step     int // the percent between reports
 	done     int
 	reported int // the last percent reported
 }
 
-// newPercentProgress starts counting a lookup of total items, label naming it in each report
-func newPercentProgress(label string, total int) *percentProgress {
-	return &percentProgress{label: label, total: total}
+// newPercentProgress starts counting a lookup of total items, label naming it in each report, every step percent
+func newPercentProgress(label string, total int, step int) *percentProgress {
+	return &percentProgress{label: label, total: total, step: step}
 }
 
 // add counts finished items, reporting when they pass another progress step. A short lookup reports nothing.
@@ -59,7 +60,7 @@ func (p *percentProgress) add(items int) {
 	defer p.mu.Unlock()
 
 	p.done += items
-	percent := p.done * 100 / p.total / progressStepPercent * progressStepPercent
+	percent := p.done * 100 / p.total / p.step * p.step
 	if percent > p.reported {
 		p.reported = percent
 		comm.ReportProgress("%s: %d%% (%d of %d)", p.label, percent, p.done, p.total)
@@ -75,7 +76,7 @@ func (p *percentProgress) add(items int) {
 	- So are the types of victims' fitted items, drones, fighters, implants, and boosters that fit_types.json does not have, which BuildFit names through the cache.
 	  Cargo and other holds are not: a fit shows only cargo fit_types.json keeps.
 
-	Only what is not already cached is looked up. A long lookup reports each 5% it passes (percentProgress), so it can't be mistaken for a stopped search.
+	Only what is not already cached is looked up. A long lookup reports as it goes (percentProgress), pilots each 10% and the rest each 5%, so it can't be mistaken for a stopped search.
 
 Parameters:
   - killmails: the killmails about to be expanded
@@ -99,7 +100,7 @@ func (cached *CachedEveIDs) PrefetchKillmailEntities(killmails []RawKillmail) {
 	// the two bulk calls do not depend on each other
 	names, affiliations := map[int]string{}, map[int]api.ESIAffiliation{}
 	if len(needed) > 0 {
-		pilotProgress := newPercentProgress("Looking up pilots", len(needed))
+		pilotProgress := newPercentProgress("Looking up pilots", len(needed), pilotProgressStep)
 		var namesFailed, affiliationsFailed bool // logged once, as every batch after a failure tends to fail too
 		for batch := range slices.Chunk(needed, pilotBatchSize(len(needed))) {
 			var wait sync.WaitGroup
@@ -153,7 +154,7 @@ func (cached *CachedEveIDs) PrefetchKillmailEntities(killmails []RawKillmail) {
 			lookups = append(lookups, func() { cached.prefetchSystem(systemID) })
 		}
 	}
-	lookupProgress := newPercentProgress("Looking up corporations, alliances, ships and systems", len(lookups))
+	lookupProgress := newPercentProgress("Looking up corporations, alliances, ships and systems", len(lookups), lookupProgressStep)
 	for index, lookup := range lookups {
 		lookups[index] = func() {
 			lookup()

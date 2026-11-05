@@ -106,7 +106,7 @@ func (a *App) collectStructureKillmails(target retrieval.IntelTarget, limits ret
 	}
 
 	switch target.TypeOfEntity {
-	case types.CORPORATION, types.ALLIANCE:
+	case types.CORPORATION, types.ALLIANCE, types.COALITION:
 		found, err := retrieval.CollectStructureKillmails(target, limits)
 		if err != nil {
 			comm.Logger.WithError(err).Warn("Continuing with the structure killmails collected")

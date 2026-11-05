@@ -57,6 +57,7 @@ const (
 	sectionRecentSearches       section = "recent_search"
 	sectionIgnoredAllies        section = "ignored_ally"
 	sectionHoldings             section = "holding"
+	sectionCoalitions           section = "coalition"
 	sectionZkillLists           section = "zkill_list"
 	sectionIntelChecks          section = "intel_check"
 	sectionImages               section = "image"

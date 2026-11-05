@@ -81,6 +81,9 @@ type App struct {
 	importMu      sync.Mutex
 	pendingImport *importPlan
 
+	// lets one change to a coalition read then save at a time, see changeCoalition
+	coalitionMu sync.Mutex
+
 	// checkMu lets one check of imported entities run at a time, see runIntelChecks, and closing stops one when the app closes
 	checkMu sync.Mutex
 	closing atomic.Bool
@@ -94,7 +97,9 @@ type TargetResult struct {
 	ID       int               `json:"id"`
 	Type     string            `json:"type"`
 	Display  api.TargetDisplay `json:"display"`
-	Holdings *Holdings         `json:"holdings"` // a corp or alliance target's holding links, nil for pilots and systems
+	Holdings *Holdings         `json:"holdings"` // a corp or alliance target's holding links, nil for pilots, systems, and coalitions
+	// a coalition target's card, set only for a coalition: it is the user's own group, so its members come from the cache and the ESI is not asked
+	Coalition *CoalitionCard `json:"coalition,omitempty"`
 	// the holding that was searched for, when the search went to its main instead, empty otherwise
 	SearchedHolding string `json:"searchedHolding,omitempty"`
 	// the pilots, corporations, alliances, and systems a search with no type matched, when more than one did or any by ticker.
@@ -104,10 +109,10 @@ type TargetResult struct {
 
 // TargetChoice is one of the matches of a name searched with no type, for the user to choose between
 type TargetChoice struct {
-	Type     string `json:"type"` // PILOT, CORPORATION, ALLIANCE, or SYSTEM
+	Type     string `json:"type"` // PILOT, CORPORATION, ALLIANCE, SYSTEM, or COALITION
 	ID       int    `json:"id"`
 	Name     string `json:"name"`
-	ImageURL string `json:"imageUrl"` // a portrait or logo, empty for a system
+	ImageURL string `json:"imageUrl"` // a portrait or logo, empty for a system or coalition
 	ByTicker bool   `json:"byTicker"` // a corporation or alliance with the name searched as its ticker
 }
 
@@ -121,7 +126,7 @@ type IntelReport struct {
 	Members      []Fleetmate          `json:"members"`      // a corp or alliance target's most active pilots, shown the same way as fleetmates
 	Pilots       []Fleetmate          `json:"pilots"`       // a system target's most active pilots
 	Corporations []CorporationSummary `json:"corporations"` // a system target's most active corporations
-	Allies       []AllySummary        `json:"allies"`       // a pilot, corp, or alliance target's most common alliances and corps on its kills, outside its own alliance
+	Allies       []AllySummary        `json:"allies"`       // a pilot, corp, alliance, or coalition target's most common alliances and corps on its kills, outside its own alliance
 	// the allies the user chose to leave out of this target's Allies, see SaveIgnoredAllies
 	IgnoredAllies []IgnoredAllySummary `json:"ignoredAllies"`
 	// how many allies the target also killed, which the Hide killed allies preference leaves out of Allies
@@ -259,6 +264,7 @@ var searchTypes = map[string]types.EntityType{
 	types.CORPORATION.String(): types.CORPORATION,
 	types.ALLIANCE.String():    types.ALLIANCE,
 	types.SYSTEM.String():      types.SYSTEM,
+	types.COALITION.String():   types.COALITION,
 }
 
 // fleetmateLimit is how many fleetmates the intel report ranks
@@ -551,13 +557,15 @@ func (a *App) holdingMain(target *retrieval.IntelTarget) (retrieval.HoldingLink,
 }
 
 /*
-	SearchTarget looks up a pilot, corporation, alliance, or system, by id when it is known, else by name, and builds its display values
+	SearchTarget looks up a pilot, corporation, alliance, system, or coalition, by id when it is known, else by name, and builds its display values
 
 Parameters:
   - name: the exact in game name of the target, ignoring case, or a zKillboard or EveWho link to it, which is searched by the id in it
-  - searchType: PILOT, CORPORATION, ALLIANCE, or SYSTEM, only accepting a match of this type, or empty to accept any: a lone match is searched,
-    and with more than one, or any by ticker, the result has only Choices, for the search to be asked again for the one chosen
+  - searchType: PILOT, CORPORATION, ALLIANCE, SYSTEM, or COALITION, only accepting a match of this type, or empty to accept any: a lone match is searched,
+    and with more than one, or any by ticker, or a coalition of that exact name, the result has only Choices, for the search to be asked again for the one chosen.
+    A coalition named exactly is searched at once when the ESI finds nothing else by the name or can not be reached.
   - id: the target's eve id with its searchType, when the frontend knows it, ie from a menu or recent search, so no name lookup is needed. 0 to search by name.
+    A coalition's is its own negative id.
 
 Returns:
   - TargetResult: the target's id, type, and display values, or the Choices
@@ -597,12 +605,24 @@ func (a *App) SearchTarget(name string, searchType string, id int) (result Targe
 		searchType, id = linkType.String(), linkID
 	}
 
+	// a coalition is the user's own, so it is searched from the cache without the ESI
+	if searchType == coalitionType {
+		return a.searchCoalition(name, id)
+	}
+
 	if id == 0 && searchType == "" {
+		coalition, isCoalition := a.cache.CoalitionNamed(name)
 		found, err := a.matchTargets(name)
-		if err != nil {
+		switch {
+		case err != nil && isCoalition:
+			// the ESI found nothing else, or could not be reached
+			return a.coalitionResult(coalition), nil
+		case err != nil:
 			return result, err
-		}
-		if len(found.Matches) > 1 || found.Matches[0].ByTicker {
+		case isCoalition:
+			choices := targetChoices(found.Matches)
+			return TargetResult{Choices: append([]TargetChoice{{Type: coalitionType, ID: coalition.ID, Name: coalition.Name}}, choices...)}, nil
+		case len(found.Matches) > 1 || found.Matches[0].ByTicker:
 			return TargetResult{Choices: targetChoices(found.Matches)}, nil
 		}
 		searchType = found.Matches[0].Type.String()
@@ -687,7 +707,7 @@ func (a *App) SearchTarget(name string, searchType string, id int) (result Targe
 
 Parameters:
   - targetID: the eve id of the target
-  - targetType: PILOT, CORPORATION, ALLIANCE, or SYSTEM, as returned in TargetResult.Type
+  - targetType: PILOT, CORPORATION, ALLIANCE, SYSTEM, or COALITION, as returned in TargetResult.Type
 
 Returns:
   - IntelReport: the killmail count and each report section. Sections that do not apply to the target type are left nil.
@@ -730,7 +750,17 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		Clients:      a.clients,
 	}
 
+	settings := a.searchPreferences()
+	// a coalition is the user's own group, not an EVE entity: it has no Expanded, and nothing about it reaches the ESI or zKillboard
+	var coalition retrieval.Coalition
 	switch entityType {
+	case types.COALITION:
+		var found bool
+		if coalition, found = a.cache.CoalitionByID(targetID); !found {
+			return report, errNoCoalition
+		}
+		target.Name = coalition.Name
+		target.Holdings = a.cache.CoalitionGroups(coalition, settings.IncludeHoldings)
 	case types.PILOT:
 		target.Expanded = a.cache.ExpandPilot(targetID, true)
 	case types.CORPORATION:
@@ -741,8 +771,7 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 		target.Expanded = a.cache.ExpandSystem(targetID)
 	}
 
-	settings := a.searchPreferences()
-	if settings.IncludeHoldings {
+	if settings.IncludeHoldings && entityType != types.COALITION {
 		target.Holdings = a.targetHoldings(&target)
 	}
 	a.noteDebugSearch(func(search *debugSearch) {
@@ -768,8 +797,11 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 			return report, fmt.Errorf("Could not retrieve killmails for this target: %s", api.FailureReason(collectErr))
 		}
 	}
-	// the structure lists are pulled with the killmails, and everything on them looked up together
-	structureRaw, expandStructures := a.collectStructureKillmails(target, limits)
+	// the structure lists are pulled with the killmails, and everything on them looked up together. A coalition only if it opted in, as they cost a call per member and structure group.
+	structureRaw, expandStructures := []retrieval.RawKillmail(nil), func() structureKillmails { return structureKillmails{} }
+	if entityType != types.COALITION || coalition.IncludeStructures {
+		structureRaw, expandStructures = a.collectStructureKillmails(target, limits)
+	}
 	a.cache.PrefetchKillmailEntities(append(append([]retrieval.RawKillmail{}, *killmails...), structureRaw...))
 	structures := expandStructures()
 
@@ -784,7 +816,7 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 	case types.PILOT:
 		comm.ReportProgress("Ranking fleetmates")
 		report.Fleetmates = buildFleetmates(aggregate.GetMostFrequentFleetmates(fleetmateLimit, collected.PilotsSeen, &target))
-	case types.CORPORATION, types.ALLIANCE:
+	case types.CORPORATION, types.ALLIANCE, types.COALITION:
 		comm.ReportProgress("Ranking members")
 		report.Members = buildFleetmates(aggregate.GetTopMembers(memberLimit, collected.PilotsSeen, &target))
 		comm.ReportProgress("Finding capital pilots")
@@ -795,10 +827,17 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 				memberCount = corp.MemberCount
 			}
 		}
-		a.setRoster(newRoster(targetID, entityType, collected.PilotsSeen, memberCount))
-		report.MemberList = true
-		comm.ReportProgress("Finding structures")
-		report.Structures = buildStructures(a.clients.ESIClient, structures, collected.Killmails, &target)
+		if entityType == types.COALITION {
+			// no member list, so the last corp or alliance's is not left to be asked for
+			a.setRoster(nil)
+		} else {
+			a.setRoster(newRoster(targetID, entityType, collected.PilotsSeen, memberCount))
+			report.MemberList = true
+		}
+		if entityType != types.COALITION || coalition.IncludeStructures {
+			comm.ReportProgress("Finding structures")
+			report.Structures = buildStructures(a.clients.ESIClient, structures, collected.Killmails, &target)
+		}
 	case types.SYSTEM:
 		comm.ReportProgress("Ranking pilots and corporations")
 		report.Pilots = buildFleetmates(aggregate.GetTopPilots(pilotLimit, collected.PilotsSeen))
@@ -830,17 +869,21 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 
 	// a system target is the only system on its killmails, so it has no top systems, and no side to have allies on
 	if entityType != types.SYSTEM {
-		comm.ReportProgress("Ranking allies")
-		a.lastAllies = &alliesSource{target: target, killmails: collected.Killmails}
-		report.Allies, report.IgnoredAllies, report.KilledAllies = a.rankAllies(a.lastAllies)
-		report.Holdings = a.holdingActivity(a.lastAllies)
+		// a coalition has no Allies: the user chose who is in it, so who flies beside them is not what its search is for
+		a.lastAllies = nil
+		if entityType != types.COALITION {
+			comm.ReportProgress("Ranking allies")
+			a.lastAllies = &alliesSource{target: target, killmails: collected.Killmails}
+			report.Allies, report.IgnoredAllies, report.KilledAllies = a.rankAllies(a.lastAllies)
+			report.Holdings = a.holdingActivity(a.lastAllies)
+		}
 		report.Fits = buildFits(collected.Killmails, &target, collected.BattleOfKillmail(), a.clients.ESIClient)
 		comm.ReportProgress("Ranking systems")
 		report.Systems = buildSystemSummaries(aggregate.GetMostVisitedSystems(systemLimit, collected.SystemsVisted), collected.Killmails, &target)
 	}
 
 	// a stopped search goes without them, the PDF drawing plain boxes, rather than wait on the image server
-	if (entityType == types.CORPORATION || entityType == types.ALLIANCE) && !a.stopRequested.Load() {
+	if (entityType == types.CORPORATION || entityType == types.ALLIANCE || entityType == types.COALITION) && !a.stopRequested.Load() {
 		comm.ReportProgress("Fetching report images")
 		report.Images = a.fetchReportImages(pdfImageURLs(entityType, targetID, report))
 	}

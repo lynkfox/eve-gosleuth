@@ -280,6 +280,7 @@ func listedTime(km api.ZkbResponse, cache killmailCache) time.Time {
 
 /*
 	listKillmails lists the target's killmails, and those of each of its Holdings, merged newest first with each killmail once.
+	A coalition target has no list of its own, only its Holdings' (members and their affiliates), each killmail's Via naming whose list it was on.
 	Each list is newest first, so the newest of the merged list are among the newest of each, and every list is paged alike. See listEntity.
 	A killmail with no time is sorted by the cache's copy. Should any have no time at all, the list is sorted by killmail id instead,
 	as ids are given out in nearly the order killmails happen.
@@ -291,7 +292,7 @@ Parameters:
 
 Returns:
   - *[]api.ZkbResponse: the merged list, those within the limits first, then those only from the cached lists beyond them. A killmail on the target's own list and a holding's is the target's.
-  - []*TargetGroup: for each killmail on the list, the holding it was listed for, nil when it is on the target's own list
+  - []*TargetGroup: for each killmail on the list, the holding it was listed for, nil when it is on the target's own list (never for a coalition)
   - int: how many from the top of the merged list are within the limits
   - error: nil, or the zkill pull errors, the lists that were pulled are still merged
 */
@@ -319,30 +320,37 @@ func listKillmails(target IntelTarget, paging api.ZkillPaging, need int) (*[]api
 	}
 
 	errs := []error{}
+	coalition := target.TypeOfEntity == types.COALITION
 	// with holdings the ticker says whose list each page is, as each list starts again from page 1
-	mainPaging := paging
-	if len(target.Holdings) > 0 {
-		mainPaging.For = target.DisplayName() + " (main)"
+	if !coalition {
+		mainPaging := paging
+		if len(target.Holdings) > 0 {
+			mainPaging.For = target.DisplayName() + " (main)"
+		}
+		own, err := listEntity(target, target.TypeOfEntity, target.IDNumber, mainPaging, need)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		add(own, nil)
 	}
-	own, err := listEntity(target, target.TypeOfEntity, target.IDNumber, mainPaging, need)
-	if err != nil {
-		errs = append(errs, err)
-	}
-	add(own, nil)
 	for index := range target.Holdings {
 		holding := &target.Holdings[index]
-		comm.ReportProgress("Fetching killmail list for affiliate %s from zKillboard (live)", holding.Name)
+		label := "affiliate"
+		if coalition && holding.Member {
+			label = "member"
+		}
+		comm.ReportProgress("Fetching killmail list for %s %s from zKillboard (live)", label, holding.Name)
 		holdingPaging := paging
-		holdingPaging.For = "affiliate " + holding.Name
+		holdingPaging.For = label + " " + holding.Name
 		list, err := listEntity(target, holding.Type, holding.ID, holdingPaging, need)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("affiliate %s: %w", holding.Name, err))
+			errs = append(errs, fmt.Errorf("%s %s: %w", label, holding.Name, err))
 		}
 		add(list, holding)
 	}
 
 	newestFirst := func(a, b listed) int { return b.at.Compare(a.at) }
-	if untimed && len(target.Holdings) == 0 {
+	if untimed && len(target.Holdings) == 0 && !coalition {
 		newestFirst = func(a, b listed) int { return 0 } // a single list keeps zKillboard's order
 	} else if untimed {
 		newestFirst = func(a, b listed) int { return b.killmail.KillmailID - a.killmail.KillmailID }

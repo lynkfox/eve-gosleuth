@@ -78,9 +78,13 @@ Parameters:
 
 Returns:
   - entityList: the listed killmails, and how many are within the search's limits
-  - error: the zkill pull error, with what was listed
+  - error: the zkill pull error, with what was listed. ErrLocalID for an id below 0.
 */
 func listEntity(target IntelTarget, entityType types.EntityType, entityID int, paging api.ZkillPaging, need int) (entityList, error) {
+	// a coalition's id is not an eve id, and its members are listed one by one
+	if entityID < 0 {
+		return entityList{}, fmt.Errorf("%w: %s %d can not be listed on zKillboard", ErrLocalID, entityType, entityID)
+	}
 	zkill := target.Clients.ZkillClient
 	lists, _ := target.Clients.ESIClient.(zkillListCache)
 	bodies, _ := target.Clients.ESIClient.(killmailCache)

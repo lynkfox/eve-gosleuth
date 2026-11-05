@@ -47,12 +47,21 @@ type intelFileCard struct {
 	IgnoredAllies []intelFileEntity  `json:"ignoredAllies,omitempty"`
 }
 
-// intelFile is a My Intel export, to give to other users: the cards exported, each as My Intel shows it
+// intelFileCoalition is a coalition in a My Intel file: its name, note, whether it collects structures, and its members. Older copies of the app ignore the list it is in.
+type intelFileCoalition struct {
+	Name              string            `json:"name"`
+	Note              string            `json:"note,omitempty"`
+	IncludeStructures bool              `json:"includeStructures,omitempty"`
+	Members           []intelFileEntity `json:"members"` // corporations and alliances
+}
+
+// intelFile is a My Intel export, to give to other users: the cards exported, each as My Intel shows it, and the coalitions
 type intelFile struct {
-	Format   string          `json:"format"`
-	Version  int             `json:"version"`
-	Exported time.Time       `json:"exported"`
-	Cards    []intelFileCard `json:"cards"`
+	Format     string               `json:"format"`
+	Version    int                  `json:"version"`
+	Exported   time.Time            `json:"exported"`
+	Cards      []intelFileCard      `json:"cards"`
+	Coalitions []intelFileCoalition `json:"coalitions,omitempty"`
 }
 
 /*
@@ -60,7 +69,7 @@ type intelFile struct {
 	A link where a card is another main's holding is that main's, so it goes only with the main.
 
 Parameters:
-  - cards: the chosen cards' keys, ie ALLIANCE:99013330
+  - cards: the chosen cards' keys, ie ALLIANCE:99013330, or COALITION:-1730000000000 for a coalition
 */
 func (a *App) buildIntelFile(cards []string) intelFile {
 	chosen := map[string]bool{}
@@ -82,6 +91,17 @@ func (a *App) buildIntelFile(cards []string) intelFile {
 			card.IgnoredAllies = append(card.IgnoredAllies, intelFileEntity{Type: ally.Type, ID: ally.ID, Name: ally.Name})
 		}
 		file.Cards = append(file.Cards, card)
+	}
+
+	for _, coalition := range a.cache.Coalitions() {
+		if !chosen[intelGroupKey(coalitionType, coalition.ID)] {
+			continue
+		}
+		exported := intelFileCoalition{Name: coalition.Name, Note: coalition.Note, IncludeStructures: coalition.IncludeStructures, Members: []intelFileEntity{}}
+		for _, member := range coalition.Members {
+			exported.Members = append(exported.Members, intelFileEntity{Type: member.Type, ID: member.ID, Name: member.Name})
+		}
+		file.Coalitions = append(file.Coalitions, exported)
 	}
 	return file
 }
@@ -115,7 +135,7 @@ func (file intelFile) flatten() ([]importedHolding, []importedIgnored) {
 	ExportMyIntel saves the chosen My Intel cards to a file the user picks, to give to other users. It does not wait for a running search.
 
 Parameters:
-  - cards: the chosen cards' keys, ie ALLIANCE:99013330
+  - cards: the chosen cards' keys, ie ALLIANCE:99013330, and COALITION:<id> for coalitions
 
 Returns:
   - string: the file's name, empty if the user closed the picker
@@ -124,7 +144,7 @@ Returns:
 func (a *App) ExportMyIntel(cards []string) (name string, err error) {
 	defer recoverAsError(&err)
 	file := a.buildIntelFile(cards)
-	if len(file.Cards) == 0 {
+	if len(file.Cards)+len(file.Coalitions) == 0 {
 		return "", errors.New("Choose at least one card with something on it to export")
 	}
 
@@ -159,15 +179,25 @@ type IntelNoteChange struct {
 
 // ImportPreview is what an import would change, for the user to agree to before it does
 type ImportPreview struct {
-	Cancelled       bool              `json:"cancelled,omitempty"` // the user closed the picker
-	File            string            `json:"file"`
-	NewHoldings     int               `json:"newHoldings"`
-	KnownHoldings   int               `json:"knownHoldings"` // already saved, with the same note
-	NoteChanges     []IntelNoteChange `json:"noteChanges"`
-	NewIgnored      int               `json:"newIgnored"`
-	KnownIgnored    int               `json:"knownIgnored"`
-	Skipped         int               `json:"skipped"`         // entries left out, as they did not check out with the ESI or were not valid
-	SkippedExamples []string          `json:"skippedExamples"` // why, for the first few
+	Cancelled        bool              `json:"cancelled,omitempty"` // the user closed the picker
+	File             string            `json:"file"`
+	NewHoldings      int               `json:"newHoldings"`
+	KnownHoldings    int               `json:"knownHoldings"` // already saved, with the same note
+	NoteChanges      []IntelNoteChange `json:"noteChanges"`
+	NewIgnored       int               `json:"newIgnored"`
+	KnownIgnored     int               `json:"knownIgnored"`
+	Coalitions       int               `json:"coalitions"`       // coalitions the file would create, ones the user has by that name only get members
+	CoalitionMembers int               `json:"coalitionMembers"` // members it would add to coalitions, new or not
+	Skipped          int               `json:"skipped"`          // entries left out, as they did not check out with the ESI or were not valid
+	SkippedExamples  []string          `json:"skippedExamples"`  // why, for the first few
+}
+
+// plannedCoalition is a coalition a file holds: matched by name, ignoring case, to one the user has, which only gets the members it lacks, else created
+type plannedCoalition struct {
+	name              string
+	note              string
+	includeStructures bool
+	members           []retrieval.CoalitionMember // the members to add, as the file has them
 }
 
 // importPlan is a read import, kept between its preview and the user agreeing to it
@@ -176,6 +206,7 @@ type importPlan struct {
 	changedNotes   []retrieval.HoldingLink // with their notes
 	newIgnored     map[string][]retrieval.IgnoredAlly
 	ignoredTargets map[string]intelFileEntity
+	coalitions     []plannedCoalition
 	checks         []retrieval.IntelCheck // every entity the import names, to check with the ESI once it is saved, see runIntelChecks
 }
 
@@ -269,8 +300,27 @@ func (a *App) applyImport(plan importPlan, useTheirNotes bool) {
 		}
 		a.cache.SetIgnoredAllies(target.Type, target.ID, ignored)
 	}
+	a.applyCoalitions(plan.coalitions)
 	a.cache.AddIntelChecks(plan.checks)
 	a.saveCacheQuietly()
+}
+
+// applyCoalitions adds an import's coalitions: a name the user has again by now only gets the members it lacks, else a new coalition is made. Nothing is removed or changed.
+func (a *App) applyCoalitions(planned []plannedCoalition) {
+	a.coalitionMu.Lock()
+	defer a.coalitionMu.Unlock()
+	for _, wanted := range planned {
+		coalition, found := a.cache.CoalitionNamed(wanted.name)
+		if !found {
+			coalition = retrieval.Coalition{Name: wanted.name, Note: wanted.note, IncludeStructures: wanted.includeStructures}
+		}
+		for _, member := range wanted.members {
+			if !slices.ContainsFunc(coalition.Members, func(other retrieval.CoalitionMember) bool { return other.Type == member.Type && other.ID == member.ID }) {
+				coalition.Members = append(coalition.Members, member)
+			}
+		}
+		a.cache.SaveCoalition(coalition)
+	}
 }
 
 // readLimited reads a file, refusing one larger than limit
@@ -315,7 +365,11 @@ func (a *App) planImport(data []byte) (importPlan, ImportPreview, error) {
 	for _, ignored := range ignoredLists {
 		allyCount += len(ignored.Allies)
 	}
-	if len(holdings) > maxIntelEntries || allyCount > maxIntelEntries {
+	memberCount := 0
+	for _, coalition := range file.Coalitions {
+		memberCount += len(coalition.Members)
+	}
+	if len(holdings) > maxIntelEntries || allyCount > maxIntelEntries || memberCount > maxIntelEntries || len(file.Coalitions) > maxIntelEntries {
 		return plan, preview, errors.New("This My Intel file has more entries than GoSleuth imports")
 	}
 
@@ -412,6 +466,8 @@ func (a *App) planImport(data []byte) (importPlan, ImportPreview, error) {
 			}
 		}
 	}
+	a.planCoalitions(file.Coalitions, &plan, &preview, checked, skip)
+
 	for _, check := range toCheck {
 		plan.checks = append(plan.checks, check)
 	}
@@ -421,17 +477,72 @@ func (a *App) planImport(data []byte) (importPlan, ImportPreview, error) {
 // cleanImportedName keeps a name from a file printable and short until the ESI check corrects it: control and invisible formatting characters, which could
 // make one name look like another, are taken out, and it is cut to maxImportedName. One with nothing left is named by its type and id.
 func cleanImportedName(entity intelFileEntity) string {
-	name := strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
-			return -1
-		}
-		return r
-	}, entity.Name))
-	if runes := []rune(name); len(runes) > maxImportedName {
-		name = string(runes[:maxImportedName])
-	}
+	name := cleanImportedText(entity.Name, maxImportedName)
 	if name == "" {
 		name = fmt.Sprintf("%s %d", strings.ToLower(entity.Type), entity.ID)
 	}
 	return name
+}
+
+// cleanImportedText keeps text from a file printable: control and invisible formatting characters are taken out, it is trimmed, and cut to limit characters
+func cleanImportedText(text string, limit int) string {
+	text = strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, text))
+	if runes := []rune(text); len(runes) > limit {
+		text = string(runes[:limit])
+	}
+	return text
+}
+
+/*
+	planCoalitions works out what a file's coalitions would change, as planImport does the cards: each is matched by name, ignoring case, with one the user has,
+	which only gets the members it lacks, else it would be created. A coalition with no usable name is skipped, and a member that is malformed.
+
+Parameters:
+  - coalitions: the file's coalitions
+  - plan, preview: planImport's, which this fills
+  - checked: planImport's check of an entity, giving its cleaned name or why it is left out, and noting it to check with the ESI
+  - skip: planImport's count of an entry left out
+*/
+func (a *App) planCoalitions(coalitions []intelFileCoalition, plan *importPlan, preview *ImportPreview, checked func(intelFileEntity, ...string) (string, string), skip func(string)) {
+	groupKinds := []string{types.CORPORATION.String(), types.ALLIANCE.String()}
+	byName := map[string]int{} // a lower case name to its place in plan.coalitions
+	for _, filed := range coalitions {
+		name := cleanImportedText(filed.Name, maxCoalitionName)
+		if name == "" {
+			for range filed.Members {
+				skip("a coalition has no name")
+			}
+			skip("a coalition has no name")
+			continue
+		}
+		at, planned := byName[strings.ToLower(name)]
+		existing, known := a.cache.CoalitionNamed(name)
+		if !planned {
+			at = len(plan.coalitions)
+			byName[strings.ToLower(name)] = at
+			plan.coalitions = append(plan.coalitions, plannedCoalition{name: name, note: cleanImportedText(filed.Note, maxHoldingNote), includeStructures: filed.IncludeStructures})
+			if !known {
+				preview.Coalitions++
+			}
+		}
+		coalition := &plan.coalitions[at]
+		for _, member := range filed.Members {
+			memberName, problem := checked(member, groupKinds...)
+			if problem != "" {
+				skip(problem)
+				continue
+			}
+			same := func(other retrieval.CoalitionMember) bool { return other.Type == member.Type && other.ID == member.ID }
+			if slices.ContainsFunc(existing.Members, same) || slices.ContainsFunc(coalition.members, same) {
+				continue
+			}
+			coalition.members = append(coalition.members, retrieval.CoalitionMember{Type: member.Type, ID: member.ID, Name: memberName})
+			preview.CoalitionMembers++
+		}
+	}
 }

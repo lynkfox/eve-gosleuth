@@ -82,6 +82,7 @@ type CachedEveIDs struct {
 	Searched             map[string]*CacheEntry // the search bar's recent searches, by recentSearchKey. Never expire, see AddRecentSearch.
 	IgnoredAllies        map[string]*CacheEntry // each target's allies left out of its Allies tab, by ignoredAlliesKey. Never expire, see SetIgnoredAllies.
 	Holdings             map[string]*CacheEntry // the user's holding links, by holdingKey. Never expire, see SaveHoldingLink.
+	SavedCoalitions      map[string]*CacheEntry // the user's coalitions, by coalitionKey. Never expire, see SaveCoalition.
 	PendingChecks        map[string]*CacheEntry // imported pilots, corporations, and alliances still to check with the ESI, by intelCheckKey, see AddIntelChecks
 	ZkillLists           map[string]*CacheEntry // entities' zKillboard killmail lists, by zkillListKey. Never expire, see SaveKnownZkillList.
 	Images               map[string]*CacheEntry // the PDF report's images from the image server, by url. Dropped by a newer SDE, see SaveImage.
@@ -91,10 +92,12 @@ type CachedEveIDs struct {
 	mu                   sync.Mutex
 	counts               CacheCounts // lookups since the app started, for progress messages
 
-	searchedLoaded bool // Searched has every saved recent search, see loadRecentSearches. Guarded by mu.
-	holdingsLoaded bool // Holdings has every saved holding link, see loadHoldings. Guarded by mu.
-	ignoredLoaded  bool // IgnoredAllies has every target's saved ignored allies, see AllIgnoredAllies. Guarded by mu.
-	checksLoaded   bool // PendingChecks has every saved check, see IntelChecks. Guarded by mu.
+	searchedLoaded   bool // Searched has every saved recent search, see loadRecentSearches. Guarded by mu.
+	holdingsLoaded   bool // Holdings has every saved holding link, see loadHoldings. Guarded by mu.
+	coalitionsLoaded bool // SavedCoalitions has every saved coalition, see loadCoalitions. Guarded by mu.
+	coalitionFloor   int  // the lowest coalition id given out or seen this session, so a removed one's id is not given again. Guarded by mu.
+	ignoredLoaded    bool // IgnoredAllies has every target's saved ignored allies, see AllIgnoredAllies. Guarded by mu.
+	checksLoaded     bool // PendingChecks has every saved check, see IntelChecks. Guarded by mu.
 
 	db      *sql.DB                // nil if the database could not be opened, the cache then only lasts the session
 	dirty   map[rowKey]*CacheEntry // added since the last SaveCache, guarded by mu
@@ -233,6 +236,9 @@ func (c *CachedEveIDs) ensureMaps() {
 	}
 	if c.Holdings == nil {
 		c.Holdings = make(map[string]*CacheEntry)
+	}
+	if c.SavedCoalitions == nil {
+		c.SavedCoalitions = make(map[string]*CacheEntry)
 	}
 	if c.PendingChecks == nil {
 		c.PendingChecks = make(map[string]*CacheEntry)
@@ -592,6 +598,9 @@ func (c *CachedEveIDs) UpdateExpanded(idNumber int, item any) {
 
 // GetIfNotCached takes an id number and a type and returns the raw ESI response for the IDnumber if cached and current, else calls the ESI and caches the response
 func (c *CachedEveIDs) GetIfNotCached(idNumber int, typeOfEntity types.EntityType) (*interface{}, error) {
+	if idNumber < 0 {
+		return nil, fmt.Errorf("%w: %s %d", ErrLocalID, typeOfEntity, idNumber)
+	}
 
 	var found any
 

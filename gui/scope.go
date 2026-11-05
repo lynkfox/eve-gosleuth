@@ -4,19 +4,20 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lynkfox/go_eve_sleuth/comm/types"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
 )
 
 // ReportScope is what a search covered, for At a glance's Scope card and the PDF report
 type ReportScope struct {
 	Limits  []string      `json:"limits"`  // the search limits used, as plain phrases, see scopeLimits
-	Sources []ScopeSource `json:"sources"` // the target then each affiliate, in the holdings' order, empty when the search had none
+	Sources []ScopeSource `json:"sources"` // the target then each affiliate, in the holdings' order, empty when the search had none. A coalition has no row of its own: each member then each affiliate.
 }
 
 // ScopeSource is the killmails one list of the search gave: the target's own, or an affiliate's
 type ScopeSource struct {
 	Name      string    `json:"name"`
-	Main      bool      `json:"main"` // the target itself
+	Main      bool      `json:"main"` // the target itself, never set for a coalition
 	Killmails int       `json:"killmails"`
 	Oldest    time.Time `json:"oldest"` // zero with no killmails
 	Newest    time.Time `json:"newest"`
@@ -38,9 +39,12 @@ func buildScope(target *retrieval.IntelTarget, cards []KillmailCard, limits Sear
 	if len(target.Holdings) == 0 {
 		return scope
 	}
-	scope.Sources = append(scope.Sources, ScopeSource{Name: target.DisplayName(), Main: true})
 	// killmails carry only their holding's name (Via), so two affiliates sharing a name, ie a corp and an alliance, count as one: rare enough to accept
-	index := map[string]int{"": 0}
+	index := map[string]int{}
+	if target.TypeOfEntity != types.COALITION {
+		index[""] = 0
+		scope.Sources = append(scope.Sources, ScopeSource{Name: target.DisplayName(), Main: true})
+	}
 	for _, holding := range target.Holdings {
 		index[holding.Name] = len(scope.Sources)
 		scope.Sources = append(scope.Sources, ScopeSource{Name: holding.Name})
