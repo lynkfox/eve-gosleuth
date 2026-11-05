@@ -1,6 +1,6 @@
 # War tracker and group search
 
-Plan of 2026-11-04, decisions from the user the same night. Stages 1, 2, and 3 built.
+Plan of 2026-11-04, decisions from the user the same night. Stages 1, 2, and 3 built, Stage 4 under way.
 
 The model is the user's hand-kept 2024 Coalition vs Lazerhawks sheet (id `11i7aE7hB7ES0Q-mtVmYRaO8dBj6DX7B6IL6GGNQQLP8`): gid 722070133 is one row per fight, gid 1013484469 the totals by side and day.
 
@@ -11,11 +11,11 @@ The model is the user's hand-kept 2024 Coalition vs Lazerhawks sheet (id `11i7aE
 | 1 | Group search from the search bar |
 | 2 | War core: setup, saved wars, collection, classification, Overview, Battles, Systems |
 | 3 | Station trash and asset denial, and the Timeline with every category |
-| 4 | Notes and flags per battle, merging and splitting battles, a battle report link per battle |
+| 4 | Merging, splitting, and ignoring battles, then notes and system nicknames |
 | 5 | Pilots and Ships tabs |
 | 6 | Last: data export, then the PDF report |
 
-Each stage is usable when it lands. **After these, in a later version:** membership changes during a war, importing zKillboard killmail dumps, who joined in, fleet doctrines, the tour, right-click "Add to a war".
+Each stage is usable when it lands. **After these, in a later version:** membership changes during a war, importing zKillboard killmail dumps, who joined in, fleet doctrines, the tour, right-click "Add to a war", multi-system battle reports, user assigned markers.
 
 ## Settled rules
 
@@ -146,39 +146,61 @@ These may fall outside any counted battle, the one exception to that rule, and j
 - **Station ref** when that side's upwell structure in that system then dies within 3 days for a medium structure, 4 days for a large (user, 2026-11-05). The fight it dies in counts. `medium_structure_types` in `structures.json` lists the mediums, as size has no group of its own; everything else, Keepstars and Sotiyos too, takes 4 days.
 - **Ref attempt** otherwise, so a mark can move from one to the other at a later Update.
 
-Standup Fighters never count as ships lost, only in ISK lost, under structures (user, 2026-11-04). They are their own groups, 4777, 4778, and 4779 (`category` 87 in `fit_types.json`), apart from carrier fighters' 1537, 1652, and 1653. They go in a new `standup_fighter_groups` section of `structures.json`, read with `ContainsGroupOf`, so a minor bump at most. Fights are found on killmails, so a station reffed that neither fires on a killmail nor has a fighter on one is not marked. In Stage 4 either mark starts the For Timer flag ticked, and the user can clear it.
+Standup Fighters never count as ships lost, only in ISK lost, under structures (user, 2026-11-04). They are their own groups, 4777, 4778, and 4779 (`category` 87 in `fit_types.json`), apart from carrier fighters' 1537, 1652, and 1653. They go in a new `standup_fighter_groups` section of `structures.json`, read with `ContainsGroupOf`, so a minor bump at most. Fights are found on killmails, so a station reffed that neither fires on a killmail nor has a fighter on one is not marked.
 
 **Structure lookups in a war (user, 2026-11-05):** only Citadel, POS, and POCO losses and Standup Fighters are looked for. A war does not run the full structure lookup.
 
 **Timeline:** the sheet's tab: for each day in EVE time and each side, every category, with toggle buttons on the left for By Day (By Week while on weeks) or Running Total, and on the right for Days or Weeks, weeks starting on a Monday. Above it a strip drawn like the Activity chart, one cell per period in the side's color, the more ISK lost the stronger. The strip and switches stay pinned while the table scrolls; past 14 cells the strip scrolls sideways, starting at the newest (user, 2026-11-05).
 
-## Stage 4: notes, flags, and battle edits
+## Stage 4: battle edits, notes, and nicknames
 
-Added after a report is generated, from a battle's row. Reordered by the user on 2026-11-05: merge, split, and ignore first, then notes and system nicknames.
+Added after a report is generated, from a battle's row. Reordered by the user on 2026-11-05: merge, split, and ignore first, then notes and system nicknames. Settled with the user on 2026-11-05.
 
-**Saving them.** All of it has to outlast closing the app, an Update, and a new version, so it is saved as the user's own data and applied again at every build: its own cache section beside the war, one of `userSections` so a clear leaves it, removed with the war. Not in the `War` record, which every save rewrites.
+**Saving them.** All of it has to outlast closing the app, an Update, and a new version, so it is saved as the user's own data and applied again at every build: a `war_edit` section with one row per war (`retrieval.WarEdits`), one of `userSections` so a clear leaves it, removed with the war. Not in the `War` record, which every save rewrites.
 
-**Keeping them through updates:** a battle's id comes from its first killmail, which a later run can change. Every edit is saved with the battle's killmail ids, and goes to whichever battle now holds most of those. If two edited battles end up as one, both notes are kept. An edit whose battle falls outside the war's dates (the Change window can do that) stays saved, and comes back if the dates do.
+**Replay.** The edits are an ordered list, applied after `findWarTrash` at each build (`aggregate/war_edits.go`). Each holds its killmail ids and goes to the battle now holding most of them. One that matches nothing, as its battle is outside the war's dates, stays saved and does nothing. Undo removes that edit and replays the rest.
 
-### 1. Merge, split, and ignore (the important part)
+### Merge and split
 
-- **Merge or split battles** by hand. An edit is saved as the killmail ids it moved, and applied after `FindBattles` at each build. A killmail new since the edit joins a battle as usual, and the edit then applies on top.
-- **Ignore a battle:** it leaves the war's totals, and stays on the lists grayed out, so it can be taken back (user, 2026-11-05). The Ahbazon tower's fight (J121959, Nov 4) is the first case. It is the one edit that changes totals, so decide when building how the Timeline, Systems, marks, and trash go with it: the same killmails should leave all of them.
-- **Merging and splitting change no totals:** they should apply after trash is decided, only regrouping rows and their pilot and ISK lines, though the count of battles changes. Trash and battles are found together in `findWarTrash`, and re-running it on an edit could move trash figures.
+**They change no ISK, ship, Timeline, or Systems ISK figure:** tested. Only the row level moves: the battle and skirmish counts, marks, and each system's battle count.
 
-### 2. Notes and system nicknames
+- **A third party's side stays as the automatic battles decided it (user):** worked out per automatic battle and kept on each killmail, before any edit, as regrouping would otherwise move its ISK. So a split does not correct a group that really changed sides partway through.
+- **A piece of a split keeps counting** though it may have no direct kill, as the battle it came from counted.
+- **A new killmail** joins a merged battle by its usual battle. In a split one it joins the piece with the nearest killmail in time in its system, else the nearest overall.
 
-- **A notes field** on any battle, merged ones too.
-- **A nickname for a system** that follows it, ie "J110117 - Ursa Home" (user, 2026-11-05). Settle when building whether it is the war's or the whole app's; following the system suggests it is saved by system id and shown wherever its name is.
+**Merge with…** on a battle's menu lists the others, nearest in time first, to tick. **Split…** lists the battle's killmails (`GetWarBattleKillmails`) to tick by hand, by system, or from a line down, then moves them to a new battle. Each makes two, and can be repeated. The row carries a chit and an Undo on its menu. A row's id comes from its first killmail, with that killmail's id added if two pieces would share one.
 
-### Not decided or held back
+### Ignore a battle
 
-- **User assigned markers** (a mark added or dismissed by hand): wanted, but probably a future version (user, 2026-11-05). So a wrong mark like the Ahbazon tower's is dealt with by ignoring its battle for now. When built, one added by hand should say so in its hover, as killmails don't show everything.
-- **The sheet's flags** (One Fight, Not war, 3rd Party, For Timer, Timer defended, Defence succeeded): the older plan had them changing no totals, with For Timer starting ticked on a mark. The user's order of 2026-11-05 leaves them out, so ask before building them.
+It leaves the war's totals and stays on the lists grayed out, with its own figures, to be taken back (user, 2026-11-05). The Ahbazon tower's fight (J121959, Nov 4) is the first case.
 
-### Multi-system battle reports
+- **What the row shows leaves with it (user):** its killmails and any trash or asset denial attached to its stations, from the Overview, Timeline, Systems, Others, and marks.
+- **Trash is found again without them,** so a station in it stops confirming a Ref'd mark or ending asset denial elsewhere.
+- **The killmails stay held,** and the Overview counts it apart.
+- **Known limit:** if an Update joins an ignored fight to a real one, the whole joined battle is ignored; the larger gray row shows it, and it can be split.
 
-After the above, unless the user says otherwise. Its `systems` list should replace `OtherSystemReports` (2026-11-05), which holds much the same.
+Stages 5 and 6 must leave ignored battles out.
+
+### Notes and system nicknames
+
+- **A notes field** on any battle, saved with its killmail ids, so it follows the battle. Merged battles keep every note.
+- **A nickname for a system** that follows it, shown beside its name. **Its scope is chosen when it is named (user, 2026-11-05):** for the whole app, as "Valhalla, Ursa home", or this war only, as an op name like "Mango". The war's wins inside that war. Links, sorting, and copied text keep the real name.
+
+### Held back
+
+**User assigned markers** (a mark added or dismissed by hand): wanted, in a future version, and **they replace the sheet's flags entirely (user, 2026-11-05)**, so One Fight, Not war, 3rd Party, For Timer and the rest will not be built. When built, one added by hand should say so in its hover, as killmails don't show everything. Until then a wrong mark like the Ahbazon tower's is dealt with by ignoring its battle.
+
+## Stage 5: Pilots and Ships
+
+**Pilots:** top pilots per side, by kills and ISK destroyed. **Ships:** hulls lost and flown per side, trash left out.
+
+## Stage 6: export and PDF
+
+A JSON export of the report's data, as the sheet offered, with each battle's saved report link. Then the war report in the PDF, built like the existing one.
+
+## Later: multi-system battle reports
+
+Its own piece of work after the war plan (user, 2026-11-05). Its `systems` list should replace `OtherSystemReports` (2026-11-05), which holds much the same.
 
 The app never makes a battle report itself (user, 2026-11-05). The related links show one system each, and a fight that moved through a gate needs a report built by hand on the user's site of choice. EVE Tools (`/create`) and WarBeacon (`/br/create`) can build one; zKillboard has no way to. Their create endpoints are internal and undocumented, and using them would add public reports to someone else's site, so the user makes the report there and brings the link back.
 
@@ -202,14 +224,6 @@ The app never makes a battle report itself (user, 2026-11-05). The related links
 - This needs each system's id, name, start, and end on `WarBattle`: a new `systems` list, added then, with room left in the row beside `OtherSystems`.
 
 **Including the report:** the pasted link is saved with the battle like a note: with its killmail ids, following the battle through updates, and cleared with the war. Only an `https` link is kept, and it opens in the browser as other links do. The row shows it first, named by its site where known, ahead of the per-system related links, which stay. It is also part of the export and the PDF's battles in Stage 6. A saved link changes no totals, and the app does not read anything from it.
-
-## Stage 5: Pilots and Ships
-
-**Pilots:** top pilots per side, by kills and ISK destroyed. **Ships:** hulls lost and flown per side, trash left out.
-
-## Stage 6: export and PDF
-
-A JSON export of the report's data, as the sheet offered, with each battle's saved report link. Then the war report in the PDF, built like the existing one.
 
 ## Contract for Stage 2
 
