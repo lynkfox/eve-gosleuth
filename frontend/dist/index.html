@@ -430,14 +430,15 @@
           </div>
 
           <div id="panel-war-battles" class="tab-panel paged-panel" role="tabpanel" aria-labelledby="tab-war-battles" hidden>
+            <div id="war-battles-classes" class="war-classes"></div>
             <div class="war-toolbar">
-              <label class="war-toggle"><input id="war-show-skirmishes" type="checkbox" checked><span id="war-skirmish-label">Show skirmishes</span></label>
               <span class="muted war-toolbar-note">An estimate from killmails alone. No battle is called won.</span>
             </div>
             <div class="panel-scroll">
-              <table class="war-table">
+              <table class="war-table war-fixed war-battles-table">
+                <colgroup><col class="war-col-when"><col class="war-col-class"><col class="war-col-system"><col><col><col class="war-col-others"><col class="war-col-structures"><col class="war-col-reports"></colgroup>
                 <thead>
-                  <tr><th>When</th><th>System</th><th class="war-head-a" id="war-battles-head-a">Side A</th><th class="war-head-b" id="war-battles-head-b">Side B</th><th class="war-head-others">Others</th><th title="Structures lost">Structures</th><th>Battle reports</th></tr>
+                  <tr><th data-sort="when" aria-sort="descending"><button class="war-sort" type="button"><span>When</span></button></th><th data-sort="class"><button class="war-sort" type="button"><span>Class</span></button></th><th data-sort="system"><button class="war-sort" type="button"><span>System</span></button></th><th class="war-head-a" data-sort="a"><button class="war-sort" type="button"><span id="war-battles-head-a">Side A</span></button></th><th class="war-head-b" data-sort="b"><button class="war-sort" type="button"><span id="war-battles-head-b">Side B</span></button></th><th class="war-head-others">Others</th><th title="Structures lost">Structures</th><th>Battle reports</th></tr>
                 </thead>
                 <tbody id="war-battles-body"></tbody>
               </table>
@@ -454,9 +455,10 @@
 
           <div id="panel-war-systems" class="tab-panel" role="tabpanel" aria-labelledby="tab-war-systems" hidden>
             <div id="war-systems-classes" class="war-classes"></div>
-            <table class="war-table">
+            <table class="war-table war-fixed war-systems-table">
+              <colgroup><col class="war-col-class"><col class="war-col-name"><col><col><col></colgroup>
               <thead>
-                <tr><th>System</th><th class="num war-head-a" id="war-systems-head-a">Side A</th><th class="num war-head-b" id="war-systems-head-b">Side B</th><th class="num war-head-others">Others</th></tr>
+                <tr><th data-sort="class"><button class="war-sort" type="button"><span>Class</span></button></th><th data-sort="system" aria-sort="ascending"><button class="war-sort" type="button"><span>System</span></button></th><th class="num war-head-a" data-sort="a"><button class="war-sort" type="button"><span id="war-systems-head-a">Side A</span></button></th><th class="num war-head-b" data-sort="b"><button class="war-sort" type="button"><span id="war-systems-head-b">Side B</span></button></th><th class="num war-head-others" data-sort="others"><button class="war-sort" type="button"><span>Others</span></button></th></tr>
               </thead>
               <tbody id="war-systems-body"></tbody>
             </table>

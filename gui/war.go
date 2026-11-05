@@ -77,13 +77,20 @@ type WarMeasures struct {
 	Efficiency    float64             `json:"efficiency"` // 0 to 100: the other side's ISK lost as a share of both sides' ISK lost. 0 for Others, and when neither lost any.
 }
 
+// WarStructureKind is how many of one kind of structure a side lost in a battle
+type WarStructureKind struct {
+	Name  string `json:"name"` // the type's name, or POS for any control tower
+	Count int    `json:"count"`
+}
+
 // WarBattleSide is a side's part in a row of the Battles tab
 type WarBattleSide struct {
-	Group      *EntityRef `json:"group"` // its largest group in the battle by pilots, null if it has none there
-	Pilots     int        `json:"pilots"`
-	ISKLost    float64    `json:"iskLost"`
-	ShipsLost  int        `json:"shipsLost"`
-	Structures int        `json:"structures"`
+	Group          *EntityRef         `json:"group"` // its largest group in the battle by pilots, null if it has none there
+	Pilots         int                `json:"pilots"`
+	ISKLost        float64            `json:"iskLost"`
+	ShipsLost      int                `json:"shipsLost"`
+	Structures     int                `json:"structures"`
+	StructureKinds []WarStructureKind `json:"structureKinds"` // never null, most lost first
 }
 
 // WarBattle is a row of the Battles tab: one fight, as in the sheet
@@ -96,7 +103,7 @@ type WarBattle struct {
 	Class        string        `json:"class"`        // the system's wormhole class, else its security band
 	Pilots       int           `json:"pilots"`
 	Killmails    int           `json:"killmails"`
-	Skirmish     bool          `json:"skirmish"` // behind the skirmishes toggle
+	Skirmish     bool          `json:"skirmish"` // marked beside its date
 	A            WarBattleSide `json:"a"`
 	B            WarBattleSide `json:"b"`
 	Others       WarBattleSide `json:"others"`
@@ -119,11 +126,12 @@ type WarSystemSide struct {
 
 // WarSystem is a row of the Systems tab
 type WarSystem struct {
-	System SystemSummary `json:"system"`
-	Class  string        `json:"class"` // as WarClassCount's
-	A      WarSystemSide `json:"a"`
-	B      WarSystemSide `json:"b"`
-	Others WarSystemSide `json:"others"`
+	System  SystemSummary `json:"system"`
+	Class   string        `json:"class"`   // as WarClassCount's
+	Battles int           `json:"battles"` // battles and skirmishes here, one that moved counting in each of its systems
+	A       WarSystemSide `json:"a"`
+	B       WarSystemSide `json:"b"`
+	Others  WarSystemSide `json:"others"`
 }
 
 // WarKillmail is a killmail a war's report counted. The frontend never lists them, as a war has far too many, so it gets only their count.
@@ -892,7 +900,11 @@ func warGroupRef(group *aggregate.WarGroup) *EntityRef {
 }
 
 func warBattleSide(side aggregate.WarBattleSide) WarBattleSide {
-	return WarBattleSide{Group: warGroupRef(side.Group), Pilots: side.Pilots, ISKLost: side.ISKLost, ShipsLost: side.ShipsLost, Structures: side.StructureLost}
+	converted := WarBattleSide{Group: warGroupRef(side.Group), Pilots: side.Pilots, ISKLost: side.ISKLost, ShipsLost: side.ShipsLost, Structures: side.StructureLost, StructureKinds: []WarStructureKind{}}
+	for _, kind := range side.StructureKinds {
+		converted.StructureKinds = append(converted.StructureKinds, WarStructureKind{Name: kind.Name, Count: kind.Count})
+	}
+	return converted
 }
 
 func warSystemSide(side aggregate.WarSystemSide) WarSystemSide {
@@ -984,7 +996,7 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 		}
 		class := warClass(system.System)
 		classes[class]++
-		report.Systems = append(report.Systems, WarSystem{System: structureSystem(system.System), Class: class,
+		report.Systems = append(report.Systems, WarSystem{System: structureSystem(system.System), Class: class, Battles: system.Battles,
 			A: warSystemSide(system.A), B: warSystemSide(system.B), Others: warSystemSide(system.Others)})
 	}
 	report.SystemCount = len(report.Systems)

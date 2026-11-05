@@ -3942,11 +3942,15 @@ const TAB_HELP = {
   ],
   "tab-war-battles": [
     "One row per fight, newest first: when, where, each side's largest group, and what each side lost.",
-    "Skirmishes are the smaller fights. The toggle hides them.",
+    "Click When, Class, System, or a side to sort by it, a side by the name of its largest group. Hover over And other systems or a structure count for the details.",
+    "Skirmishes are the smaller fights, marked beside their date. The table at the top counts both as Engagements.",
+    "Click a class in the table at the top to show only those. Several can be on at once.",
     "The icons open the battle on zKillboard, EVE Tools, and Warbeacon. Right-click a row for the same.",
   ],
   "tab-war-systems": [
-    "Where the war was fought: the count by class, then each system's killmails and ISK lost by side.",
+    "Where the war was fought: the count by class, then each system's ISK lost and killmails by side.",
+    "Click a column heading to sort by it. The sides sort by ISK lost.",
+    "Click a class in the table at the top to show only those. Several can be on at once.",
     "Right-click a system to search it or open it on an external site.",
   ],
   "tab-roster": (type) => type === "ALLIANCE"
@@ -4203,8 +4207,8 @@ const WORMHOLE_CLASS_KEY = {
 const WAR_SIDE_KEY = {
   title: "Side",
   items: [
-    { sample: "A", className: "key-war-a", meaning: "Side A, or a loss of side A's" },
-    { sample: "B", className: "key-war-b", meaning: "Side B, or a loss of side B's" },
+    { sample: "A", className: "key-war-a", meaning: "Side A" },
+    { sample: "B", className: "key-war-b", meaning: "Side B" },
     { sample: "—", className: "key-neutral", meaning: "Others, on neither side" },
   ],
 };
@@ -5542,7 +5546,8 @@ let warMode = false;
 // warReport is the war report shown, the backend's WarReport, null while another kind of report or none is
 let warReport = null;
 let warBattlePage = 0;
-let warShowSkirmishes = true;
+// warClassFilters are the classes each table is filtered to, every class while empty
+const warClassFilters = { battles: new Set(), systems: new Set() };
 // warOthersAll is true once the Others list is shown in full, past WAR_OTHERS_SHOWN
 let warOthersAll = false;
 const WAR_OTHERS_SHOWN = 40;
@@ -5586,20 +5591,26 @@ function warClassChip(cls) {
   return spaceLabel(WAR_BANDS[cls] || cls);
 }
 
-// warCountsTable is a small table of the report's counts, one column each: with fights, its battles and skirmishes, then its systems and how many of each class, most first, in their colors
-function warCountsTable(report, withFights) {
-  const columns = [
-    ...(withFights ? [["Battles", report.battleCount], ["Skirmishes", report.skirmishes]] : []),
+// warCountsTable is the Overview's small table of the report's counts, one column each: its battles and skirmishes, then its systems and how many of each class, most first, in their colors
+function warCountsTable(report) {
+  return warCounts([
+    ["Battles", report.battleCount],
+    ["Skirmishes", report.skirmishes],
     ["Systems", report.systemCount],
     ...report.classes.map((entry) => [warClassChip(entry.class), entry.count]),
-  ];
+  ]);
+}
+
+// warCounts builds a table of counts from columns of [title, count], and an optional third item that fills the column's th instead of the title
+function warCounts(columns) {
   const table = document.createElement("table");
   table.className = "war-counts";
   const head = document.createElement("tr");
   const counts = document.createElement("tr");
-  for (const [title, count] of columns) {
+  for (const [title, count, fill] of columns) {
     const th = document.createElement("th");
-    th.append(title);
+    if (fill) fill(th);
+    else th.append(title);
     const td = document.createElement("td");
     td.textContent = count.toLocaleString("en-US");
     head.append(th);
@@ -5754,9 +5765,9 @@ function showWarReport(report) {
   intelReport = null;
   if (!sameWar) {
     warBattlePage = 0;
-    warShowSkirmishes = true;
     warOthersAll = false;
-    el("war-show-skirmishes").checked = true;
+    warClassFilters.battles.clear();
+    warClassFilters.systems.clear();
   }
 
   setWarMode(true);
@@ -5764,11 +5775,16 @@ function showWarReport(report) {
   renderWarVersus(report.war, report);
   for (const key of ["a", "b"]) {
     const name = warSideName(report.war, key);
-    for (const id of [`war-battles-head-${key}`, `war-systems-head-${key}`]) el(id).textContent = name;
+    for (const id of [`war-battles-head-${key}`, `war-systems-head-${key}`]) {
+      el(id).textContent = name;
+      el(id).title = name;
+    }
   }
-  setTabCount("tab-war-battles", report.battles.length);
-  setTabCount("tab-war-systems", report.systemCount);
   renderWarOverview(report);
+  renderWarClassFilter("battles", "Engagements", report.battles);
+  renderWarClassFilter("systems", "Systems", report.systems);
+  showWarCounts("battles");
+  showWarCounts("systems");
   renderWarBattlePage();
   renderWarSystems(report);
 
@@ -5794,7 +5810,7 @@ function renderWarOverview(report) {
     parts.push(warParagraph("This war has not been run yet. Press Update at the top to list both sides' killmails.", "status war-first-run"));
   }
 
-  parts.push(warCountsTable(report, true));
+  parts.push(warCountsTable(report));
 
   parts.push(warMeasuresTable(report));
   parts.push(warParagraph("Efficiency is the other side's ISK lost as a share of both sides' ISK lost, over the whole war.", "row-detail war-note"));
@@ -5859,25 +5875,14 @@ function warMeasuresTable(report) {
   row("In fights", (m) => count(m.shipsFights), { indent: true });
   if (any((m) => m.shipsTrash)) row("Station trash and asset denial", (m) => count(m.shipsTrash), { indent: true });
 
-  // the citadels' count opens a line under it with the count of each type, or shows them on hover
-  const detail = document.createElement("tr");
-  detail.className = "war-citadel-detail";
-  detail.hidden = true;
-  const citadels = row("All Citadels", (m) => {
+  // the citadels' count, with the count of each type under it
+  row("All Citadels", (m) => {
     if (m.citadelCount === 0) return "0";
-    const figure = document.createElement("button");
-    figure.type = "button";
-    figure.className = "text-link war-figure";
-    figure.textContent = count(m.citadelCount);
-    figure.title = m.citadels.map((type) => `${type.name} × ${type.count}`).join("\n") || "Click for each type";
-    figure.addEventListener("click", () => { detail.hidden = !detail.hidden; });
-    return figure;
-  });
-  detail.append(document.createElement("td"));
-  for (const [, measures] of columns) {
-    const cell = document.createElement("td");
-    cell.className = "war-citadel-types";
-    for (const type of measures.citadels) {
+    const figures = document.createDocumentFragment();
+    figures.append(count(m.citadelCount));
+    const types = document.createElement("div");
+    types.className = "war-citadel-types";
+    for (const type of m.citadels) {
       const line = document.createElement("div");
       if (type.imageUrl) {
         const icon = document.createElement("img");
@@ -5887,11 +5892,11 @@ function warMeasuresTable(report) {
         line.append(icon);
       }
       line.append(`${type.name} × ${type.count}`);
-      cell.append(line);
+      types.append(line);
     }
-    detail.append(cell);
-  }
-  citadels.after(detail);
+    figures.append(types);
+    return figures;
+  });
   row("All POS", (m) => count(m.pos));
 
   const enough = report.a.iskLost + report.b.iskLost > 0;
@@ -6093,22 +6098,199 @@ async function saveWarAdd() {
 
 // warBattles are the battles the Battles tab lists: the real ones, and the skirmishes too once the toggle is on
 function warBattles() {
-  return warReport.battles.filter((battle) => warShowSkirmishes || !battle.skirmish);
+  return warSorted("battles", warFiltered("battles", warReport.battles));
 }
 
-// warBattleSideCell is a side's part of a battle row: its largest group there, then what it lost. key is a, b, or others.
+// warFiltered is a table's rows of the classes it is filtered to
+function warFiltered(name, rows) {
+  const on = warClassFilters[name];
+  return on.size === 0 ? rows : rows.filter((row) => on.has(row.class));
+}
+
+// showWarCounts puts how many rows a table's filters leave on its tab and in the total of its count table, flashing both when asked and they changed
+function showWarCounts(name, flash = false) {
+  const tab = `tab-war-${name}`;
+  const shown = el(tab).querySelector(".tab-count");
+  const total = el(`war-${name}-classes`).querySelector("tbody td");
+  const before = shown.dataset.count;
+  const count = warFiltered(name, warReport[name]).length;
+  setTabCount(tab, count);
+  total.textContent = count.toLocaleString("en-US");
+  if (!flash || shown.dataset.count === before) return;
+  for (const figure of [shown, total]) {
+    figure.classList.remove("war-count-flash");
+    void figure.offsetWidth; // restarts the animation on a second change while the first still runs
+    figure.classList.add("war-count-flash");
+  }
+}
+
+/*
+  renderWarClassFilter fills the small table above a list: the rows in all, then how many of each class, most first. Clicking a class heading turns it on or off as a filter, several at once.
+  Filters on a class no longer among the rows, ie after ignoring a group, are dropped.
+*/
+function renderWarClassFilter(name, title, rows) {
+  const counts = new Map();
+  for (const row of rows) counts.set(row.class, (counts.get(row.class) || 0) + 1);
+  const on = warClassFilters[name];
+  for (const cls of on) {
+    if (!counts.has(cls)) on.delete(cls);
+  }
+
+  const classes = [...counts.entries()].sort(([a, countA], [b, countB]) => countB - countA || warClassRank(a) - warClassRank(b) || (a || "").localeCompare(b || "", undefined, { numeric: true }));
+  const box = el(`war-${name}-classes`);
+  box.hidden = rows.length === 0;
+  box.replaceChildren(warCounts([
+    [title, rows.length],
+    ...classes.map(([cls, count]) => [cls, count, (head) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "war-filter";
+      button.title = "Show only these, or click again to stop. Several can be on at once.";
+      button.append(cls ? warClassChip(cls) : "Unknown");
+      const mark = () => {
+        head.classList.toggle("war-filter-on", on.has(cls));
+        button.setAttribute("aria-pressed", String(on.has(cls)));
+      };
+      button.addEventListener("click", () => {
+        if (on.has(cls)) on.delete(cls);
+        else on.add(cls);
+        mark();
+        WAR_SORTS[name].redraw();
+        showWarCounts(name, true);
+      });
+      head.classList.add("war-filter-head");
+      head.append(button);
+      mark();
+    }]),
+  ]));
+}
+
+// warClassRank orders classes as security bands from high to null, then wormhole classes, then unknown
+function warClassRank(cls) {
+  const band = Object.keys(WAR_BANDS).indexOf(cls);
+  if (band >= 0) return band;
+  return cls ? 3 : 4;
+}
+
+// warByClass compares two rows with a class and system: by class, C2 before C13, then highest security first
+function warByClass(a, b) {
+  return warClassRank(a.class) - warClassRank(b.class)
+    || (a.class || "").localeCompare(b.class || "", undefined, { numeric: true })
+    || b.system.securityStatus - a.system.securityStatus;
+}
+
+/*
+  warByGroup compares two battles by the name of a side's largest group, a side with none last in either direction.
+
+  Parameters:
+    key: a or b
+*/
+function warByGroup(key) {
+  return (x, y, direction) => {
+    const first = x[key].group ? x[key].group.name : "";
+    const second = y[key].group ? y[key].group.name : "";
+    if (!first || !second) return first === second ? 0 : direction * (first ? -1 : 1);
+    return first.localeCompare(second);
+  };
+}
+
+// warBySystem compares two rows with a system by its name
+function warBySystem(a, b) {
+  return a.system.name.localeCompare(b.system.name);
+}
+
+/*
+  WAR_SORTS are the war report's sortable tables: the column each is sorted by, each column's compare (a tie goes to then, or stays in the report's order), and which columns sort most first on their first click.
+  The headings are the th elements with a data-sort.
+*/
+const WAR_SORTS = {
+  battles: {
+    key: "when",
+    descending: true,
+    columns: {
+      when: { compare: (a, b) => new Date(a.start) - new Date(b.start), mostFirst: true },
+      class: { compare: warByClass },
+      system: { compare: warBySystem },
+      a: { compare: warByGroup("a") },
+      b: { compare: warByGroup("b") },
+    },
+    redraw() {
+      warBattlePage = 0;
+      renderWarBattlePage();
+    },
+  },
+  systems: {
+    key: "system",
+    descending: false,
+    then: warBySystem,
+    columns: {
+      class: { compare: warByClass },
+      system: { compare: warBySystem },
+      a: { compare: (x, y) => x.a.iskLost - y.a.iskLost, mostFirst: true },
+      b: { compare: (x, y) => x.b.iskLost - y.b.iskLost, mostFirst: true },
+      others: { compare: (x, y) => x.others.iskLost - y.others.iskLost, mostFirst: true },
+    },
+    redraw() {
+      renderWarSystems(warReport);
+    },
+  },
+};
+
+// warSorted is a copy of a table's rows in its current sort
+function warSorted(name, rows) {
+  const sort = WAR_SORTS[name];
+  const { compare } = sort.columns[sort.key];
+  const direction = sort.descending ? -1 : 1;
+  return [...rows].sort((a, b) => direction * compare(a, b, direction) || (sort.then ? sort.then(a, b) : 0));
+}
+
+// wireWarSort makes a table's headings sort it: another column starts at its first direction, the same one turns around
+function wireWarSort(name) {
+  const sort = WAR_SORTS[name];
+  const heads = [...el(`war-${name}-body`).closest("table").querySelectorAll("th[data-sort]")];
+  for (const head of heads) {
+    head.querySelector("button").addEventListener("click", () => {
+      const key = head.dataset.sort;
+      sort.descending = key === sort.key ? !sort.descending : Boolean(sort.columns[key].mostFirst);
+      sort.key = key;
+      for (const other of heads) other.removeAttribute("aria-sort");
+      head.setAttribute("aria-sort", sort.descending ? "descending" : "ascending");
+      if (warReport) sort.redraw();
+    });
+  }
+}
+
+// warClassCell is a row's thin first column: its class, with the security status in k-space, where it says something
+function warClassCell(cls, system) {
+  const cell = document.createElement("td");
+  cell.className = "war-class-cell";
+  if (!cls) return cell;
+  cell.append(warClassChip(cls));
+  if (WAR_BANDS[cls]) {
+    const security = document.createElement("span");
+    security.className = securityClass(system.securityBand);
+    security.textContent = system.securityStatus.toFixed(1);
+    cell.append(security);
+  }
+  return cell;
+}
+
+// warBattleSideCell is a side's part of a battle row: its largest group there, then what it lost. key is a, b, or others, and Others is left bare when it lost nothing.
 function warBattleSideCell(side, key) {
   const cell = document.createElement("td");
+  if (key === "others" && !side.iskLost && !side.shipsLost) return cell;
   cell.className = `war-side-cell war-${key}`;
   const group = side.group ? groupLine(side.group) : null;
   if (key !== "others") {
     const name = document.createElement("div");
     if (group) name.append(group);
     else name.textContent = "—";
+    if (group) name.title = side.group.name;
     cell.append(name);
   } else if (group) {
     const name = document.createElement("div");
     name.append(group);
+    name.title = side.group.name;
     cell.append(name);
   }
   const lost = document.createElement("div");
@@ -6132,10 +6314,6 @@ function renderWarBattlePage() {
   warBattlePage = Math.max(0, Math.min(warBattlePage, pageCount - 1));
   const start = warBattlePage * BATTLES_PER_PAGE;
 
-  const label = el("war-skirmish-label");
-  label.textContent = `Show skirmishes (${report.skirmishes.toLocaleString("en-US")})`;
-  label.parentElement.hidden = report.skirmishes === 0;
-
   const rows = list.slice(start, start + BATTLES_PER_PAGE).map((battle) => {
     const row = document.createElement("tr");
     row.className = battle.skirmish ? "war-battle war-skirmish" : "war-battle";
@@ -6143,50 +6321,59 @@ function renderWarBattlePage() {
     const whenCell = document.createElement("td");
     const date = document.createElement("div");
     date.textContent = spokenDate(battle.start);
+    if (battle.skirmish) {
+      const tag = document.createElement("span");
+      tag.className = "war-chit";
+      tag.textContent = "Skirmish";
+      date.append(tag);
+    }
     const clock = document.createElement("div");
-    clock.className = "row-detail";
+    clock.className = "row-detail war-clock";
     clock.textContent = battleClock(battle);
     whenCell.append(date, clock);
-    if (battle.skirmish) {
-      const tag = document.createElement("div");
-      tag.className = "row-detail";
-      tag.textContent = "Skirmish";
-      whenCell.append(tag);
-    }
 
     const systemCell = document.createElement("td");
     const name = document.createElement("div");
-    const security = document.createElement("span");
-    security.className = securityClass(battle.system.securityBand);
-    security.textContent = battle.system.securityStatus.toFixed(1);
-    name.append(`${battle.system.name} `, security, " ", warClassChip(battle.class));
+    name.textContent = battle.system.name;
+    name.title = battle.system.name;
     const detail = document.createElement("div");
     detail.className = "row-detail";
-    detail.textContent = `${warPlural(battle.killmails, "killmail")} · ${warPlural(battle.pilots, "pilot")}${battle.otherSystems.length ? ` · also ${battle.otherSystems.join(", ")}` : ""}`;
+    detail.textContent = `${warPlural(battle.killmails, "killmail")} · ${warPlural(battle.pilots, "pilot")}`;
     systemCell.append(name, detail);
+    if (battle.otherSystems.length > 0) {
+      const others = document.createElement("div");
+      others.className = "war-other-systems";
+      const words = document.createElement("span");
+      words.textContent = "And other systems";
+      words.title = battle.otherSystems.join(", ");
+      others.append(words);
+      systemCell.append(others);
+    }
 
     const structures = document.createElement("td");
-    const lost = [["a", battle.a.structures], ["b", battle.b.structures], ["others", battle.others.structures]].filter(([, count]) => count > 0);
-    if (lost.length === 0) structures.textContent = "—";
-    for (const [key, count] of lost) {
+    structures.className = "war-structures-cell";
+    const lost = [["a", battle.a], ["b", battle.b], ["others", battle.others]].filter(([, side]) => side.structures > 0);
+    for (const [key, side] of lost) {
       const line = document.createElement("div");
       line.className = `war-structure-count war-${key}`;
-      line.textContent = `${key === "others" ? "Others" : key.toUpperCase()}: ${count}`;
-      line.title = warSideName(report.war, key);
+      line.textContent = `${key === "others" ? "Others" : key.toUpperCase()}: ${side.structures}`;
       structures.append(line);
+    }
+    if (lost.length > 0) {
+      structures.title = lost.map(([key, side]) => `${warSideName(report.war, key)}: ${side.structureKinds.map((kind) => `${kind.count} ${kind.name}`).join(", ")}`).join("\n");
     }
 
     const reports = document.createElement("td");
     reports.append(siteLinks(`the battle in ${battle.system.name}`, battle));
 
-    row.append(whenCell, systemCell, warBattleSideCell(battle.a, "a"), warBattleSideCell(battle.b, "b"), warBattleSideCell(battle.others, "others"), structures, reports);
+    row.append(whenCell, warClassCell(battle.class, battle.system), systemCell, warBattleSideCell(battle.a, "a"), warBattleSideCell(battle.b, "b"), warBattleSideCell(battle.others, "others"), structures, reports);
     return withMenu(row, battleSections(battle));
   });
 
   el("war-battles-body").replaceChildren(...rows);
   const empty = el("war-battles-empty");
   if (list.length === 0) {
-    empty.textContent = warEmptyText(report, report.skirmishes > 0 ? "No battles yet, only skirmishes. Show skirmishes lists them." : "No battles on the killmails the war holds.");
+    empty.textContent = warEmptyText(report, "No battles on the killmails the war holds.");
   }
   empty.hidden = list.length > 0;
 
@@ -6203,39 +6390,36 @@ function showWarBattlePage(page) {
 
 /* Systems */
 
-// renderWarSystems fills the Systems tab: the count by class, then each system with its killmails and ISK lost for each side
+// renderWarSystems fills the Systems tab: the count by class, then each system with its ISK lost and killmails for each side
 function renderWarSystems(report) {
-  const line = el("war-systems-classes");
-  line.replaceChildren(warCountsTable(report, false));
-  line.hidden = report.systemCount === 0;
-
-  const rows = report.systems.map((entry) => {
+  const rows = warSorted("systems", warFiltered("systems", report.systems)).map((entry) => {
     const row = document.createElement("tr");
     const nameCell = document.createElement("td");
     const name = document.createElement("div");
-    const security = document.createElement("span");
-    security.className = securityClass(entry.system.securityBand);
-    security.textContent = entry.system.securityStatus.toFixed(1);
-    name.append(`${entry.system.name} `, security, " ", warClassChip(entry.class));
+    name.textContent = entry.system.name;
     const detail = document.createElement("div");
     detail.className = "row-detail";
     const parts = systemLocation(entry.system).filter((part) => !(part instanceof Node && part.classList.contains("space")));
+    parts.push(`Number of Battles fought: ${entry.battles.toLocaleString("en-US")}`);
     parts.forEach((part, index) => {
       if (index > 0) detail.append(" · ");
       detail.append(part);
     });
     nameCell.append(name, detail);
 
-    row.append(nameCell);
+    row.append(warClassCell(entry.class, entry.system), nameCell);
     for (const key of ["a", "b", "others"]) {
       const side = entry[key];
-      const cell = numberCell(warPlural(side.killmails, "killmail"));
-      cell.className = `num war-side-cell war-${key}`;
-      const isk = document.createElement("div");
-      isk.className = "row-detail";
-      isk.textContent = formatIsk(side.iskLost);
-      cell.append(isk);
+      const cell = document.createElement("td");
       row.append(cell);
+      if (key === "others" && !side.killmails && !side.iskLost) continue; // bare, as in a battle row
+      cell.className = `num war-side-cell war-${key}`;
+      const isk = document.createElement("strong");
+      isk.textContent = formatIsk(side.iskLost);
+      const killmails = document.createElement("div");
+      killmails.className = "row-detail";
+      killmails.textContent = warPlural(side.killmails, "killmail");
+      cell.append(isk, killmails);
     }
     return withMenu(row, [systemSection(entry.system)]);
   });
@@ -6692,15 +6876,12 @@ function wireWarSetup() {
     });
   }
 
-  // the Battles tab's skirmish toggle, and the Killmails tab's filter, battle, and pager
-  el("war-show-skirmishes").addEventListener("change", () => {
-    warShowSkirmishes = el("war-show-skirmishes").checked;
-    warBattlePage = 0;
-    renderWarBattlePage();
-  });
+  // the Battles tab's pager and both tabs' sortable headings
   el("war-battle-prev").addEventListener("click", () => showWarBattlePage(warBattlePage - 1));
   el("war-battle-next").addEventListener("click", () => showWarBattlePage(warBattlePage + 1));
   wirePagerJumps(el("war-battle-first"), el("war-battle-last"), () => Math.ceil(warBattles().length / BATTLES_PER_PAGE), showWarBattlePage);
+  wireWarSort("battles");
+  wireWarSort("systems");
 }
 
 function clearIntel() {

@@ -79,13 +79,20 @@ type WarMeasures struct {
 	POS           int                 // control_tower_groups and poco_groups
 }
 
+// WarStructureKind is how many of one kind of structure a side lost in a battle
+type WarStructureKind struct {
+	Name  string // the type's name, or POS for any control tower
+	Count int
+}
+
 // WarBattleSide is one side's part in a battle, third parties beside it included
 type WarBattleSide struct {
-	Group         *WarGroup // its largest group in the battle by pilots, nil if it has none there
-	Pilots        int
-	ISKLost       float64
-	ShipsLost     int
-	StructureLost int // upwell, control tower, and customs office killmails
+	Group          *WarGroup // its largest group in the battle by pilots, nil if it has none there
+	Pilots         int
+	ISKLost        float64
+	ShipsLost      int
+	StructureLost  int                // upwell, control tower, and customs office killmails
+	StructureKinds []WarStructureKind // what those were, most lost first then by name
 }
 
 // WarBattle is a counted battle, or a skirmish
@@ -116,6 +123,7 @@ type WarOther struct {
 // WarSystem is what happened in one system
 type WarSystem struct {
 	System       *retrieval.System
+	Battles      int // the battles and skirmishes with a killmail it counts here. A battle that moved counts in each of its systems.
 	A, B, Others WarSystemSide
 }
 
@@ -491,6 +499,32 @@ func warLossOf(kill *warKill, km *retrieval.Killmail) warLoss {
 	return loss
 }
 
+// structureKind is the name a structure loss goes under in a battle, control towers being one kind
+func (loss warLoss) structureKind() string {
+	if comm.ControlTowerGroups.ContainsGroupOf(loss.typeID) {
+		return "POS"
+	}
+	if loss.item.Name != "" {
+		return loss.item.Name
+	}
+	if fit := comm.FitTypeOf(loss.typeID); fit != nil && fit.Name != "" {
+		return fit.Name
+	}
+	return "Unknown structure"
+}
+
+// addStructureKind counts a structure lost in the battle
+func (side *WarBattleSide) addStructureKind(name string) {
+	side.StructureLost++
+	for index := range side.StructureKinds {
+		if side.StructureKinds[index].Name == name {
+			side.StructureKinds[index].Count++
+			return
+		}
+	}
+	side.StructureKinds = append(side.StructureKinds, WarStructureKind{Name: name, Count: 1})
+}
+
 func (m *warMeasureBuilder) add(loss warLoss) {
 	m.Killmails++
 	m.ISKLost += loss.isk
@@ -674,6 +708,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		}
 		wb.Skirmish = wb.Pilots < minPilots
 		inBattle := map[WarSideKey]*WarBattleSide{WarSideA: &wb.A, WarSideB: &wb.B, WarSideNone: &wb.Others}
+		countedIn := map[int]*WarSystem{}
 		systemKills := map[int]int{}
 		systemFirst := []*retrieval.System{}
 		for _, kill := range battle.kills {
@@ -701,7 +736,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 					target.ShipsLost++
 				}
 				if loss.structure {
-					target.StructureLost++
+					target.addStructureKind(loss.structureKind())
 				}
 
 				data.Killmails = append(data.Killmails, WarKillmail{Killmail: km, VictimSide: side, BattleID: wb.ID})
@@ -732,7 +767,11 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 				}
 				bucket.Killmails++
 				bucket.ISKLost += loss.isk
+				countedIn[km.System.SystemID] = entry
 			}
+		}
+		for _, entry := range countedIn {
+			entry.Battles++
 		}
 
 		// where it was fought
@@ -754,6 +793,9 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		for side, target := range inBattle {
 			a := about[side]
 			target.Pilots = len(a.pilots)
+			slices.SortFunc(target.StructureKinds, func(x, y WarStructureKind) int {
+				return cmp.Or(cmp.Compare(y.Count, x.Count), cmp.Compare(x.Name, y.Name))
+			})
 			pick := func(counts map[warGroupKey]int) *WarGroup {
 				var best *warGroupKey
 				for group, count := range counts {

@@ -106,8 +106,8 @@ The **War** button sets up two sides and a start date, and GoSleuth follows the 
   - *A third party counts, per battle, for the side it fought beside. If that can't be told, it shows under Others, and from there you can right-click a group to add it to a side, from the start of the war or from a date, or to ignore it*
 - **The report takes the whole window**
   - *Overview: each side's ISK, ships, and structures lost, and how far back zKillboard's lists reached*
-  - *Battles: one row per fight, with what each side lost and links to its battle reports*
-  - *Systems: where the war was fought, by class*
+  - *Battles: one row per fight, with what each side lost and links to its battle reports, sortable by date, class, system, or side, and filtered by clicking classes in the table above it*
+  - *Systems: where the war was fought, by class, sortable by any column, and filtered the same way*
 
 Killmails can't show objectives or survivors, so GoSleuth never calls a battle won.
 

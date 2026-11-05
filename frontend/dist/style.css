@@ -3150,6 +3150,14 @@ body.war-report #tab-sidebar { display: none; }
 .war-tabs .tab[aria-selected="true"] { border-bottom-color: var(--highlight); }
 .war-tabs .tab-name { flex: none; }
 .war-tabs .tab-count { color: var(--muted); font-size: 12px; font-weight: 400; }
+/* a tab's count and its count table's total flash as a class filter changes them */
+.war-count-flash { border-radius: 2px; animation: war-count-flash 0.7s ease-out; }
+@keyframes war-count-flash {
+  from { background: color-mix(in srgb, var(--highlight) 35%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--highlight) 35%, transparent); color: var(--highlight); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .war-count-flash { animation: none; }
+}
 .war-versus-sides { display: flex; align-items: stretch; gap: 12px; min-width: 0; }
 .war-side-card { display: flex; flex-direction: column; min-width: 0; max-width: 260px; padding: 6px 12px; background: var(--panel-raised); border-left: 4px solid var(--border); border-radius: var(--radius); }
 .war-side-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3177,9 +3185,7 @@ table.war-counts { width: auto; margin: 0 auto; border: 1px solid var(--border);
 .war-table th.war-head-others { box-shadow: inset 0 -3px 0 var(--muted); color: var(--text); }
 .war-measure.war-indent { padding-left: 28px; color: var(--muted); }
 .war-total td { font-weight: 600; }
-.war-figure { font-variant-numeric: tabular-nums; }
-.war-citadel-detail td { padding-top: 2px; padding-bottom: 6px; color: var(--muted); font-size: 12px; }
-.war-citadel-types { text-align: right; }
+.war-citadel-types { margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 400; }
 .war-citadel-types img { width: 18px; height: 18px; margin-right: 6px; vertical-align: middle; border-radius: 3px; }
 .war-reach ul { margin: 6px 0; padding-left: 20px; }
 .war-first-run { border-left-color: var(--highlight); }
@@ -3198,10 +3204,10 @@ table.war-counts { width: auto; margin: 0 auto; border: 1px solid var(--border);
 .war-more { justify-self: start; }
 
 .war-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-bottom: 8px; }
-.war-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-.war-toggle input { flex: none; width: auto; }
 .war-toolbar-note { font-size: 12px; }
-.war-battle:hover { background: var(--panel-raised); }
+/* every war table's rows alternate, faintly */
+.war-table > tbody > tr:nth-child(even) { background: color-mix(in srgb, var(--text) 3%, transparent); }
+.war-table > tbody > tr.war-battle:hover { background: var(--panel-raised); }
 .war-skirmish { color: var(--muted); }
 .war-side-cell { border-left: 3px solid var(--border); }
 .war-side-cell.war-a { border-left-color: var(--war-a); }
@@ -3211,6 +3217,39 @@ table.war-counts { width: auto; margin: 0 auto; border: 1px solid var(--border);
 .war-structure-count.war-b { border-left-color: var(--war-b); }
 .war-classes { margin: 0 0 8px; font-size: 15px; }
 .war-table td, .war-table th { overflow-wrap: anywhere; }
+
+/* the Battles and Systems tabs: set column widths, every line on one line, long names cut with an ellipsis */
+.war-table.war-fixed { min-width: 980px; table-layout: fixed; }
+.war-table.war-systems-table { min-width: 640px; }
+.war-table.war-fixed td, .war-table.war-fixed th { overflow: hidden; overflow-wrap: normal; text-overflow: ellipsis; white-space: nowrap; }
+.war-fixed td > div { overflow: hidden; text-overflow: ellipsis; }
+.war-fixed .group-line { display: block; overflow: hidden; text-overflow: ellipsis; }
+.war-col-when { width: 190px; }
+.war-col-class { width: 70px; }
+.war-col-system { width: 16%; }
+.war-col-name { width: 30%; }
+.war-col-others { width: 11%; }
+.war-col-structures { width: 104px; }
+.war-col-reports { width: 116px; }
+
+/* a count table's class headings filter the list below it, several at once, a light highlight behind each that is on */
+.war-counts th.war-filter-head { padding: 0; }
+.war-counts th.war-filter-head:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.war-counts th.war-filter-on, .war-counts th.war-filter-on:hover { background: color-mix(in srgb, var(--highlight) 18%, transparent); }
+button.war-filter, button.war-filter:hover { display: block; width: 100%; padding: 2px 14px; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
+
+button.war-sort, button.war-sort:hover { display: inline-flex; max-width: 100%; padding: 0; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
+button.war-sort:hover { color: var(--text); }
+.war-sort > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+th[aria-sort="ascending"] .war-sort::after { flex: none; margin-left: 4px; content: "▲"; font-size: 9px; }
+th[aria-sort="descending"] .war-sort::after { flex: none; margin-left: 4px; content: "▼"; font-size: 9px; }
+
+.war-class-cell .sec-high, .war-class-cell .sec-low, .war-class-cell .sec-null, .war-class-cell .sec-trig { margin-left: 4px; font-size: 12px; }
+.war-clock { font-size: 9px; }
+.war-chit { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid currentColor; border-radius: 3px; color: var(--muted); font-size: 10px; line-height: 14px; vertical-align: 1px; }
+.war-other-systems { color: var(--muted); font-size: 12px; }
+.war-other-systems > span { border-bottom: 1px dotted currentColor; cursor: help; }
+.war-structures-cell[title] { cursor: help; }
 
 
 .key-war-a, .key-war-b {

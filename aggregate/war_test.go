@@ -322,6 +322,20 @@ func TestBuildWarStructures(t *testing.T) {
 		assert.Zero(t, data.A.ShipsLost, "a structure is not a ship")
 	})
 
+	t.Run("a battle's structures go by kind, most lost first, towers as one kind", func(t *testing.T) {
+		kms := []retrieval.RawKillmail{
+			raw(1, 0, sysHome, wp{corp: corpA1, ally: allyA}, astrahus, pB(2)),
+			raw(2, 1, sysHome, wp{corp: corpA1, ally: allyA}, tower, pB(2)),
+			raw(3, 2, sysHome, wp{corp: corpA1, ally: allyA}, tower, pB(2)),
+		}
+		data := aggregate.BuildWar(kms, expand(kms...), sides, 10)
+		if assert.Len(t, data.Battles, 1) {
+			assert.Equal(t, 3, data.Battles[0].A.StructureLost)
+			assert.Equal(t, []aggregate.WarStructureKind{{Name: "POS", Count: 2}, {Name: "Astrahus", Count: 1}}, data.Battles[0].A.StructureKinds)
+			assert.Empty(t, data.Battles[0].B.StructureKinds)
+		}
+	})
+
 	t.Run("towers and customs offices are POS, and every structure's ISK is structure ISK", func(t *testing.T) {
 		kms := []retrieval.RawKillmail{
 			raw(1, 0, sysHome, wp{corp: corpA1, ally: allyA}, tower, pB(2)),
@@ -331,6 +345,10 @@ func TestBuildWarStructures(t *testing.T) {
 		data := aggregate.BuildWar(kms, expand(kms...), sides, 10)
 		assert.Equal(t, 2, data.A.POS)
 		assert.Empty(t, data.A.Citadels)
+		if assert.Len(t, data.Battles, 1) {
+			assert.Equal(t, 2, data.Battles[0].A.StructureLost)
+			assert.ElementsMatch(t, []aggregate.WarStructureKind{{Name: "POS", Count: 1}, {Name: "Customs Office", Count: 1}}, data.Battles[0].A.StructureKinds)
+		}
 		assert.InDelta(t, 300, data.A.ISKStructures, 0.001)
 		assert.InDelta(t, 300, data.A.ISKFights, 0.001)
 	})
@@ -558,6 +576,8 @@ func TestBuildWarTotals(t *testing.T) {
 	assert.Equal(t, 8, data.Killmails[0].Killmail.KillmailID, "newest first")
 	if assert.Len(t, data.Systems, 2) {
 		assert.Equal(t, "Home", data.Systems[0].System.Name)
+		assert.Equal(t, 1, data.Systems[0].Battles)
+		assert.Equal(t, 1, data.Systems[1].Battles, "a battle that moved counts in each of its systems")
 		assert.Equal(t, 7, data.Systems[0].A.Killmails+data.Systems[0].B.Killmails)
 	}
 	assert.Equal(t, 0, data.BattleCount)
