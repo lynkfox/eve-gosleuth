@@ -63,6 +63,8 @@
           </div>
         </div>
       </div>
+      <!-- sets up a war between two sides, see openWarSetup -->
+      <button id="war-button" class="secondary war-button" type="button" aria-haspopup="dialog" aria-controls="war-setup" title="Set up a war between two sides, or open one you saved">War</button>
       <button id="search-button" type="submit">Search</button>
     </form>
 
@@ -106,6 +108,16 @@
       <span id="target-pull-label" class="pull-label" hidden></span>
       <span class="pull-grip" aria-hidden="true"></span>
     </button>
+
+    <!-- a war's report takes the whole window: this strip replaces the target panel, and its tabs the sidebar, see setWarMode. They are not part of the saved tab order. -->
+    <section id="war-strip" class="card war-strip" hidden>
+      <div id="war-versus-box"></div>
+      <nav id="war-tab-list" class="war-tabs" role="tablist" aria-label="War report" hidden>
+        <button id="tab-war-overview" class="tab" type="button" role="tab" aria-controls="panel-war-overview" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-glance"/></svg><span class="tab-name">Overview</span><span class="tab-count"></span></button>
+        <button id="tab-war-battles" class="tab" type="button" role="tab" aria-controls="panel-war-battles" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-battles"/></svg><span class="tab-name">Battles</span><span class="tab-count"></span></button>
+        <button id="tab-war-systems" class="tab" type="button" role="tab" aria-controls="panel-war-systems" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-systems"/></svg><span class="tab-name">Systems</span><span class="tab-count"></span></button>
+      </nav>
+    </section>
 
     <!-- a report built from part of its data: the search was stopped, or the ESI rate limited it -->
     <p id="report-warning" class="status warning" hidden></p>
@@ -410,6 +422,45 @@
               <button id="roster-next" class="secondary" type="button">Next</button>
               <button id="roster-last" class="secondary page-jump" type="button" title="Last page" aria-label="Last page">»</button>
             </nav>
+          </div>
+
+          <!-- the war report's panels, drawn by renderWarReport -->
+          <div id="panel-war-overview" class="tab-panel" role="tabpanel" aria-labelledby="tab-war-overview" hidden>
+            <div id="war-overview" class="war-overview"></div>
+          </div>
+
+          <div id="panel-war-battles" class="tab-panel paged-panel" role="tabpanel" aria-labelledby="tab-war-battles" hidden>
+            <div class="war-toolbar">
+              <label class="war-toggle"><input id="war-show-skirmishes" type="checkbox" checked><span id="war-skirmish-label">Show skirmishes</span></label>
+              <span class="muted war-toolbar-note">An estimate from killmails alone. No battle is called won.</span>
+            </div>
+            <div class="panel-scroll">
+              <table class="war-table">
+                <thead>
+                  <tr><th>When</th><th>System</th><th class="war-head-a" id="war-battles-head-a">Side A</th><th class="war-head-b" id="war-battles-head-b">Side B</th><th class="war-head-others">Others</th><th title="Structures lost">Structures</th><th>Battle reports</th></tr>
+                </thead>
+                <tbody id="war-battles-body"></tbody>
+              </table>
+              <p id="war-battles-empty" class="muted" hidden></p>
+            </div>
+            <nav id="war-battle-pager" class="pager" hidden>
+              <button id="war-battle-first" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
+              <button id="war-battle-prev" class="secondary" type="button">Previous</button>
+              <span id="war-battle-label"></span>
+              <button id="war-battle-next" class="secondary" type="button">Next</button>
+              <button id="war-battle-last" class="secondary page-jump" type="button" title="Last page" aria-label="Last page">»</button>
+            </nav>
+          </div>
+
+          <div id="panel-war-systems" class="tab-panel" role="tabpanel" aria-labelledby="tab-war-systems" hidden>
+            <div id="war-systems-classes" class="war-classes"></div>
+            <table class="war-table">
+              <thead>
+                <tr><th>System</th><th class="num war-head-a" id="war-systems-head-a">Side A</th><th class="num war-head-b" id="war-systems-head-b">Side B</th><th class="num war-head-others">Others</th></tr>
+              </thead>
+              <tbody id="war-systems-body"></tbody>
+            </table>
+            <p id="war-systems-empty" class="muted" hidden></p>
           </div>
         </div>
       </div>
@@ -1004,6 +1055,106 @@
       <div class="confirm-actions">
         <button class="secondary" value="keep" autofocus>Keep the limit</button>
         <button value="ignore">Ignore it this search</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- sets up a war: the saved ones to open, update, or remove, then the form to add or change one. Filled by openWarSetup. -->
+  <dialog id="war-setup" class="window war-setup" aria-labelledby="war-setup-title">
+    <div class="window-titlebar">
+      <h2 id="war-setup-title">War</h2>
+      <button id="war-setup-close" class="window-close" type="button" aria-label="Close" title="Close">×</button>
+    </div>
+    <div class="window-body war-setup-body">
+      <section class="war-saved" aria-labelledby="war-saved-title">
+        <div class="war-saved-head">
+          <h3 id="war-saved-title">Saved wars</h3>
+          <button id="war-new" class="secondary" type="button" title="Clear the form to set up another war">New war</button>
+        </div>
+        <div id="war-saved-list" class="war-saved-list"></div>
+        <p id="war-saved-empty" class="muted war-saved-empty">No wars saved yet.</p>
+      </section>
+      <form id="war-form" class="war-form" autocomplete="off">
+        <h3 id="war-form-title">New war</h3>
+        <div class="war-row">
+          <span class="preference-name war-label war-label-a">Side A</span>
+          <div class="war-side">
+            <input id="war-side-a-input" type="text" spellcheck="false" placeholder="Coalition, affiliate group, or corp or alliance name" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="war-side-a-list" aria-label="Side A">
+            <ul id="war-side-a-list" class="menu-dropdown recent-list war-suggest" role="listbox" aria-label="Side A choices" hidden></ul>
+            <p id="war-side-a-note" class="row-detail war-side-note"></p>
+          </div>
+        </div>
+        <div class="war-row">
+          <span class="preference-name war-label war-label-b">Side B</span>
+          <div class="war-side">
+            <input id="war-side-b-input" type="text" spellcheck="false" placeholder="Coalition, affiliate group, or corp or alliance name" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="war-side-b-list" aria-label="Side B">
+            <ul id="war-side-b-list" class="menu-dropdown recent-list war-suggest" role="listbox" aria-label="Side B choices" hidden></ul>
+            <p id="war-side-b-note" class="row-detail war-side-note"></p>
+          </div>
+        </div>
+        <div class="war-row">
+          <label class="preference-name war-label" for="war-name">Name</label>
+          <input id="war-name" type="text" maxlength="100" spellcheck="false" placeholder="Filled in as A vs B">
+        </div>
+        <div class="war-row">
+          <span class="preference-name war-label">From</span>
+          <div id="war-from" class="age-picker" data-empty="No start">
+            <span class="age-date" title="Killmails from this date on, in EVE time. Click to pick another."><span class="age-date-text"></span><span class="age-date-arrow" aria-hidden="true">▾</span><input type="date" aria-label="The war's first day, in EVE time"></span>
+            <span class="age-buttons">
+              <button class="secondary age-button" type="button" data-days="7" title="A week back from today" aria-label="A week back">W</button>
+              <button class="secondary age-button" type="button" data-days="30" title="30 days back from today" aria-label="30 days back">30</button>
+              <button class="secondary age-button" type="button" data-days="90" title="90 days back from today" aria-label="90 days back">90</button>
+              <button class="secondary age-button" type="button" data-days="0" title="No start date" aria-label="No start date">∞</button>
+            </span>
+          </div>
+        </div>
+        <div class="war-row">
+          <span class="preference-name war-label">Until</span>
+          <div id="war-until" class="age-picker" data-empty="Still going">
+            <span class="age-date" title="Killmails up to this date, in EVE time. Click to pick another."><span class="age-date-text"></span><span class="age-date-arrow" aria-hidden="true">▾</span><input type="date" aria-label="The war's last day, in EVE time"></span>
+            <span class="age-buttons">
+              <button class="secondary age-button" type="button" data-days="0" title="Still going: no end date" aria-label="Still going">∞</button>
+            </span>
+          </div>
+        </div>
+        <p id="war-warning" class="war-warning" hidden></p>
+        <p id="war-error" class="preferences-error" role="alert" hidden></p>
+      </form>
+    </div>
+    <div class="window-actions">
+      <button id="war-cancel" class="secondary" type="button">Close</button>
+      <button id="war-save" type="submit" form="war-form">Save and run</button>
+    </div>
+  </dialog>
+
+  <!-- removing a saved war takes the killmails it holds with it -->
+  <dialog id="war-remove-confirm" class="confirm" aria-labelledby="war-remove-title">
+    <form method="dialog">
+      <p id="war-remove-title" class="confirm-warning">Remove this war?</p>
+      <p id="war-remove-name" class="confirm-target"></p>
+      <p id="war-remove-detail" class="confirm-detail"></p>
+      <div class="confirm-actions">
+        <button class="secondary" value="cancel" autofocus>Keep it</button>
+        <button class="danger" value="remove">Remove</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- puts a group under Others onto a side, from the war's Overview -->
+  <dialog id="war-add-dialog" class="confirm war-add-dialog" aria-labelledby="war-add-title">
+    <form id="war-add-form" method="dialog">
+      <p id="war-add-title" class="holding-title">Add to side A</p>
+      <p id="war-add-group" class="confirm-target"></p>
+      <label class="war-add-choice"><input type="radio" name="war-add-from" value="beginning" checked><span>From the beginning of the war</span></label>
+      <label class="war-add-choice"><input type="radio" name="war-add-from" value="date"><span>From a date onward</span></label>
+      <div id="war-add-picker" class="age-picker war-add-date" data-empty="Pick a date">
+        <span class="age-date" title="The first day it counts for the side, in EVE time. Click to pick another."><span class="age-date-text"></span><span class="age-date-arrow" aria-hidden="true">▾</span><input id="war-add-date" type="date" aria-label="The first day it counts for the side, in EVE time" disabled></span>
+      </div>
+      <p class="confirm-detail">Its killmails before then stay under Others. Its own killmail list comes in at the next full run.</p>
+      <p id="war-add-error" class="preferences-error" role="alert" hidden></p>
+      <div class="confirm-actions">
+        <button class="secondary" value="cancel" formnovalidate>Cancel</button>
+        <button id="war-add-save" value="add">Add</button>
       </div>
     </form>
   </dialog>

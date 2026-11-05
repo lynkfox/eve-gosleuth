@@ -116,5 +116,11 @@
         "182": "Police Drone",
         "288": "Faction Drone",
         "301": "Concord Drone"
+    },
+    "ship_categories": {
+        "6": "Ship"
+    },
+    "capsule_groups": {
+        "29": "Capsule"
     }
 }

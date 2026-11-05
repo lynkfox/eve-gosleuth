@@ -22,5 +22,8 @@
     "minor_structure_groups": {
         "4744": "Upwell Moon Drill",
         "1025": "Orbital Infrastructure"
+    },
+    "poco_groups": {
+        "1025": "Orbital Infrastructure"
     }
 }

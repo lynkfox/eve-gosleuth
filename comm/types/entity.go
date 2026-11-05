@@ -16,6 +16,7 @@ const (
 	CATEGORY                        // 11
 	MOON                            // 12
 	COALITION                       // 13, a named group of corporations and alliances searched as one, see retrieval.Coalition
+	WAR                             // 14, two sides tracked against each other, see retrieval.War
 )
 
 func (e EntityType) String() string {
@@ -46,6 +47,8 @@ func (e EntityType) String() string {
 		return "MOON"
 	case COALITION:
 		return "COALITION"
+	case WAR:
+		return "WAR"
 	default:
 		return "UNKNOWN"
 	}

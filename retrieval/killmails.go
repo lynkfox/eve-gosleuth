@@ -36,6 +36,9 @@ type KillmailLimits struct {
 	// ConfirmIgnoreDate is asked, when the newest killmail is already older than NewerThan, whether to collect without the date limit for this search.
 	// It is given the newest killmail's time, and returns false to keep the limit and collect none. nil always keeps it.
 	ConfirmIgnoreDate func(newest time.Time) bool
+	// OnListed is told how far each of the target's Holdings' lists reached, once it is listed, for a report's reach warning. nil to not.
+	// oldest is the oldest killmail read without a gap, the zero time for an empty list. complete is whether the list reached NewerThan or zKillboard's end, with no error.
+	OnListed func(group string, oldest time.Time, complete bool)
 }
 
 // AllKillmails as KillmailLimits.Max collects every killmail on the first KillmailLimits.Pages pages zKillboard lists, still stopping at NewerThan
@@ -118,7 +121,7 @@ func CollectKillmails(target IntelTarget, limits KillmailLimits) (*[]RawKillmail
 		comm.ReportProgress("Fetching killmail list from zKillboard (live, only as far as the cached list does not have it)")
 		paging, need := limits.paging()
 		var err error
-		killmails, via, within, err = listKillmails(target, paging, need)
+		killmails, via, within, err = listKillmails(target, paging, need, limits.OnListed)
 		if err != nil {
 			comm.Logger.WithError(err).Warnf("[Zkill] Only retrieved %d killmails, continuing with partial results", len(*killmails))
 			comm.ReportProgress("zKillboard pull incomplete (%s), continuing with %d killmails", api.FailureReason(err), len(*killmails))
@@ -301,6 +304,7 @@ Parameters:
   - target: the IntelTarget, with any Holdings
   - paging: how far to page through each list
   - need: how many killmails each list needs from its top
+  - onListed: told how far each holding's list reached, see KillmailLimits.OnListed, nil to not
 
 Returns:
   - *[]api.ZkbResponse: the merged list, those within the limits first, then those only from the cached lists beyond them. A killmail on the target's own list and a holding's is the target's.
@@ -308,7 +312,7 @@ Returns:
   - int: how many from the top of the merged list are within the limits
   - error: nil, or the zkill pull errors, the lists that were pulled are still merged
 */
-func listKillmails(target IntelTarget, paging api.ZkillPaging, need int) (*[]api.ZkbResponse, []*TargetGroup, int, error) {
+func listKillmails(target IntelTarget, paging api.ZkillPaging, need int, onListed func(group string, oldest time.Time, complete bool)) (*[]api.ZkbResponse, []*TargetGroup, int, error) {
 	type listed struct {
 		killmail api.ZkbResponse
 		via      *TargetGroup
@@ -359,6 +363,9 @@ func listKillmails(target IntelTarget, paging api.ZkillPaging, need int) (*[]api
 			errs = append(errs, fmt.Errorf("%s %s: %w", label, holding.Name, err))
 		}
 		add(list, holding)
+		if onListed != nil {
+			onListed(holding.Name, list.oldest, err == nil && list.reached)
+		}
 	}
 
 	newestFirst := func(a, b listed) int { return b.at.Compare(a.at) }

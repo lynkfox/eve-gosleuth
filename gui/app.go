@@ -84,6 +84,9 @@ type App struct {
 	// lets one change to a coalition read then save at a time, see changeCoalition
 	coalitionMu sync.Mutex
 
+	// lets one change to a saved war read then save at a time, taken after mu where both are
+	warMu sync.Mutex
+
 	// checkMu lets one check of imported entities run at a time, see runIntelChecks, and closing stops one when the app closes
 	checkMu sync.Mutex
 	closing atomic.Bool
@@ -100,6 +103,8 @@ type TargetResult struct {
 	Holdings *Holdings         `json:"holdings"` // a corp or alliance target's holding links, nil for pilots, systems, and coalitions
 	// a coalition target's card, set only for a coalition: it is the user's own group, so its members come from the cache and the ESI is not asked
 	Coalition *CoalitionCard `json:"coalition,omitempty"`
+	// a war's card, set only for a war search: it is the user's own, so it comes from the cache and the ESI is not asked
+	War *WarCard `json:"war,omitempty"`
 	// the holding that was searched for, when the search went to its main instead, empty otherwise
 	SearchedHolding string `json:"searchedHolding,omitempty"`
 	// the pilots, corporations, alliances, and systems a search with no type matched, when more than one did or any by ticker.
@@ -109,7 +114,7 @@ type TargetResult struct {
 
 // TargetChoice is one of the matches of a name searched with no type, for the user to choose between
 type TargetChoice struct {
-	Type     string `json:"type"` // PILOT, CORPORATION, ALLIANCE, SYSTEM, or COALITION
+	Type     string `json:"type"` // PILOT, CORPORATION, ALLIANCE, SYSTEM, COALITION, or WAR
 	ID       int    `json:"id"`
 	Name     string `json:"name"`
 	ImageURL string `json:"imageUrl"` // a portrait or logo, empty for a system or coalition
@@ -561,11 +566,12 @@ func (a *App) holdingMain(target *retrieval.IntelTarget) (retrieval.HoldingLink,
 
 Parameters:
   - name: the exact in game name of the target, ignoring case, or a zKillboard or EveWho link to it, which is searched by the id in it
-  - searchType: PILOT, CORPORATION, ALLIANCE, SYSTEM, or COALITION, only accepting a match of this type, or empty to accept any: a lone match is searched,
-    and with more than one, or any by ticker, or a coalition of that exact name, the result has only Choices, for the search to be asked again for the one chosen.
-    A coalition named exactly is searched at once when the ESI finds nothing else by the name or can not be reached.
+  - searchType: PILOT, CORPORATION, ALLIANCE, SYSTEM, COALITION, or WAR, only accepting a match of this type, or empty to accept any: a lone match is searched,
+    and with more than one, or any by ticker, or a coalition or war of that exact name, the result has only Choices, for the search to be asked again for the one chosen.
+    A coalition or war named exactly is searched at once when the ESI finds nothing else by the name or can not be reached, and if both are named so, they are the choices.
+    A war is searched from the cache, and its result has only its War card: its report comes from OpenWar or CollectWar.
   - id: the target's eve id with its searchType, when the frontend knows it, ie from a menu or recent search, so no name lookup is needed. 0 to search by name.
-    A coalition's is its own negative id.
+    A coalition's or war's is its own negative id.
 
 Returns:
   - TargetResult: the target's id, type, and display values, or the Choices
@@ -610,18 +616,35 @@ func (a *App) SearchTarget(name string, searchType string, id int) (result Targe
 		return a.searchCoalition(name, id)
 	}
 
+	// a war is the user's own too
+	if searchType == warType {
+		return a.searchWar(name, id)
+	}
+
 	if id == 0 && searchType == "" {
 		coalition, isCoalition := a.cache.CoalitionNamed(name)
+		war, isWar := a.cache.WarNamed(name)
 		found, err := a.matchTargets(name)
+		// the user's own groups of that name come first
+		own := []TargetChoice{}
+		if isCoalition {
+			own = append(own, TargetChoice{Type: coalitionType, ID: coalition.ID, Name: coalition.Name})
+		}
+		if isWar {
+			own = append(own, TargetChoice{Type: warType, ID: war.ID, Name: war.Name})
+		}
 		switch {
-		case err != nil && isCoalition:
+		case err != nil && len(own) == 1 && isCoalition:
 			// the ESI found nothing else, or could not be reached
 			return a.coalitionResult(coalition), nil
+		case err != nil && len(own) == 1:
+			return a.warResult(war), nil
+		case err != nil && len(own) > 1:
+			return TargetResult{Choices: own}, nil
 		case err != nil:
 			return result, err
-		case isCoalition:
-			choices := targetChoices(found.Matches)
-			return TargetResult{Choices: append([]TargetChoice{{Type: coalitionType, ID: coalition.ID, Name: coalition.Name}}, choices...)}, nil
+		case len(own) > 0:
+			return TargetResult{Choices: append(own, targetChoices(found.Matches)...)}, nil
 		case len(found.Matches) > 1 || found.Matches[0].ByTicker:
 			return TargetResult{Choices: targetChoices(found.Matches)}, nil
 		}

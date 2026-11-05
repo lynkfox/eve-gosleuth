@@ -58,15 +58,17 @@ const (
 	sectionIgnoredAllies        section = "ignored_ally"
 	sectionHoldings             section = "holding"
 	sectionCoalitions           section = "coalition"
+	sectionWars                 section = "war"
+	sectionWarKillmails         section = "war_killmail"
 	sectionZkillLists           section = "zkill_list"
 	sectionIntelChecks          section = "intel_check"
 	sectionImages               section = "image"
 	sectionAppState             section = "app_state"
 )
 
-// compressed reports whether a section's values are gzipped. Killmails and zKillboard lists are most of the cache and shrink several times, the rest are small.
+// compressed reports whether a section's values are gzipped. Killmails, a war's among them, and zKillboard lists are most of the cache and shrink several times, the rest are small.
 func (s section) compressed() bool {
-	return s == sectionKillmails || s == sectionZkillLists
+	return s == sectionKillmails || s == sectionZkillLists || s == sectionWarKillmails
 }
 
 // rowKey is a value's place in the table

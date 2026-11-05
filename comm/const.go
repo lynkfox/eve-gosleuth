@@ -26,12 +26,15 @@ var (
 	FitIgnoredTypes      = newStaticValues()
 	LogiGroups           = newStaticValues() // LogiGroups and LogiTypes are the logistics hulls a fleet doctrine flies with: T2 logi, logi frigates, force auxiliaries, and the T1 logi cruisers and frigates
 	LogiTypes            = newStaticValues()
+	ShipCategories       = newStaticValues() // what a war counts as a ship lost, leaving out CapsuleGroups: not structures, deployables, or fighters
+	CapsuleGroups        = newStaticValues() // capsules, whose loss a war counts in ISK but not as a ship
 	NPCNotRatGroups      = newStaticValues() // NPCs that don't mean PvE: gate and station sentry guns, CONCORD, police, and faction navies. Matched by the ESI's group of the NPC's ship, as fit_types.json has no NPCs.
 
 	UpwellStructureGroups = newStaticValues() // the upwell structures the Structures tab and a j-space system's last structure lost cover
 	ControlTowerGroups    = newStaticValues() // control towers, which the same cover, but are never on a killmail's attackers, their batteries are instead
 	PosBatteryGroups      = newStaticValues() // control tower batteries, which stand in for their tower on kills
 	MinorStructureGroups  = newStaticValues() // structures with no guns, ie Metenox moon drills and customs offices: listed with the structures destroyed, but never as a j-space system's last structure lost
+	PocoGroups            = newStaticValues() // customs offices, which a war counts among its POS, as well as in MinorStructureGroups
 
 	PIMaterialGroups = newStaticValues() // Planetary Industry resources and commodities
 	SmartbombGroups  = newStaticValues() // smartbomb modules, the weapon a player on a ratting loss may have only bombed it with
@@ -66,12 +69,15 @@ func sectionedFiles() []sectionedFile {
 			"logi_groups":            &LogiGroups,
 			"logi_types":             &LogiTypes,
 			"npc_not_rat_groups":     &NPCNotRatGroups,
+			"ship_categories":        &ShipCategories,
+			"capsule_groups":         &CapsuleGroups,
 		}},
 		{"structures.json", map[string]**StaticValues{
 			"upwell_structure_groups": &UpwellStructureGroups,
 			"control_tower_groups":    &ControlTowerGroups,
 			"pos_battery_groups":      &PosBatteryGroups,
 			"minor_structure_groups":  &MinorStructureGroups,
+			"poco_groups":             &PocoGroups,
 		}},
 		{"items.json", map[string]**StaticValues{
 			"pi_material_groups": &PIMaterialGroups,

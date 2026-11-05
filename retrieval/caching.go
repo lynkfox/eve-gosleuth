@@ -83,6 +83,7 @@ type CachedEveIDs struct {
 	IgnoredAllies        map[string]*CacheEntry // each target's allies left out of its Allies tab, by ignoredAlliesKey. Never expire, see SetIgnoredAllies.
 	Holdings             map[string]*CacheEntry // the user's holding links, by holdingKey. Never expire, see SaveHoldingLink.
 	SavedCoalitions      map[string]*CacheEntry // the user's coalitions, by coalitionKey. Never expire, see SaveCoalition.
+	SavedWars            map[string]*CacheEntry // the user's wars, by warKey. Never expire, see SaveWar. Their killmails are not held here, see WarKillmails.
 	PendingChecks        map[string]*CacheEntry // imported pilots, corporations, and alliances still to check with the ESI, by intelCheckKey, see AddIntelChecks
 	ZkillLists           map[string]*CacheEntry // entities' zKillboard killmail lists, by zkillListKey. Never expire, see SaveKnownZkillList.
 	Images               map[string]*CacheEntry // the PDF report's images from the image server, by url. Dropped by a newer SDE, see SaveImage.
@@ -96,6 +97,8 @@ type CachedEveIDs struct {
 	holdingsLoaded   bool // Holdings has every saved holding link, see loadHoldings. Guarded by mu.
 	coalitionsLoaded bool // SavedCoalitions has every saved coalition, see loadCoalitions. Guarded by mu.
 	coalitionFloor   int  // the lowest coalition id given out or seen this session, so a removed one's id is not given again. Guarded by mu.
+	warsLoaded       bool // SavedWars has every saved war, see loadWars. Guarded by mu.
+	warFloor         int  // the lowest war id given out or seen this session, as coalitionFloor. Guarded by mu.
 	ignoredLoaded    bool // IgnoredAllies has every target's saved ignored allies, see AllIgnoredAllies. Guarded by mu.
 	checksLoaded     bool // PendingChecks has every saved check, see IntelChecks. Guarded by mu.
 
@@ -239,6 +242,9 @@ func (c *CachedEveIDs) ensureMaps() {
 	}
 	if c.SavedCoalitions == nil {
 		c.SavedCoalitions = make(map[string]*CacheEntry)
+	}
+	if c.SavedWars == nil {
+		c.SavedWars = make(map[string]*CacheEntry)
 	}
 	if c.PendingChecks == nil {
 		c.PendingChecks = make(map[string]*CacheEntry)

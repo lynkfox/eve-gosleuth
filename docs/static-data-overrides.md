@@ -103,6 +103,8 @@ Each section is a list of `"id": "label"` entries.
 | `fit_ignored_types` | ship types | |
 | `logi_groups` | ship groups | Logistics hulls, which the Fits tab's Fleet Doctrine tag looks for in a battle: T2 logi, logi frigates, force auxiliaries |
 | `logi_types` | ship types | Logistics hulls outside those groups: the T1 logi cruisers and frigates |
+| `ship_categories` | categories | What a war counts as a ship lost |
+| `capsule_groups` | ship groups | Capsules, whose loss a war counts in ISK lost but not as a ship |
 | `npc_not_rat_groups` | NPC groups | NPCs that don't mean the pilot was ratting: gate and station sentry guns, CONCORD, police, faction navies. The Ratters tab and the Fits tab's Ratting tag skip them. NPCs aren't in `fit_types.json`, so these are matched by the group the ESI gives the NPC's ship. |
 
 For example, to stop showing the Astero's losses on the Fits tab, and stop freighters counting as capitals:
@@ -128,6 +130,7 @@ All sections hold groups.
 | `control_tower_groups` | Control towers, the same |
 | `pos_battery_groups` | Control tower guns and ewar batteries, which appear on kills in place of their tower |
 | `minor_structure_groups` | Structures with no guns, such as Metenox moon drills and customs offices: listed among structures destroyed, never as a system's last structure lost |
+| `poco_groups` | Customs offices, which a war report counts under POS |
 
 For example, to let a Metenox moon drill count as a wormhole system's last structure lost, move its group from the minor structures to the upwell ones:
 

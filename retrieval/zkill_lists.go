@@ -62,6 +62,8 @@ type zkillListCache interface {
 type entityList struct {
 	killmails []api.ZkbResponse
 	within    int
+	oldest    time.Time // the oldest killmail read without a gap, the zero time for none
+	reached   bool      // the list without a gap reaches paging's NewerThan or zKillboard's end
 }
 
 /*
@@ -128,7 +130,11 @@ func listEntity(target IntelTarget, entityType types.EntityType, entityID int, p
 	if lists != nil {
 		lists.SaveKnownZkillList(entityType.String(), entityID, paging.Filter, knownList(merged, unbroken, ended))
 	}
-	return entityList{killmails: merged, within: min(unbroken, need)}, err
+	list := entityList{killmails: merged, within: min(unbroken, need), reached: ended || api.ReachesDate(merged[:unbroken], paging.NewerThan)}
+	if unbroken > 0 {
+		list.oldest = merged[unbroken-1].KillmailTime
+	}
+	return list, err
 }
 
 // storeBodies caches the killmails zKillboard sent whole, so later searches have them, even those beyond this search's limits

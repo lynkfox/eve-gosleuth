@@ -45,6 +45,8 @@ function setBusy(busy) {
   if (busy) startSearchTimer();
   else stopSearchTimer();
   el("search-button").disabled = busy;
+  el("war-button").disabled = busy;
+  for (const update of document.querySelectorAll(".war-update")) update.disabled = busy;
   el("search-input").disabled = busy;
   el("recent-toggle").disabled = busy;
   // the tour never starts over a running search
@@ -144,7 +146,7 @@ function toggleTickerHistory() {
 }
 
 // SEARCH_TYPES are the kinds of entity a search finds, with their names, ie Pilot for PILOT
-const SEARCH_TYPES = { PILOT: "Pilot", CORPORATION: "Corporation", ALLIANCE: "Alliance", SYSTEM: "System", COALITION: "Coalition" };
+const SEARCH_TYPES = { PILOT: "Pilot", CORPORATION: "Corporation", ALLIANCE: "Alliance", SYSTEM: "System", COALITION: "Coalition", WAR: "War" };
 
 // isSearchable returns true if a search can find the entity type, ie PILOT
 function isSearchable(type) {
@@ -410,14 +412,16 @@ function renderTarget(result) {
   coalitionMembersBox = null;
 
   if (result.type === "COALITION") drawCoalitionTarget(result, display);
+  else if (result.type === "WAR") drawWarTarget(result);
   else drawEntityTarget(result, display);
 
-  shownTarget = { id: result.id, type: result.type, name: display.Name, imageUrl: display.TargetImageUrl };
+  shownTarget = { id: result.id, type: result.type, name: display.Name || (result.war && result.war.name), imageUrl: display.TargetImageUrl };
   renderHoldings(result.holdings);
 
   el("empty").hidden = true;
-  el("target-wrap").hidden = false;
-  el("target-pull").hidden = false;
+  // a war's report has its strip in place of the target panel
+  el("target-wrap").hidden = result.type === "WAR";
+  el("target-pull").hidden = result.type === "WAR";
   // a panel pulled shut stays so for the next search, its bar naming the new target. The Collapse target preference shuts it at each search.
   setTargetCollapsed(targetCollapsed || preferences.collapseTarget);
 }
@@ -2058,6 +2062,8 @@ let intelReport = null;
 
 // renderIntel fills a tab for each section of the killmail based intel report. Sections the backend left null do not apply to this target type.
 function renderIntel(report) {
+  setWarMode(false);
+  warReport = null;
   intelReport = report;
   killmails = report.killmails || [];
   killmailPage = 0;
@@ -2167,6 +2173,7 @@ let profileOnlyReason = null;
 */
 function showProfileOnly(reason) {
   profileOnlyReason = reason;
+  setWarMode(false);
   for (const tab of el("tab-list").querySelectorAll(".tab")) tab.hidden = true;
   const note = document.createElement("p");
   note.className = "muted";
@@ -3927,6 +3934,21 @@ const TAB_HELP = {
     "A struck-through pilot has since left the alliance.",
     PILOT_MENU_HELP,
   ],
+  "tab-war-overview": [
+    "Each side's losses over the whole war, with Others: everyone on the killmails who is on neither side.",
+    "Killmails show neither objectives nor survivors, so no battle is called won. Efficiency is a share of ISK lost, not a verdict.",
+    "Right-click a group under Others to add it to a side, from the war's start or from a date, or to ignore it.",
+    "Update at the top lists both sides' killmails again; only what is new unless the sides or start date changed.",
+  ],
+  "tab-war-battles": [
+    "One row per fight, newest first: when, where, each side's largest group, and what each side lost.",
+    "Skirmishes are the smaller fights. The toggle hides them.",
+    "The icons open the battle on zKillboard, EVE Tools, and Warbeacon. Right-click a row for the same.",
+  ],
+  "tab-war-systems": [
+    "Where the war was fought: the count by class, then each system's killmails and ISK lost by side.",
+    "Right-click a system to search it or open it on an external site.",
+  ],
   "tab-roster": (type) => type === "ALLIANCE"
     ? ["Current member corporations, their member counts, and how long they've been in.", CORP_MENU_HELP]
     : [
@@ -4177,6 +4199,16 @@ const WORMHOLE_CLASS_KEY = {
   ],
 };
 
+// WAR_SIDE_KEY is the war tabs' side colors, fixed rather than themed as red and green are a loss and a kill
+const WAR_SIDE_KEY = {
+  title: "Side",
+  items: [
+    { sample: "A", className: "key-war-a", meaning: "Side A, or a loss of side A's" },
+    { sample: "B", className: "key-war-b", meaning: "Side B, or a loss of side B's" },
+    { sample: "—", className: "key-neutral", meaning: "Others, on neither side" },
+  ],
+};
+
 const WORMHOLE_KEY = {
   title: "Wormhole class and statics",
   items: [
@@ -4253,6 +4285,9 @@ const TAB_COLOR_KEYS = {
   "tab-killmails": [OUTCOME_KEY, SECURITY_KEY, WORMHOLE_CLASS_KEY],
   "tab-systems": [SECURITY_KEY, WORMHOLE_KEY],
   "tab-battles": [SECURITY_KEY, WORMHOLE_KEY],
+  "tab-war-overview": [WAR_SIDE_KEY],
+  "tab-war-battles": [WAR_SIDE_KEY, SECURITY_KEY, WORMHOLE_KEY],
+  "tab-war-systems": [WAR_SIDE_KEY, SECURITY_KEY, WORMHOLE_KEY],
 };
 
 // securityClass colors a security status by its band, high, low, or null, which the backend decides (api.SecurityBand)
@@ -5489,8 +5524,1189 @@ function battleSections(battle) {
   ];
 }
 
+/*
+  The war tracker. A war is two sides, each a coalition, an affiliate group, or one corp or alliance, and a start and end date. The setup window (openWarSetup) saves them,
+  and a war's report takes the whole window under the top bar (setWarMode): a strip with the two sides and its three tabs, Overview, Battles, and Systems, with no sidebar or target panel.
+  The killmails it holds are never listed, as a war has far too many to read.
+  The report is the backend's WarReport. Side A is blue and side B orange in the report, fixed colors in style.css as red and green mean a loss and a kill.
+*/
+
+// WAR_TABS are the war report's tabs, in its strip
+const WAR_TABS = ["tab-war-overview", "tab-war-battles", "tab-war-systems"];
+
+// WAR_BANDS name the security bands a battle's or system's class can be, for spaceLabel
+const WAR_BANDS = { high: "Highsec", low: "Lowsec", null: "Nullsec" };
+
+// warMode is true while the window is laid out for a war's report
+let warMode = false;
+// warReport is the war report shown, the backend's WarReport, null while another kind of report or none is
+let warReport = null;
+let warBattlePage = 0;
+let warShowSkirmishes = true;
+// warOthersAll is true once the Others list is shown in full, past WAR_OTHERS_SHOWN
+let warOthersAll = false;
+const WAR_OTHERS_SHOWN = 40;
+
+// warPlural writes a count with its noun, ie 1 battle or 41 battles
+function warPlural(count, one, many = `${one}s`) {
+  return `${count.toLocaleString("en-US")} ${count === 1 ? one : many}`;
+}
+
+// warNeverRun is true for a war that has not been run, its last run being the zero time
+function warNeverRun(war) {
+  return !war.lastRun || new Date(war.lastRun).getUTCFullYear() <= 1;
+}
+
+// warSideName is a side's name for the report's column heads: a or b of the war, or Others
+function warSideName(war, key) {
+  return key === "a" ? war.sideA.name : key === "b" ? war.sideB.name : "Others";
+}
+
+// warRange writes a war's dates, ie Mar 25th, 2024 → Still going. A date is a day in EVE time, so the time zone does not move it.
+function warRange(war) {
+  return `${war.fromDate ? writtenDay(war.fromDate) : "No start"} → ${war.untilDate ? writtenDay(war.untilDate) : "Still going"}`;
+}
+
+// warSideKind says what a side is, ie Coalition or Alliance with affiliates
+function warSideKind(side) {
+  if (side.type === "COALITION") return "Coalition";
+  return `${searchTypeLabel(side.type)}${side.withAffiliates ? " with affiliates" : ""}`;
+}
+
+// setWarMode lays the window out for a war's report, its strip in place of the sidebar and target panel, or back. The tabs show only once there is a report for them.
+function setWarMode(on) {
+  warMode = on;
+  document.body.classList.toggle("war-report", on);
+  el("war-strip").hidden = !on;
+  el("war-tab-list").hidden = !on || !warReport;
+}
+
+// warClassChip is a class or security band as the colored label used everywhere, ie C5 or HS
+function warClassChip(cls) {
+  return spaceLabel(WAR_BANDS[cls] || cls);
+}
+
+// warCountsTable is a small table of the report's counts, one column each: with fights, its battles and skirmishes, then its systems and how many of each class, most first, in their colors
+function warCountsTable(report, withFights) {
+  const columns = [
+    ...(withFights ? [["Battles", report.battleCount], ["Skirmishes", report.skirmishes]] : []),
+    ["Systems", report.systemCount],
+    ...report.classes.map((entry) => [warClassChip(entry.class), entry.count]),
+  ];
+  const table = document.createElement("table");
+  table.className = "war-counts";
+  const head = document.createElement("tr");
+  const counts = document.createElement("tr");
+  for (const [title, count] of columns) {
+    const th = document.createElement("th");
+    th.append(title);
+    const td = document.createElement("td");
+    td.textContent = count.toLocaleString("en-US");
+    head.append(th);
+    counts.append(td);
+  }
+  const thead = document.createElement("thead");
+  thead.append(head);
+  const tbody = document.createElement("tbody");
+  tbody.append(counts);
+  table.append(thead, tbody);
+  return table;
+}
+
+// warEmptyText is what an empty list says: press Update for a war not run yet, else the empty reason given
+function warEmptyText(report, otherwise) {
+  return warNeverRun(report.war) && report.killmailCount === 0 ? "Nothing here yet. Press Update at the top to list both sides' killmails." : otherwise;
+}
+
+/* The strip's versus card */
+
+// drawWarTarget lays the window out for a war and fills its strip from the search result, before its report is in. result.war is the WarCard.
+function drawWarTarget(result) {
+  setWarMode(true);
+  renderWarVersus(result.war, null);
+}
+
+/*
+  renderWarVersus draws the strip's versus card: the war's name if the user gave it one, the two sides in their colors, its dates, its last run, and an Update button that runs it.
+  report is the war's report, or null before it is in, which gives the card whether the next run reads every list again.
+*/
+function renderWarVersus(war, report) {
+  const box = document.createElement("div");
+  box.className = "war-versus";
+
+  const title = document.createElement("h2");
+  title.className = "war-title";
+  title.textContent = war.name;
+  title.hidden = war.name === `${war.sideA.name} vs ${war.sideB.name}`;
+
+  const sides = document.createElement("div");
+  sides.className = "war-versus-sides";
+  const sideCard = (key, side) => {
+    const card = document.createElement("div");
+    card.className = `war-side-card war-${key}`;
+    const name = document.createElement("strong");
+    name.textContent = side.name;
+    name.title = side.name;
+    const kind = document.createElement("span");
+    kind.className = "row-detail";
+    kind.textContent = side.count ? `${warSideKind(side)} · ${warPlural(side.count, "group")}` : warSideKind(side);
+    card.append(name, kind);
+    return card;
+  };
+  const versus = document.createElement("span");
+  versus.className = "war-vs";
+  versus.textContent = "vs";
+  sides.append(sideCard("a", war.sideA), versus, sideCard("b", war.sideB));
+
+  const facts = document.createElement("div");
+  facts.className = "war-facts";
+  const dates = document.createElement("div");
+  dates.textContent = warRange(war);
+  const ran = document.createElement("div");
+  ran.className = "row-detail";
+  ran.textContent = warNeverRun(war) ? "Not run yet" : `Last run ${formatKillmailTime(war.lastRun)} · ${warPlural(war.killmails, "killmail")} held`;
+  facts.append(dates, ran);
+
+  const update = document.createElement("button");
+  update.type = "button";
+  update.className = "war-update";
+  update.textContent = "Update";
+  update.disabled = searching;
+  update.addEventListener("click", () => runWar(war, true));
+  const note = document.createElement("span");
+  note.className = "row-detail war-update-note";
+  if (report && report.fullRunDue && !warNeverRun(war)) {
+    note.textContent = "The sides or start changed, so the next run reads every list again.";
+    update.title = "Reads every list again, as the sides or start date changed since the last full run";
+  } else if (warNeverRun(war)) {
+    note.textContent = "Update lists both sides' killmails for the first time.";
+  } else {
+    update.title = "Lists only what is new since the last run";
+  }
+  if (note.textContent) facts.append(note);
+  const run = document.createElement("div");
+  run.className = "war-run";
+  run.append(update);
+
+  box.append(title, sides, facts, run);
+  el("war-versus-box").replaceChildren(box);
+}
+
+/* Running a war */
+
+/*
+  runWar collects a war, or opens it from what it holds, as a search would: the target panel, progress in the ticker bar, and Stop.
+  war is the WarCard. collect is true for Update and for Save and run, false to open it.
+*/
+async function runWar(war, collect) {
+  if (searching) return;
+  stopRequested = false;
+  setBusy(true);
+  setStatus("");
+  clearIntel();
+  const started = performance.now();
+  let report = null;
+  try {
+    renderTarget({ id: war.id, type: "WAR", war, display: {} });
+    report = await loadWarReport(war, collect);
+  } finally {
+    const took = formatDuration(performance.now() - started);
+    tickerPush(report ? searchSummary(war.name, took, report) : `${collect ? "Update of" : "Opening"} ${war.name} stopped after ${took}`);
+    setBusy(false);
+  }
+}
+
+/*
+  loadWarReport collects a war (CollectWar) or opens it (OpenWar) and shows its report. The caller has the target panel and the busy state.
+  A collect that fails shows what the war held, if it can. Returns the report, or null.
+*/
+async function loadWarReport(war, collect) {
+  el("intel-loading").hidden = false;
+  el("intel").hidden = false;
+  let report = await runBackend(() => (collect ? backend().CollectWar(war.id) : backend().OpenWar(war.id)));
+  if (!report && collect) {
+    try {
+      report = await backend().OpenWar(war.id);
+    } catch {
+      // the first error is already shown
+    }
+  }
+  loadRecentSearches();
+  if (!report) {
+    // the error is already shown, and the strip stays, as its Update is how to try again
+    el("intel-loading").hidden = true;
+    el("intel").hidden = true;
+    return null;
+  }
+  intelTarget = { id: war.id, type: "WAR" };
+  showWarReport(report);
+  showReportWarning(report);
+  return report;
+}
+
+/*
+  showWarReport draws a war's report: the versus card and the three tabs. On the same war's report again, ie after adding a group, it keeps the tab and page the user is on.
+*/
+function showWarReport(report) {
+  const sameWar = warReport !== null && warReport.war.id === report.war.id;
+  const selected = warMode ? WAR_TABS.find((id) => el(id).getAttribute("aria-selected") === "true") : null;
+  warReport = report;
+  intelReport = null;
+  if (!sameWar) {
+    warBattlePage = 0;
+    warShowSkirmishes = true;
+    warOthersAll = false;
+    el("war-show-skirmishes").checked = true;
+  }
+
+  setWarMode(true);
+  setExportPDF(false);
+  renderWarVersus(report.war, report);
+  for (const key of ["a", "b"]) {
+    const name = warSideName(report.war, key);
+    for (const id of [`war-battles-head-${key}`, `war-systems-head-${key}`]) el(id).textContent = name;
+  }
+  setTabCount("tab-war-battles", report.battles.length);
+  setTabCount("tab-war-systems", report.systemCount);
+  renderWarOverview(report);
+  renderWarBattlePage();
+  renderWarSystems(report);
+
+  selectTab(sameWar && selected ? selected : "tab-war-overview");
+  el("intel-loading").hidden = true;
+  el("intel-tabs").hidden = false;
+  el("intel").hidden = false;
+}
+
+/* Overview */
+
+function warParagraph(text, className) {
+  const paragraph = document.createElement("p");
+  paragraph.className = className;
+  paragraph.textContent = text;
+  return paragraph;
+}
+
+// renderWarOverview draws the Overview tab: the counts, the measures per side, the reach warning, the caveat, and Others
+function renderWarOverview(report) {
+  const parts = [];
+  if (warNeverRun(report.war) && report.killmailCount === 0) {
+    parts.push(warParagraph("This war has not been run yet. Press Update at the top to list both sides' killmails.", "status war-first-run"));
+  }
+
+  parts.push(warCountsTable(report, true));
+
+  parts.push(warMeasuresTable(report));
+  parts.push(warParagraph("Efficiency is the other side's ISK lost as a share of both sides' ISK lost, over the whole war.", "row-detail war-note"));
+
+  if (report.reach.length > 0) parts.push(warReachWarning(report));
+  parts.push(warParagraph("Killmails show neither objectives nor survivors, so these are what was lost, not who won. No battle is called won.", "row-detail war-caveat"));
+  parts.push(warOthersSection(report));
+  el("war-overview").replaceChildren(...parts);
+}
+
+/*
+  warMeasuresTable is the measures of each side and Others, as the sheet's top rows: ISK lost in total, then in fights and structures indented to add up, ships lost,
+  the structures lost, and efficiency. Trash rows are left out while every side has none.
+*/
+function warMeasuresTable(report) {
+  const war = report.war;
+  const columns = [["a", report.a], ["b", report.b], ["others", report.others]];
+  const any = (read) => columns.some(([, measures]) => read(measures) > 0);
+
+  const table = document.createElement("table");
+  table.className = "war-table war-measures";
+  const head = document.createElement("tr");
+  head.append(document.createElement("th"));
+  for (const [key] of columns) {
+    const cell = document.createElement("th");
+    cell.className = `num war-head-${key}`;
+    cell.textContent = warSideName(war, key);
+    head.append(cell);
+  }
+  const thead = document.createElement("thead");
+  thead.append(head);
+  const body = document.createElement("tbody");
+  table.append(thead, body);
+
+  const row = (label, read, options = {}) => {
+    const line = document.createElement("tr");
+    if (options.strong) line.className = "war-total";
+    const name = document.createElement("td");
+    name.className = options.indent ? "war-measure war-indent" : "war-measure";
+    name.textContent = label;
+    if (options.title) name.title = options.title;
+    line.append(name);
+    for (const [key, measures] of columns) {
+      const cell = document.createElement("td");
+      cell.className = "num";
+      const content = read(measures, key);
+      if (content instanceof Node) cell.append(content);
+      else cell.textContent = content;
+      line.append(cell);
+    }
+    body.append(line);
+    return line;
+  };
+
+  const count = (value) => value.toLocaleString("en-US");
+  row("Killmails held", (m) => count(m.killmails), { title: "The killmails the war holds that are a loss of this side" });
+  row("ISK lost", (m) => formatIsk(m.iskLost), { strong: true });
+  row("In fights", (m) => formatIsk(m.iskFights), { indent: true });
+  if (any((m) => m.iskTrash)) row("Station trash and asset denial", (m) => formatIsk(m.iskTrash), { indent: true });
+  row("Structures", (m) => formatIsk(m.iskStructures), { indent: true });
+  row("Ships lost", (m) => count(m.shipsLost), { strong: true });
+  row("In fights", (m) => count(m.shipsFights), { indent: true });
+  if (any((m) => m.shipsTrash)) row("Station trash and asset denial", (m) => count(m.shipsTrash), { indent: true });
+
+  // the citadels' count opens a line under it with the count of each type, or shows them on hover
+  const detail = document.createElement("tr");
+  detail.className = "war-citadel-detail";
+  detail.hidden = true;
+  const citadels = row("All Citadels", (m) => {
+    if (m.citadelCount === 0) return "0";
+    const figure = document.createElement("button");
+    figure.type = "button";
+    figure.className = "text-link war-figure";
+    figure.textContent = count(m.citadelCount);
+    figure.title = m.citadels.map((type) => `${type.name} × ${type.count}`).join("\n") || "Click for each type";
+    figure.addEventListener("click", () => { detail.hidden = !detail.hidden; });
+    return figure;
+  });
+  detail.append(document.createElement("td"));
+  for (const [, measures] of columns) {
+    const cell = document.createElement("td");
+    cell.className = "war-citadel-types";
+    for (const type of measures.citadels) {
+      const line = document.createElement("div");
+      if (type.imageUrl) {
+        const icon = document.createElement("img");
+        icon.src = type.imageUrl;
+        icon.alt = "";
+        icon.loading = "lazy";
+        line.append(icon);
+      }
+      line.append(`${type.name} × ${type.count}`);
+      cell.append(line);
+    }
+    detail.append(cell);
+  }
+  citadels.after(detail);
+  row("All POS", (m) => count(m.pos));
+
+  const enough = report.a.iskLost + report.b.iskLost > 0;
+  row("Efficiency", (m, key) => (key === "others" || !enough ? "—" : `${m.efficiency.toFixed(1)}%`), {
+    title: "The other side's ISK lost as a share of both sides' ISK lost, over the whole war. Not a verdict on who won.",
+  });
+  return table;
+}
+
+// warReachWarning names each zKillboard list that stopped short of the war's start, and the date it got to
+function warReachWarning(report) {
+  const box = document.createElement("div");
+  box.className = "status warning war-reach";
+  const start = report.war.fromDate ? ` (${writtenDay(report.war.fromDate)})` : "";
+  const title = document.createElement("strong");
+  title.textContent = `Some of zKillboard's lists stop short of the war's start${start}.`;
+  const list = document.createElement("ul");
+  for (const line of report.reach) {
+    const item = document.createElement("li");
+    item.textContent = `${line.group}: reached ${spokenDate(line.oldest)}`;
+    list.append(item);
+  }
+  const note = document.createElement("div");
+  note.className = "row-detail";
+  note.textContent = "Killmails older than that are missing from this report. Those the war already held stay.";
+  box.append(title, list, note);
+  return box;
+}
+
+// warOthersSection lists the groups on neither side with the ISK and ships they lost, each with a menu to add it to a side or ignore it, under the groups already added or ignored
+function warOthersSection(report) {
+  const war = report.war;
+  const section = document.createElement("section");
+  section.className = "war-others";
+  const heading = document.createElement("h3");
+  heading.textContent = "Others";
+  section.append(heading, warParagraph("Groups on the killmails that are on neither side. Right-click one to add it to a side or ignore it.", "row-detail"));
+
+  const added = [["a", war.addedA || []], ["b", war.addedB || []], ["ignored", war.ignored || []]].filter(([, groups]) => groups.length > 0);
+  for (const [key, groups] of added) {
+    const line = document.createElement("div");
+    line.className = "war-added";
+    const label = document.createElement("span");
+    label.className = `war-added-label war-${key}`;
+    label.textContent = key === "ignored" ? "Ignored" : `Added to ${warSideName(war, key)}`;
+    line.append(label);
+    for (const group of groups) line.append(warAddedChip(key, group));
+    section.append(line);
+  }
+
+  const npc = report.npcPilots;
+  if (report.otherGroups.length === 0 && !npc.killmails) {
+    section.append(warParagraph(warEmptyText(report, "No other groups were on the killmails."), "muted"));
+    return section;
+  }
+
+  const table = document.createElement("table");
+  table.className = "war-table war-others-table";
+  const head = document.createElement("tr");
+  for (const [text, numeric] of [["Group", false], ["Killmails", true], ["ISK lost", true], ["Ships lost", true]]) {
+    const cell = document.createElement("th");
+    cell.textContent = text;
+    if (numeric) cell.className = "num";
+    head.append(cell);
+  }
+  const thead = document.createElement("thead");
+  thead.append(head);
+  const body = document.createElement("tbody");
+  // pilots in NPC corps come first, as they have no group to add to a side or ignore, and so no menu
+  if (npc.killmails) {
+    const row = document.createElement("tr");
+    const name = document.createElement("td");
+    name.textContent = "Pilots in NPC corps";
+    name.title = "They have no group, so they can not be added to a side or ignored.";
+    row.append(name, numberCell(npc.killmails), numberCell(formatIsk(npc.iskLost)), numberCell(npc.shipsLost));
+    body.append(row);
+  }
+  const shown = warOthersAll ? report.otherGroups : report.otherGroups.slice(0, WAR_OTHERS_SHOWN);
+  for (const other of shown) {
+    const row = document.createElement("tr");
+    const name = document.createElement("td");
+    name.className = "war-group-name";
+    const group = groupLine(other.group);
+    name.append(group || other.group.name);
+    row.append(name, numberCell(other.killmails), numberCell(formatIsk(other.iskLost)), numberCell(other.shipsLost));
+    withMenu(row, [
+      { heading: "This war", items: [
+        { label: `Add to ${war.sideA.name}`, action: () => openWarAdd("a", other.group) },
+        { label: `Add to ${war.sideB.name}`, action: () => openWarAdd("b", other.group) },
+        { label: "Ignore", action: () => ignoreWarGroup(other.group) },
+      ] },
+      refSection(other.group, `${searchTypeLabel(other.group.type)}: ${other.group.name}`),
+    ]);
+    body.append(row);
+  }
+  table.append(thead, body);
+  section.append(table);
+
+  if (!warOthersAll && report.otherGroups.length > WAR_OTHERS_SHOWN) {
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "secondary war-more";
+    more.textContent = `Show the other ${(report.otherGroups.length - WAR_OTHERS_SHOWN).toLocaleString("en-US")} groups`;
+    more.addEventListener("click", () => {
+      warOthersAll = true;
+      renderWarOverview(warReport);
+    });
+    section.append(more);
+  }
+  return section;
+}
+
+// ignoreWarGroup sets a group under Others aside, so it leaves the list and its losses count nowhere
+async function ignoreWarGroup(group) {
+  if (!warReport) return;
+  const war = warReport.war;
+  const report = await runBackend(() => backend().IgnoreWarGroup(war.id, { type: group.type, id: group.id, name: group.name }));
+  if (report && warReport && warReport.war.id === war.id) {
+    showWarReport(report);
+    tickerPush(`Ignoring ${group.name} in ${war.name}`);
+  }
+}
+
+// warAddedChip is a group added to a side, with when it counts from, or one ignored, and an x that takes it off again or back
+function warAddedChip(key, group) {
+  const chip = document.createElement("span");
+  chip.className = `war-added-chip war-${key}`;
+  const text = document.createElement("span");
+  text.textContent = key === "ignored" ? group.name : group.fromDate ? `${group.name} · from ${writtenDay(group.fromDate)}` : `${group.name} · from the beginning`;
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "war-added-remove";
+  remove.textContent = "×";
+  remove.title = key === "ignored" ? `Stop ignoring ${group.name}` : `Take ${group.name} off ${warSideName(warReport.war, key)}`;
+  remove.setAttribute("aria-label", remove.title);
+  remove.addEventListener("click", async () => {
+    remove.disabled = true;
+    const war = warReport.war;
+    const report = await runBackend(() => backend().RemoveWarGroup(war.id, group.type, group.id));
+    if (report && warReport && warReport.war.id === war.id) {
+      showWarReport(report);
+      tickerPush(key === "ignored" ? `Stopped ignoring ${group.name} in ${war.name}` : `Took ${group.name} off ${warSideName(war, key)}`);
+    } else {
+      remove.disabled = false;
+    }
+  });
+  chip.append(text, remove);
+  return chip;
+}
+
+/* Adding a group under Others to a side */
+
+// warAdding is the side and group the Add dialog is for
+let warAdding = null;
+
+// openWarAdd asks whether a group under Others counts for a side from the beginning of the war or from a date
+function openWarAdd(key, group) {
+  if (!warReport) return;
+  warAdding = { side: key, group };
+  el("war-add-title").textContent = `Add to side ${key.toUpperCase()}`;
+  el("war-add-group").textContent = `${group.name} → ${warSideName(warReport.war, key)}`;
+  setAgePicker(el("war-add-picker"), 0, eveDay());
+  el("war-add-date").disabled = true;
+  el("war-add-picker").classList.add("war-add-off");
+  el("war-add-form").elements["war-add-from"].value = "beginning";
+  el("war-add-error").hidden = true;
+  el("war-add-save").disabled = false;
+  el("war-add-dialog").returnValue = "";
+  el("war-add-dialog").showModal();
+}
+
+// saveWarAdd adds the group to the side from the beginning or the date chosen, redrawing the report
+async function saveWarAdd() {
+  const adding = warAdding;
+  if (!adding || !warReport) return;
+  const fromDate = el("war-add-form").elements["war-add-from"].value === "date" ? el("war-add-picker").dataset.date : "";
+  const showError = (message) => {
+    el("war-add-error").textContent = message;
+    el("war-add-error").hidden = false;
+  };
+  if (el("war-add-form").elements["war-add-from"].value === "date" && !fromDate) {
+    showError("Pick the date it counts from.");
+    return;
+  }
+  const war = warReport.war;
+  el("war-add-save").disabled = true;
+  try {
+    const report = await backend().AddWarGroup(war.id, adding.side, { type: adding.group.type, id: adding.group.id, name: adding.group.name, fromDate });
+    el("war-add-dialog").close();
+    if (warReport && warReport.war.id === war.id) showWarReport(report);
+    tickerPush(`Added ${adding.group.name} to ${warSideName(war, adding.side)}. Its own killmails come in at the next full run.`);
+  } catch (err) {
+    showError(String(err));
+    el("war-add-save").disabled = false;
+  }
+}
+
+/* Battles */
+
+// warBattles are the battles the Battles tab lists: the real ones, and the skirmishes too once the toggle is on
+function warBattles() {
+  return warReport.battles.filter((battle) => warShowSkirmishes || !battle.skirmish);
+}
+
+// warBattleSideCell is a side's part of a battle row: its largest group there, then what it lost. key is a, b, or others.
+function warBattleSideCell(side, key) {
+  const cell = document.createElement("td");
+  cell.className = `war-side-cell war-${key}`;
+  const group = side.group ? groupLine(side.group) : null;
+  if (key !== "others") {
+    const name = document.createElement("div");
+    if (group) name.append(group);
+    else name.textContent = "—";
+    cell.append(name);
+  } else if (group) {
+    const name = document.createElement("div");
+    name.append(group);
+    cell.append(name);
+  }
+  const lost = document.createElement("div");
+  lost.className = "row-detail";
+  lost.textContent = side.iskLost || side.shipsLost ? `${formatIsk(side.iskLost)} · ${warPlural(side.shipsLost, "ship")}` : "Nothing lost";
+  cell.append(lost);
+  if (side.pilots) {
+    const pilots = document.createElement("div");
+    pilots.className = "row-detail";
+    pilots.textContent = warPlural(side.pilots, "pilot");
+    cell.append(pilots);
+  }
+  return cell;
+}
+
+// renderWarBattlePage draws a page of the Battles tab, a row per fight
+function renderWarBattlePage() {
+  const report = warReport;
+  const list = warBattles();
+  const pageCount = Math.ceil(list.length / BATTLES_PER_PAGE);
+  warBattlePage = Math.max(0, Math.min(warBattlePage, pageCount - 1));
+  const start = warBattlePage * BATTLES_PER_PAGE;
+
+  const label = el("war-skirmish-label");
+  label.textContent = `Show skirmishes (${report.skirmishes.toLocaleString("en-US")})`;
+  label.parentElement.hidden = report.skirmishes === 0;
+
+  const rows = list.slice(start, start + BATTLES_PER_PAGE).map((battle) => {
+    const row = document.createElement("tr");
+    row.className = battle.skirmish ? "war-battle war-skirmish" : "war-battle";
+
+    const whenCell = document.createElement("td");
+    const date = document.createElement("div");
+    date.textContent = spokenDate(battle.start);
+    const clock = document.createElement("div");
+    clock.className = "row-detail";
+    clock.textContent = battleClock(battle);
+    whenCell.append(date, clock);
+    if (battle.skirmish) {
+      const tag = document.createElement("div");
+      tag.className = "row-detail";
+      tag.textContent = "Skirmish";
+      whenCell.append(tag);
+    }
+
+    const systemCell = document.createElement("td");
+    const name = document.createElement("div");
+    const security = document.createElement("span");
+    security.className = securityClass(battle.system.securityBand);
+    security.textContent = battle.system.securityStatus.toFixed(1);
+    name.append(`${battle.system.name} `, security, " ", warClassChip(battle.class));
+    const detail = document.createElement("div");
+    detail.className = "row-detail";
+    detail.textContent = `${warPlural(battle.killmails, "killmail")} · ${warPlural(battle.pilots, "pilot")}${battle.otherSystems.length ? ` · also ${battle.otherSystems.join(", ")}` : ""}`;
+    systemCell.append(name, detail);
+
+    const structures = document.createElement("td");
+    const lost = [["a", battle.a.structures], ["b", battle.b.structures], ["others", battle.others.structures]].filter(([, count]) => count > 0);
+    if (lost.length === 0) structures.textContent = "—";
+    for (const [key, count] of lost) {
+      const line = document.createElement("div");
+      line.className = `war-structure-count war-${key}`;
+      line.textContent = `${key === "others" ? "Others" : key.toUpperCase()}: ${count}`;
+      line.title = warSideName(report.war, key);
+      structures.append(line);
+    }
+
+    const reports = document.createElement("td");
+    reports.append(siteLinks(`the battle in ${battle.system.name}`, battle));
+
+    row.append(whenCell, systemCell, warBattleSideCell(battle.a, "a"), warBattleSideCell(battle.b, "b"), warBattleSideCell(battle.others, "others"), structures, reports);
+    return withMenu(row, battleSections(battle));
+  });
+
+  el("war-battles-body").replaceChildren(...rows);
+  const empty = el("war-battles-empty");
+  if (list.length === 0) {
+    empty.textContent = warEmptyText(report, report.skirmishes > 0 ? "No battles yet, only skirmishes. Show skirmishes lists them." : "No battles on the killmails the war holds.");
+  }
+  empty.hidden = list.length > 0;
+
+  el("war-battle-pager").hidden = pageCount <= 1;
+  renderPager(el("war-battle-label"), warBattlePage, pageCount, showWarBattlePage, { first: el("war-battle-first"), last: el("war-battle-last") });
+  el("war-battle-prev").disabled = warBattlePage === 0;
+  el("war-battle-next").disabled = warBattlePage >= pageCount - 1;
+}
+
+function showWarBattlePage(page) {
+  warBattlePage = page;
+  renderWarBattlePage();
+}
+
+/* Systems */
+
+// renderWarSystems fills the Systems tab: the count by class, then each system with its killmails and ISK lost for each side
+function renderWarSystems(report) {
+  const line = el("war-systems-classes");
+  line.replaceChildren(warCountsTable(report, false));
+  line.hidden = report.systemCount === 0;
+
+  const rows = report.systems.map((entry) => {
+    const row = document.createElement("tr");
+    const nameCell = document.createElement("td");
+    const name = document.createElement("div");
+    const security = document.createElement("span");
+    security.className = securityClass(entry.system.securityBand);
+    security.textContent = entry.system.securityStatus.toFixed(1);
+    name.append(`${entry.system.name} `, security, " ", warClassChip(entry.class));
+    const detail = document.createElement("div");
+    detail.className = "row-detail";
+    const parts = systemLocation(entry.system).filter((part) => !(part instanceof Node && part.classList.contains("space")));
+    parts.forEach((part, index) => {
+      if (index > 0) detail.append(" · ");
+      detail.append(part);
+    });
+    nameCell.append(name, detail);
+
+    row.append(nameCell);
+    for (const key of ["a", "b", "others"]) {
+      const side = entry[key];
+      const cell = numberCell(warPlural(side.killmails, "killmail"));
+      cell.className = `num war-side-cell war-${key}`;
+      const isk = document.createElement("div");
+      isk.className = "row-detail";
+      isk.textContent = formatIsk(side.iskLost);
+      cell.append(isk);
+      row.append(cell);
+    }
+    return withMenu(row, [systemSection(entry.system)]);
+  });
+  el("war-systems-body").replaceChildren(...rows);
+  const empty = el("war-systems-empty");
+  empty.textContent = warEmptyText(report, "No systems on the killmails the war holds.");
+  empty.hidden = rows.length > 0;
+}
+
+/* The setup window */
+
+// warForm is what the setup window is editing: the war's id (0 for a new one), each side as chosen (null while none), and whether the name was typed
+const warForm = { id: 0, a: null, b: null, nameEdited: false };
+// warSaved are the saved wars as the backend's WarCard
+let warSaved = [];
+// warSuggested is the open side box's choices, and warSuggestActive the one the arrow keys are on
+let warSuggested = [];
+let warSuggestActive = -1;
+
+const WAR_SIDES = ["a", "b"];
+
+// openWarSetup opens the War window on an empty form, with the saved wars listed above it
+function openWarSetup() {
+  if (searching) return;
+  resetWarForm();
+  loadSearchGroups();
+  el("war-setup").showModal();
+  loadWars();
+}
+
+// loadWars reads the saved wars into the window's list
+async function loadWars() {
+  try {
+    warSaved = (await backend().GetWars()) || [];
+  } catch (err) {
+    showWarError(String(err));
+    return;
+  }
+  renderWarSaved();
+}
+
+function showWarError(message) {
+  el("war-error").textContent = message;
+  el("war-error").hidden = !message;
+}
+
+// renderWarSaved draws the saved wars: the name to change it, with its dates and what it holds, then Open, Update, and ×
+function renderWarSaved() {
+  el("war-saved-empty").hidden = warSaved.length > 0;
+  el("war-saved-list").replaceChildren(...warSaved.map((war) => {
+    const row = document.createElement("div");
+    row.className = "war-saved-row";
+    if (war.id === warForm.id) row.classList.add("war-saved-editing");
+
+    const name = document.createElement("button");
+    name.type = "button";
+    name.className = "text-link war-saved-name";
+    name.textContent = war.name;
+    name.title = "Change this war";
+    name.addEventListener("click", () => fillWarForm(war));
+    const detail = document.createElement("span");
+    detail.className = "row-detail war-saved-detail";
+    detail.textContent = `${warRange(war)} · ${warNeverRun(war) ? "not run yet" : warPlural(war.killmails, "killmail")}`;
+    const text = document.createElement("div");
+    text.className = "war-saved-text";
+    text.append(name, detail);
+
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "secondary";
+    open.textContent = "Open";
+    open.title = "Show the report from what the war holds";
+    open.addEventListener("click", () => openSavedWar(war));
+    const update = document.createElement("button");
+    update.type = "button";
+    update.className = "secondary";
+    update.textContent = "Update";
+    update.title = "List both sides' killmails again";
+    update.addEventListener("click", () => {
+      el("war-setup").close();
+      runWar(war, true);
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "secondary war-remove";
+    remove.textContent = "×";
+    remove.title = `Remove ${war.name}`;
+    remove.setAttribute("aria-label", remove.title);
+    remove.addEventListener("click", () => removeSavedWar(war));
+    row.append(text, open, update, remove);
+    return row;
+  }));
+}
+
+// openSavedWar closes the window and opens a war's report as a search for it would
+function openSavedWar(war) {
+  el("war-setup").close();
+  searchTypeHint = "WAR";
+  searchIdHint = war.id;
+  searchAffiliatesFor = "";
+  el("search-input").value = war.name;
+  el("search-form").requestSubmit();
+}
+
+// removeSavedWar asks, then removes a war and what it holds
+async function removeSavedWar(war) {
+  const dialog = el("war-remove-confirm");
+  el("war-remove-name").textContent = war.name;
+  el("war-remove-detail").textContent = war.killmails > 0
+    ? `This removes the war and the ${warPlural(war.killmails, "killmail")} it holds.`
+    : "This removes the war.";
+  dialog.returnValue = "";
+  const answer = await new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue), { once: true });
+    dialog.showModal();
+  });
+  if (answer !== "remove") return;
+  try {
+    await backend().RemoveWar(war.id);
+  } catch (err) {
+    showWarError(String(err));
+    return;
+  }
+  if (warForm.id === war.id) resetWarForm();
+  // a report of it on screen goes with it
+  if (warReport && warReport.war.id === war.id && !searching) {
+    clearIntel();
+    el("target-wrap").hidden = true;
+    el("target-pull").hidden = true;
+    el("empty").hidden = false;
+  }
+  loadRecentSearches();
+  tickerPush(`Removed the war ${war.name}`);
+  loadWars();
+}
+
+// resetWarForm empties the form for a new war
+function resetWarForm() {
+  warForm.id = 0;
+  warForm.a = warForm.b = null;
+  warForm.nameEdited = false;
+  for (const key of WAR_SIDES) {
+    el(`war-side-${key}-input`).value = "";
+    showWarSide(key);
+    hideWarSuggest(key);
+  }
+  el("war-name").value = "";
+  el("war-form-title").textContent = "New war";
+  setAgePicker(el("war-from"), 0, "");
+  setAgePicker(el("war-until"), 0, "");
+  showWarError("");
+  showWarWarning();
+  renderWarSaved();
+}
+
+// fillWarForm puts a saved war in the form to change. Saving it again keeps what it holds.
+function fillWarForm(war) {
+  warForm.id = war.id;
+  warForm.a = { type: war.sideA.type, id: war.sideA.id, name: war.sideA.name, withAffiliates: war.sideA.withAffiliates, count: war.sideA.count, resolved: true };
+  warForm.b = { type: war.sideB.type, id: war.sideB.id, name: war.sideB.name, withAffiliates: war.sideB.withAffiliates, count: war.sideB.count, resolved: true };
+  for (const key of WAR_SIDES) {
+    el(`war-side-${key}-input`).value = warForm[key].name;
+    showWarSide(key);
+  }
+  el("war-name").value = war.name;
+  warForm.nameEdited = war.name !== `${war.sideA.name} vs ${war.sideB.name}`;
+  el("war-form-title").textContent = `Change ${war.name}`;
+  setAgePicker(el("war-from"), 0, war.fromDate || "");
+  setAgePicker(el("war-until"), 0, war.untilDate || "");
+  showWarError("");
+  showWarWarning();
+  renderWarSaved();
+}
+
+// showWarSide writes what a side is under its box: a coalition's members, an affiliate group, or one corp or alliance alone
+function showWarSide(key) {
+  const side = warForm[key];
+  const note = el(`war-side-${key}-note`);
+  if (!side) {
+    note.textContent = "";
+    return;
+  }
+  const kind = warSideKind(side);
+  let size = "";
+  if (side.count) size = side.resolved ? ` · resolves to ${warPlural(side.count, "group")}` : side.type === "COALITION" ? ` · ${warPlural(side.count, "member")}` : ` · ${warPlural(side.count, "affiliate")}`;
+  note.textContent = `${kind}${size}`;
+}
+
+// setWarSide makes a side the one chosen, filling the name if it was not typed
+function setWarSide(key, side) {
+  warForm[key] = side;
+  el(`war-side-${key}-input`).value = side.name;
+  showWarSide(key);
+  hideWarSuggest(key);
+  refreshWarForm();
+}
+
+// refreshWarForm fills in the name as A vs B until it is edited, and the large search warning
+function refreshWarForm() {
+  if (!warForm.nameEdited) el("war-name").value = warForm.a && warForm.b ? `${warForm.a.name} vs ${warForm.b.name}` : "";
+  showWarWarning();
+}
+
+// showWarWarning warns of a large first run: with both sides chosen, every page of each is read, and a coalition or affiliate group pages each of its members on its own
+function showWarWarning() {
+  const warning = el("war-warning");
+  if (!warForm.a || !warForm.b) {
+    warning.hidden = true;
+    return;
+  }
+  const from = agePickerValue(el("war-from"));
+  const reason = largeSearchReason({ ...from, maxKillmails: ALL_KILLMAILS, killmailPages: ALL_PAGES });
+  const grouped = [warForm.a, warForm.b].some((side) => side.type === "COALITION" || side.withAffiliates);
+  const anyAge = !from.killmailsNewerThanDate && from.killmailsNewerThanDays === 0;
+  if (!grouped && !anyAge) {
+    warning.hidden = true;
+    return;
+  }
+  warning.textContent = `A war reads every zKillboard page of both sides (${reason}), ${grouped ? "and a coalition or affiliate group pages each of its members on its own, " : ""}so its first run may take a long time. A start date shortens it, and Update later reads only what is new.`;
+  warning.hidden = false;
+}
+
+// warSuggestions are the saved groups the typed text matches, for a side box's list
+function warSuggestions(typed) {
+  return matchingRecent(typed.trim().toLowerCase(), searchGroups).slice(0, 30);
+}
+
+// showWarSuggest opens a side box's list of coalitions and affiliate groups, filtered as typed
+function showWarSuggest(key) {
+  warSuggested = warSuggestions(el(`war-side-${key}-input`).value);
+  warSuggestActive = -1;
+  const list = el(`war-side-${key}-list`);
+  if (warSuggested.length === 0) {
+    hideWarSuggest(key);
+    return;
+  }
+  list.replaceChildren(...warSuggested.map((group, index) => {
+    const option = document.createElement("li");
+    option.id = `war-side-${key}-option-${index}`;
+    option.className = "recent-option";
+    option.setAttribute("role", "option");
+    option.setAttribute("aria-selected", "false");
+    const name = document.createElement("span");
+    name.className = "recent-name";
+    name.textContent = group.name;
+    if (group.ticker) {
+      const ticker = document.createElement("span");
+      ticker.className = "recent-ticker";
+      ticker.textContent = ` ${formatTicker(group.type, group.ticker)}`;
+      name.append(ticker);
+    }
+    const type = document.createElement("span");
+    type.className = "recent-type";
+    type.textContent = `${group.type === "COALITION" ? "Coalition" : `${searchTypeLabel(group.type)} + affiliates`} · ${groupCount(group)}`;
+    option.append(name, type);
+    option.addEventListener("mousedown", (event) => event.preventDefault());
+    option.addEventListener("click", () => pickWarGroup(key, group));
+    return option;
+  }));
+  list.hidden = false;
+  el(`war-side-${key}-input`).setAttribute("aria-expanded", "true");
+}
+
+function hideWarSuggest(key) {
+  el(`war-side-${key}-list`).hidden = true;
+  el(`war-side-${key}-input`).setAttribute("aria-expanded", "false");
+  el(`war-side-${key}-input`).removeAttribute("aria-activedescendant");
+  warSuggestActive = -1;
+}
+
+function moveWarSuggest(key, step) {
+  if (el(`war-side-${key}-list`).hidden) showWarSuggest(key);
+  const count = warSuggested.length;
+  if (count === 0) return;
+  warSuggestActive = warSuggestActive < 0 ? (step > 0 ? 0 : count - 1) : (warSuggestActive + step + count) % count;
+  const options = el(`war-side-${key}-list`).querySelectorAll(".recent-option");
+  options.forEach((option, at) => option.setAttribute("aria-selected", String(at === warSuggestActive)));
+  el(`war-side-${key}-input`).setAttribute("aria-activedescendant", options[warSuggestActive].id);
+  options[warSuggestActive].scrollIntoView({ block: "nearest" });
+}
+
+// pickWarGroup chooses a group from the list: a coalition, or a corp or alliance with its affiliates
+function pickWarGroup(key, group) {
+  setWarSide(key, { type: group.type, id: group.id, name: group.name, withAffiliates: group.type !== "COALITION", count: group.count });
+  showWarError("");
+}
+
+/*
+  resolveWarSide turns what is typed in a side's box into the side, unless it already is one: a coalition or a group a tag names (c: or a:, one match), else a corp or alliance
+  looked up by its exact name or a zKillboard or EveWho link, alone with no affiliates. Throws a message for a pilot, a system, or a name nothing has.
+*/
+async function resolveWarSide(key) {
+  const text = el(`war-side-${key}-input`).value.trim();
+  const label = `Side ${key.toUpperCase()}`;
+  if (!text) throw new Error(`${label} needs a coalition, a group, or a corporation or alliance.`);
+  if (warForm[key] && warForm[key].name === text) return warForm[key];
+
+  const tag = groupTag(text);
+  if (tag) {
+    await loadSearchGroups();
+    const matches = tag.text ? taggedGroups(tag) : [];
+    if (matches.length !== 1) throw new Error(`${label}: ${matches.length === 0 ? "nothing matches that tag" : "more than one group matches that tag, pick one from the list"}.`);
+    const group = matches[0];
+    return { type: group.type, id: group.id, name: group.name, withAffiliates: group.type !== "COALITION", count: group.count };
+  }
+
+  const coalition = searchGroups.find((group) => group.type === "COALITION" && group.name.toLowerCase() === text.toLowerCase());
+  if (coalition) return { type: "COALITION", id: coalition.id, name: coalition.name, withAffiliates: false, count: coalition.count };
+
+  let entity;
+  const isLink = /^https?:\/\//i.test(text);
+  try {
+    entity = await backend().LookupEntity(text, "ALLIANCE");
+  } catch (err) {
+    if (isLink) throw new Error(`${label}: ${err}`);
+    try {
+      entity = await backend().LookupEntity(text, "CORPORATION");
+    } catch {
+      throw new Error(`${label}: no coalition, alliance, or corporation is named "${text}". Pilots and systems can not be a side.`);
+    }
+  }
+  if (entity.type !== "CORPORATION" && entity.type !== "ALLIANCE") {
+    throw new Error(`${label}: ${entity.name} is a ${entity.type.toLowerCase()}. A side is a coalition, a corporation, or an alliance, not a pilot or a system.`);
+  }
+  return { type: entity.type, id: entity.id, name: entity.name, withAffiliates: false, count: 0 };
+}
+
+// resolveWarSides resolves both boxes, so a name typed and not yet picked still counts
+async function resolveWarSides() {
+  for (const key of WAR_SIDES) {
+    const side = await resolveWarSide(key);
+    if (warForm[key] !== side) setWarSide(key, side);
+  }
+}
+
+// saveAndRunWar saves the form as a war, then closes the window and collects it. The backend's refusals show in the window.
+async function saveAndRunWar() {
+  const button = el("war-save");
+  if (button.disabled) return;
+  button.disabled = true;
+  showWarError("");
+  try {
+    try {
+      await resolveWarSides();
+    } catch (err) {
+      showWarError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    const side = (chosen) => ({ type: chosen.type, id: chosen.id, name: chosen.name, withAffiliates: chosen.withAffiliates, count: 0 });
+    const from = agePickerValue(el("war-from"));
+    const card = {
+      id: warForm.id,
+      name: el("war-name").value.trim(),
+      sideA: side(warForm.a),
+      sideB: side(warForm.b),
+      fromDays: from.killmailsNewerThanDays,
+      fromDate: from.killmailsNewerThanDate,
+      untilDate: el("war-until").dataset.date || "",
+      addedA: [],
+      addedB: [],
+    };
+    let saved;
+    try {
+      saved = await backend().SaveWar(card);
+    } catch (err) {
+      showWarError(String(err));
+      return;
+    }
+    el("war-setup").close();
+    runWar(saved, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// wireWarSetup connects the War window's boxes, buttons, and pickers
+function wireWarSetup() {
+  el("war-button").addEventListener("click", openWarSetup);
+  el("war-setup-close").addEventListener("click", () => el("war-setup").close());
+  el("war-cancel").addEventListener("click", () => el("war-setup").close());
+  el("war-new").addEventListener("click", resetWarForm);
+  wireAgePicker(el("war-from"));
+  wireAgePicker(el("war-until"));
+  wireAgePicker(el("war-add-picker"));
+  setAgePicker(el("war-from"), 0, "");
+  setAgePicker(el("war-until"), 0, "");
+  for (const picker of [el("war-from"), el("war-until")]) {
+    picker.addEventListener("input", showWarWarning);
+    picker.addEventListener("change", showWarWarning);
+  }
+  el("war-name").addEventListener("input", () => {
+    warForm.nameEdited = el("war-name").value.trim() !== "";
+    if (!warForm.nameEdited) refreshWarForm();
+  });
+  el("war-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveAndRunWar();
+  });
+
+  for (const key of WAR_SIDES) {
+    const input = el(`war-side-${key}-input`);
+    input.addEventListener("input", () => {
+      // typing past a chosen side makes it a name to look up again
+      if (warForm[key] && warForm[key].name !== input.value.trim()) {
+        warForm[key] = null;
+        showWarSide(key);
+        refreshWarForm();
+      }
+      showWarSuggest(key);
+    });
+    input.addEventListener("focus", () => {
+      loadSearchGroups();
+      if (!warForm[key]) showWarSuggest(key);
+    });
+    input.addEventListener("blur", () => hideWarSuggest(key));
+    input.addEventListener("keydown", async (event) => {
+      const open = !el(`war-side-${key}-list`).hidden;
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        moveWarSuggest(key, event.key === "ArrowDown" ? 1 : -1);
+      } else if (event.key === "Enter") {
+        // Enter picks the row the arrows are on, else looks up what was typed, and never submits the form from a side box
+        event.preventDefault();
+        if (open && warSuggestActive >= 0) {
+          pickWarGroup(key, warSuggested[warSuggestActive]);
+          return;
+        }
+        try {
+          const side = await resolveWarSide(key);
+          if (warForm[key] !== side) setWarSide(key, side);
+          showWarError("");
+        } catch (err) {
+          showWarError(err instanceof Error ? err.message : String(err));
+        }
+      } else if (event.key === "Escape" && open) {
+        event.preventDefault();
+        event.stopPropagation();
+        hideWarSuggest(key);
+      }
+    });
+  }
+
+  el("war-add-form").addEventListener("submit", (event) => {
+    if (event.submitter && event.submitter.value === "add") {
+      event.preventDefault();
+      saveWarAdd();
+    }
+  });
+  for (const radio of el("war-add-form").elements["war-add-from"]) {
+    radio.addEventListener("change", () => {
+      const off = el("war-add-form").elements["war-add-from"].value !== "date";
+      el("war-add-date").disabled = off;
+      el("war-add-picker").classList.toggle("war-add-off", off);
+    });
+  }
+
+  // the Battles tab's skirmish toggle, and the Killmails tab's filter, battle, and pager
+  el("war-show-skirmishes").addEventListener("change", () => {
+    warShowSkirmishes = el("war-show-skirmishes").checked;
+    warBattlePage = 0;
+    renderWarBattlePage();
+  });
+  el("war-battle-prev").addEventListener("click", () => showWarBattlePage(warBattlePage - 1));
+  el("war-battle-next").addEventListener("click", () => showWarBattlePage(warBattlePage + 1));
+  wirePagerJumps(el("war-battle-first"), el("war-battle-last"), () => Math.ceil(warBattles().length / BATTLES_PER_PAGE), showWarBattlePage);
+}
+
 function clearIntel() {
   intelReport = null;
+  warReport = null;
+  setWarMode(false);
   profileOnlyReason = null;
   intelTarget = null;
   roster = null;
@@ -6024,7 +7240,15 @@ async function search(event) {
     // SearchTarget cached the found target as a recent search
     loadRecentSearches();
     if (stopRequested) {
-      showProfileOnly("The search was stopped before any killmails were collected.");
+      // a war keeps its strip, as its Update is how to go on
+      if (target.type !== "WAR") showProfileOnly("The search was stopped before any killmails were collected.");
+      return;
+    }
+
+    // a war opens from what it holds: its Update button collects
+    if (target.type === "WAR") {
+      report = await loadWarReport(target.war, false);
+      if (report) retrievedName = target.war.name;
       return;
     }
 
@@ -6102,10 +7326,16 @@ function chooseTarget(name, choices) {
   });
 }
 
+// reportKillmailCount is how many killmails a report is built from: a war's report sends only the count, an intel report the killmails
+function reportKillmailCount(report) {
+  return report.killmailCount ?? (report.killmails || []).length;
+}
+
 // showReportWarning explains, between the target and its report, that the report was built from part of its data
 function showReportWarning(report) {
-  const count = (report.killmails || []).length.toLocaleString("en-US");
-  const killmails = (report.killmails || []).length === 1 ? "killmail" : "killmails";
+  const held = reportKillmailCount(report);
+  const count = held.toLocaleString("en-US");
+  const killmails = held === 1 ? "killmail" : "killmails";
   let message = "";
   if (report.stopped) {
     message = `This report was stopped before data collection finished. It is built from the ${count} ${killmails} collected, and some details may be missing.`;
@@ -6118,7 +7348,7 @@ function showReportWarning(report) {
 
 // searchSummary is a finished search's ticker line, ie Info Retrieved on URSA. in 26.1s from 100 killmails (9748 hits from cache, 1763 from the ESI; zKillboard live)
 function searchSummary(targetName, took, report) {
-  const count = (report.killmails || []).length;
+  const count = reportKillmailCount(report);
   const sources = report.sources ? ` (${report.sources})` : "";
   return `Info Retrieved on ${targetName} in ${took} from ${count} ${count === 1 ? "killmail" : "killmails"}${sources}`;
 }
@@ -6295,7 +7525,7 @@ const AGE_FIRST_DAY = "2003-01-01";
 // showAgePicker writes a Killmails newer than picker's date and marks the button it came from
 function showAgePicker(picker) {
   const value = picker.querySelector("input").value;
-  picker.querySelector(".age-date-text").textContent = value ? writtenDay(value) : "Any age";
+  picker.querySelector(".age-date-text").textContent = value ? writtenDay(value) : picker.dataset.empty || "Any age";
   const days = Number(picker.dataset.days);
   for (const button of picker.querySelectorAll(".age-button")) {
     button.setAttribute("aria-pressed", String(Number(button.dataset.days) === days && (days > 0 || !value)));
@@ -6505,7 +7735,8 @@ function showDebugMode() {
 
 // redrawIntel draws the shown report again after a preference that changes how it looks
 function redrawIntel() {
-  if (intelReport) renderIntelSections(intelReport);
+  if (warReport) showWarReport(warReport);
+  else if (intelReport) renderIntelSections(intelReport);
   else renderKillmailPage();
 }
 
@@ -6993,6 +8224,7 @@ el("entity-menu").addEventListener("keydown", (event) => {
     closeEntityMenu();
   }
 });
+wireWarSetup();
 el("holding-form").addEventListener("submit", (event) => {
   // Save looks the holding up before closing, Cancel and Escape just close
   if (event.submitter && event.submitter.value === "save") {

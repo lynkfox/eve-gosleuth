@@ -47,7 +47,7 @@ func (a *App) GetRecentSearches() (recent []retrieval.RecentSearch, err error) {
 
 	recent = []retrieval.RecentSearch{}
 	for _, search := range a.cache.RecentSearches(a.currentSettings().MaxRecentSearches) {
-		if _, ok := searchTypes[search.Type]; ok {
+		if _, ok := searchTypes[search.Type]; ok || search.Type == warType {
 			recent = append(recent, search)
 		}
 	}

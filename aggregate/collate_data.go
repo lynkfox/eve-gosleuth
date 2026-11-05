@@ -564,25 +564,71 @@ Returns:
   - map[int]string: each killmail id to its battle's id, a killmail on its own in a battle of its own
 */
 func (c *CollectedData) FindBattles(killmails []*retrieval.Killmail) map[int]string {
-	ordered := slices.Clone(killmails)
-	slices.SortStableFunc(ordered, func(a, b *retrieval.Killmail) int { return a.KillmailTime.Compare(b.KillmailTime) })
-
-	open := []*BattleFought{}
-	all := []*BattleFought{}
-	for _, km := range ordered {
+	inputs := make([]BattleKillmail, 0, len(killmails))
+	for _, km := range killmails {
 		system := 0
 		if km.System != nil {
 			system = km.System.SystemID
 		}
-		pilots := killmailPilots(km)
+		inputs = append(inputs, BattleKillmail{ID: km.KillmailID, Time: km.KillmailTime, System: system, Pilots: killmailPilots(km)})
+	}
 
+	battleOf := map[int]string{}
+	for _, battle := range FindBattlesOf(inputs) {
+		c.SaveBattle(battle)
+		for _, killmailID := range battle.KillmailIDs {
+			battleOf[killmailID] = battle.BattleIDReference
+		}
+	}
+	return battleOf
+}
+
+// BattleKillmail is what finding battles needs of a killmail, which a raw or an expanded killmail can give
+type BattleKillmail struct {
+	ID     int
+	Time   time.Time
+	System int   // 0 when it is not known
+	Pilots []int // the character ids on it, victim and attackers, leaving out NPCs and structures
+}
+
+// RawBattleKillmail is what finding battles needs of a raw killmail
+func RawBattleKillmail(raw *retrieval.RawKillmail) BattleKillmail {
+	km := raw.ESIKillmail
+	pilots := []int{}
+	if km.Victim.CharacterID != nil && *km.Victim.CharacterID != 0 {
+		pilots = append(pilots, *km.Victim.CharacterID)
+	}
+	for _, attacker := range km.Attackers {
+		if attacker.CharacterID != nil && *attacker.CharacterID != 0 {
+			pilots = append(pilots, *attacker.CharacterID)
+		}
+	}
+	return BattleKillmail{ID: km.KillmailID, Time: km.KillmailTime, System: km.SolarSystemID, Pilots: pilots}
+}
+
+/*
+	FindBattlesOf is the rules of FindBattles on what it needs of each killmail, see FindBattles
+
+Parameters:
+  - killmails: in any order
+
+Returns:
+  - []*BattleFought: every battle by its first killmail's time, a killmail on its own in a battle of its own
+*/
+func FindBattlesOf(killmails []BattleKillmail) []*BattleFought {
+	ordered := slices.Clone(killmails)
+	slices.SortStableFunc(ordered, func(a, b BattleKillmail) int { return a.Time.Compare(b.Time) })
+
+	open := []*BattleFought{}
+	all := []*BattleFought{}
+	for _, km := range ordered {
 		stillOpen := []*BattleFought{}
 		var joined *BattleFought
 		for _, battle := range open {
-			if !WithinFifteenMinutes(battle.LatestTime, km.KillmailTime) {
+			if !WithinFifteenMinutes(battle.LatestTime, km.Time) {
 				continue
 			}
-			if !battle.sharesWith(system, pilots) {
+			if !battle.sharesWith(km.System, km.Pilots) {
 				stillOpen = append(stillOpen, battle)
 				continue
 			}
@@ -596,8 +642,8 @@ func (c *CollectedData) FindBattles(killmails []*retrieval.Killmail) map[int]str
 
 		if joined == nil {
 			joined = &BattleFought{
-				BattleIDReference: fmt.Sprintf("%d/%s", system, km.KillmailTime.Format("200601021504")),
-				SystemID:          system,
+				BattleIDReference: fmt.Sprintf("%d/%s", km.System, km.Time.Format("200601021504")),
+				SystemID:          km.System,
 				Systems:           make(map[int]struct{}),
 				UniquePilots:      make(map[int]struct{}),
 				KillmailIDs:       []int{},
@@ -606,26 +652,17 @@ func (c *CollectedData) FindBattles(killmails []*retrieval.Killmail) map[int]str
 			all = append(all, joined)
 		}
 		joined.TotalKillmails++
-		joined.KillmailIDs = append(joined.KillmailIDs, km.KillmailID)
-		joined.Systems[system] = struct{}{}
-		for _, pilot := range pilots {
+		joined.KillmailIDs = append(joined.KillmailIDs, km.ID)
+		joined.Systems[km.System] = struct{}{}
+		for _, pilot := range km.Pilots {
 			joined.UniquePilots[pilot] = struct{}{}
 		}
-		joined.LatestTime = km.KillmailTime
+		joined.LatestTime = km.Time
 		open = stillOpen
 	}
 
-	battleOf := map[int]string{}
-	for _, battle := range all {
-		if battle.TotalKillmails == 0 {
-			continue // absorbed into another
-		}
-		c.SaveBattle(battle)
-		for _, killmailID := range battle.KillmailIDs {
-			battleOf[killmailID] = battle.BattleIDReference
-		}
-	}
-	return battleOf
+	// a merged battle is left empty
+	return slices.DeleteFunc(all, func(battle *BattleFought) bool { return battle.TotalKillmails == 0 })
 }
 
 // sharesWith is whether a killmail in this system with these pilots belongs to the battle: one of its systems, or any of its pilots

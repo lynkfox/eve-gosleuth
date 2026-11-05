@@ -21,6 +21,8 @@
   --space-c6: #4a78e0;
   --radius: 6px;
   --debug: #ff7a1a; /* the debug mode border, the same whatever the theme */
+  --war-a: #4d9de0; /* a war's side A and side B, fixed whatever the theme as red and green mean a loss and a kill */
+  --war-b: #f08a3c;
   color-scheme: dark;
 }
 
@@ -3089,3 +3091,139 @@ p.tour-text { margin: 0; }
 }
 .myintel-coalition-note .myintel-note-cell { justify-content: flex-start; }
 .myintel-coalition-note .myintel-note-text { text-align: left; }
+
+/*
+  The war tracker: the War button and setup window, the versus card in the target panel, and the war report's four tabs.
+  Side A is blue and side B orange, fixed colors (--war-a and --war-b) as red and green mean a loss and a kill. Others use the muted text color.
+*/
+
+.war-button { flex: none; }
+
+.war-setup { width: min(640px, calc(100vw - 32px)); }
+.war-setup .war-setup-body { align-content: start; padding-bottom: 28px; }
+.war-setup h3 { margin: 0; font-size: 13px; }
+
+.war-saved-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.war-saved-list { display: grid; gap: 4px; }
+.war-saved-empty { margin: 0; }
+.war-saved-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: var(--radius); }
+.war-saved-row.war-saved-editing { border-left-color: var(--accent); }
+.war-saved-text { display: flex; flex: 1; flex-direction: column; align-items: flex-start; min-width: 0; }
+.war-saved-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.war-saved-detail { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.war-saved-row button.secondary { flex: none; padding: 4px 10px; }
+.war-saved-row button.war-remove { padding: 4px 9px; color: var(--muted); }
+.war-saved-row button.war-remove:hover { color: var(--error); }
+
+.war-form { display: grid; gap: 12px; padding-top: 14px; border-top: 1px solid var(--border); }
+.war-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: start; gap: 12px; }
+.war-row > input { width: 100%; }
+.war-label { padding-top: 8px; }
+.war-label-a { color: var(--war-a); }
+.war-label-b { color: var(--war-b); }
+.war-side { position: relative; min-width: 0; }
+.war-side input { width: 100%; }
+.war-suggest { top: 38px; right: 0; left: 0; max-height: 220px; margin: 0; overflow-y: auto; list-style: none; }
+.war-side-note { margin: 2px 0 0 2px; min-height: 18px; }
+.war-row .age-date input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.war-row .age-button { flex: 1 1 0; min-width: 0; padding: 2px 0; font-size: 12px; }
+.war-warning { margin: 0; padding: 8px 12px; background: var(--panel); border-left: 3px solid var(--accent); border-radius: var(--radius); font-size: 13px; }
+
+.war-add-dialog { width: min(380px, calc(100vw - 32px)); }
+.war-add-choice { display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer; }
+.war-add-choice input { flex: none; width: auto; }
+.war-add-date { width: 100%; margin: 8px 0 12px; }
+.war-add-date.war-add-off { opacity: 0.5; pointer-events: none; }
+.war-add-dialog .age-date input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+
+/* a war's report takes the whole window under the top bar: no width limit, no sidebar, less room around it */
+body.war-report main { max-width: none; gap: 8px; padding: 8px 12px; }
+body.war-report #tab-sidebar { display: none; }
+
+/* the strip above it: the versus card in one line, then the tabs across */
+.war-strip { display: flex; flex-direction: column; gap: 8px; padding: 8px 12px; }
+.war-versus { display: flex; gap: 8px 24px; align-items: center; width: 100%; }
+.war-versus-sides { flex: none; }
+.war-title { min-width: 0; margin: 0; font-size: 16px; }
+.war-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border); }
+.war-tabs .tab { border-left: 0; border-bottom: 2px solid transparent; border-radius: var(--radius) var(--radius) 0 0; }
+.war-tabs .tab[aria-selected="true"] { border-bottom-color: var(--highlight); }
+.war-tabs .tab-name { flex: none; }
+.war-tabs .tab-count { color: var(--muted); font-size: 12px; font-weight: 400; }
+.war-versus-sides { display: flex; align-items: stretch; gap: 12px; min-width: 0; }
+.war-side-card { display: flex; flex-direction: column; min-width: 0; max-width: 260px; padding: 6px 12px; background: var(--panel-raised); border-left: 4px solid var(--border); border-radius: var(--radius); }
+.war-side-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.war-side-card.war-a { border-left-color: var(--war-a); }
+.war-side-card.war-b { border-left-color: var(--war-b); }
+.war-vs { align-self: center; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+.war-facts { min-width: 0; }
+.war-run { flex: none; margin-left: auto; }
+
+/* the war report */
+/* one centered column, so the tables don't leave the right of a wide window empty */
+.war-overview { display: grid; gap: 14px; max-width: 900px; margin: 0 auto; }
+.war-overview > p, .war-overview h3 { margin: 0; }
+/* the counts, thin and centered at the top of a tab */
+table.war-counts { width: auto; margin: 0 auto; border: 1px solid var(--border); border-radius: var(--radius); border-collapse: separate; border-spacing: 0; }
+.war-overview > table.war-counts { justify-self: center; }
+.war-counts th, .war-counts td { padding: 2px 14px; border: 0; text-align: center; white-space: nowrap; }
+.war-counts th { font-size: 12px; }
+.war-counts td { font-variant-numeric: tabular-nums; font-weight: 600; }
+.war-classes { margin-bottom: 8px; }
+.war-note { margin: -6px 0 0; }
+.war-table th.war-head-a, .war-table td.war-a { border-bottom-color: var(--border); }
+.war-table th.war-head-a { box-shadow: inset 0 -3px 0 var(--war-a); color: var(--text); }
+.war-table th.war-head-b { box-shadow: inset 0 -3px 0 var(--war-b); color: var(--text); }
+.war-table th.war-head-others { box-shadow: inset 0 -3px 0 var(--muted); color: var(--text); }
+.war-measure.war-indent { padding-left: 28px; color: var(--muted); }
+.war-total td { font-weight: 600; }
+.war-figure { font-variant-numeric: tabular-nums; }
+.war-citadel-detail td { padding-top: 2px; padding-bottom: 6px; color: var(--muted); font-size: 12px; }
+.war-citadel-types { text-align: right; }
+.war-citadel-types img { width: 18px; height: 18px; margin-right: 6px; vertical-align: middle; border-radius: 3px; }
+.war-reach ul { margin: 6px 0; padding-left: 20px; }
+.war-first-run { border-left-color: var(--highlight); }
+.war-others { display: grid; gap: 8px; }
+.war-added { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.war-added-label { font-size: 12px; font-weight: 600; }
+.war-added-label.war-a, .war-added-label.war-b { padding-left: 6px; border-left: 3px solid var(--war-a); }
+.war-added-label.war-b { border-left-color: var(--war-b); }
+.war-added-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; background: var(--panel-raised); border-left: 3px solid var(--war-a); border-radius: var(--radius); font-size: 13px; }
+.war-added-chip.war-b { border-left-color: var(--war-b); }
+.war-added-remove { padding: 0 6px; background: none; color: var(--muted); font-size: 16px; line-height: 1.2; }
+.war-added-remove:hover { color: var(--error); }
+.war-group-name .group-line { display: inline-flex; align-items: center; gap: 4px; }
+.war-added-chip.war-ignored { border-left-color: var(--muted); }
+.war-added-label.war-ignored { padding-left: 6px; border-left: 3px solid var(--muted); }
+.war-more { justify-self: start; }
+
+.war-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-bottom: 8px; }
+.war-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.war-toggle input { flex: none; width: auto; }
+.war-toolbar-note { font-size: 12px; }
+.war-battle:hover { background: var(--panel-raised); }
+.war-skirmish { color: var(--muted); }
+.war-side-cell { border-left: 3px solid var(--border); }
+.war-side-cell.war-a { border-left-color: var(--war-a); }
+.war-side-cell.war-b { border-left-color: var(--war-b); }
+.war-structure-count { padding-left: 6px; border-left: 3px solid var(--border); font-size: 12px; }
+.war-structure-count.war-a { border-left-color: var(--war-a); }
+.war-structure-count.war-b { border-left-color: var(--war-b); }
+.war-classes { margin: 0 0 8px; font-size: 15px; }
+.war-table td, .war-table th { overflow-wrap: anywhere; }
+
+
+.key-war-a, .key-war-b {
+  padding-left: 8px;
+  border-left: 3px solid var(--war-a);
+  color: var(--war-a);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.key-war-b { border-left-color: var(--war-b); color: var(--war-b); }
+
+@media (max-width: 760px) {
+  .war-versus { flex-wrap: wrap; }
+  .war-versus-sides { flex: 0 1 auto; flex-wrap: wrap; }
+  .war-run { margin-left: 0; }
+}
