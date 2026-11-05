@@ -68,13 +68,14 @@ var outputAttributes = []int{
 	2746, // resistanceMultiplier: Assault Damage Control's
 }
 
-// structuralAttributes are the attributes the engine itself reads to find what a modifier applies to
+// structuralAttributes are the attributes read as they are: by the engine, to find what a modifier applies to, and by the EFT writer
 var structuralAttributes = []int{
 	182, 183, 184, 1285, 1289, 1290, // requiredSkill1 to requiredSkill6
 	attributeSkillLevel,
 	2468, 2470, 2472, 2536, // warfareBuff1ID to warfareBuff4ID: which buffs a command burst gives
 	2469, 2471, 2473, 2537, // warfareBuff1Value to warfareBuff4Value: how strong
 	2596, 2597, 2598, 2599, // warfareBuff1Multiplier to warfareBuff4Multiplier: a burst charge's, which its effect multiplies the values by
+	2215, // fighterSquadronMaxSize: a fighter type's squadron, one line each in an EFT
 }
 
 // codeEffects are effects kept even with no modifiers, as the fitting package handles them in code or reads them as markers
