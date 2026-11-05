@@ -89,7 +89,7 @@ type WarDay struct {
 	A, B WarMeasures
 }
 
-// WarStationRef marks a battle where a side lost Standup Fighters, so its station was probably under attack
+// WarStationRef marks a battle where a side lost or used Standup Fighters, or a station of its fired and survived, so its station was probably under attack
 type WarStationRef struct {
 	Side      WarSideKey
 	Attempt   bool   // no structure of that side died in the system within its timer days
@@ -820,6 +820,25 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		systemKills := map[int]int{}
 		systemFirst := []*retrieval.System{}
 		fighters := []*warRefFighters{}
+		noteRef := func(kill *warKill, side WarSideKey, party warParty) {
+			system := kill.raw.ESIKillmail.SolarSystemID
+			index := slices.IndexFunc(fighters, func(f *warRefFighters) bool { return f.side == side && f.system == system })
+			if index < 0 {
+				fighters = append(fighters, &warRefFighters{side: side, listed: party.side, group: party.group, system: system, first: kill.at})
+				index = len(fighters) - 1
+			}
+			fighters[index].last = kill.at
+		}
+		// the stations that died in this battle, by owner and type, as one firing before it dies is not one that was reffed
+		stationDied := map[warGroupKey]map[int]bool{}
+		for _, kill := range battle.kills {
+			if victim := kill.parties[0]; victim.hasGroup && warIsStation(warVictimType(kill)) {
+				if stationDied[victim.group] == nil {
+					stationDied[victim.group] = map[int]bool{}
+				}
+				stationDied[victim.group][warVictimType(kill)] = true
+			}
+		}
 		for _, kill := range battle.kills {
 			if trash.anchors[kill.id] {
 				battleOfStation[kill.id] = wb
@@ -838,13 +857,13 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 				measures[side].add(loss)
 				dayOf(kill.at, side).add(loss)
 				if loss.fighter && side != WarSideNone {
-					system := kill.raw.ESIKillmail.SolarSystemID
-					index := slices.IndexFunc(fighters, func(f *warRefFighters) bool { return f.side == side && f.system == system })
-					if index < 0 {
-						fighters = append(fighters, &warRefFighters{side: side, listed: victim.side, group: victim.group, system: system, first: kill.at})
-						index = len(fighters) - 1
+					noteRef(kill, side, victim)
+				}
+				for index, attacker := range kill.raw.ESIKillmail.Attackers {
+					shooter := kill.parties[index+1]
+					if shooterSide := effective(shooter); shooterSide != WarSideNone && warStationFiring(attacker.ShipTypeID, stationDied[shooter.group]) {
+						noteRef(kill, shooterSide, shooter)
 					}
-					fighters[index].last = kill.at
 				}
 				if side == WarSideNone && victim.hasGroup && otherGroups[victim.group] != nil {
 					otherGroups[victim.group].add(loss)
@@ -882,7 +901,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 			entry.Battles++
 		}
 
-		// a station under attack, for each side that lost its fighters
+		// a station under attack, for each side with its fighters or a station in the fight
 		wb.StationRefs = []WarStationRef{}
 		for _, side := range []WarSideKey{WarSideA, WarSideB} {
 			lost := false

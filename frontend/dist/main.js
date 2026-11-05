@@ -4317,8 +4317,8 @@ const WAR_COUNTED_KEY = {
     { sample: "Efficiency", className: "", meaning: WAR_EFFICIENCY_TIP },
     { sample: "Station trash", className: "", meaning: "Empty ships shot after a station died in their system." },
     { sample: "Asset denial", className: "", meaning: "Capitals a side destroyed rather than lose them." },
-    { sample: "Station ref", className: "", meaning: "A side lost Standup Fighters, then its structure there within 3 days (medium) or 4 (large)." },
-    { sample: "Ref attempt", className: "", meaning: "Standup fighters lost, with no structure lost there in that time. Possible ref attempt." },
+    { sample: "Station ref", className: "", meaning: "A side's Standup Fighters or a station of its in a fight, then its structure there within 3 days (medium) or 4 (large)." },
+    { sample: "Ref attempt", className: "", meaning: "A side's Standup Fighters or a station of its in a fight, with no structure lost there in that time. Possible ref attempt." },
   ],
 };
 
@@ -5879,10 +5879,10 @@ function renderWarOverview(report) {
 
 // These say what the war's estimates mean wherever they show, a line break between station trash and asset denial. The full rules are in .claude/docs/features.md.
 const WAR_TRASH_TIP = "Station Trash: empty ships shot after a station died in their system.\nAsset Denial: capitals a side destroyed rather than lose them.";
-const WAR_PROBABLE_TIP = "Station Trash: multiple ships dying from the same pilot in rapid succession, with no capsule lost. Any anchorable besides tractor units.\nAsset Denial: capitals with nothing fitted outside of rigs, or top damage from the same side's station. Any subcapital whose only attacker is the same side's station.";
-const WAR_UNCERTAIN_TIP = "Station Trash: other losses in the 4 hours after the fight a station died in, with no capsule lost.\nAsset Denial: capitals with the same side's station lower on the kill, or killed by their own side shortly before it lost a station there.";
-const WAR_REF_TIP = "Standup fighters belonging to this side lost, then its structure there within 3 days for a medium, 4 for a large.";
-const WAR_ATTEMPT_TIP = "Standup fighters belonging to this side lost, with no structure of its lost there after. Possible ref attempt.";
+const WAR_PROBABLE_TIP = "Station Trash: multiple ships dying from the same pilot in rapid succession, with no capsule lost. Any anchorable besides tractor units.\nAsset Denial: capitals with top damage from the same side's station, or with nothing fitted outside of rigs when the side then lost a station there. Anything whose only attacker is the same side's station.";
+const WAR_UNCERTAIN_TIP = "Station Trash: other losses in the 4 hours after the fight a station died in, with no capsule lost, unless fitted with more than one attacker.\nAsset Denial: capitals with nothing fitted and no station lost there yet, as it may never die. Capitals with the same side's station lower on the kill, or killed by their own side shortly before it lost a station there.";
+const WAR_REF_TIP = "This side's Standup Fighters, or a station of its that survived the fight, were in it, then its structure there died within 3 days for a medium, 4 for a large.";
+const WAR_ATTEMPT_TIP = "This side's Standup Fighters, or a station of its that survived the fight, were in it, with no structure of its lost there after. Possible ref attempt.";
 
 // warCollapsedMeasures are the Overview's heading rows closed, by section, kept for the session. Their rows are left out rather than hidden, so the lines still alternate.
 const warCollapsedMeasures = new Set();
@@ -6455,8 +6455,8 @@ function renderWarBattlePage() {
       tag.textContent = ref.attempt ? "Ref attempt" : "Station ref";
       const name = warSideName(report.war, ref.side);
       tag.title = ref.attempt
-        ? `Standup fighters belonging to ${name} lost here. Possible ref attempt.`
-        : `${name} lost Standup Fighters here, and then its ${ref.structure} in this system.`;
+        ? `Standup Fighters or a station of ${name} in this fight. Possible ref attempt.`
+        : `Standup Fighters or a station of ${name} in this fight, and then it lost its ${ref.structure} in this system.`;
       date.append(tag);
     }
     const clock = document.createElement("div");

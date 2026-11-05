@@ -912,6 +912,41 @@ func TestWarStationTrash(t *testing.T) {
 	})
 }
 
+func TestWarEscapeFleet(t *testing.T) {
+	warSetup(t)
+	sides := baseSides()
+	owner := wp{corp: corpA1, ally: allyA}
+	const hour = 60
+	build := func(kms ...retrieval.RawKillmail) *aggregate.WarData {
+		return aggregate.BuildWar(kms, expand(kms...), sides, 10)
+	}
+	fitted := func(km retrieval.RawKillmail) retrieval.RawKillmail {
+		km.ESIKillmail.Victim.Items = []api.ESIKillmailItem{{ItemTypeID: 2873, Flag: 27}}
+		return km
+	}
+	station := raw(1, 0, sysHome, owner, astrahus, pB(2))
+
+	t.Run("a fitted ship with more than one attacker in the 4 hours is not trash", func(t *testing.T) {
+		data := build(station, fitted(raw(2, hour, sysHome, pA1(5), rifter, pB(2), pB(3))))
+		assert.Empty(t, trashIDs(data))
+		assert.Equal(t, 1, data.A.ShipsFights)
+	})
+
+	t.Run("one attacker, or nothing fitted, is still trash, and uncertain", func(t *testing.T) {
+		for _, km := range []retrieval.RawKillmail{fitted(raw(2, hour, sysHome, pA1(5), rifter, pB(2))), raw(2, hour, sysHome, pA1(5), rifter, pB(2), pB(3))} {
+			data := build(station, km)
+			assert.Equal(t, []int{2}, trashIDs(data))
+			assert.Zero(t, data.A.ShipsTrashDefinite)
+		}
+	})
+
+	t.Run("a pilot's rapid losses are trash even fitted with several attackers", func(t *testing.T) {
+		data := build(station, fitted(raw(2, hour, sysHome, pA1(5), rifter, pB(2), pB(3))), fitted(raw(3, hour+1, sysHome, pA1(5), rifter, pB(2), pB(3))))
+		assert.ElementsMatch(t, []int{2, 3}, trashIDs(data))
+		assert.Equal(t, 2, data.A.ShipsTrashDefinite)
+	})
+}
+
 func TestWarAssetDenial(t *testing.T) {
 	warSetup(t)
 	sides := baseSides()
@@ -930,21 +965,94 @@ func TestWarAssetDenial(t *testing.T) {
 		return fitted(raw(id, minutes, sysHome, pA1(5), naglfar, pA2(6)))
 	}
 
-	t.Run("a side's capital with nothing fitted is definite, whoever killed it and with no station lost", func(t *testing.T) {
-		data := build(raw(1, 0, sysHome, pA1(5), naglfar, pB(2)))
+	// stationDies is the side's station dying a day after the killmails it follows
+	stationDies := func() retrieval.RawKillmail { return raw(90, day, sysHome, owner, astrahus, pB(2)) }
+
+	t.Run("a side's capital with nothing fitted is definite, whoever killed it, before its station dies there", func(t *testing.T) {
+		data := build(raw(1, 0, sysHome, pA1(5), naglfar, pB(2)), stationDies())
 		assert.Equal(t, []int{1}, trashIDs(data))
 		assert.Equal(t, 1, data.A.ShipsTrash)
+		assert.Equal(t, 1, data.A.ShipsTrashDefinite)
 		assert.Zero(t, data.A.ShipsFights)
-		assert.Empty(t, data.Battles, "it never was a fight")
-		assert.Equal(t, "", data.Killmails[0].BattleID)
-		assert.Equal(t, 1, data.Systems[0].A.Killmails, "it shows under its system")
-		assert.Equal(t, []int{1}, ids(aggregate.ClassifyRawWar([]retrieval.RawKillmail{raw(1, 0, sysHome, pA1(5), naglfar, pC(2))}, sides)), "held even when no side killed it")
+		if assert.Len(t, data.Battles, 1, "it never was a fight, only the station's death is") {
+			assert.Equal(t, 1, data.Battles[0].A.TrashKillmails)
+		}
+		kms := []retrieval.RawKillmail{raw(1, 0, sysHome, pA1(5), naglfar, pC(2)), stationDies()}
+		assert.Equal(t, []int{1, 90}, ids(aggregate.ClassifyRawWar(kms, sides)), "held even when no side killed it")
+	})
+
+	t.Run("with no station lost after it, it is still denial, but only the weaker grade, as the station may never die", func(t *testing.T) {
+		uncertain := func(kms ...retrieval.RawKillmail) {
+			t.Helper()
+			data := build(kms...)
+			assert.Equal(t, []int{1}, trashIDs(data))
+			assert.Equal(t, 1, data.A.ShipsTrash)
+			assert.Zero(t, data.A.ShipsTrashDefinite)
+			assert.Zero(t, data.A.ShipsFights)
+		}
+		uncertain(raw(1, 0, sysHome, pA1(5), naglfar, pB(2)))
+		lower := onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, owner, pB(2))), astrahus)
+		lower.ESIKillmail.Attackers[1].DamageDone = 9
+		uncertain(lower)
+		uncertain(raw(1, 0, sysHome, pA1(5), naglfar, pB(2)), raw(2, 5*day, sysHome, owner, astrahus, pB(2)))
+		uncertain(raw(1, 0, sysHome, pA1(5), naglfar, pB(2)), raw(2, 60, sysOther, owner, astrahus, pB(2)))
+
+		assert.Equal(t, []int{1}, ids(aggregate.ClassifyRawWar([]retrieval.RawKillmail{raw(1, 0, sysHome, pA1(5), naglfar, pC(2))}, sides)), "held, so its grade can rise when the station dies")
+	})
+
+	t.Run("its own station alone on the kill, or at top damage on a capital, is always the stronger grade, with no station lost", func(t *testing.T) {
+		alone := build(onKill(raw(1, 0, sysHome, pA1(5), rifter, owner), astrahus))
+		assert.Equal(t, []int{1}, trashIDs(alone))
+		assert.Equal(t, 1, alone.A.ShipsTrashDefinite)
+
+		aloneCapital := build(onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, owner)), astrahus))
+		assert.Equal(t, 1, aloneCapital.A.ShipsTrashDefinite)
+
+		top := onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, owner, pB(2))), astrahus)
+		top.ESIKillmail.Attackers[0].DamageDone = 9
+		assert.Equal(t, 1, build(top).A.ShipsTrashDefinite)
+	})
+
+	t.Run("a killmail its own side made keeps its grade when a station is lost after", func(t *testing.T) {
+		alone := build(onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, owner)), astrahus), stationDies())
+		assert.Equal(t, []int{1}, trashIDs(alone))
+		assert.Equal(t, 1, alone.A.ShipsTrashDefinite, "its own station alone")
+
+		unfitted := build(raw(1, 0, sysHome, pA1(5), naglfar, pA2(6)), stationDies())
+		assert.Equal(t, []int{1}, trashIDs(unfitted))
+		assert.Equal(t, 1, unfitted.A.ShipsTrashDefinite, "nothing fitted")
+
+		repeats := build(raw(10, 0, sysHome, owner, astrahus, pB(2)), blue(1, day), blue(2, day+1), raw(11, 2*day, sysHome, owner, astrahus, pB(2)))
+		assert.ElementsMatch(t, []int{1, 2}, trashIDs(repeats))
+		assert.Equal(t, 2, repeats.A.ShipsTrashDefinite, "a repeat victim's capitals stay trash")
+	})
+
+	t.Run("a capital killed by its own side's pilots still needs its station lost after", func(t *testing.T) {
+		assert.Empty(t, trashIDs(build(blue(1, 0))))
+		data := build(blue(1, 0), stationDies())
+		assert.Equal(t, []int{1}, trashIDs(data))
+		assert.Zero(t, data.A.ShipsTrashDefinite)
+	})
+
+	t.Run("after its side lost a station there it is not denial, unless another is lost soon after", func(t *testing.T) {
+		first := raw(2, 0, sysHome, owner, astrahus, pB(2))
+		data := build(first, raw(1, day, sysHome, pA1(5), naglfar, pB(2)))
+		assert.Empty(t, trashIDs(data))
+		assert.Equal(t, 1, data.A.ShipsFights)
+
+		assert.Empty(t, trashIDs(build(first, onKill(raw(1, day, sysHome, pA1(5), rifter, owner), astrahus))))
+
+		data = build(first, raw(1, day, sysHome, pA1(5), naglfar, pB(2)), raw(3, 2*day, sysHome, owner, astrahus, pB(2)))
+		assert.Equal(t, []int{1}, trashIDs(data))
+		assert.Equal(t, 1, data.A.ShipsTrashDefinite)
+
+		assert.Equal(t, []int{1}, trashIDs(build(raw(2, 0, sysHome, wp{corp: corpB1, ally: allyB}, astrahus, pA1(2)), raw(1, day, sysHome, pA1(5), naglfar, pB(2)))), "another side's station is no matter")
 	})
 
 	t.Run("rigs and holds do not make it fitted", func(t *testing.T) {
 		km := raw(1, 0, sysHome, pA1(5), naglfar, pB(2))
 		km.ESIKillmail.Victim.Items = []api.ESIKillmailItem{{ItemTypeID: 30993, Flag: 92}, {ItemTypeID: 2873, Flag: 5}, {ItemTypeID: 2873, Flag: 155}}
-		assert.Equal(t, []int{1}, trashIDs(build(km)))
+		assert.Equal(t, []int{1}, trashIDs(build(km, stationDies())))
 	})
 
 	t.Run("a fitted capital killed by the other side is a fight", func(t *testing.T) {
@@ -954,30 +1062,30 @@ func TestWarAssetDenial(t *testing.T) {
 	})
 
 	t.Run("an unfitted subcapital is not denial, nor a third party's capital", func(t *testing.T) {
-		assert.Empty(t, trashIDs(build(raw(1, 0, sysHome, pA1(5), rifter, pB(2)))))
-		assert.Empty(t, trashIDs(build(raw(1, 0, sysHome, pC(5), naglfar, pB(2)))))
+		assert.Empty(t, trashIDs(build(raw(1, 0, sysHome, pA1(5), rifter, pB(2)), stationDies())))
+		assert.Empty(t, trashIDs(build(raw(1, 0, sysHome, pC(5), naglfar, pB(2)), stationDies())))
 	})
 
 	t.Run("a subcapital is denial only with nothing but its own station on the kill, and definite", func(t *testing.T) {
-		data := build(onKill(raw(1, 0, sysHome, pA1(5), rifter, owner), astrahus))
+		data := build(onKill(raw(1, 0, sysHome, pA1(5), rifter, owner), astrahus), stationDies())
 		assert.Equal(t, []int{1}, trashIDs(data))
 		assert.Equal(t, 1, data.A.ShipsTrashDefinite)
 
-		assert.Empty(t, trashIDs(build(onKill(raw(1, 0, sysHome, pA1(5), rifter, owner, pA2(6)), astrahus))), "with a pilot on it too")
+		assert.Empty(t, trashIDs(build(onKill(raw(1, 0, sysHome, pA1(5), rifter, owner, pA2(6)), astrahus), stationDies())), "with a pilot on it too")
 		assert.Empty(t, trashIDs(build(raw(1, 0, sysHome, pA1(5), rifter, pA2(6)), raw(2, 60, sysHome, owner, astrahus, pB(2)))), "blue on blue before a station's loss is capitals only")
 		assert.Empty(t, trashIDs(build(onKill(fitted(raw(1, 0, sysHome, wp{corp: corpB1, ally: allyB, char: 5}, rifter, owner)), astrahus))), "another side's station")
 	})
 
-	t.Run("a fitted capital with its side's station or fighters on the kill is denial, with no loss", func(t *testing.T) {
-		assert.Equal(t, []int{1}, trashIDs(build(onKill(blue(1, 0), astrahus))))
-		assert.Equal(t, []int{1}, trashIDs(build(onKill(blue(1, 0), standupTemplar))))
+	t.Run("a fitted capital with its side's station or fighters on the kill is denial", func(t *testing.T) {
+		assert.Equal(t, []int{1}, trashIDs(build(onKill(blue(1, 0), astrahus), stationDies())))
+		assert.Equal(t, []int{1}, trashIDs(build(onKill(blue(1, 0), standupTemplar), stationDies())))
 	})
 
 	t.Run("its own station among the other side's fleet is still denial, out of the battles", func(t *testing.T) {
-		data := build(onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, owner, pB(2), pB(3))), astrahus))
+		data := build(onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, owner, pB(2), pB(3))), astrahus), stationDies())
 		assert.Equal(t, []int{1}, trashIDs(data))
 		assert.Equal(t, 1, data.A.ShipsTrash)
-		assert.Empty(t, data.Battles)
+		assert.Zero(t, data.A.ShipsFights)
 	})
 
 	t.Run("graded definite with nothing fitted or its station at top damage, else probable", func(t *testing.T) {
@@ -991,15 +1099,15 @@ func TestWarAssetDenial(t *testing.T) {
 			assert.Fail(t, "killmail 1 is not counted")
 			return false
 		}
-		assert.True(t, grade(raw(1, 0, sysHome, pA1(5), naglfar, pB(2))), "nothing fitted")
+		assert.True(t, grade(raw(1, 0, sysHome, pA1(5), naglfar, pB(2)), stationDies()), "nothing fitted")
 
 		top := onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, owner, pB(2))), astrahus)
 		top.ESIKillmail.Attackers[0].DamageDone = 9
-		assert.True(t, grade(top), "its station did the most")
+		assert.True(t, grade(top, stationDies()), "its station did the most")
 
 		lower := onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, owner, pB(2))), astrahus)
 		lower.ESIKillmail.Attackers[1].DamageDone = 9
-		assert.False(t, grade(lower), "its station did less")
+		assert.False(t, grade(lower, stationDies()), "its station did less")
 
 		assert.False(t, grade(blue(1, 0), raw(2, day, sysHome, owner, astrahus, pB(2))), "only blue on blue before the station died")
 	})
@@ -1016,7 +1124,7 @@ func TestWarAssetDenial(t *testing.T) {
 	})
 
 	t.Run("the other side's station on the kill is a fight", func(t *testing.T) {
-		data := build(onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, pB(2))), astrahus))
+		data := build(onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, pB(2))), astrahus), stationDies())
 		assert.Empty(t, trashIDs(data))
 		assert.Equal(t, 1, data.A.ShipsFights)
 	})
@@ -1140,6 +1248,38 @@ func TestWarStationRef(t *testing.T) {
 	t.Run("a carrier's fighter marks nothing", func(t *testing.T) {
 		data := build(raw(1, 0, sysHome, owner, carrierTemplar, pB(2)))
 		assert.Nil(t, ref(data))
+	})
+
+	// firing is a fight where the attacker on the other side's loss flies ship, alongside a pilot
+	firing := func(ship int) retrieval.RawKillmail {
+		return onKill(raw(1, 0, sysHome, pB(2), rifter, owner, pA1(5)), ship)
+	}
+
+	t.Run("standup fighters used, or a side's station firing, mark that side, with no fighter lost", func(t *testing.T) {
+		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Attempt: true}}, ref(build(firing(standupTemplar))))
+		data := build(firing(astrahus))
+		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Attempt: true}}, ref(data))
+		assert.Equal(t, 1, data.A.RefAttempts)
+		assert.Zero(t, data.B.RefAttempts)
+	})
+
+	t.Run("a carrier's fighter or a pilot firing marks nothing", func(t *testing.T) {
+		assert.Nil(t, ref(build(firing(carrierTemplar))))
+		assert.Nil(t, ref(build(raw(1, 0, sysHome, pB(2), rifter, pA1(5)))))
+	})
+
+	t.Run("a station firing that dies in the battle marks nothing, though fighters used still do", func(t *testing.T) {
+		dies := raw(2, 5, sysHome, owner, astrahus, pB(2))
+		assert.Nil(t, ref(build(firing(astrahus), dies)))
+
+		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Structure: "Astrahus"}}, ref(build(firing(standupTemplar), dies)))
+	})
+
+	t.Run("a station firing is a station ref if it dies later, within its timer", func(t *testing.T) {
+		data := build(firing(raitaru), raw(2, 3*day, sysHome, owner, raitaru, pB(2)))
+		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Structure: "Raitaru"}}, ref(data))
+		assert.Equal(t, 1, data.A.StationRefs)
+		assert.True(t, ref(build(firing(raitaru), raw(2, 3*day+1, sysHome, owner, raitaru, pB(2))))[0].Attempt)
 	})
 
 	t.Run("a medium dying within 3 days makes it a station ref, past that an attempt", func(t *testing.T) {

@@ -22,7 +22,7 @@ const (
 type warTrashMark struct {
 	owner  WarSideKey // the side whose station it goes with
 	anchor int        // the killmail of the station it goes with, 0 for none: a station on a same-side kill that did not die soon after
-	// definite is the stronger grade: a repeat victim's empty ships, a capital with nothing fitted, or one with its own station at top damage. The rest are probable.
+	// definite is the stronger grade: a repeat victim's empty ships, an anchorable, a capital with its own station at top damage, anything with only its own station on it, or a capital with nothing fitted before its station's loss. The rest are probable.
 	definite bool
 }
 
@@ -52,6 +52,19 @@ func warIsFixture(typeID int) bool {
 // warIsStationPart is whether an attacker's ship is a station, one of its batteries, or its fighters
 func warIsStationPart(ship int) bool {
 	return warIsStation(ship) || comm.PosBatteryGroups.ContainsGroupOf(ship) || comm.StandupFighterGroups.ContainsGroupOf(ship)
+}
+
+// warStationFiring is whether an attacker's ship says a station was under attack: its Standup Fighters, or a station or battery of an owner that lost no such station in the battle, as died says
+func warStationFiring(ship int, died map[int]bool) bool {
+	switch {
+	case comm.StandupFighterGroups.ContainsGroupOf(ship):
+		return true
+	case warIsStation(ship):
+		return !died[ship]
+	case comm.PosBatteryGroups.ContainsGroupOf(ship):
+		return len(died) == 0
+	}
+	return false
 }
 
 // warOwnStationOnKill is whether an attacker on a killmail is a station, one of its batteries, or its fighters on the victim's side, whoever else shot: a station does not shoot its own side's capital by accident
@@ -204,10 +217,15 @@ func findWarTrash(kills []*warKill) *warTrash {
 		}
 		return nil
 	}
-	markDenial := func(kill *warKill, side WarSideKey, definite bool) {
-		mark := warTrashMark{owner: side, definite: definite}
+	// denialOpen is whether a killmail can still be asset denial: not once the side has lost a station in that system, unless it loses another soon after (user, 2026-11-05)
+	denialOpen := func(kill *warKill, side WarSideKey) bool {
+		return stationSoon(kill, side) != nil || !warStationBefore(t.stations, kill, side)
+	}
+	// markDenial marks asset denial, of the stronger grade if sure, or if ifLost and a station is lost after it, as without one it may never die (user, 2026-11-05)
+	markDenial := func(kill *warKill, side WarSideKey, sure bool, ifLost bool) {
+		mark := warTrashMark{owner: side, definite: sure}
 		if next := stationSoon(kill, side); next != nil {
-			mark.anchor = next.id
+			mark.anchor, mark.definite = next.id, sure || ifLost
 		}
 		t.marks[kill.id] = mark
 	}
@@ -221,11 +239,11 @@ func findWarTrash(kills []*warKill) *warTrash {
 		switch {
 		case side == WarSideNone:
 		// asset denial: a side's capital with nothing fitted, or with its own station on the kill, whoever else shot it
-		case warIsCapital(typeID) && (warUnfitted(kill) || warOwnStationOnKill(kill)):
-			markDenial(kill, side, warUnfitted(kill) || warOwnStationTopDamage(kill))
+		case warIsCapital(typeID) && (warUnfitted(kill) || warOwnStationOnKill(kill)) && denialOpen(kill, side):
+			markDenial(kill, side, warOwnStationTopDamage(kill), warUnfitted(kill))
 		// asset denial: anything else with nothing but its own station on the kill. A capsule is never it, and warOwnPodOnly leaves those out of the war.
-		case warOwnStationOnly(kill) && !warIsFixture(typeID) && !comm.CapsuleGroups.ContainsGroupOf(typeID):
-			markDenial(kill, side, true)
+		case warOwnStationOnly(kill) && !warIsFixture(typeID) && !comm.CapsuleGroups.ContainsGroupOf(typeID) && denialOpen(kill, side):
+			markDenial(kill, side, true, false)
 		// trash: an anchorable the war's sides shot, wherever and whenever. It goes with a station below, if one died before it.
 		case warIsAnchorable(typeID) && warSidesShot(kill):
 			t.marks[kill.id] = warTrashMark{owner: side, definite: true}
@@ -329,7 +347,7 @@ func findWarTrash(kills []*warKill) *warTrash {
 		system := anchor.raw.ESIKillmail.SolarSystemID
 		losses := map[int][]*warKill{}
 		for _, kill := range bySystem[system] {
-			if !kill.at.After(end) || kill.at.After(end.Add(warTrashWindow)) || !mayBeTrash(kill, owner) || shotBack(kill, ended, anchor, owner) {
+			if !kill.at.After(end) || kill.at.After(end.Add(warTrashWindow)) || !mayBeTrash(kill, owner) || shotBack(kill, ended, anchor, owner) || warEscaping(kill) {
 				continue
 			}
 			losses[kill.parties[0].char] = append(losses[kill.parties[0].char], kill)
@@ -342,10 +360,10 @@ func findWarTrash(kills []*warKill) *warTrash {
 	}
 	t.battles = warBattlesOf(notTrash())
 
-	// asset denial: a fitted capital its own side killed, losing a station there soon after
+	// asset denial: a fitted capital its own side killed, losing a station there soon after. What is already marked keeps its mark and grade.
 	for _, kill := range ordered {
-		if kill.sameSide && warIsCapital(warVictimType(kill)) && stationSoon(kill, kill.parties[0].side) != nil {
-			markDenial(kill, kill.parties[0].side, false)
+		if kill.sameSide && warIsCapital(warVictimType(kill)) && t.marks[kill.id] == (warTrashMark{}) && stationSoon(kill, kill.parties[0].side) != nil {
+			markDenial(kill, kill.parties[0].side, false, false)
 		}
 	}
 	return t
@@ -361,7 +379,19 @@ func warStationAfter(stations []*warKill, kill *warKill, side WarSideKey) *warKi
 	return nil
 }
 
-// warRefFighters is one side's Standup Fighters lost in one system of a battle
+// warEscaping is whether a loss looks like a fleet trying to get out: a fitted ship with more than one attacker (user, 2026-11-05). A repeat victim's ship is trash all the same.
+func warEscaping(kill *warKill) bool {
+	return !warUnfitted(kill) && len(kill.raw.ESIKillmail.Attackers) > 1
+}
+
+// warStationBefore is whether a side lost a station in a killmail's system before it
+func warStationBefore(stations []*warKill, kill *warKill, side WarSideKey) bool {
+	return slices.ContainsFunc(stations, func(station *warKill) bool {
+		return station.at.Before(kill.at) && station.parties[0].side == side && station.raw.ESIKillmail.SolarSystemID == kill.raw.ESIKillmail.SolarSystemID
+	})
+}
+
+// warRefFighters is one side's station under attack in one system of a battle: its Standup Fighters lost or used, or a station of its firing that did not die in the battle
 type warRefFighters struct {
 	side, listed WarSideKey // listed is by SideOf alone, side also takes in a third party fighting beside it
 	group        warGroupKey
