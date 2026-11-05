@@ -96,6 +96,7 @@ Every row's menu is built by `withMenu` in main.js from sections (`openSectionsM
 - A typed name matching a coalition joins the search's choices, or is searched straight away when the ESI has nothing else or can't be reached.
 - The large search warning (frontend, warns only) shows on the Coalitions tab and in the status line of a coalition search: any age, or more than 2000 killmails, counting `maxKillmails`, or `killmailPages * 200` when that is -1 (100 pages when pages are -1 too).
 - Exports hold coalitions as an optional `coalitions` list, by name with no id; an import matches by name ignoring case and only adds members, and the intel check fixes or drops them.
+- A saved affiliate that is a coalition's direct member moves there (`coalitionsFollowAffiliate`, from `SaveHolding` and an import's new links): its main takes its place as a member, and it comes in as the main's affiliate. `Holdings.CoalitionsMoved` names those changed, for the ticker. Only a new link does it: saving one again, ie its note, leaves the coalitions alone, so to move an older one remove the link and add it again. A member added by hand that is someone's affiliate stays as added.
 
 ## War tracker
 

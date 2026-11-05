@@ -3,6 +3,7 @@ package gui
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/lynkfox/go_eve_sleuth/aggregate"
@@ -30,6 +31,8 @@ type HoldingEntity struct {
 type Holdings struct {
 	Holdings []HoldingEntity `json:"holdings"`
 	HeldFor  []HoldingEntity `json:"heldFor"`
+	// CoalitionsMoved are the coalitions a save just changed, as the affiliate saved was a member of them: it became an affiliate there and its main a member. Only from SaveHolding.
+	CoalitionsMoved []string `json:"coalitionsMoved"`
 }
 
 // holdingEntity describes one end of a link, with the link's note
@@ -117,13 +120,25 @@ func (a *App) SaveHolding(mainID int, mainType string, mainName string, holdingN
 	if len([]rune(note)) > maxHoldingNote {
 		note = string([]rune(note)[:maxHoldingNote])
 	}
-	a.cache.SaveHoldingLink(retrieval.HoldingLink{
+	link := retrieval.HoldingLink{
 		MainType: mainType, MainID: mainID, MainName: mainName,
 		HoldingType: holding.Type, HoldingID: holding.ID, HoldingName: holding.Name,
 		Note: note,
+	}
+	// only a new link moves a coalition's member: saving one again changes its note, and a member added back by hand stays
+	existing, _ := a.cache.HoldingLinks(mainType, mainID)
+	isNew := !slices.ContainsFunc(existing, func(other retrieval.HoldingLink) bool {
+		return other.HoldingType == link.HoldingType && other.HoldingID == link.HoldingID
 	})
+	a.cache.SaveHoldingLink(link)
+	moved := []string{}
+	if isNew {
+		moved = a.coalitionsFollowAffiliate(link)
+	}
 	a.saveCacheQuietly()
-	return a.holdingsFor(mainType, mainID), nil
+	holdings = a.holdingsFor(mainType, mainID)
+	holdings.CoalitionsMoved = moved
+	return holdings, nil
 }
 
 /*

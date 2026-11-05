@@ -57,3 +57,63 @@ func TestTogetherURL(t *testing.T) {
 		assert.Equal(t, api.ZkillTogetherURL(groups, api.ZkillEntity{Type: types.ALLIANCE, ID: 99014851}), togetherURL(types.ALLIANCE, 99014851, target))
 	})
 }
+
+func TestCoalitionsFollowAffiliate(t *testing.T) {
+	app, _, _ := newCollectApp(t, nil)
+	estates := retrieval.CoalitionMember{Type: "ALLIANCE", ID: 700, Name: "Estates"}
+	other := retrieval.CoalitionMember{Type: "ALLIANCE", ID: 800, Name: "Other"}
+	ldev := retrieval.CoalitionMember{Type: "ALLIANCE", ID: 900, Name: "LDEV"}
+	link := retrieval.HoldingLink{MainType: "ALLIANCE", MainID: 900, MainName: "LDEV", HoldingType: "ALLIANCE", HoldingID: 700, HoldingName: "Estates"}
+	has := app.cache.SaveCoalition(retrieval.Coalition{Name: "Has it", Members: []retrieval.CoalitionMember{estates, other}})
+	both := app.cache.SaveCoalition(retrieval.Coalition{Name: "Has both", Members: []retrieval.CoalitionMember{estates, ldev}})
+	without := app.cache.SaveCoalition(retrieval.Coalition{Name: "Without", Members: []retrieval.CoalitionMember{other}})
+
+	app.cache.SaveHoldingLink(link)
+	assert.ElementsMatch(t, []string{"Has it", "Has both"}, app.coalitionsFollowAffiliate(link))
+
+	saved, _ := app.cache.CoalitionByID(has.ID)
+	assert.ElementsMatch(t, []retrieval.CoalitionMember{other, ldev}, saved.Members, "its main takes its place")
+	card := app.coalitionCard(saved)
+	if assert.Len(t, card.Affiliates, 1) {
+		assert.Equal(t, "Estates", card.Affiliates[0].Name)
+	}
+
+	saved, _ = app.cache.CoalitionByID(both.ID)
+	assert.Equal(t, []retrieval.CoalitionMember{ldev}, saved.Members, "a main already there is not added twice")
+
+	saved, _ = app.cache.CoalitionByID(without.ID)
+	assert.Equal(t, []retrieval.CoalitionMember{other}, saved.Members)
+
+	assert.Empty(t, app.coalitionsFollowAffiliate(link), "nothing left to move")
+
+	t.Run("an import moves a member of a coalition the same file adds", func(t *testing.T) {
+		app, _, _ := newCollectApp(t, nil)
+		app.applyImport(importPlan{
+			newHoldings: []retrieval.HoldingLink{link},
+			coalitions:  []plannedCoalition{{name: "From the file", members: []retrieval.CoalitionMember{estates}}},
+		}, false)
+		saved, found := app.cache.CoalitionNamed("From the file")
+		assert.True(t, found)
+		assert.Equal(t, []retrieval.CoalitionMember{ldev}, saved.Members)
+	})
+
+	t.Run("saving a link only moves a member when the link is new, so a note edit leaves one added back by hand", func(t *testing.T) {
+		app := newIntelApp(t)
+		card := coalitionWith(t, app, "Hand made", [2]string{"URSA PRIMUS", "CORPORATION"})
+
+		holdings, err := app.SaveHolding(99013330, "ALLIANCE", "URSA.", "URSA PRIMUS", "CORPORATION", "")
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"Hand made"}, holdings.CoalitionsMoved)
+		cards, _ := app.GetCoalitions()
+		assert.Equal(t, []string{"URSA."}, memberNames(cards[0].Members))
+		assert.Equal(t, []string{"URSA PRIMUS"}, memberNames(cards[0].Affiliates))
+
+		_, err = app.AddCoalitionMember(card.ID, "URSA PRIMUS", "CORPORATION")
+		assert.NoError(t, err)
+		holdings, err = app.SaveHolding(99013330, "ALLIANCE", "URSA.", "URSA PRIMUS", "CORPORATION", "a new note")
+		assert.NoError(t, err)
+		assert.Empty(t, holdings.CoalitionsMoved)
+		cards, _ = app.GetCoalitions()
+		assert.Contains(t, memberNames(cards[0].Members), "URSA PRIMUS")
+	})
+}

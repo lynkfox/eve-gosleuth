@@ -31,6 +31,39 @@ type CoalitionCard struct {
 	Affiliates        []EntityRef `json:"affiliates"` // the members' own affiliates, which its search also pulls, by name
 }
 
+/*
+	coalitionsFollowAffiliate changes every coalition with a new affiliate as a direct member: its main takes its place as a member, and it becomes the main's affiliate there, which CoalitionGroups brings in.
+
+Parameters:
+  - link: the holding link just saved
+
+Returns:
+  - []string: the names of the coalitions it changed, never nil
+*/
+func (a *App) coalitionsFollowAffiliate(link retrieval.HoldingLink) []string {
+	a.coalitionMu.Lock()
+	defer a.coalitionMu.Unlock()
+
+	moved := []string{}
+	for _, coalition := range a.cache.Coalitions() {
+		isHolding := func(member retrieval.CoalitionMember) bool {
+			return member.Type == link.HoldingType && member.ID == link.HoldingID
+		}
+		if !slices.ContainsFunc(coalition.Members, isHolding) {
+			continue
+		}
+		coalition.Members = slices.DeleteFunc(coalition.Members, isHolding)
+		if !slices.ContainsFunc(coalition.Members, func(member retrieval.CoalitionMember) bool {
+			return member.Type == link.MainType && member.ID == link.MainID
+		}) {
+			coalition.Members = append(coalition.Members, retrieval.CoalitionMember{Type: link.MainType, ID: link.MainID, Name: link.MainName})
+		}
+		a.cache.SaveCoalition(coalition)
+		moved = append(moved, coalition.Name)
+	}
+	return moved
+}
+
 // coalitionCard builds a coalition's card, with tickers only from the cache so it opens at once
 func (a *App) coalitionCard(coalition retrieval.Coalition) CoalitionCard {
 	card := CoalitionCard{ID: coalition.ID, Name: coalition.Name, Note: coalition.Note, IncludeStructures: coalition.IncludeStructures,

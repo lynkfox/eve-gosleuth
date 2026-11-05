@@ -280,9 +280,11 @@ func (a *App) applyImport(plan importPlan, useTheirNotes bool) {
 	for _, link := range a.cache.AllHoldingLinks() {
 		saved[intelGroupKey(link.MainType, link.MainID)+">"+intelGroupKey(link.HoldingType, link.HoldingID)] = true
 	}
+	added := []retrieval.HoldingLink{}
 	for _, link := range plan.newHoldings {
 		if !saved[intelGroupKey(link.MainType, link.MainID)+">"+intelGroupKey(link.HoldingType, link.HoldingID)] {
 			a.cache.SaveHoldingLink(link)
+			added = append(added, link)
 		}
 	}
 	if useTheirNotes {
@@ -301,6 +303,10 @@ func (a *App) applyImport(plan importPlan, useTheirNotes bool) {
 		a.cache.SetIgnoredAllies(target.Type, target.ID, ignored)
 	}
 	a.applyCoalitions(plan.coalitions)
+	// after the coalitions, as the file's own may list a new affiliate as a member
+	for _, link := range added {
+		a.coalitionsFollowAffiliate(link)
+	}
 	a.cache.AddIntelChecks(plan.checks)
 	a.saveCacheQuietly()
 }

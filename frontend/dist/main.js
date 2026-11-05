@@ -773,6 +773,7 @@ async function saveHolding() {
       holdingsChanged();
     }
     tickerPush(`Saved an affiliate for ${target.name}`);
+    tickerCoalitionsMoved(holdings);
   } catch (err) {
     el("holding-error").textContent = String(err);
     el("holding-error").hidden = false;
@@ -1760,16 +1761,23 @@ function myIntelAddRow(key, placeholder, withNote, add) {
   return form;
 }
 
+// tickerCoalitionsMoved says which coalitions a saved affiliate changed, as it was a member of them and its main took its place
+function tickerCoalitionsMoved(holdings) {
+  const moved = holdings.coalitionsMoved || [];
+  if (moved.length > 0) tickerPush(`Its main is now the member in ${moved.join(", ")}, with it as an affiliate`);
+}
+
 // myIntelChange saves a change from a card, showing why on the card if it can not, then draws My Intel again and brings the shown target up to date. It resolves whether it saved.
 async function myIntelChange(save, showError, message) {
   showError("");
   try {
-    await save();
+    const saved = await save();
+    tickerPush(message);
+    if (saved) tickerCoalitionsMoved(saved);
   } catch (err) {
     showError(String(err));
     return false;
   }
-  tickerPush(message);
   await loadMyIntel();
   syncShownTarget();
   return true;
