@@ -40,19 +40,20 @@ type Settings struct {
 
 // Preferences are the choices in the Preferences window, saved together with its Save button
 type Preferences struct {
-	IncludeZkillLabels     bool   `json:"includeZkillLabels"`     // show zKillboard's labels, ie solo or ganked, on killmail cards. Off by default.
-	MaxKillmails           int    `json:"maxKillmails"`           // the most killmails collected per search, 1 to api.ZKILL_MAX_KILLMAILS, or retrieval.AllKillmails (-1) for all
-	KillmailPages          int    `json:"killmailPages"`          // how many zKillboard pages of 200 are listed when MaxKillmails is -1, 1 to api.ZKILL_MAX_PAGES, or retrieval.AllPages (-1) for as far as the age limit reaches
-	KillmailsNewerThanDays int    `json:"killmailsNewerThanDays"` // only collect killmails from the last 7, 30, or 90 days, 0 for any age
-	UseCachedKillmails     bool   `json:"useCachedKillmails"`     // also use the target's cached killmails beyond the limits above
-	TimeZone               string `json:"timeZone"`               // how killmail times are shown: "eve" for EVE time (UTC), the default, or "local"
-	MaxRecentSearches      int    `json:"maxRecentSearches"`      // how many recent searches the search bar keeps, 1 to retrieval.MaxRecentSearches
-	HideKilledAllies       bool   `json:"hideKilledAllies"`       // leave out of every Allies tab the allies the target also killed. Off by default.
-	IncludeHoldings        bool   `json:"includeHoldings"`        // a corp or alliance search also collects its holdings' killmails, counted as its own. On by default.
-	CollapseTarget         bool   `json:"collapseTarget"`         // pull the target panel shut at each search, leaving more room for the report. Off by default.
-	ShowCaveatWarning      bool   `json:"showCaveatWarning"`      // warn as the app launches that killmails only show the losses. On by default.
-	ShowChangelog          bool   `json:"showChangelog"`          // open What's New at the first launch of a newer version. On by default.
-	DebugMode              bool   `json:"debugMode"`              // log everything, and zip each search's log into the debug folder to send with a problem report. Off by default, and off again at each start, so it is never left on.
+	IncludeZkillLabels     bool   `json:"includeZkillLabels"`               // show zKillboard's labels, ie solo or ganked, on killmail cards. Off by default.
+	MaxKillmails           int    `json:"maxKillmails"`                     // the most killmails collected per search, 1 to api.ZKILL_MAX_KILLMAILS, or retrieval.AllKillmails (-1) for all
+	KillmailPages          int    `json:"killmailPages"`                    // how many zKillboard pages of 200 are listed when MaxKillmails is -1, 1 to api.ZKILL_MAX_PAGES, or retrieval.AllPages (-1) for as far as the age limit reaches
+	KillmailsNewerThanDays int    `json:"killmailsNewerThanDays"`           // only collect killmails from the last 7, 30, or 90 days, counted back from each search, 0 for any age or a fixed date
+	KillmailsNewerThanDate string `json:"killmailsNewerThanDate,omitempty"` // only collect killmails from this day on, in EVE time, as YYYY-MM-DD. Set, it is used in place of the days.
+	UseCachedKillmails     bool   `json:"useCachedKillmails"`               // also use the target's cached killmails beyond the limits above
+	TimeZone               string `json:"timeZone"`                         // how killmail times are shown: "eve" for EVE time (UTC), the default, or "local"
+	MaxRecentSearches      int    `json:"maxRecentSearches"`                // how many recent searches the search bar keeps, 1 to retrieval.MaxRecentSearches
+	HideKilledAllies       bool   `json:"hideKilledAllies"`                 // leave out of every Allies tab the allies the target also killed. Off by default.
+	IncludeHoldings        bool   `json:"includeHoldings"`                  // a corp or alliance search also collects its holdings' killmails, counted as its own. On by default.
+	CollapseTarget         bool   `json:"collapseTarget"`                   // pull the target panel shut at each search, leaving more room for the report. Off by default.
+	ShowCaveatWarning      bool   `json:"showCaveatWarning"`                // warn as the app launches that killmails only show the losses. On by default.
+	ShowChangelog          bool   `json:"showChangelog"`                    // open What's New at the first launch of a newer version. On by default.
+	DebugMode              bool   `json:"debugMode"`                        // log everything, and zip each search's log into the debug folder to send with a problem report. Off by default, and off again at each start, so it is never left on.
 }
 
 // maxTabs is the most tab ids SetTabOrder keeps, well above the number of tabs, so a bad value from the frontend stays small
@@ -81,6 +82,12 @@ var timeZoneChoices = []string{"eve", "local"}
 // killmailAgeChoices are the Killmails newer than options, in days, 0 for all
 var killmailAgeChoices = []int{0, 7, 30, 90}
 
+// newerThanDateLayout is how KillmailsNewerThanDate is written, the value of the frontend's date input
+const newerThanDateLayout = "2006-01-02"
+
+// newerThanFirstYear is the earliest year KillmailsNewerThanDate takes, as EVE began in 2003
+const newerThanFirstYear = 2003
+
 // defaultSettings are the settings before the user changes anything
 func defaultSettings() Settings {
 	return Settings{Preferences: Preferences{MaxKillmails: retrieval.DefaultKillmailLimit, KillmailPages: retrieval.DefaultKillmailPages, TimeZone: "eve", MaxRecentSearches: retrieval.DefaultRecentSearches, IncludeHoldings: true, ShowCaveatWarning: true, ShowChangelog: true}}
@@ -96,6 +103,18 @@ func (p Preferences) validate() error {
 	}
 	if !slices.Contains(killmailAgeChoices, p.KillmailsNewerThanDays) {
 		return fmt.Errorf("Killmails newer than must be 7, 30, or 90 days, or all")
+	}
+	if p.KillmailsNewerThanDate != "" {
+		date, err := time.Parse(newerThanDateLayout, p.KillmailsNewerThanDate)
+		if err != nil {
+			return fmt.Errorf("Killmails newer than must be a date")
+		}
+		if date.After(time.Now()) {
+			return fmt.Errorf("Killmails newer than can not be a date in the future")
+		}
+		if date.Year() < newerThanFirstYear {
+			return fmt.Errorf("Killmails newer than can not be before %d", newerThanFirstYear)
+		}
 	}
 	if !slices.Contains(timeZoneChoices, p.TimeZone) {
 		return fmt.Errorf("Times must be shown in EVE time or local time")
@@ -117,7 +136,9 @@ Returns:
 */
 func (p Preferences) KillmailLimits(now time.Time) retrieval.KillmailLimits {
 	limits := retrieval.KillmailLimits{Max: p.MaxKillmails, Pages: p.KillmailPages, IncludeCached: p.UseCachedKillmails}
-	if p.KillmailsNewerThanDays > 0 {
+	if date, err := time.Parse(newerThanDateLayout, p.KillmailsNewerThanDate); err == nil {
+		limits.NewerThan = date
+	} else if p.KillmailsNewerThanDays > 0 {
 		limits.NewerThan = now.AddDate(0, 0, -p.KillmailsNewerThanDays)
 	}
 	return limits

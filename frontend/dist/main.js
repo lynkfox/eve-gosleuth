@@ -904,7 +904,7 @@ const ZKILL_PAGE_KILLMAILS = 200;
 // largeSearchReason says why the limits the next search uses are large, or "" when they are not: any age, or more than LARGE_KILLMAILS killmails (the pages' worth when all are asked for)
 function largeSearchReason(limits) {
   const reasons = [];
-  if (limits.killmailsNewerThanDays === 0) reasons.push("killmails of any age");
+  if (limits.killmailsNewerThanDays === 0 && !limits.killmailsNewerThanDate) reasons.push("killmails of any age");
   const pages = limits.killmailPages === ALL_PAGES ? MAX_KILLMAIL_PAGES : limits.killmailPages;
   const count = limits.maxKillmails === ALL_KILLMAILS ? pages * ZKILL_PAGE_KILLMAILS : limits.maxKillmails;
   if (count > LARGE_KILLMAILS) reasons.push(`up to ${count.toLocaleString("en-US")} killmails`);
@@ -5277,6 +5277,11 @@ const MONTH_ABBREVIATIONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "A
 // spokenDate reads a time as an abbreviated month, ordinal day, and year in the chosen time zone, ie 2026-10-12T08:00:00Z is Oct 12th, 2026 in EVE time. Every date in the gui is written this way.
 function spokenDate(isoTime) {
   const { year, month, day } = timeParts(isoTime);
+  return writtenDate(year, month, day);
+}
+
+// writtenDate is a date as the gui writes every date, month from 0
+function writtenDate(year, month, day) {
   const lastTwo = day % 100;
   const suffix = lastTwo >= 11 && lastTwo <= 13 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[day % 10] || "th";
   return `${MONTH_ABBREVIATIONS[month]} ${day}${suffix}, ${year}`;
@@ -6166,8 +6171,79 @@ let searchLimits = null;
 // limitsPending is the last change of search limits on its way to the backend, which a search waits for
 let limitsPending = Promise.resolve();
 
-// AGE_LABELS name the Killmails newer than choices, in days, for the search limits button
+// AGE_LABELS name the Killmails newer than buttons, in days, for the search limits button
 const AGE_LABELS = { 0: "any age", 7: "1 week", 30: "30 days", 90: "90 days" };
+
+// writtenDay is a date input's YYYY-MM-DD as the gui writes dates. It is a day in EVE time, so the time zone preference does not move it.
+function writtenDay(day) {
+  const [year, month, date] = day.split("-").map(Number);
+  return writtenDate(year, month - 1, date);
+}
+
+// eveDay is the day in EVE time, as YYYY-MM-DD, some days back from today
+function eveDay(daysBack = 0) {
+  const when = new Date();
+  when.setUTCDate(when.getUTCDate() - daysBack);
+  return when.toISOString().slice(0, 10);
+}
+
+// AGE_FIRST_DAY is the earliest date a Killmails newer than picker takes, as EVE began in 2003 (newerThanFirstYear in gui/settings.go)
+const AGE_FIRST_DAY = "2003-01-01";
+
+// showAgePicker writes a Killmails newer than picker's date and marks the button it came from
+function showAgePicker(picker) {
+  const value = picker.querySelector("input").value;
+  picker.querySelector(".age-date-text").textContent = value ? writtenDay(value) : "Any age";
+  const days = Number(picker.dataset.days);
+  for (const button of picker.querySelectorAll(".age-button")) {
+    button.setAttribute("aria-pressed", String(Number(button.dataset.days) === days && (days > 0 || !value)));
+  }
+}
+
+// setAgePicker fills a Killmails newer than picker: a date it keeps, or else days counted back from each search, of which it shows the date they reach today
+function setAgePicker(picker, days, date) {
+  const input = picker.querySelector("input");
+  input.min = AGE_FIRST_DAY;
+  input.max = eveDay();
+  input.value = date || (days > 0 ? eveDay(days) : "");
+  picker.dataset.days = String(date ? 0 : days);
+  picker.dataset.date = date || "";
+  showAgePicker(picker);
+}
+
+// agePickerValue reads a Killmails newer than picker as the backend's two limits
+function agePickerValue(picker) {
+  const days = Number(picker.dataset.days);
+  return { killmailsNewerThanDays: days, killmailsNewerThanDate: days > 0 ? "" : picker.dataset.date };
+}
+
+/*
+  wireAgePicker makes a Killmails newer than picker work: a date typed or picked is kept as it is, up to today, and a button picks the date for it. Either tells the form around it.
+  A date input is empty while a part of it is blank, and passes through years like 0002 as one is typed, so the picker keeps its last whole date until there is a new one and goes back to it on leaving. Only the ∞ button clears it.
+*/
+function wireAgePicker(picker) {
+  const input = picker.querySelector("input");
+  input.addEventListener("click", () => {
+    try { input.showPicker(); } catch { /* it opens from its own indicator */ }
+  });
+  input.addEventListener("input", () => {
+    if (input.value < AGE_FIRST_DAY) return;
+    if (input.value > input.max) input.value = input.max;
+    picker.dataset.days = "0";
+    picker.dataset.date = input.value;
+    showAgePicker(picker);
+  });
+  input.addEventListener("blur", () => setAgePicker(picker, Number(picker.dataset.days), picker.dataset.date));
+  for (const button of picker.querySelectorAll(".age-button")) {
+    button.addEventListener("click", () => {
+      setAgePicker(picker, Number(button.dataset.days), "");
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+}
+
+// ageLimitLabel is the age part of the search limits button's text
+const ageLimitLabel = (limits) => (limits.killmailsNewerThanDate ? `from ${writtenDay(limits.killmailsNewerThanDate)}` : AGE_LABELS[limits.killmailsNewerThanDays] || "any age");
 
 // savedLimits are the Preferences' search limits, the defaults
 function savedLimits() {
@@ -6175,6 +6251,7 @@ function savedLimits() {
     maxKillmails: preferences.maxKillmails,
     killmailPages: preferences.killmailPages,
     killmailsNewerThanDays: preferences.killmailsNewerThanDays,
+    killmailsNewerThanDate: preferences.killmailsNewerThanDate,
     useCachedKillmails: preferences.useCachedKillmails,
     includeHoldings: preferences.includeHoldings,
   };
@@ -6188,7 +6265,7 @@ function showSearchLimits() {
   let count = `${limits.maxKillmails.toLocaleString("en-US")} killmails`;
   if (limits.maxKillmails === ALL_KILLMAILS) count = limits.killmailPages === ALL_PAGES ? "All" : `All on ${limits.killmailPages} ${limits.killmailPages === 1 ? "page" : "pages"}`;
   const button = el("limits-button");
-  button.textContent = `${count} · ${AGE_LABELS[limits.killmailsNewerThanDays] || "any age"}`;
+  button.textContent = `${count} · ${ageLimitLabel(limits)}`;
   const changed = searchLimits !== null;
   button.classList.toggle("limits-changed", changed);
   button.title = changed ? "Search limits for this session, not your defaults. Click to change them." : "Search limits, your defaults from Preferences. Click to change them for this session.";
@@ -6198,7 +6275,7 @@ function fillLimitsForm(limits) {
   el("limit-max").value = String(limits.maxKillmails);
   el("limit-pages").value = String(limits.killmailPages);
   el("limit-pages").disabled = limits.maxKillmails !== ALL_KILLMAILS;
-  el("limit-age").value = String(limits.killmailsNewerThanDays);
+  setAgePicker(el("limit-age"), limits.killmailsNewerThanDays, limits.killmailsNewerThanDate);
   el("limit-cached").checked = limits.useCachedKillmails;
   el("limit-holdings").checked = limits.includeHoldings;
 }
@@ -6208,7 +6285,7 @@ function limitsForm() {
   return {
     maxKillmails: Number(el("limit-max").value),
     killmailPages: Number(el("limit-pages").value),
-    killmailsNewerThanDays: Number(el("limit-age").value),
+    ...agePickerValue(el("limit-age")),
     useCachedKillmails: el("limit-cached").checked,
     includeHoldings: el("limit-holdings").checked,
   };
@@ -6287,7 +6364,7 @@ const ALL_PAGES = -1;
 const MAX_RECENT_SEARCHES = 25;
 
 // preferences are the saved Preferences window choices, as the backend's Preferences
-let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailPages: 10, killmailsNewerThanDays: 0, useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5, hideKilledAllies: false, includeHoldings: true, collapseTarget: false, showCaveatWarning: true, showChangelog: true, debugMode: false };
+let preferences = { includeZkillLabels: false, maxKillmails: 20, killmailPages: 10, killmailsNewerThanDays: 0, killmailsNewerThanDate: "", useCachedKillmails: false, timeZone: "eve", maxRecentSearches: 5, hideKilledAllies: false, includeHoldings: true, collapseTarget: false, showCaveatWarning: true, showChangelog: true, debugMode: false };
 
 // applySettings sets the saved theme and preferences on the app
 function applySettings(settings) {
@@ -6301,6 +6378,7 @@ function applySettings(settings) {
     maxKillmails: settings.maxKillmails || 20,
     killmailPages: settings.killmailPages || 10,
     killmailsNewerThanDays: settings.killmailsNewerThanDays || 0,
+    killmailsNewerThanDate: settings.killmailsNewerThanDate || "",
     useCachedKillmails: Boolean(settings.useCachedKillmails),
     timeZone: settings.timeZone === "local" ? "local" : "eve",
     maxRecentSearches: settings.maxRecentSearches || 5,
@@ -6334,7 +6412,7 @@ function fillPreferencesForm(chosen) {
   el("pref-max-killmails").value = String(chosen.maxKillmails);
   el("pref-killmail-pages").value = String(chosen.killmailPages);
   showKillmailPagesUsed();
-  el("pref-killmail-age").value = String(chosen.killmailsNewerThanDays);
+  setAgePicker(el("pref-killmail-age"), chosen.killmailsNewerThanDays, chosen.killmailsNewerThanDate);
   el("pref-use-cached").checked = chosen.useCachedKillmails;
   el("pref-time-zone").value = chosen.timeZone;
   el("pref-max-recent").value = String(chosen.maxRecentSearches);
@@ -6357,7 +6435,7 @@ function preferencesForm() {
     includeZkillLabels: el("pref-zkill-labels").checked,
     maxKillmails: Number(el("pref-max-killmails").value),
     killmailPages: Number(el("pref-killmail-pages").value),
-    killmailsNewerThanDays: Number(el("pref-killmail-age").value),
+    ...agePickerValue(el("pref-killmail-age")),
     useCachedKillmails: el("pref-use-cached").checked,
     timeZone: el("pref-time-zone").value,
     maxRecentSearches: Number(el("pref-max-recent").value),
@@ -6569,6 +6647,8 @@ el("preference-more-close").addEventListener("click", () => el("preference-more"
 el("preferences-advanced").addEventListener("toggle", (event) => {
   if (event.currentTarget.open) event.currentTarget.scrollIntoView({ block: "nearest", behavior: "smooth" });
 });
+wireAgePicker(el("limit-age"));
+wireAgePicker(el("pref-killmail-age"));
 el("limits-menu").addEventListener("input", changeSearchLimits);
 el("limits-menu").addEventListener("change", changeSearchLimits);
 // Enter closes the popup rather than starting a search

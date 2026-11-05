@@ -1621,7 +1621,19 @@ button.text-link {
 .limits-menu:not([hidden]) { display: grid; gap: 10px; }
 .limits-menu .preference-field input,
 .limits-menu .preference-field select,
-.limits-menu .preference-check { width: 110px; }
+.limits-menu .preference-check { width: 132px; }
+/* Killmails newer than: the date, spelled the way the gui writes dates over an unseen date input, and buttons that pick one */
+.age-picker { display: grid; flex: none; gap: 4px; width: 150px; }
+.limits-menu .age-picker { width: 132px; }
+.age-date { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); white-space: nowrap; }
+.age-date:hover,
+.age-date:focus-within { border-color: var(--accent); }
+.age-date-arrow { color: var(--muted); }
+.preference-field .age-date input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.age-date input::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; cursor: pointer; }
+.age-buttons { display: flex; gap: 4px; }
+.preference-field .age-button { flex: 1 1 0; min-width: 0; padding: 2px 0; font-size: 12px; }
+.age-button[aria-pressed="true"] { border-color: var(--accent); }
 .limits-menu .preference-help,
 .limits-menu .preferences-error { margin: 0; }
 .limits-actions { display: flex; justify-content: space-between; gap: 8px; }

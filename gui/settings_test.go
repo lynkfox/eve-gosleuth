@@ -130,6 +130,24 @@ func TestSettings(t *testing.T) {
 		assert.NoFileExists(t, path)
 	})
 
+	t.Run("a fixed newer than date is used in place of the days", func(t *testing.T) {
+		chosen := defaultSettings().Preferences
+		chosen.KillmailsNewerThanDays = 7
+		chosen.KillmailsNewerThanDate = "2026-03-14"
+		assert.NoError(t, chosen.validate())
+		now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+		assert.Equal(t, time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC), chosen.KillmailLimits(now).NewerThan)
+
+		chosen.KillmailsNewerThanDate = "3/14/2026"
+		assert.Error(t, chosen.validate(), "not a date")
+		chosen.KillmailsNewerThanDate = "0002-03-14"
+		assert.Error(t, chosen.validate(), "before EVE began")
+		chosen.KillmailsNewerThanDate = time.Now().UTC().AddDate(0, 0, 2).Format(newerThanDateLayout)
+		assert.Error(t, chosen.validate(), "in the future")
+		chosen.KillmailsNewerThanDate = time.Now().UTC().Format(newerThanDateLayout)
+		assert.NoError(t, chosen.validate(), "today is fine")
+	})
+
 	t.Run("a max killmail count of -1 is all killmails", func(t *testing.T) {
 		app := &App{settingsPath: filepath.Join(t.TempDir(), "settings.json"), settings: defaultSettings()}
 		chosen := defaultSettings().Preferences

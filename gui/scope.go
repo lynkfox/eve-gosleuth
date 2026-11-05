@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
 )
@@ -80,7 +81,10 @@ func scopeLimits(limits SearchLimits) []string {
 	} else {
 		phrases = append(phrases, fmt.Sprintf("At most %s killmails", commaInt(limits.MaxKillmails)))
 	}
+	date, dateErr := time.Parse(newerThanDateLayout, limits.KillmailsNewerThanDate)
 	switch days := limits.KillmailsNewerThanDays; {
+	case dateErr == nil:
+		phrases = append(phrases, "Killmails from "+api.FormatShortDate(date))
 	case days <= 0:
 		phrases = append(phrases, "Killmails of any age")
 	case days == 7:

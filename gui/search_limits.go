@@ -4,22 +4,23 @@ import "errors"
 
 // SearchLimits are the choices of the search limits button beside the search bar: what a search collects, overriding the saved Preferences for this session
 type SearchLimits struct {
-	MaxKillmails           int  `json:"maxKillmails"`           // as Preferences.MaxKillmails
-	KillmailPages          int  `json:"killmailPages"`          // as Preferences.KillmailPages
-	KillmailsNewerThanDays int  `json:"killmailsNewerThanDays"` // as Preferences.KillmailsNewerThanDays
-	UseCachedKillmails     bool `json:"useCachedKillmails"`     // as Preferences.UseCachedKillmails
-	IncludeHoldings        bool `json:"includeHoldings"`        // as Preferences.IncludeHoldings
+	MaxKillmails           int    `json:"maxKillmails"`                     // as Preferences.MaxKillmails
+	KillmailPages          int    `json:"killmailPages"`                    // as Preferences.KillmailPages
+	KillmailsNewerThanDays int    `json:"killmailsNewerThanDays"`           // as Preferences.KillmailsNewerThanDays
+	KillmailsNewerThanDate string `json:"killmailsNewerThanDate,omitempty"` // as Preferences.KillmailsNewerThanDate
+	UseCachedKillmails     bool   `json:"useCachedKillmails"`               // as Preferences.UseCachedKillmails
+	IncludeHoldings        bool   `json:"includeHoldings"`                  // as Preferences.IncludeHoldings
 }
 
 // searchLimits are the preferences' search limits
 func (p Preferences) searchLimits() SearchLimits {
-	return SearchLimits{MaxKillmails: p.MaxKillmails, KillmailPages: p.KillmailPages, KillmailsNewerThanDays: p.KillmailsNewerThanDays,
+	return SearchLimits{MaxKillmails: p.MaxKillmails, KillmailPages: p.KillmailPages, KillmailsNewerThanDays: p.KillmailsNewerThanDays, KillmailsNewerThanDate: p.KillmailsNewerThanDate,
 		UseCachedKillmails: p.UseCachedKillmails, IncludeHoldings: p.IncludeHoldings}
 }
 
 // withSearchLimits are the preferences with their search limits replaced
 func (p Preferences) withSearchLimits(limits SearchLimits) Preferences {
-	p.MaxKillmails, p.KillmailPages, p.KillmailsNewerThanDays = limits.MaxKillmails, limits.KillmailPages, limits.KillmailsNewerThanDays
+	p.MaxKillmails, p.KillmailPages, p.KillmailsNewerThanDays, p.KillmailsNewerThanDate = limits.MaxKillmails, limits.KillmailPages, limits.KillmailsNewerThanDays, limits.KillmailsNewerThanDate
 	p.UseCachedKillmails, p.IncludeHoldings = limits.UseCachedKillmails, limits.IncludeHoldings
 	return p
 }
