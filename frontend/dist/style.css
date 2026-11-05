@@ -124,6 +124,14 @@ input { flex: 1; }
   list-style: none;
 }
 
+.recent-heading {
+  padding: 8px 10px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .recent-option {
   display: flex;
   align-items: center;

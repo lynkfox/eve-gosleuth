@@ -5524,12 +5524,62 @@ function loadRecentSearches() {
   backend().GetRecentSearches().then((recent) => { recentSearches = recent || []; }).catch(() => {});
 }
 
-// matchingRecent returns the recent searches whose name starts with the typed text, then those that contain it, ignoring case. No text matches them all.
-function matchingRecent(typed) {
-  if (!typed) return recentSearches;
+// searchGroups are the saved groups the list also offers, as the backend's SearchGroup: the coalitions, then the mains with affiliates
+let searchGroups = [];
+
+// loadSearchGroups reads the saved groups as the search bar is used, as My Intel, a target panel, or an import can change them. It draws an open list again only if they did change.
+async function loadSearchGroups() {
+  let groups;
+  try {
+    groups = (await backend().GetSearchGroups()) || [];
+  } catch {
+    return; // the list goes on with the groups it has
+  }
+  const changed = JSON.stringify(groups) !== JSON.stringify(searchGroups);
+  searchGroups = groups;
+  if (changed && !el("recent-list").hidden) showRecent(recentAll);
+}
+
+// searchAffiliatesFor is the key (intelKey) of the group asked for as an affiliate group, from the a: tag or the list, whose searches bring its affiliates whatever the Include affiliates limit says. Kept as the group rather than yes or no, so searching it again still does, and a search of anything else never does. Typing clears it.
+let searchAffiliatesFor = "";
+
+// groupTag reads the a: and c: tags typed into the search bar, ie a:ursa, returning { coalition, text } with the text in lower case, or null for anything else. A name in EVE has no colon.
+function groupTag(typed) {
+  const match = /^([ac]):\s*(.*)$/i.exec(typed.trim());
+  return match ? { coalition: match[1].toLowerCase() === "c", text: match[2].toLowerCase() } : null;
+}
+
+// taggedGroups are the saved groups of a tag's kind that match its text, and only those with exactly its name or ticker when any has
+function taggedGroups(tag) {
+  const kind = searchGroups.filter((group) => (group.type === "COALITION") === tag.coalition);
+  const exact = kind.filter((group) => group.name.toLowerCase() === tag.text || (group.ticker && group.ticker.toLowerCase() === tag.text));
+  return exact.length > 0 ? exact : matchingRecent(tag.text, kind);
+}
+
+/*
+  resolveGroupTag finds the saved group a tag asks for, asking which when several match.
+  Returns it, or null when none match, which the status line says, or the question was closed.
+*/
+async function resolveGroupTag(tag, typed) {
+  setRecentOpen(false);
+  await loadSearchGroups();
+  const matches = tag.text ? taggedGroups(tag) : [];
+  if (matches.length === 0) {
+    const kind = tag.coalition ? "coalition" : "affiliate group";
+    const message = tag.text ? `No ${kind} matches "${tag.text}"` : `Type the name of a ${kind} after the tag`;
+    setStatus(message, true);
+    tickerPush(message);
+    return null;
+  }
+  return matches.length === 1 ? matches[0] : chooseTarget(typed, matches);
+}
+
+// matchingRecent returns the entries whose name starts with the typed text, then those that contain it, ignoring case. No text matches them all.
+function matchingRecent(typed, entries = recentSearches) {
+  if (!typed) return entries;
   const starting = [];
   const containing = [];
-  for (const entry of recentSearches) {
+  for (const entry of entries) {
     const at = entry.name.toLowerCase().indexOf(typed);
     // a ticker typed finds its corp or alliance too
     if (at === 0 || (entry.ticker && entry.ticker.toLowerCase().startsWith(typed))) starting.push(entry);
@@ -5545,7 +5595,13 @@ function setRecentOpen(open) {
   if (!open) setRecentActive(-1);
 }
 
-// recentOption is one row of the list: the name with the typed part highlighted and a corp's or alliance's ticker, then its type
+// groupCount says how much a saved group holds, for its row in the list
+function groupCount(group) {
+  const noun = group.type === "COALITION" ? "member" : "affiliate";
+  return `${group.count} ${noun}${group.count === 1 ? "" : "s"}`;
+}
+
+// recentOption is one row of the list: the name with the typed part highlighted and a corp's or alliance's ticker, then its type, and a recent search's × or a saved group's size
 function recentOption(entry, index, typed) {
   const option = document.createElement("li");
   option.id = `recent-${index}`;
@@ -5575,6 +5631,14 @@ function recentOption(entry, index, typed) {
   const type = document.createElement("span");
   type.className = "recent-type";
   type.textContent = searchTypeLabel(entry.type);
+
+  if (entry.savedGroup) {
+    type.textContent += ` · ${groupCount(entry)}`;
+    option.append(name, type);
+    option.addEventListener("mousedown", (event) => event.preventDefault());
+    option.addEventListener("click", () => pickRecent(entry));
+    return option;
+  }
 
   const remove = document.createElement("button");
   remove.type = "button";
@@ -5608,15 +5672,34 @@ async function removeRecent(entry) {
   if (active >= 0 && recentShown.length > 0) setRecentActive(Math.min(active, recentShown.length - 1));
 }
 
+// recentHeading titles a section of the list. It is not an option, so the arrow keys pass it by.
+function recentHeading(title) {
+  const heading = document.createElement("li");
+  heading.className = "recent-heading";
+  heading.setAttribute("role", "presentation");
+  heading.textContent = title;
+  return heading;
+}
+
 /*
-  showRecent opens the recent searches list: all of them from the toggle or the down arrow, or as a name is typed, those that match it.
-  Typing that matches none, or clearing the box, closes it.
+  showRecent opens the list of recent searches and saved groups: all of them from the toggle or the down arrow, or as a name is typed, those that match it.
+  A group already matched as a recent search is listed once, under Recent, while typing. Typing that matches none, or clearing the box, closes it.
 */
 function showRecent(all) {
   recentAll = all;
-  const typed = all ? "" : el("search-input").value.trim().toLowerCase();
-  recentShown = matchingRecent(typed);
-  if (!all && (!typed || recentShown.length === 0)) {
+  const tag = all ? null : groupTag(el("search-input").value);
+  const typed = all ? "" : tag ? tag.text : el("search-input").value.trim().toLowerCase();
+  // a tag asks for its kind of group alone
+  const recent = tag ? [] : matchingRecent(typed);
+  // by type and name, as recent searches saved before ids were have none
+  const nameKey = (entry) => `${entry.type}:${entry.name.toLowerCase()}`;
+  const shownAsRecent = new Set(typed ? recent.map(nameKey) : []);
+  const offered = tag ? searchGroups.filter((group) => (group.type === "COALITION") === tag.coalition) : searchGroups;
+  const saved = matchingRecent(typed, offered).filter((group) => !shownAsRecent.has(nameKey(group))).map((group) => ({ ...group, savedGroup: true }));
+  const coalitions = saved.filter((group) => group.type === "COALITION");
+  const affiliateGroups = saved.filter((group) => group.type !== "COALITION");
+  recentShown = [...recent, ...coalitions, ...affiliateGroups];
+  if (!all && ((!typed && !tag) || recentShown.length === 0)) {
     setRecentOpen(false);
     return;
   }
@@ -5628,7 +5711,15 @@ function showRecent(all) {
     empty.textContent = "No recent searches yet";
     list.replaceChildren(empty);
   } else {
-    list.replaceChildren(...recentShown.map((entry, index) => recentOption(entry, index, typed)));
+    const rows = [];
+    let index = 0;
+    for (const [title, entries] of [["Recent", recent], ["Coalitions · c:", coalitions], ["Affiliate groups · a:", affiliateGroups]]) {
+      if (entries.length === 0) continue;
+      // recent searches alone need no title, as they always did
+      if (saved.length > 0) rows.push(recentHeading(title));
+      for (const entry of entries) rows.push(recentOption(entry, index++, typed));
+    }
+    list.replaceChildren(...rows);
   }
   setRecentOpen(true);
   setRecentActive(-1);
@@ -5659,6 +5750,7 @@ function pickRecent(entry) {
   setRecentOpen(false);
   searchTypeHint = entry.type;
   searchIdHint = entry.id || 0;
+  searchAffiliatesFor = entry.savedGroup && entry.type !== "COALITION" ? intelKey(entry) : "";
   el("search-input").value = entry.name;
   el("search-form").requestSubmit();
 }
@@ -5671,7 +5763,7 @@ function recentKeydown(event) {
   } else if (event.key === "Enter" && open && recentActive >= 0) {
     event.preventDefault();
     pickRecent(recentShown[recentActive]);
-  } else if (event.key === "Delete" && open && recentActive >= 0) {
+  } else if (event.key === "Delete" && open && recentActive >= 0 && !recentShown[recentActive].savedGroup) {
     // only with a row picked by the arrow keys, otherwise Delete edits the typed name as usual
     event.preventDefault();
     removeRecent(recentShown[recentActive]);
@@ -5872,9 +5964,19 @@ function checkForUpdatesFromAbout() {
 async function search(event) {
   event.preventDefault();
 
-  const name = el("search-input").value.trim();
+  let name = el("search-input").value.trim();
   if (!name) {
     return;
+  }
+  const tag = groupTag(name);
+  if (tag) {
+    const group = await resolveGroupTag(tag, name);
+    if (!group) return;
+    name = group.name;
+    el("search-input").value = name;
+    searchTypeHint = group.type;
+    searchIdHint = group.id;
+    searchAffiliatesFor = tag.coalition ? "" : intelKey(group);
   }
   const searchType = searchTypeHint;
   const searchId = searchIdHint;
@@ -5928,7 +6030,7 @@ async function search(event) {
 
     el("intel-loading").hidden = false;
     el("intel").hidden = false;
-    report = await runBackend(() => backend().CollectIntel(target.id, target.type));
+    report = await runBackend(() => (searchAffiliatesFor === intelKey(target) ? backend().CollectIntelWithAffiliates(target.id, target.type) : backend().CollectIntel(target.id, target.type)));
     if (report) intelTarget = { id: target.id, type: target.type };
 
     if (report) {
@@ -6684,6 +6786,7 @@ backend().GetSettings().then((settings) => {
   showCaveatWarning();
 }).catch(() => applyTheme(""));
 loadRecentSearches();
+loadSearchGroups();
 el("preferences-button").addEventListener("click", openPreferences);
 el("preferences-close").addEventListener("click", closePreferences);
 el("preferences-save").addEventListener("click", savePreferences);
@@ -6714,15 +6817,19 @@ el("search-input").addEventListener("input", () => {
   // a typed name could be anything
   searchTypeHint = "";
   searchIdHint = 0;
+  searchAffiliatesFor = "";
   showRecent(false);
 });
 el("search-input").addEventListener("keydown", recentKeydown);
+el("search-input").addEventListener("focus", loadSearchGroups);
 el("search-input").addEventListener("blur", () => setRecentOpen(false));
 // the toggle keeps focus in the search box, so its blur does not close the list the toggle is opening
 el("recent-toggle").addEventListener("mousedown", (event) => event.preventDefault());
 el("recent-toggle").addEventListener("click", () => {
-  if (el("recent-list").hidden) showRecent(true);
-  else setRecentOpen(false);
+  if (el("recent-list").hidden) {
+    showRecent(true);
+    loadSearchGroups();
+  } else setRecentOpen(false);
   el("search-input").focus();
 });
 el("ticker-bar").addEventListener("click", toggleTickerHistory);

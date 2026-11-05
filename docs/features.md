@@ -9,7 +9,7 @@ Killmails only record deaths, so keep in mind what they can't show: fights nobod
 - **One search bar for everything.** 
   - *Type a pilot, corporation, alliance, or system name, or a corp or alliance ticker. If a name matches more than one thing, GoSleuth asks which you meant. You can even use an ID from the ESI or a link from zKill or EveWho.*
 - **Everything is cached.** 
-  - *Killmails are kept for good, and names and details until they could have changed, so a repeat search is quick and kind to the APIs. The cache can be cleared, in whole or by age, from Preferences. The search bar even saves recent searches for quick returns, and you can adjust how many it shows in the preferences.*
+  - *Killmails are kept for good, and names and details until they could have changed, so a repeat search is quick and kind to the APIs. The cache can be cleared, in whole or by age, from Preferences. The search bar even saves recent searches for quick returns, and you can adjust how many it shows in the preferences. Its list also offers your coalitions and affiliate groups, so you can search them without opening My Intel, or type `a:` and a name for an affiliate group or `c:` and a name for a coalition, ie `a:ursa`.*
 - **Search limits.** 
   - *Choose how many killmails to collect, how far back to go, and whether to use killmails you've already downloaded. The limits button beside the search bar changes them for the current session; Preferences sets the defaults.*
 - **Stop at any time.** 

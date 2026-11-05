@@ -713,7 +713,27 @@ Returns:
   - IntelReport: the killmail count and each report section. Sections that do not apply to the target type are left nil.
   - error: a user readable message if no killmails could be collected
 */
-func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport, err error) {
+func (a *App) CollectIntel(targetID int, targetType string) (IntelReport, error) {
+	return a.collectIntel(targetID, targetType, false)
+}
+
+/*
+	CollectIntelWithAffiliates is CollectIntel with the target's affiliates whatever the Include affiliates limit says, for a search asked for as an affiliate group: the a: tag or the search bar's list.
+
+Parameters:
+  - targetID: the eve id of the target
+  - targetType: CORPORATION or ALLIANCE, as returned in TargetResult.Type
+
+Returns:
+  - IntelReport: as CollectIntel
+  - error: as CollectIntel
+*/
+func (a *App) CollectIntelWithAffiliates(targetID int, targetType string) (IntelReport, error) {
+	return a.collectIntel(targetID, targetType, true)
+}
+
+// collectIntel is CollectIntel, with forceAffiliates overriding the Include affiliates limit for this search
+func (a *App) collectIntel(targetID int, targetType string, forceAffiliates bool) (report IntelReport, err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	// the search ends here, its debug log bundled after recoverAsError has turned any panic into err
@@ -751,6 +771,7 @@ func (a *App) CollectIntel(targetID int, targetType string) (report IntelReport,
 	}
 
 	settings := a.searchPreferences()
+	settings.IncludeHoldings = settings.IncludeHoldings || forceAffiliates
 	// a coalition is the user's own group, not an EVE entity: it has no Expanded, and nothing about it reaches the ESI or zKillboard
 	var coalition retrieval.Coalition
 	switch entityType {
