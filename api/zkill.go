@@ -58,6 +58,7 @@ func NewZkillClient() *ZkillConnection {
 			},
 			MaxRetries: 3,
 			Backoff:    1 * time.Second,
+			OnRetry:    reportZkillRetry,
 		},
 	}
 
@@ -115,6 +116,7 @@ func (z ZkillConnection) GetZkillResults(entityId int, typeOfEntity types.Entity
 				ended = true
 				break
 			}
+			comm.ReportProgress("zKillboard failed on page %d%s (%s), going on without the rest of that list", pageNumber, listFor, FailureReason(err))
 			return ZkillList{Killmails: withoutDuplicates(*allZkillmails)}, fmt.Errorf("%w at page %d: %w", ErrOnlyPartialZkillPull, pageNumber, err)
 		}
 		page := (*allZkillmails)[listed:]
@@ -130,6 +132,11 @@ func (z ZkillConnection) GetZkillResults(entityId int, typeOfEntity types.Entity
 	}
 
 	return ZkillList{Killmails: withoutDuplicates(*allZkillmails), Ended: ended}, nil
+}
+
+// reportZkillRetry tells the status bar a zKillboard page is being tried again, as the ESI's slowdowns are
+func reportZkillRetry(err error, wait time.Duration) {
+	comm.ReportProgress("zKillboard did not answer (%s), trying again in %s", FailureReason(err), wait.Round(time.Second))
 }
 
 // zkillLastPage is what GetZkillPage returns as the next page when the page it pulled was the last

@@ -102,7 +102,8 @@ type APIConnection struct {
 	Headers    map[string]string
 	MaxRetries int
 	Backoff    time.Duration
-	Guard      *RateGuard // keeps requests within the server's rate limits, nil for none
+	Guard      *RateGuard                          // keeps requests within the server's rate limits, nil for none
+	OnRetry    func(err error, wait time.Duration) // told of each failed attempt about to be tried again, and how long until then, nil to not
 	// NotFoundIsAnswer logs a 404 at Info, for a server whose 404 means no such entity (the ESI's biomassed pilot), which its callers handle or log themselves
 	NotFoundIsAnswer bool
 }
@@ -233,6 +234,9 @@ func (c APIConnection) Request(method, endpoint string, body interface{}) (*http
 			failed := logrus.Fields{"body": body, "status": status, "nextBackoff": backoffDuration}
 			maps.Copy(failed, responseFields(method, resp, sent))
 			comm.Logger.WithFields(defaultFields.AddTemporaryDebugOnlyFields(failed)).WithError(err).Warn("Request failed, retrying")
+			if c.OnRetry != nil {
+				c.OnRetry(err, backoffDuration)
+			}
 			// after a 420 the guard waits as long as the server asked, instead
 			if c.Guard == nil || status != 420 {
 				time.Sleep(backoffDuration)

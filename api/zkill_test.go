@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
@@ -448,4 +449,32 @@ func TestGetZkillPageRateLimit(t *testing.T) {
 		assert.Equal(t, 1, client.calls)
 		assert.Equal(t, "request failed to send", api.ErrRequestFailedToSend.Error())
 	})
+}
+
+func TestZkillStatusMessages(t *testing.T) {
+	comm.InitLogger(logrus.PanicLevel)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	client := api.NewZkillClient()
+	connection := client.Client.(api.APIConnection)
+	connection.BaseURL, connection.HTTPClient, connection.Backoff = server.URL, server.Client(), time.Millisecond
+	client.Client = connection
+
+	messages := []string{}
+	comm.SetProgressReporter(func(message string) { messages = append(messages, message) })
+	defer comm.SetProgressReporter(nil)
+
+	_, err := client.GetZkillResults(99013330, types.ALLIANCE, api.ZkillPaging{MaxPages: 5, For: "member URSA."})
+
+	assert.ErrorIs(t, err, api.ErrOnlyPartialZkillPull)
+	if assert.Len(t, messages, 4, "the page, each of its two retries, and giving up") {
+		assert.Contains(t, messages[1], "zKillboard did not answer (")
+		assert.Contains(t, messages[1], "502 Bad Gateway")
+		assert.Contains(t, messages[1], "trying again in")
+		assert.Contains(t, messages[3], "zKillboard failed on page 1 for member URSA. (")
+		assert.Contains(t, messages[3], "going on without the rest of that list")
+	}
 }
