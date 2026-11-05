@@ -1,6 +1,6 @@
 # War tracker and group search
 
-Plan of 2026-11-04, decisions from the user the same night. Stage 1 under way.
+Plan of 2026-11-04, decisions from the user the same night. Stage 1 built, Stage 2 under way.
 
 The model is the user's hand-kept 2024 Coalition vs Lazerhawks sheet (id `11i7aE7hB7ES0Q-mtVmYRaO8dBj6DX7B6IL6GGNQQLP8`): gid 722070133 is one row per fight, gid 1013484469 the totals by side and day.
 
@@ -9,9 +9,9 @@ The model is the user's hand-kept 2024 Coalition vs Lazerhawks sheet (id `11i7aE
 | Stage | What ships |
 | --- | --- |
 | 1 | Group search from the search bar |
-| 2 | War core: setup, saved wars, collection, classification, Overview, Battles, Systems, Killmails |
+| 2 | War core: setup, saved wars, collection, classification, Overview, Battles, Systems |
 | 3 | Station trash and asset denial, and the Timeline with every category |
-| 4 | Notes and flags per battle, merging and splitting battles |
+| 4 | Notes and flags per battle, merging and splitting battles, a battle report link per battle |
 | 5 | Pilots and Ships tabs |
 | 6 | Last: data export, then the PDF report |
 
@@ -29,12 +29,12 @@ Everything works on the corp and alliance **at the time of the kill**. A side li
 
 ### What counts
 
-**A battle counts when anyone of both sides appears on its killmails, as victim or attacker.** Every killmail in such a battle counts in the totals, including those of third parties. A battle without anyone of one side is forgotten, whatever else happened in it.
+**A battle counts when one side killed the other on at least one of its killmails** (user, 2026-11-05, in place of anyone of both sides appearing: on the Apes Strong Together vs MSF war, one 1,012 pilot fight with a lone pilot of each side put 14.57B on a side and about 199 groups under Others). Every killmail in such a battle counts in the totals, including those of third parties. Any other battle is forgotten, whatever else happened in it.
 
 - **Battles** are `FindBattles`' rules unchanged.
-- **Battles and skirmishes:** a counted fight of `battleMinPilots` (10) or more pilots is a battle, shown by default. Anything smaller is a **skirmish**, behind a toggle, including a lone killmail of one side killing the other, which counts in the totals. The Overview counts both, ie "41 battles, 96 skirmishes".
+- **Battles and skirmishes:** a counted fight of `battleMinPilots` (10) or more pilots is a battle. Anything smaller is a **skirmish**, shown too, with a toggle to hide them (user, 2026-11-05), including a lone killmail of one side killing the other, which counts in the totals. The Overview counts both, ie "41 battles, 96 skirmishes".
 - **A killmail outside any counted battle** with no one from the other side does not count, except asset denial (Stage 3).
-- **Third parties:** a third party group in a counted battle counts for the side it fought beside: per battle, the opposite of whichever side it shot at or was shot by more. Even or unknown, it shows under Others, and does not count for a side. The group is the alliance, or the corp if it has none.
+- **Third parties:** a third party group in a counted battle counts for the side it fought beside: per battle, the opposite of whichever side it shot at or was shot by more. Even or unknown, it shows under Others, and does not count for a side. The group is the alliance, or the corp if it has none. An added group before its date is on no side, but the others on its killmails still count toward the side they shot at (user, 2026-11-05).
 - **Adding Others to a side:** the user can put a group under Others onto a side from the report. Adding it asks whether it counts **from the beginning of the war**, the default, or **from that point onward** (user, 2026-11-04). It is saved on the war with that date, and its killmails before the date stay under Others. The date is on the added group only; dates on a side's own members wait for the later membership feature. Stage 2.
 - **No winners.** The report shows each side's ISK and ships, and never calls a battle won. Efficiency is shown only for the whole war and per day.
 - The report keeps the caveat that killmails show neither objectives nor survivors.
@@ -105,12 +105,11 @@ The side boxes use the Stage 1 list plus any corp or alliance typed or linked (`
 
 ### Report
 
-The target panel shows the two sides as a versus card and the sidebar only the war tabs, hidden on other reports. Side colors are fixed, blue and orange, since red and green mean loss and kill.
+**The report takes the whole window (user, 2026-11-05):** only the top bar and the ticker stay; the sidebar, target panel, and width limit go, and nothing is left from the previous report. A slim strip under the top bar holds the two sides, the dates, the last run, and Update, with the tabs across beneath it. A run lands on Overview. **The killmails are not listed (user, 2026-11-05):** a war has far too many, so there is no Killmails tab and the frontend gets only their count. Side colors are fixed, blue and orange, since red and green mean loss and kill.
 
 - **Overview:** the Measures per side, the totals by side as in the sheet's top rows, battles and skirmishes counted, the reach warning, the caveat.
-- **Battles:** one row per fight as in the sheet: time, duration, system, class, each side's named group, ISK and ships lost per side, Others, structures, and the battle report links. Battles of `battleMinPilots` or more first, the rest behind the skirmishes toggle.
+- **Battles:** one row per fight as in the sheet: time, duration, system, class, each side's named group, ISK and ships lost per side, Others, structures, and the battle report links. Battles and skirmishes together by default (user, 2026-11-05), with a toggle to hide skirmishes.
 - **Systems:** the count by class, then each system's killmails and ISK per side.
-- **Killmails:** the existing cards and paging, filtered by side.
 
 ## Stage 3: trash and asset denial
 
@@ -128,6 +127,8 @@ Trash stays attached to the structure's battle, in its own columns, and doesn't 
 
 **Station being reffed:** a fight where one side's losses include Standup Fighters (user, 2026-11-04) is probably that side's station being reinforced, as only structures launch them. The battle gets an automatic **Station ref** mark on its row, naming that side, and the Overview counts them. Standup Fighters never count as ships lost, only in ISK lost, under structures (user, 2026-11-04). They are their own groups, 4777, 4778, and 4779 (`category` 87 in `fit_types.json`), apart from carrier fighters' 1537, 1652, and 1653. They go in a new `standup_fighter_groups` section of `structures.json`, read with `ContainsGroupOf`, so a minor bump at most. Fights are found on killmails, so a station reffed with none of its fighters dying is not marked. In Stage 4 the mark starts the For Timer flag ticked, and the user can clear it.
 
+**Structure lookups in a war (user, 2026-11-05):** only Citadel, POS, and POCO losses and Standup Fighters are looked for. A war does not run the full structure lookup.
+
 **Timeline:** the sheet's tab: for each day and each side, every category as running totals and as that day's own figures, with a chart over them drawn like the Activity one.
 
 ## Stage 4: notes, flags, and battle edits
@@ -139,65 +140,62 @@ Added after a report is generated, from a battle's row, and saved with the war.
 - **Merge or split battles** by hand. An edit is saved as the killmail ids it moved, and applied after `FindBattles` at each build.
 - **Keeping them through updates:** a battle's id comes from its first killmail, which a later run can change. Notes and flags are saved with the battle's killmail ids, and go to whichever battle now holds most of those.
 
+### Multi-system battle reports
+
+The app never makes a battle report itself (user, 2026-11-05). The related links show one system each, and a fight that moved through a gate needs a report built by hand on the user's site of choice. EVE Tools (`/create`) and WarBeacon (`/br/create`) can build one; zKillboard has no way to. Their create endpoints are internal and undocumented, and using them would add public reports to someone else's site, so the user makes the report there and brings the link back.
+
+**Getting the systems over:** on a battle's row, **Build a report** opens a small popup, for any battle but aimed at those in more than one system:
+
+```
+┌ BUILD A BATTLE REPORT ────────────────────────── × ┐
+│ J123456  C5   Nov 4th, 2026 20:01 → 20:48          │
+│ J654321  C5   Nov 4th, 2026 20:32 → 21:10          │
+│                                                    │
+│ [Copy systems and times]                           │
+│ [Open EVE Tools] [Open WarBeacon]                  │
+│ ────────────────────────────────────────────────── │
+│ Report link [ paste it here              ] [Save]  │
+└────────────────────────────────────────────────────┘
+```
+
+- Each system is listed in the order the battle reached it, with its own first and last killmail, as a report's time range for a system should cover only its part of the fight. Times follow the EVE/local preference on screen. The copied text is always EVE time, labelled so, as the sites work in it.
+- **Copy** puts one line per system on the clipboard: name, system id, start, end.
+- **Open** goes to the site's create page, in the browser. Whether either page can be filled from its URL, and what it takes pasted, is checked when this is built; if it can, the Open button fills it, and if not, the copied text is the whole help.
+- This needs each system's id, name, start, and end on `WarBattle`: a new `systems` list, added then, with room left in the row beside `OtherSystems`.
+
+**Including the report:** the pasted link is saved with the battle like a note: with its killmail ids, following the battle through updates, and cleared with the war. Only an `https` link is kept, and it opens in the browser as other links do. The row shows it first, named by its site where known, ahead of the per-system related links, which stay. It is also part of the export and the PDF's battles in Stage 6. A saved link changes no totals, and the app does not read anything from it.
+
 ## Stage 5: Pilots and Ships
 
 **Pilots:** top pilots per side, by kills and ISK destroyed. **Ships:** hulls lost and flown per side, trash left out.
 
 ## Stage 6: export and PDF
 
-A JSON export of the report's data, as the sheet offered. Then the war report in the PDF, built like the existing one.
+A JSON export of the report's data, as the sheet offered, with each battle's saved report link. Then the war report in the PDF, built like the existing one.
 
 ## Contract for Stage 2
 
-```go
-// comm/types: WAR added last in EntityType
+The contract is the code: `retrieval/wars.go`, `aggregate/war.go`, and `gui/war.go`, with `FindBattlesOf` and `BattleKillmail` in `aggregate/collate_data.go` and `KillmailLimits.OnListed`. Settled while writing it:
 
-// retrieval/wars.go
-type WarSide struct { Type string; ID int; Name string } // COALITION, CORPORATION, or ALLIANCE
-type WarAddedGroup struct { Type string; ID int; Name string; FromDate string } // FromDate YYYY-MM-DD, empty for from the beginning of the war
-type War struct {
-    ID           int    // negative, local to this cache, as a coalition's
-    Name         string
-    SideA, SideB WarSide
-    FromDays     int    // as Preferences.KillmailsNewerThanDays
-    FromDate     string // YYYY-MM-DD, used in place of FromDays
-    UntilDate    string // YYYY-MM-DD, empty while it goes on
-    AddedA, AddedB []WarAddedGroup // Others put on a side by hand
-    LastRun      time.Time
-    SetAt        time.Time
-}
-func (c *CachedEveIDs) Wars() []War
-func (c *CachedEveIDs) WarByID(id int) (War, bool)
-func (c *CachedEveIDs) WarNamed(name string) (War, bool)
-func (c *CachedEveIDs) SaveWar(war War) War
-func (c *CachedEveIDs) RemoveWar(id int)           // and its killmails
-func (c *CachedEveIDs) WarKillmails(id int) []RawKillmail
-func (c *CachedEveIDs) AddWarKillmails(id int, killmails []RawKillmail)
-
-// aggregate/war.go
-func ClassifyRawWar(raw []retrieval.RawKillmail, a, b *retrieval.IntelTarget) (keep []retrieval.RawKillmail)
-func BuildWar(killmails []*retrieval.Killmail, a, b *retrieval.IntelTarget, minPilots int) *WarData
-
-// gui/war.go, bound
-func (a *App) GetSearchGroups() ([]SearchGroup, error) // Stage 1
-func (a *App) GetWars() ([]WarCard, error)
-func (a *App) SaveWar(card WarCard) (WarCard, error)   // checks the sides, overlap, dates
-func (a *App) RemoveWar(id int) error
-func (a *App) OpenWar(id int) (WarReport, error)       // from what it holds, no network beyond name lookups
-func (a *App) CollectWar(id int) (WarReport, error)    // takes a.mu, stops and reports progress as CollectIntel does
-```
-
-`WarReport` is its own struct, not more `IntelReport` fields. Its fields are settled when the contract is written, with room for Stage 3's categories.
+- **A war's start is a fixed date.** The age picker's buttons give a date on saving, as a rolling start would slide the report and force a full run each day.
+- **`WarSide.WithAffiliates`:** a corp or alliance picked as a group brings its affiliates, one typed or linked is alone. A coalition always brings its members' affiliates.
+- **`War.RunKey` against `War.CurrentRunKey()`** says whether a run is a full one. `War.Reach` keeps the reach warning across sessions.
+- **`ClassifyRawWar` and `BuildWar` read sides and battles from raw killmails,** taking `WarSides` rather than two targets, so both find the same battles.
+- **Same-side killmails are held from Stage 2** and count for nothing, leaving them out of battles too, so Stage 3 can look back at them.
+- **`AddWarGroup` and `RemoveWarGroup`** change added groups and rebuild from what is held.
+- **New sections:** `ship_categories` and `capsule_groups` in `ships.json`, `poco_groups` in `structures.json`, as customs offices were not in `control_tower_groups`.
+- **An opened war:** recent searches and a typed name open it from what it holds; its Update button runs it.
 
 ## Tests
 
-- **Counting:** both sides in a battle with no direct killmail, one side only forgotten, lone direct killmail, corp beats alliance, a corp moved between alliances, NPCs only, structures with no pilot.
+- **Counting:** both sides in a battle with no direct killmail forgotten, one direct killmail counting the whole battle, one side only forgotten, lone direct killmail, corp beats alliance, a corp moved between alliances, NPCs only, structures with no pilot.
 - **Third parties:** beside A, beside B, even, and one added to a side by hand, from the beginning and from a date.
 - **`FindBattles` split:** existing tests pass untouched; raw and expanded input give the same battles.
 - **Saved wars:** round trip, a held killmail surviving a cache clear and the list no longer reaching it, update reading only from the last run, a side change doing a full run.
 - **Station ref:** a Standup Fighter loss marks the battle for that side, a carrier fighter's does not, and it adds to ISK lost but not ships lost.
 - **Trash:** repeat victim, a battle ending once they are removed, the 3 hour edge, a returning fleet not counted, a neutral victim counted, asset denial before the loss but not after it or with no loss. Stage 3's rules should also be compared by eye with a real structure fight.
 - **Report totals** by hand on a small fixture, the three ISK buckets adding to the total.
+- **Battle report links:** systems listed in the order reached with their own times, the copied text in EVE time whatever the preference, a saved link following its battle through an update, and a link not `https` refused.
 - **Frontend:** load check, and a stand-in report in the Edge harness.
 
 ## Build order and agents
