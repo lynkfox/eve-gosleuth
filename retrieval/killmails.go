@@ -31,7 +31,7 @@ const MaxESIKillmails = 1700
 type KillmailLimits struct {
 	Max           int       // the most killmails to collect from zKillboard's list, newest first, or AllKillmails for every one it lists
 	NewerThan     time.Time // only killmails after this, the zero time for no date limit
-	IncludeCached bool      // also use killmails already in the cache that are beyond Max, Pages, or NewerThan, ie those listed by earlier searches
+	IncludeCached bool      // also use killmails already in the cache that are beyond Max, Pages, or NewerThan, ie those listed by earlier searches, though not those older than NewerThan when the date alone decides, see dateDecides
 	Pages         int       // how many zKillboard pages of killmails to collect when Max is AllKillmails, 1 to api.ZKILL_MAX_PAGES, or AllPages. 0 is DefaultKillmailPages.
 	// ConfirmIgnoreDate is asked, when the newest killmail is already older than NewerThan, whether to collect without the date limit for this search.
 	// It is given the newest killmail's time, and returns false to keep the limit and collect none. nil always keeps it.
@@ -65,6 +65,11 @@ func (limits KillmailLimits) paging() (api.ZkillPaging, int) {
 	return api.ZkillPaging{Killmails: limits.Max, MaxPages: api.ZKILL_MAX_PAGES, NewerThan: limits.NewerThan}, limits.Max
 }
 
+// dateDecides is whether only NewerThan says how far back a search reaches, as with AllKillmails on AllPages, so a cached killmail older than it is left out too
+func (limits KillmailLimits) dateDecides() bool {
+	return limits.Max == AllKillmails && limits.Pages == AllPages && !limits.NewerThan.IsZero()
+}
+
 // DefaultKillmailLimits collects the newest DefaultKillmailLimit killmails of any age
 func DefaultKillmailLimits() KillmailLimits {
 	return KillmailLimits{Max: DefaultKillmailLimit}
@@ -89,7 +94,7 @@ const killmailWorkers = 10
 
 Parameters:
   - target: the IntelTarget to collect killmails for
-  - limits: how many killmails, and how far back, to collect. With IncludeCached, killmails beyond the limits are still used if they are in the cache.
+  - limits: how many killmails, and how far back, to collect. With IncludeCached, killmails beyond the limits are still used if they are in the cache, unless older than a date that alone decides how far back the search reaches.
     When even the newest killmail is older than NewerThan, ConfirmIgnoreDate decides whether to drop the date limit for this search, listing again further back if so.
 
 Returns:
@@ -252,10 +257,11 @@ func CollectKillmails(target IntelTarget, limits KillmailLimits) (*[]RawKillmail
 	extraFromCache := 0
 	if limits.IncludeCached {
 		for index := beyondLimits; index < len(*killmails); index++ {
-			if cached[index] != nil {
-				allRawKillmails = append(allRawKillmails, RawKillmail{Zkillmail: &(*killmails)[index], ESIKillmail: cached[index], Via: via[index]})
-				extraFromCache++
+			if cached[index] == nil || (limits.dateDecides() && !cached[index].KillmailTime.After(limits.NewerThan)) {
+				continue
 			}
+			allRawKillmails = append(allRawKillmails, RawKillmail{Zkillmail: &(*killmails)[index], ESIKillmail: cached[index], Via: via[index]})
+			extraFromCache++
 		}
 	}
 

@@ -255,6 +255,17 @@ func TestCollectKillmailsLimits(t *testing.T) {
 		assert.NotContains(t, fetched, 3, "the cache's copy gives its date")
 	})
 
+	t.Run("with IncludeCached on every page, the date alone decides and older cached killmails are left out", func(t *testing.T) {
+		ids, _ := collect(retrieval.KillmailLimits{Max: retrieval.AllKillmails, Pages: retrieval.AllPages, NewerThan: now.AddDate(0, 0, -7), IncludeCached: true}, 3, 5)
+		assert.Equal(t, []int{1, 2}, ids)
+
+		ids, _ = collect(retrieval.KillmailLimits{Max: retrieval.AllKillmails, Pages: 10, NewerThan: now.AddDate(0, 0, -7), IncludeCached: true}, 3, 5)
+		assert.Equal(t, []int{1, 2, 3, 5}, ids, "a page limit keeps them")
+
+		ids, _ = collect(retrieval.KillmailLimits{Max: retrieval.AllKillmails, Pages: retrieval.AllPages, IncludeCached: true}, 3, 5)
+		assert.Equal(t, []int{1, 2, 3, 4, 5}, ids, "no date to leave them out by")
+	})
+
 	t.Run("without IncludeCached, cached killmails beyond the limits are left out", func(t *testing.T) {
 		ids, _ := collect(retrieval.KillmailLimits{Max: 2}, 3, 4, 5)
 
