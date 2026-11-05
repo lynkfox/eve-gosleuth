@@ -21,7 +21,7 @@ You don't copy and edit the whole file. You write a small file holding only your
 
 5. Start GoSleuth. Your changes are read at startup, so restart it after every edit.
 
-The layout of these files changes only with a new major version (2.0, 3.0, ...), so your files keep working through every update until then. Check them against the new built-in files when the first number of the version goes up.
+Anything in these files is removed or changed only with a new major version (2.0, 3.0, ...), so your files keep working through every update until then. A minor version can add new sections or fields, which your files don't need to have. Check them against the new built-in files when the first number of the version goes up.
 
 ```
 GoSleuth\
