@@ -27,6 +27,34 @@ func TestRateGuard(t *testing.T) {
 		return api.APIConnection{BaseURL: server.URL, HTTPClient: server.Client(), Headers: map[string]string{}, MaxRetries: 3, Backoff: time.Millisecond, Guard: api.NewRateGuard(api.ESI_MAX_IN_FLIGHT)}, calls
 	}
 
+	t.Run("the status bar is told once when a group gets close to its limit, and when an error limit pauses requests", func(t *testing.T) {
+		notes := []string{}
+		comm.SetProgressReporter(func(message string) { notes = append(notes, message) })
+		defer comm.SetProgressReporter(nil)
+		connection, _ := guarded(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Ratelimit-Group", "killmail")
+			w.Header().Set("X-Ratelimit-Limit", "36000/15m")
+			w.Header().Set("X-Ratelimit-Remaining", "10")
+			if r.URL.Query().Get("errors") != "" {
+				w.Header().Set("X-Esi-Error-Limit-Remain", "5")
+				w.Header().Set("X-Esi-Error-Limit-Reset", "1")
+			}
+		})
+
+		for range 3 {
+			_, err := connection.Request("GET", "killmails/1/?group=killmail", nil)
+			assert.NoError(t, err)
+		}
+		assert.Equal(t, []string{"Close to the ESI's killmail rate limit, slowing down to stay within it"}, notes)
+
+		_, err := connection.Request("GET", "other/?errors=1", nil)
+		assert.NoError(t, err)
+		if assert.Len(t, notes, 2) {
+			assert.Contains(t, notes[1], "Waiting ")
+			assert.Contains(t, notes[1], "the error limit is nearly used up")
+		}
+	})
+
 	t.Run("a 404 is not sent again", func(t *testing.T) {
 		connection, calls := guarded(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNotFound) })
 

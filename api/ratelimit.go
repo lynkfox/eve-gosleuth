@@ -20,6 +20,8 @@ const (
 	ESI_RATE_RESERVE = 0.1
 	// ESI_SUCCESS_TOKENS is what the ESI charges a rate limit group for a 2xx response, the most common cost
 	ESI_SUCCESS_TOKENS = 2
+	// ESI_SLOWDOWN_NOTE is how often the status bar is told again that a rate limit group is still being slowed down
+	ESI_SLOWDOWN_NOTE = time.Minute
 	// ESI_RATE_LIMIT_HOLD is the least time a 429 stops requests for, longer if the ESI's Retry-After asks. Tokens come back 15 minutes after they were spent.
 	ESI_RATE_LIMIT_HOLD = 15 * time.Minute
 )
@@ -36,7 +38,7 @@ RateGuard keeps requests within the ESI's limits. One is shared by every request
   - At most maxInFlight requests are sent at once.
   - The error limit (X-Esi-Error-Limit-Remain, 100 errors a minute): below ESI_ERROR_RESERVE remaining, every request waits until X-Esi-Error-Limit-Reset.
   - Rate limit groups (X-Ratelimit-Group, ie "killmail" with a limit of "3600/15m", a floating window): below ESI_RATE_RESERVE of the limit remaining,
-    the group's requests are spaced so they use tokens no faster than the window gives them back.
+    the group's requests are spaced so they use tokens no faster than the window gives them back, and the status bar says so, at most once per ESI_SLOWDOWN_NOTE.
   - A 429 is not retried: it holds the group, or every request when the ESI named no group, for ESI_RATE_LIMIT_HOLD or the Retry-After if longer.
     Until then requests to it fail at once with ErrRateLimited, and comm.ReportRateLimited tells the app.
   - A 420 pauses everything for the Retry-After the ESI asks for.
@@ -60,6 +62,7 @@ type rateGroup struct {
 	remaining    int
 	limitedUntil time.Time // after a 429, requests fail with ErrRateLimited until then
 	nextStart    time.Time // while spacing, the earliest the next request may start
+	notedAt      time.Time // when the status bar was last told this group is being slowed down
 }
 
 // NewRateGuard creates a guard that lets at most maxInFlight requests run at once
@@ -113,8 +116,13 @@ func (g *RateGuard) wait(route string) (func(), error) {
 		return nil, ErrRateLimited
 	}
 	start := g.pausedUntil
+	slowing := ""
 	if group != nil {
 		if group.spacing() > 0 {
+			if now.Sub(group.notedAt) >= ESI_SLOWDOWN_NOTE {
+				group.notedAt = now
+				slowing = g.routeGroups[route]
+			}
 			// each request takes the next spaced start, so parallel requests line up behind each other
 			if group.nextStart.After(start) {
 				start = group.nextStart
@@ -127,6 +135,9 @@ func (g *RateGuard) wait(route string) (func(), error) {
 	}
 	g.mu.Unlock()
 
+	if slowing != "" {
+		comm.ReportProgress("Close to the ESI's %s rate limit, slowing down to stay within it", slowing)
+	}
 	if delay := time.Until(start); delay > 0 {
 		comm.Logger.Debugf("[ESI] Waiting %s before %s to stay within the rate limits", delay.Round(time.Millisecond), route)
 		time.Sleep(delay)
@@ -228,6 +239,7 @@ func (g *RateGuard) pauseAll(until time.Time, why string) {
 	if until.After(g.pausedUntil) {
 		g.pausedUntil = until
 		comm.Logger.Warnf("[ESI] Pausing all requests until %s, %s", until.Format(time.TimeOnly), why)
+		comm.ReportProgress("Waiting %s for the ESI, %s", time.Until(until).Round(time.Second), why)
 	}
 }
 
