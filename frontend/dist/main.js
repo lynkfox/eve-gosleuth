@@ -853,7 +853,7 @@ const myIntelPart = (tab, part) => el(`${tab === "coalitions" ? "myintel-c" : "m
 const MY_INTEL_ROOM_TO_SPLIT = window.matchMedia("(min-width: 900px)");
 const myIntelIsSplit = () => myIntelSplit && MY_INTEL_ROOM_TO_SPLIT.matches;
 
-// foldMyIntel folds the top of each list away down to its Filter row, or opens them again
+// foldMyIntel folds the top of each list away down to its Filter row, or opens them again. Each time My Intel opens it shows the state saved in the settings (toggleMyIntelFold).
 function foldMyIntel(folded) {
   myIntelFolded = folded;
   const action = folded ? "Show the top of this window again" : "Fold the top of this window away, leaving the filter";
@@ -863,6 +863,12 @@ function foldMyIntel(folded) {
     button.title = action;
     button.setAttribute("aria-label", action);
   }
+}
+
+// toggleMyIntelFold is a click on a pull bar, remembered for each time My Intel opens
+function toggleMyIntelFold() {
+  foldMyIntel(!myIntelFolded);
+  backend().SetMyIntelFolded(myIntelFolded).catch((err) => showMyIntelError(String(err)));
 }
 
 // applyMyIntelLayout shows the lists tabbed or side by side, and draws the cards again, as only side by side can they be dragged
@@ -6289,6 +6295,7 @@ function applySettings(settings) {
   arrangeTabs(tabOrderFrom(settings.tabOrder || []));
   setSidebarCollapsed(Boolean(settings.sidebarCollapsed));
   myIntelSplit = Boolean(settings.myIntelSplit);
+  myIntelFolded = Boolean(settings.myIntelFolded);
   preferences = {
     includeZkillLabels: Boolean(settings.includeZkillLabels),
     maxKillmails: settings.maxKillmails || 20,
@@ -6535,7 +6542,7 @@ for (const tab of MY_INTEL_TABS) {
   myIntelPart(tab, "delete-button").addEventListener("click", () => removeMyIntelCards(pickedCards(tab)));
 }
 for (const button of document.querySelectorAll(".myintel-import-button")) button.addEventListener("click", importMyIntel);
-for (const button of document.querySelectorAll(".myintel-pull")) button.addEventListener("click", () => foldMyIntel(!myIntelFolded));
+for (const button of document.querySelectorAll(".myintel-pull")) button.addEventListener("click", toggleMyIntelFold);
 for (const button of document.querySelectorAll(".myintel-tabs button")) button.addEventListener("click", () => setMyIntelTab(button.dataset.tab));
 for (const button of document.querySelectorAll(".myintel-pull-out")) button.addEventListener("click", () => setMyIntelSplit(true));
 for (const button of document.querySelectorAll(".myintel-dock")) button.addEventListener("click", () => setMyIntelSplit(false));

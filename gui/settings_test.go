@@ -178,6 +178,11 @@ func TestSettings(t *testing.T) {
 		assert.NoError(t, app.SetMyIntelSplit(true))
 		assert.True(t, app.GetSettings().MyIntelSplit)
 		assert.True(t, loadSettings(path).MyIntelSplit)
+
+		assert.False(t, app.GetSettings().MyIntelFolded)
+		assert.NoError(t, app.SetMyIntelFolded(true))
+		assert.True(t, app.GetSettings().MyIntelFolded)
+		assert.True(t, loadSettings(path).MyIntelFolded)
 	})
 
 	t.Run("preferences become killmail limits", func(t *testing.T) {

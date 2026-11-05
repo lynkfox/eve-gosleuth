@@ -31,6 +31,8 @@ type Settings struct {
 	SidebarCollapsed bool `json:"sidebarCollapsed,omitempty"`
 	// My Intel opens with Coalitions pulled out beside Affiliates, false (one window with tabs) on a first run. Changed with SetMyIntelSplit.
 	MyIntelSplit bool `json:"myIntelSplit,omitempty"`
+	// My Intel opens with the top of each list folded down to its Filter row, false (shown in full) on a first run. Changed with SetMyIntelFolded.
+	MyIntelFolded bool `json:"myIntelFolded,omitempty"`
 	// the release the user chose Skip this update for, so the update check shows nothing for it. Changed with SkipUpdate.
 	SkippedVersion string `json:"skippedVersion,omitempty"`
 	Preferences
@@ -252,6 +254,23 @@ Returns:
 func (a *App) SetMyIntelSplit(split bool) (err error) {
 	defer recoverAsError(&err)
 	if err := a.updateSettings(func(settings *Settings) { settings.MyIntelSplit = split }); err != nil {
+		return errors.New("Could not save My Intel's layout, it will reset when the app restarts")
+	}
+	return nil
+}
+
+/*
+	SetMyIntelFolded saves whether My Intel opens with the top of each list folded down to its Filter row
+
+Parameters:
+  - folded: true when the tops are folded away
+
+Returns:
+  - error: a user readable message if it could not be saved. It still applies for this session.
+*/
+func (a *App) SetMyIntelFolded(folded bool) (err error) {
+	defer recoverAsError(&err)
+	if err := a.updateSettings(func(settings *Settings) { settings.MyIntelFolded = folded }); err != nil {
 		return errors.New("Could not save My Intel's layout, it will reset when the app restarts")
 	}
 	return nil
