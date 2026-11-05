@@ -3160,6 +3160,8 @@ body.war-report #tab-sidebar { display: none; }
 }
 .war-versus-sides { display: flex; align-items: stretch; gap: 12px; min-width: 0; }
 .war-side-card { display: flex; flex-direction: column; min-width: 0; max-width: 260px; padding: 6px 12px; background: var(--panel-raised); border-left: 4px solid var(--border); border-radius: var(--radius); }
+button.war-side-card, button.war-side-card:hover { border-style: solid; border-width: 0 0 0 4px; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+button.war-side-card:hover { background: color-mix(in srgb, var(--text) 10%, var(--panel-raised)); }
 .war-side-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .war-side-card.war-a { border-left-color: var(--war-a); }
 .war-side-card.war-b { border-left-color: var(--war-b); }

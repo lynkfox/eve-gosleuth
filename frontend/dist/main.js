@@ -824,7 +824,15 @@ function openMyIntel() {
   myIntelRemoved = [];
   showMyIntelUndo("");
   el("myintel").showModal();
-  loadMyIntel();
+  return loadMyIntel();
+}
+
+// openMyIntelCard opens My Intel on a list's card for an entity, the only one open, with the list's filter cleared so it shows
+async function openMyIntelCard(tab, entity) {
+  myIntelPart(tab, "filter").value = "";
+  myIntelTab = tab;
+  await openMyIntel();
+  showOnlyMyIntelCard(tab, intelKey(entity));
 }
 
 async function loadMyIntel() {
@@ -5652,9 +5660,16 @@ function renderWarVersus(war, report) {
 
   const sides = document.createElement("div");
   sides.className = "war-versus-sides";
+  // a coalition or affiliate group has a card in My Intel, which its side's card opens. One corp or alliance has none to open.
   const sideCard = (key, side) => {
-    const card = document.createElement("div");
+    const list = side.type === "COALITION" ? "coalitions" : side.withAffiliates ? "affiliates" : null;
+    const card = document.createElement(list ? "button" : "div");
     card.className = `war-side-card war-${key}`;
+    if (list) {
+      card.type = "button";
+      card.title = `Open ${side.name} in My Intel`;
+      card.addEventListener("click", () => openMyIntelCard(list, side));
+    }
     const name = document.createElement("strong");
     name.textContent = side.name;
     name.title = side.name;
