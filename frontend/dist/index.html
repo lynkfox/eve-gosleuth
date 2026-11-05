@@ -1246,6 +1246,37 @@
     </div>
   </dialog>
 
+  <dialog id="war-note" class="confirm" aria-labelledby="war-note-title">
+    <form id="war-note-form" method="dialog">
+      <p id="war-note-title" class="holding-title">Note on this battle</p>
+      <p id="war-note-battle" class="confirm-target"></p>
+      <textarea id="war-note-text" class="war-note-text" maxlength="1000" rows="4" aria-labelledby="war-note-title"></textarea>
+      <div class="confirm-actions">
+        <button class="secondary" value="cancel" formnovalidate>Cancel</button>
+        <button id="war-note-remove" class="danger" value="remove" formnovalidate hidden>Remove</button>
+        <button value="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="system-nickname" class="confirm" aria-labelledby="system-nickname-title">
+    <form id="system-nickname-form" method="dialog">
+      <p id="system-nickname-title" class="holding-title">Nickname</p>
+      <input id="system-nickname-name" type="text" maxlength="60" spellcheck="false" placeholder="ie Velvet Anchor" aria-labelledby="system-nickname-title">
+      <div id="system-nickname-scope">
+        <label class="war-add-choice"><input type="radio" name="system-nickname-scope" value="everywhere" checked><span>Everywhere in the app</span></label>
+        <label class="war-add-choice"><input type="radio" name="system-nickname-scope" value="war"><span>Only in this war</span></label>
+      </div>
+      <label id="system-nickname-elsewhere" class="war-add-choice" hidden><input id="system-nickname-keep" type="checkbox"><span id="system-nickname-elsewhere-text"></span></label>
+      <p class="confirm-detail">Shown beside the system's name. Links and sorting keep the real name. Leave it empty to remove it.</p>
+      <p id="system-nickname-error" class="preferences-error" role="alert" hidden></p>
+      <div class="confirm-actions">
+        <button id="system-nickname-cancel" class="secondary" type="button">Cancel</button>
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="war-remove-confirm" class="confirm" aria-labelledby="war-remove-title">
     <form method="dialog">
       <p id="war-remove-title" class="confirm-warning">Remove this war?</p>

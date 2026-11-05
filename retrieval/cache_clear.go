@@ -87,7 +87,7 @@ func (c *CachedEveIDs) Entries() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.db == nil {
-		count := len(c.NameLookups) + len(c.Searched) + len(c.IgnoredAllies) + len(c.Holdings) + len(c.SavedCoalitions) + len(c.SavedWars) + len(c.WarEdits) + len(c.ZkillLists) + len(c.Images) + len(c.PendingChecks) + len(c.States)
+		count := len(c.NameLookups) + len(c.Searched) + len(c.IgnoredAllies) + len(c.Holdings) + len(c.SavedCoalitions) + len(c.SavedWars) + len(c.WarEdits) + len(c.Nicknames) + len(c.ZkillLists) + len(c.Images) + len(c.PendingChecks) + len(c.States)
 		for _, entries := range c.idMaps() {
 			count += len(entries.entries)
 		}
@@ -153,7 +153,7 @@ func (c *CachedEveIDs) removeWhere(match func(section, *CacheEntry) bool, where 
 	for _, entries := range []struct {
 		section section
 		entries map[string]*CacheEntry
-	}{{sectionNameLookups, c.NameLookups}, {sectionRecentSearches, c.Searched}, {sectionIgnoredAllies, c.IgnoredAllies}, {sectionHoldings, c.Holdings}, {sectionCoalitions, c.SavedCoalitions}, {sectionWars, c.SavedWars}, {sectionWarEdits, c.WarEdits}, {sectionZkillLists, c.ZkillLists}, {sectionImages, c.Images}, {sectionIntelChecks, c.PendingChecks}, {sectionAppState, c.States}} {
+	}{{sectionNameLookups, c.NameLookups}, {sectionRecentSearches, c.Searched}, {sectionIgnoredAllies, c.IgnoredAllies}, {sectionHoldings, c.Holdings}, {sectionCoalitions, c.SavedCoalitions}, {sectionWars, c.SavedWars}, {sectionWarEdits, c.WarEdits}, {sectionSystemNicknames, c.Nicknames}, {sectionZkillLists, c.ZkillLists}, {sectionImages, c.Images}, {sectionIntelChecks, c.PendingChecks}, {sectionAppState, c.States}} {
 		for key, entry := range entries.entries {
 			if match(entries.section, entry) {
 				delete(entries.entries, key)
@@ -223,8 +223,8 @@ func (c *CachedEveIDs) compact() {
 	}
 }
 
-// userSections hold what the user set by hand, not looked up: ignored allies, holding links, coalitions, wars with their killmails and edits, and the checks of those imported. Clears leave them unless told to include them.
-var userSections = []section{sectionIgnoredAllies, sectionHoldings, sectionCoalitions, sectionWars, sectionWarKillmails, sectionWarEdits, sectionIntelChecks}
+// userSections hold what the user set by hand, not looked up: ignored allies, holding links, coalitions, wars with their killmails and edits, system nicknames, and the checks of those imported. Clears leave them unless told to include them.
+var userSections = []section{sectionIgnoredAllies, sectionHoldings, sectionCoalitions, sectionWars, sectionWarKillmails, sectionWarEdits, sectionSystemNicknames, sectionIntelChecks}
 
 // keptSections are never cleared: what the app remembers about itself, ie the versions What's New has shown, which a clear would only bring back
 var keptSections = []section{sectionAppState}

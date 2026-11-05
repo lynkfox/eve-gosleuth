@@ -61,6 +61,7 @@ const (
 	sectionWars                 section = "war"
 	sectionWarKillmails         section = "war_killmail"
 	sectionWarEdits             section = "war_edit"
+	sectionSystemNicknames      section = "system_nickname"
 	sectionZkillLists           section = "zkill_list"
 	sectionIntelChecks          section = "intel_check"
 	sectionImages               section = "image"

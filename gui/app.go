@@ -75,9 +75,6 @@ type App struct {
 	lastTarget *TargetResult
 	lastReport *IntelReport
 
-	// the war's report last built, for its edits. Guarded by mu.
-	lastWar *builtWar
-
 	// writes each search's log to a file in debug mode, then zips it to send with a problem report. It has its own lock.
 	debug *debugRecorder
 
@@ -603,7 +600,7 @@ func (a *App) SearchTarget(name string, searchType string, id int) (result Targe
 	if name == "" && id == 0 {
 		return result, errors.New("Enter a name to search for")
 	}
-	a.lastTarget, a.lastReport, a.lastWar = nil, nil, nil
+	a.lastTarget, a.lastReport = nil, nil
 	a.startDebug(name)
 	comm.Logger.Infof("Searching for %q as %q, id %d", name, searchType, id)
 

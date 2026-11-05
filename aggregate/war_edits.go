@@ -111,7 +111,12 @@ func warMerge(battles []*warBattleOf, edit retrieval.WarBattleEdit) []*warBattle
 	kept.marks = append(kept.marks, WarEditMark{ID: edit.ID, Kind: edit.Kind})
 	for _, battle := range found[1:] {
 		kept.kills = append(kept.kills, battle.kills...)
-		kept.marks = append(kept.marks, battle.marks...)
+		for _, mark := range battle.marks {
+			// two pieces of a split share its mark
+			if !slices.Contains(kept.marks, mark) {
+				kept.marks = append(kept.marks, mark)
+			}
+		}
 		battles = slices.DeleteFunc(battles, func(candidate *warBattleOf) bool { return candidate == battle })
 	}
 	warSortKills(kept.kills)
@@ -213,6 +218,15 @@ func warEditedBattles(trash *warTrash, edits []retrieval.WarBattleEdit) []*warBa
 		case retrieval.WarEditIgnore:
 			if battle := warHolding(battles, slices.Concat(edit.Groups...)); battle != nil {
 				battle.ignored = true
+				saved := map[int]bool{}
+				for _, id := range slices.Concat(edit.Groups...) {
+					saved[id] = true
+				}
+				for _, kill := range battle.kills {
+					if !saved[kill.id] {
+						battle.ignoredJoined++
+					}
+				}
 				battle.marks = append(battle.marks, WarEditMark{ID: edit.ID, Kind: edit.Kind})
 			}
 		}
@@ -299,4 +313,13 @@ func warIgnoring(kills []*warKill, edits []retrieval.WarBattleEdit) (*warTrash, 
 		trash.anchors[id] = true // so its trash finds the row it died on
 	}
 	return trash, append(battles, ignored...), marks
+}
+
+// warAttachNotes puts each note on the battle holding most of its killmails. One whose battle has gone stays saved and shows nowhere.
+func warAttachNotes(battles []*warBattleOf, notes []retrieval.WarBattleNote) {
+	for _, note := range notes {
+		if battle := warHolding(battles, note.Killmails); battle != nil {
+			battle.notes = append(battle.notes, note)
+		}
+	}
 }

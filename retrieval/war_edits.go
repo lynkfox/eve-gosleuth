@@ -1,6 +1,7 @@
 package retrieval
 
 import (
+	"maps"
 	"slices"
 	"time"
 )
@@ -20,9 +21,19 @@ type WarBattleEdit struct {
 	At     time.Time `json:"at"`
 }
 
+// WarBattleNote is the user's note on a battle, saved with its killmails so it follows the battle
+type WarBattleNote struct {
+	ID        int    `json:"id"` // unique within its war
+	Killmails []int  `json:"killmails"`
+	Text      string `json:"text"`
+}
+
 // WarEdits is what the user changed by hand on a war's report, applied again at every build. It is apart from the War, which every save rewrites.
 type WarEdits struct {
 	Edits []WarBattleEdit `json:"edits,omitempty"` // in the order they are applied, the oldest first
+	Notes []WarBattleNote `json:"notes,omitempty"`
+	// SystemNames are names for systems in this war only, by system id, ie an op's "Mango". They win over SystemNicknames inside it.
+	SystemNames map[int]string `json:"systemNames,omitempty"`
 }
 
 // copyOf is a copy that shares nothing with the original
@@ -36,6 +47,11 @@ func (e WarEdits) copyOf() WarEdits {
 		}
 		out.Edits[index].Groups = groups
 	}
+	out.Notes = slices.Clone(e.Notes)
+	for index := range out.Notes {
+		out.Notes[index].Killmails = slices.Clone(out.Notes[index].Killmails)
+	}
+	out.SystemNames = maps.Clone(e.SystemNames)
 	return out
 }
 
@@ -101,4 +117,36 @@ func (c *CachedEveIDs) SaveWarEdits(id int, edits WarEdits) {
 
 	saved := edits.copyOf()
 	put(c, sectionWarEdits, c.WarEdits, warKey(id), &CacheEntry{Value: &saved, CachedAt: time.Now().UTC(), Permanent: true})
+}
+
+// AddNote adds a note on a battle, saved with its killmails so it follows the battle.
+func (e *WarEdits) AddNote(killmails []int, text string) {
+	id := 1
+	for _, note := range e.Notes {
+		id = max(id, note.ID+1)
+	}
+	e.Notes = append(e.Notes, WarBattleNote{ID: id, Killmails: killmails, Text: text})
+}
+
+/*
+	SetNote changes a note's text, or removes the note when the text is empty.
+
+Parameters:
+  - id: the note
+  - text: its text, trimmed by the caller
+
+Returns:
+  - bool: false if it had no such note
+*/
+func (e *WarEdits) SetNote(id int, text string) bool {
+	index := slices.IndexFunc(e.Notes, func(note WarBattleNote) bool { return note.ID == id })
+	if index < 0 {
+		return false
+	}
+	if text == "" {
+		e.Notes = slices.Delete(e.Notes, index, index+1)
+	} else {
+		e.Notes[index].Text = text
+	}
+	return true
 }

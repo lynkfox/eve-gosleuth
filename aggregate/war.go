@@ -141,19 +141,21 @@ type WarBattleSide struct {
 
 // WarBattle is a counted battle, or a skirmish
 type WarBattle struct {
-	ID           string // from FindBattlesOf
-	Start, End   time.Time
-	System       *retrieval.System   // the system with the most of its killmails, the first of them on a tie
-	OtherSystems []string            // by name, in the order it reached them
-	OtherDetails []*retrieval.System // the same systems, for their menu
-	Pilots       int
-	Killmails    []*retrieval.Killmail // oldest first
-	KillmailIDs  []int                 // every killmail it holds, oldest first, which those of an ignored group or with no expanded form are in but Killmails is not
-	Edits        []WarEditMark         // what the user did to it
-	Ignored      bool                  // set aside by the user: its figures are its row's alone
-	Skirmish     bool                  // fewer than minPilots pilots
-	A, B, Others WarBattleSide
-	StationRefs  []WarStationRef // side A's first
+	ID            string // from FindBattlesOf
+	Start, End    time.Time
+	System        *retrieval.System   // the system with the most of its killmails, the first of them on a tie
+	OtherSystems  []string            // by name, in the order it reached them
+	OtherDetails  []*retrieval.System // the same systems, for their menu
+	Pilots        int
+	Killmails     []*retrieval.Killmail // oldest first
+	KillmailIDs   []int                 // every killmail it holds, oldest first, which those of an ignored group or with no expanded form are in but Killmails is not
+	Edits         []WarEditMark         // what the user did to it
+	Ignored       bool                  // set aside by the user: its figures are its row's alone
+	IgnoredJoined int                   // killmails that joined it since it was ignored, which count nowhere either
+	Notes         []retrieval.WarBattleNote
+	Skirmish      bool // fewer than minPilots pilots
+	A, B, Others  WarBattleSide
+	StationRefs   []WarStationRef // side A's first
 }
 
 // WarGroup is a corp or alliance on the killmails: the alliance, or the corp when it has none. An NPC corp is never one.
@@ -451,12 +453,14 @@ func analyseWarKills(raw []retrieval.RawKillmail, idx *warSideIndex) []*warKill 
 
 // warBattleOf is a battle found among a war's killmails that are not same-side
 type warBattleOf struct {
-	fought  *BattleFought // nil for a piece of a split
-	kills   []*warKill    // oldest first
-	id      string        // set by warEditedBattles
-	edited  bool          // merged or split by the user
-	marks   []WarEditMark // what the user did to it
-	ignored bool          // set aside by the user
+	fought        *BattleFought // nil for a piece of a split
+	kills         []*warKill    // oldest first
+	id            string        // set by warEditedBattles
+	edited        bool          // merged or split by the user
+	marks         []WarEditMark // what the user did to it
+	ignored       bool          // set aside by the user
+	ignoredJoined int           // killmails in it the ignore was not saved with
+	notes         []retrieval.WarBattleNote
 }
 
 // counted is whether one side killed the other on any of the battle's killmails
@@ -785,6 +789,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		}
 	}
 	trash, battles, ignoredMarks := warIgnoring(kills, edits.Edits)
+	warAttachNotes(battles, edits.Notes)
 	battleOfStation := map[int]*WarBattle{} // the battle each station with trash died in
 
 	for _, battle := range battles {
@@ -830,13 +835,15 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 
 		// the losses
 		wb := &WarBattle{
-			ID:        battle.id,
-			Edits:     slices.Clone(battle.marks),
-			Ignored:   battle.ignored,
-			Start:     battle.kills[0].at,
-			End:       battle.kills[len(battle.kills)-1].at,
-			Pilots:    len(pilots),
-			Killmails: []*retrieval.Killmail{},
+			ID:            battle.id,
+			Edits:         slices.Clone(battle.marks),
+			Ignored:       battle.ignored,
+			IgnoredJoined: battle.ignoredJoined,
+			Notes:         battle.notes,
+			Start:         battle.kills[0].at,
+			End:           battle.kills[len(battle.kills)-1].at,
+			Pilots:        len(pilots),
+			Killmails:     []*retrieval.Killmail{},
 		}
 		wb.Skirmish = wb.Pilots < minPilots
 		inBattle := map[WarSideKey]*WarBattleSide{WarSideA: &wb.A, WarSideB: &wb.B, WarSideNone: &wb.Others}

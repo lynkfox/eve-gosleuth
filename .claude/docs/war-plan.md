@@ -1,6 +1,6 @@
 # War tracker and group search
 
-Plan of 2026-11-04, decisions from the user the same night. Stages 1, 2, and 3 built, Stage 4 under way.
+Plan of 2026-11-04, decisions from the user the same night. Stages 1, 2, 3, and 4 built.
 
 The model is the user's hand-kept 2024 Coalition vs Lazerhawks sheet (id `11i7aE7hB7ES0Q-mtVmYRaO8dBj6DX7B6IL6GGNQQLP8`): gid 722070133 is one row per fight, gid 1013484469 the totals by side and day.
 
@@ -177,14 +177,15 @@ It leaves the war's totals and stays on the lists grayed out, with its own figur
 - **What the row shows leaves with it (user):** its killmails and any trash or asset denial attached to its stations, from the Overview, Timeline, Systems, Others, and marks.
 - **Trash is found again without them,** so a station in it stops confirming a Ref'd mark or ending asset denial elsewhere.
 - **The killmails stay held,** and the Overview counts it apart.
-- **Known limit:** if an Update joins an ignored fight to a real one, the whole joined battle is ignored; the larger gray row shows it, and it can be split.
+- **Known limit, warned of (user, 2026-11-05):** if an Update joins an ignored fight to a real one, the whole joined battle is ignored; its chit then says how many joined since, ie "Ignored, +3". It can be taken back and the part that doesn't belong split off.
+- **Ignoring a piece of a split can move a third party's ISK (user, 2026-11-05):** what is left is found again as its own battle, so each third party's side is worked out without the ignored killmails, as they should influence nothing. Merge and split alone move no total. The piece left loses its Split chit, and the split is undone from the ignored row.
 
 Stages 5 and 6 must leave ignored battles out.
 
 ### Notes and system nicknames
 
 - **A notes field** on any battle, saved with its killmail ids, so it follows the battle. Merged battles keep every note.
-- **A nickname for a system** that follows it, shown beside its name. **Its scope is chosen when it is named (user, 2026-11-05):** for the whole app, as "Valhalla, Ursa home", or this war only, as an op name like "Mango". The war's wins inside that war. Links, sorting, and copied text keep the real name.
+- **A nickname for a system** that follows it, shown beside its name. **Its scope is chosen when it is named (user, 2026-11-05):** for the whole app, as "Valhalla, Ursa home", or this war only, as an op name like "Mango". The war's wins inside that war. Changing a name to this war only moves it, unless Keep it everywhere else is ticked (user, 2026-11-05). Links, sorting, and copied text keep the real name.
 
 ### Held back
 

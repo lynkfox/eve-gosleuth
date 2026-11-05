@@ -85,6 +85,7 @@ type CachedEveIDs struct {
 	SavedCoalitions      map[string]*CacheEntry // the user's coalitions, by coalitionKey. Never expire, see SaveCoalition.
 	SavedWars            map[string]*CacheEntry // the user's wars, by warKey. Never expire, see SaveWar. Their killmails are not held here, see WarKillmails.
 	WarEdits             map[string]*CacheEntry // what the user changed by hand on a war's report, by warKey. Never expire, see SaveWarEdits.
+	Nicknames            map[string]*CacheEntry // the user's names for systems, one row by systemNicknamesKey. Never expires, see SetSystemNickname.
 	PendingChecks        map[string]*CacheEntry // imported pilots, corporations, and alliances still to check with the ESI, by intelCheckKey, see AddIntelChecks
 	ZkillLists           map[string]*CacheEntry // entities' zKillboard killmail lists, by zkillListKey. Never expire, see SaveKnownZkillList.
 	Images               map[string]*CacheEntry // the PDF report's images from the image server, by url. Dropped by a newer SDE, see SaveImage.
@@ -249,6 +250,9 @@ func (c *CachedEveIDs) ensureMaps() {
 	}
 	if c.WarEdits == nil {
 		c.WarEdits = make(map[string]*CacheEntry)
+	}
+	if c.Nicknames == nil {
+		c.Nicknames = make(map[string]*CacheEntry)
 	}
 	if c.PendingChecks == nil {
 		c.PendingChecks = make(map[string]*CacheEntry)

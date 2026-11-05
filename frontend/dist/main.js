@@ -3676,7 +3676,8 @@ function glanceCard(id, card) {
       text.className = "glance-text";
       const name = document.createElement("span");
       name.className = `glance-name ${row.className || ""}`.trim();
-      name.textContent = row.name;
+      if (row.nameNodes) name.replaceChildren(...row.nameNodes);
+      else name.textContent = row.name;
       text.append(name);
       if (row.detail) {
         const detail = document.createElement("span");
@@ -3810,7 +3811,8 @@ const GLANCE_CARDS = {
   }),
   "tab-systems": (report) => ({
     rows: report.systems.slice(0, GLANCE_ROWS).map((system) => ({
-      name: system.name,
+      name: systemLabel(system),
+      nameNodes: systemLabelNodes(system),
       detail: [system.class || system.securityStatus.toFixed(1), system.region].filter(Boolean).join(" · "),
       value: plural(system.killmails, "killmail", "killmails"),
       menu: [systemSection(system)],
@@ -3822,7 +3824,8 @@ const GLANCE_CARDS = {
   }),
   "tab-battles": (report) => ({
     rows: report.battles.slice(0, GLANCE_ROWS).map((battle) => ({
-      name: battle.system.name,
+      name: systemLabel(battle.system),
+      nameNodes: systemLabelNodes(battle.system),
       detail: spokenDate(battle.start),
       value: plural(battle.pilots, "pilot", "pilots"),
       menu: battleSections(battle),
@@ -3916,7 +3919,7 @@ const TAB_HELP = {
   "tab-systems": [
     "The 10 systems with the most of this target's killmails. Kills and Losses are the target's.",
     UNIQUE_DAYS_HELP,
-    "Right-click a system to search it, or open it on an external site.",
+    "Right-click a system to search it, nickname it, or open it on an external site.",
   ],
   "tab-battles": [
     "An estimate of the fights on this search's killmails, newest first: each killmail within 15 minutes of the last, in its systems or with its pilots.",
@@ -3960,7 +3963,7 @@ const TAB_HELP = {
     "A skirmish is a fight with fewer than 10 pilots, both sides together.",
     "Trash, ref marks, structure counts, and other systems can all be hovered over to show more info.",
     "Click a heading to sort, or a class at the top to filter. Several classes can be on at once.",
-    "Right-click a row to open the battle report of any of its systems, or to merge, split, or ignore it.",
+    "Right-click a row to open the battle report of any of its systems, nickname a system, add a note, or merge, split, or ignore it.",
   ],
   "tab-war-timeline": [
     "A total of the war, either by smaller unit or as a running total.",
@@ -3970,7 +3973,7 @@ const TAB_HELP = {
   "tab-war-systems": [
     "Each system's ISK lost and killmails by side.",
     "Click a heading to sort, or a class at the top to filter. Several classes can be on at once.",
-    "Right-click a system to search it or open it on an external site.",
+    "Right-click a system to search it, nickname it, or open it on an external site.",
   ],
   "tab-roster": (type) => type === "ALLIANCE"
     ? ["Current member corporations, their member counts, and how long they've been in.", CORP_MENU_HELP]
@@ -4477,7 +4480,7 @@ function renderKillmailCard(km) {
   const security = document.createElement("span");
   security.className = securityClass(km.securityBand);
   security.textContent = km.securityStatus.toFixed(1);
-  location.append(`${km.systemName} `, security);
+  location.append(...systemLabelNodes({ id: km.systemId, name: km.systemName }), " ", security);
 
   const finalBlow = km.finalBlowName ? `Final blow: ${km.finalBlowName}` : null;
   const attackers = km.solo ? "Solo" : `${km.attackerCount} attackers`;
@@ -4712,7 +4715,7 @@ function structureSystemLine(system) {
   const security = document.createElement("span");
   security.className = securityClass(system.securityBand);
   security.textContent = (system.securityStatus || 0).toFixed(1);
-  name.append(`${system.name} `, security);
+  name.append(...systemLabelNodes(system), " ", security);
   line.append(name);
   for (const part of systemLocation(system)) line.append(" · ", part);
   return line;
@@ -4794,7 +4797,105 @@ function structureLossSections(loss, withSystem) {
 }
 
 function systemSection(system) {
-  return entitySection({ type: "SYSTEM", id: system.id, name: system.name, zkillUrl: system.zkillUrl, dotlanUrl: system.dotlanUrl });
+  const entity = { type: "SYSTEM", id: system.id, name: system.name, zkillUrl: system.zkillUrl, dotlanUrl: system.dotlanUrl };
+  return { heading: `${searchTypeLabel("SYSTEM")}: ${systemLabel(system)}`, items: [...entityMenuItems(entity), ...nicknameItems(system)] };
+}
+
+/* System nicknames */
+
+let systemNicknames = {}; // the user's names for systems shown everywhere, by system id
+let nicknaming = null; // the system the Nickname window is open on
+
+// systemNickname is a system's nickname here: the war's own while its report is shown, else the app's
+function systemNickname(id) {
+  return (warMode && warReport && warReport.systemNicknames[id]) || systemNicknames[id] || "";
+}
+
+// systemLabel is how a system is shown as plain text, ie J110117 - Velvet Anchor. A system is anything with its id and name.
+function systemLabel(system) {
+  const nickname = systemNickname(system.id);
+  return nickname ? `${system.name} - ${nickname}` : system.name;
+}
+
+// nicknameItems are a system's menu items for its nickname, none for an unknown system, which has no id
+// systemLabelNodes are systemLabel to append to an element, the nickname in the theme's color and bold
+function systemLabelNodes(system) {
+  const nickname = systemNickname(system.id);
+  if (!nickname) return [system.name];
+  const shown = document.createElement("span");
+  shown.className = "system-nickname";
+  shown.textContent = nickname;
+  return [`${system.name} - `, shown];
+}
+
+function nicknameItems(system) {
+  return system.id ? [{ label: systemNickname(system.id) ? "Change nickname…" : "Add nickname…", action: () => openSystemNickname(system) }] : [];
+}
+
+// loadSystemNicknames reads the app's nicknames, drawing whatever is shown again as they arrive
+async function loadSystemNicknames() {
+  try {
+    systemNicknames = (await backend().GetSystemNicknames()) || {};
+    redrawSystemNames();
+  } catch (err) {
+    setStatus(String(err), true);
+  }
+}
+
+// redrawSystemNames draws the report shown again with the names as they are now, on the same tab and page
+function redrawSystemNames() {
+  if (warMode && warReport) showWarReport(warReport);
+  else if (intelReport) renderIntelSections(intelReport);
+}
+
+// openSystemNickname opens the Nickname window. Inside a war the scope is chosen each time, starting on where the name now shown lives.
+function openSystemNickname(system) {
+  nicknaming = system;
+  const inWar = warMode && warReport;
+  el("system-nickname-title").textContent = `Nickname for ${system.name}`;
+  el("system-nickname-name").value = systemNickname(system.id);
+  el("system-nickname-scope").hidden = !inWar;
+  const form = el("system-nickname-form");
+  // inside a war a new name starts as the war's own. One already named everywhere starts there, as that is the name being changed.
+  form.elements["system-nickname-scope"].value = inWar && (warReport.systemNicknames[system.id] || !systemNicknames[system.id]) ? "war" : "everywhere";
+  // changing a name to this war alone moves it, unless it already had both, which stay until told otherwise
+  el("system-nickname-keep").checked = Boolean(inWar && warReport.systemNicknames[system.id]);
+  showNicknameElsewhere();
+  el("system-nickname-error").hidden = true;
+  el("system-nickname").showModal();
+  el("system-nickname-name").select();
+}
+
+// showNicknameElsewhere offers to keep the system's name everywhere else, while naming it for this war only
+function showNicknameElsewhere() {
+  const elsewhere = nicknaming && systemNicknames[nicknaming.id];
+  const onlyThisWar = warMode && warReport && el("system-nickname-form").elements["system-nickname-scope"].value === "war";
+  el("system-nickname-elsewhere").hidden = !elsewhere || !onlyThisWar;
+  if (elsewhere) el("system-nickname-elsewhere-text").textContent = `Keep ${elsewhere} everywhere else`;
+}
+
+async function saveSystemNickname() {
+  const system = nicknaming;
+  const inWar = warMode && warReport;
+  const everywhere = !inWar || el("system-nickname-form").elements["system-nickname-scope"].value === "everywhere";
+  const nickname = el("system-nickname-name").value.trim();
+  const dropElsewhere = inWar && !everywhere && systemNicknames[system.id] && !el("system-nickname-keep").checked;
+  try {
+    await backend().SetSystemNickname(system.id, nickname, inWar ? warReport.war.id : 0, everywhere);
+    if (dropElsewhere) await backend().SetSystemNickname(system.id, "", 0, true);
+  } catch (err) {
+    el("system-nickname-error").textContent = String(err);
+    el("system-nickname-error").hidden = false;
+    return;
+  }
+  el("system-nickname").close();
+  if (everywhere && nickname) systemNicknames[system.id] = nickname;
+  else if (everywhere || dropElsewhere) delete systemNicknames[system.id];
+  if (inWar) {
+    if (nickname && !everywhere) warReport.systemNicknames[system.id] = nickname;
+    else delete warReport.systemNicknames[system.id];
+  }
+  redrawSystemNames();
 }
 
 // entitySection is an entity's menu section, under a heading naming its kind, ie "Corporation: URSA PRIMUS"
@@ -5471,7 +5572,7 @@ function renderSystems(systems) {
     const security = document.createElement("span");
     security.className = securityClass(system.securityBand);
     security.textContent = system.securityStatus.toFixed(1);
-    name.append(`${system.name} `, security);
+    name.append(...systemLabelNodes(system), " ", security);
     const detail = document.createElement("div");
     detail.className = "row-detail";
     const parts = [...systemLocation(system), killmailSpan(system.firstSeen, system.lastSeen)];
@@ -5522,7 +5623,7 @@ function renderBattlePage() {
     const security = document.createElement("span");
     security.className = securityClass(battle.system.securityBand);
     security.textContent = battle.system.securityStatus.toFixed(1);
-    name.append(`${battle.system.name} `, security);
+    name.append(...systemLabelNodes(battle.system), " ", security);
     const detail = document.createElement("div");
     detail.className = "row-detail";
     const parts = [...systemLocation(battle.system), ...(battle.otherSystems.length ? [`also ${battle.otherSystems.join(", ")}`] : [])];
@@ -6008,7 +6109,7 @@ function warMeasuresTable(report) {
   };
 
   const count = (value) => value.toLocaleString("en-US");
-  row("Killmails held", (m) => count(m.killmails), { help: "The killmails the war holds that are a loss of this side." });
+  row("Losses", (m) => count(m.killmails), { help: "The killmails the war holds that are a loss of this side, capsules and structures among them." });
   row("ISK lost", (m) => formatIsk(m.iskLost), { strong: true, section: "isk" });
   row("In fights", (m) => formatIsk(m.iskFights), { indent: true, under: "isk" });
   if (any((m) => m.iskTrash)) {
@@ -6116,7 +6217,7 @@ function warOthersSection(report) {
   const table = document.createElement("table");
   table.className = "war-table war-others-table";
   const head = document.createElement("tr");
-  for (const [text, numeric] of [["Group", false], ["Killmails", true], ["ISK lost", true], ["Ships lost", true]]) {
+  for (const [text, numeric] of [["Group", false], ["Losses", true], ["ISK lost", true], ["Ships lost", true]]) {
     const cell = document.createElement("th");
     cell.textContent = text;
     if (numeric) cell.className = "num";
@@ -6485,12 +6586,12 @@ function warRefNoteLine(note) {
 
 // warBattleSections are a war battle's menu: the battle report on each site for its main system, then for each other system it spread to
 function warBattleSections(battle) {
-  return [{ name: battle.system.name, zkillUrl: battle.zkillUrl, evetoolsUrl: battle.evetoolsUrl, warbeaconUrl: battle.warbeaconUrl }, ...(battle.otherSystemReports || [])].map((system) => ({
-    heading: `Battle report: ${system.name}`,
-    items: [["zKillboard", system.zkillUrl], ["EVE Tools", system.evetoolsUrl], ["Warbeacon", system.warbeaconUrl]]
+  return [{ id: battle.system.id, name: battle.system.name, zkillUrl: battle.zkillUrl, evetoolsUrl: battle.evetoolsUrl, warbeaconUrl: battle.warbeaconUrl }, ...(battle.otherSystemReports || [])].map((system) => ({
+    heading: `Battle report: ${systemLabel(system)}`,
+    items: [...[["zKillboard", system.zkillUrl], ["EVE Tools", system.evetoolsUrl], ["Warbeacon", system.warbeaconUrl]]
       .filter(([, url]) => url)
-      .map(([site, url]) => ({ label: `Open on ${site}`, action: () => window.runtime.BrowserOpenURL(url) })),
-  })).filter((section) => section.items.length > 0);
+      .map(([site, url]) => ({ label: `Open on ${site}`, action: () => window.runtime.BrowserOpenURL(url) })), ...nicknameItems(system)],
+  }));
 }
 
 // WAR_EDIT_KINDS say what a battle's edits are on its chit, its hover, and its menu
@@ -6512,7 +6613,35 @@ function warBattleEditSection(battle) {
     const about = WAR_EDIT_KINDS[edit.kind];
     if (about) items.push({ label: about.undo, action: () => applyWarEdit(() => backend().UndoWarEdit(warReport.war.id, edit.id), edit.kind === "ignore" ? `Took back the battle in ${battle.system.name}` : about.undo.replace("Undo", "Undid")) });
   }
+  items.push({ label: "Add note…", action: () => openWarNote(battle, null) });
+  for (const note of battle.notes) {
+    const short = note.text.length > 24 ? `${note.text.slice(0, 24)}…` : note.text;
+    items.push({ label: `Edit note: ${short}`, action: () => openWarNote(battle, note) });
+  }
   return { heading: "This battle", items };
+}
+
+let warNoting = null; // the battle and note the Note window is open on
+
+// openWarNote opens the Note window on a battle, for a new note or one of its own
+function openWarNote(battle, note) {
+  warNoting = { battle, note };
+  el("war-note").returnValue = ""; // Escape leaves the last answer on it
+  el("war-note-battle").replaceChildren(...warBattleTitle(battle));
+  el("war-note-text").value = note ? note.text : "";
+  el("war-note-remove").hidden = !note;
+  el("war-note").showModal();
+  el("war-note-text").focus();
+}
+
+// closeWarNote adds or changes the note as the Note window closes on Save, or removes it on Remove
+function closeWarNote() {
+  const answer = el("war-note").returnValue;
+  const noting = warNoting;
+  if (!noting || (answer !== "save" && answer !== "remove")) return;
+  const text = answer === "remove" ? "" : el("war-note-text").value.trim();
+  if (!noting.note && !text) return;
+  applyWarEdit(() => backend().SaveWarBattleNote(warReport.war.id, noting.battle.id, noting.note ? noting.note.id : 0, text), text ? "Saved a note" : "Removed a note");
 }
 
 // applyWarEdit makes a change to the war's battles, then draws what comes back on the same tab and page
@@ -6526,9 +6655,9 @@ async function applyWarEdit(call, done) {
   }
 }
 
-// warBattleTitle is how the Merge and Split windows name a battle, ie J110117, Nov 4th, 2026, 20:01 – 20:48 EVE · 47 min
+// warBattleTitle is how the Merge, Split, and Note windows name a battle, as nodes to fill an element, ie J110117, Nov 4th, 2026, 20:01 – 20:48 EVE · 47 min
 function warBattleTitle(battle) {
-  return `${battle.system.name}, ${spokenDate(battle.start)}, ${battleClock(battle)}`;
+  return [...systemLabelNodes(battle.system), `, ${spokenDate(battle.start)}, ${battleClock(battle)}`];
 }
 
 // warBattleGap says when one battle was from another, and how far apart in minutes, 0 when they overlap
@@ -6546,7 +6675,7 @@ let warMerging = null; // the battle the Merge window is open on
 // openWarMerge opens the Merge window on a battle, with the others nearest in time first
 function openWarMerge(battle) {
   warMerging = battle;
-  el("war-merge-battle").textContent = warBattleTitle(battle);
+  el("war-merge-battle").replaceChildren(...warBattleTitle(battle));
   el("war-merge-filter").value = "";
   renderWarMergeList();
   el("war-merge").showModal();
@@ -6561,7 +6690,7 @@ function renderWarMergeList() {
   const others = warReport.battles
     .filter((battle) => battle.id !== warMerging.id && !battle.ignored)
     .map((battle) => ({ battle, gap: warBattleGap(battle, warMerging) }))
-    .filter(({ battle }) => !typed || ticked.has(battle.id) || battle.system.name.toLowerCase().includes(typed) || battle.otherSystems.some((name) => name.toLowerCase().includes(typed)))
+    .filter(({ battle }) => !typed || ticked.has(battle.id) || [battle.system, ...battle.otherSystemReports].some((system) => systemLabel(system).toLowerCase().includes(typed)))
     .sort((a, b) => a.gap.minutes - b.gap.minutes);
   const rows = others.map(({ battle, gap }) => {
     const row = document.createElement("label");
@@ -6573,7 +6702,7 @@ function renderWarMergeList() {
     box.addEventListener("change", showWarMergeReady);
     const main = document.createElement("span");
     main.className = "war-pick-main";
-    main.textContent = `${battle.system.name}, ${spokenDate(battle.start)}, ${clockTime(timeParts(battle.start))} · ${warPlural(battle.pilots, "pilot")}`;
+    main.append(...systemLabelNodes(battle.system), `, ${spokenDate(battle.start)}, ${clockTime(timeParts(battle.start))} · ${warPlural(battle.pilots, "pilot")}`);
     main.title = main.textContent;
     const when = document.createElement("span");
     when.className = "war-pick-side";
@@ -6610,17 +6739,18 @@ async function openWarSplit(battle) {
   const killmails = await runBackend(() => backend().GetWarBattleKillmails(warReport.war.id, battle.id));
   if (!killmails) return;
   warSplitting = battle;
-  el("war-split-battle").textContent = warBattleTitle(battle);
+  el("war-split-battle").replaceChildren(...warBattleTitle(battle));
 
-  const systems = [...new Set(killmails.map((km) => km.system))];
-  el("war-split-systems").replaceChildren(...(systems.length < 2 ? [] : systems.map((system) => {
+  const systems = [...new Set(killmails.map((km) => km.systemId))].map((id) => killmails.find((km) => km.systemId === id));
+  el("war-split-systems").replaceChildren(...(systems.length < 2 ? [] : systems.map((km) => {
+    const label = systemLabel({ id: km.systemId, name: km.system });
     const button = document.createElement("button");
     button.type = "button";
     button.className = "secondary";
-    button.textContent = `Tick ${system}`;
-    button.title = `Tick every killmail in ${system}, and untick the rest`;
+    button.append("Tick ", ...systemLabelNodes({ id: km.systemId, name: km.system }));
+    button.title = `Tick every killmail in ${label}, and untick the rest`;
     button.addEventListener("click", () => {
-      el("war-split-list").querySelectorAll("input").forEach((box) => { box.checked = box.dataset.system === system; });
+      el("war-split-list").querySelectorAll("input").forEach((box) => { box.checked = Number(box.dataset.system) === km.systemId; });
       showWarSplitReady();
     });
     return button;
@@ -6632,7 +6762,7 @@ async function openWarSplit(battle) {
     const box = document.createElement("input");
     box.type = "checkbox";
     box.value = km.id;
-    box.dataset.system = km.system;
+    box.dataset.system = km.systemId;
     box.addEventListener("change", showWarSplitReady);
     const time = document.createElement("button");
     time.type = "button";
@@ -6646,7 +6776,7 @@ async function openWarSplit(battle) {
     });
     const main = document.createElement("span");
     main.className = "war-pick-main";
-    main.textContent = [km.system, km.ship, km.victim].filter(Boolean).join(" · ");
+    main.append(...systemLabelNodes({ id: km.systemId, name: km.system }), ...[km.ship, km.victim].filter(Boolean).map((part) => ` · ${part}`));
     main.title = main.textContent;
     const side = document.createElement("span");
     side.className = "war-pick-side";
@@ -6702,6 +6832,11 @@ function renderWarBattlePage() {
       tag.className = "war-chit war-edited";
       tag.textContent = about.chit;
       tag.title = about.title;
+      if (kind === "ignore" && battle.ignoredJoined > 0) {
+        tag.classList.add("war-ignored-joined");
+        tag.textContent = `Ignored, +${battle.ignoredJoined.toLocaleString("en-US")}`;
+        tag.title = `${warPlural(battle.ignoredJoined, "killmail")} joined this battle since you ignored it, and ${battle.ignoredJoined === 1 ? "is" : "are"} left out of the war's figures too. If they belong, take it back and split off only what doesn't.`;
+      }
       date.append(tag);
     }
     // on a line of their own, as they would not fit beside the date
@@ -6731,18 +6866,26 @@ function renderWarBattlePage() {
 
     const systemCell = document.createElement("td");
     const name = document.createElement("div");
-    name.textContent = battle.system.name;
-    name.title = battle.system.name;
+    name.append(...systemLabelNodes(battle.system));
+    name.title = name.textContent;
     const detail = document.createElement("div");
     detail.className = "row-detail";
     detail.textContent = `${warPlural(battle.killmails, "killmail")} · ${warPlural(battle.pilots, "pilot")}`;
+    detail.title = "Every killmail in this fight, one for each thing any side lost: ships, capsules, structures, and fighters. Trash is counted apart.";
     systemCell.append(name, detail);
+    for (const note of battle.notes) {
+      const line = document.createElement("div");
+      line.className = "war-battle-note";
+      line.textContent = note.text;
+      line.title = note.text;
+      systemCell.append(line);
+    }
     if (battle.otherSystems.length > 0) {
       const others = document.createElement("div");
       others.className = "war-other-systems";
       const words = document.createElement("span");
       words.textContent = `And ${warPlural(battle.otherSystems.length, "other system")}`;
-      words.title = battle.otherSystems.join(", ");
+      words.title = battle.otherSystemReports.map(systemLabel).join(", ");
       others.append(words);
       systemCell.append(others);
     }
@@ -6793,7 +6936,7 @@ function renderWarSystems(report) {
     const row = document.createElement("tr");
     const nameCell = document.createElement("td");
     const name = document.createElement("div");
-    name.textContent = entry.system.name;
+    name.append(...systemLabelNodes(entry.system));
     const detail = document.createElement("div");
     detail.className = "row-detail";
     const parts = systemLocation(entry.system).filter((part) => !(part instanceof Node && part.classList.contains("space")));
@@ -6815,7 +6958,7 @@ function renderWarSystems(report) {
       isk.textContent = formatIsk(side.iskLost);
       const killmails = document.createElement("div");
       killmails.className = "row-detail";
-      killmails.textContent = warPlural(side.killmails, "killmail");
+      killmails.textContent = warPlural(side.killmails, "loss", "losses");
       cell.append(isk, killmails);
     }
     return withMenu(row, [systemSection(entry.system)]);
@@ -7787,6 +7930,14 @@ function wireWarSetup() {
   el("war-merge-save").addEventListener("click", saveWarMerge);
   for (const id of ["war-split-close", "war-split-cancel"]) el(id).addEventListener("click", () => el("war-split").close());
   el("war-split-save").addEventListener("click", saveWarSplit);
+  el("war-note").addEventListener("close", closeWarNote);
+  el("system-nickname-cancel").addEventListener("click", () => el("system-nickname").close());
+  el("system-nickname-scope").addEventListener("change", showNicknameElsewhere);
+  el("system-nickname-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveSystemNickname();
+  });
+  loadSystemNicknames();
   el("war-button").addEventListener("click", openWarSetup);
   el("war-setup-close").addEventListener("click", () => el("war-setup").close());
   el("war-edit-close").addEventListener("click", () => el("war-edit").close());

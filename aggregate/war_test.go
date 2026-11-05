@@ -1598,6 +1598,15 @@ func TestWarBattleEdits(t *testing.T) {
 		assert.Len(t, build(merge).Battles, 2)
 	})
 
+	t.Run("merging a split's pieces back marks the split once", func(t *testing.T) {
+		data := build(retrieval.WarBattleEdit{ID: 1, Kind: retrieval.WarEditSplit, Groups: [][]int{{3}, {4}}}, retrieval.WarBattleEdit{ID: 2, Kind: retrieval.WarEditMerge, Groups: [][]int{{3}, {4}}})
+		for _, battle := range data.Battles {
+			if len(battle.Edits) > 0 {
+				assert.ElementsMatch(t, []aggregate.WarEditMark{{ID: 1, Kind: "split"}, {ID: 2, Kind: "merge"}}, battle.Edits)
+			}
+		}
+	})
+
 	t.Run("undoing an earlier edit keeps the later one", func(t *testing.T) {
 		split := retrieval.WarBattleEdit{ID: 2, Kind: retrieval.WarEditSplit, Groups: [][]int{{3}, {4}}}
 		both := build(merge, split)
@@ -1639,6 +1648,7 @@ func TestWarIgnoreBattle(t *testing.T) {
 		data := aggregate.BuildWar(all, expand(all...), sides, 1, ignore(1))
 		assert.Zero(t, data.B.Killmails)
 		assert.Equal(t, 1, data.IgnoredBattles)
+		assert.Equal(t, 1, data.Battles[0].IgnoredJoined, "and the row says so")
 	})
 
 	t.Run("the trash of its station leaves with it, and shows on its row", func(t *testing.T) {
@@ -1690,4 +1700,33 @@ func TestWarIgnoreBattle(t *testing.T) {
 		assert.Len(t, data.Battles, 2)
 		assert.NotEqual(t, data.Battles[0].ID, data.Battles[1].ID)
 	})
+}
+
+func TestWarBattleNotes(t *testing.T) {
+	comm.InitLogger(logrus.ErrorLevel)
+	assert.NoError(t, comm.InitStaticData(staticdata.Files))
+	kms := []retrieval.RawKillmail{raw(1, 0, sysHome, pB(1), rifter, pA1(2)), raw(2, 3, sysHome, pB(3), rifter, pA1(2)), raw(3, 200, sysHome, pB(4), rifter, pA1(5))}
+	notes := []retrieval.WarBattleNote{{ID: 1, Killmails: []int{1, 2}, Text: "first"}, {ID: 2, Killmails: []int{3}, Text: "second"}, {ID: 3, Killmails: []int{99}, Text: "gone"}}
+	build := func(edits ...retrieval.WarBattleEdit) *aggregate.WarData {
+		return aggregate.BuildWar(kms, expand(kms...), baseSides(), 1, retrieval.WarEdits{Edits: edits, Notes: notes})
+	}
+	texts := func(data *aggregate.WarData) [][]string {
+		out := [][]string{}
+		for _, battle := range data.Battles {
+			row := []string{}
+			for _, note := range battle.Notes {
+				row = append(row, note.Text)
+			}
+			out = append(out, row)
+		}
+		return out
+	}
+
+	plain := build()
+	assert.Equal(t, [][]string{{"second"}, {"first"}}, texts(plain), "each on its battle, and one whose battle has gone on none")
+	merged := build(retrieval.WarBattleEdit{ID: 1, Kind: retrieval.WarEditMerge, Groups: [][]int{{1, 2}, {3}}})
+	assert.Equal(t, [][]string{{"first", "second"}}, texts(merged), "a merged battle keeps both")
+	ignored := build(retrieval.WarBattleEdit{ID: 1, Kind: retrieval.WarEditIgnore, Groups: [][]int{{3}}})
+	assert.ElementsMatch(t, [][]string{{"first"}, {"second"}}, texts(ignored), "an ignored row keeps its note")
+	assert.Equal(t, warFiguresOf(plain), warFiguresOf(build()), "notes change no figure")
 }

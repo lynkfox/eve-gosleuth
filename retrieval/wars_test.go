@@ -319,3 +319,25 @@ func TestWarEdits(t *testing.T) {
 	assert.Empty(t, cache.WarEditsOf(war.ID).Edits)
 	assert.NoError(t, cache.Close())
 }
+
+func TestSystemNicknames(t *testing.T) {
+	comm.InitLogger(logrus.ErrorLevel)
+	path := filepath.Join(t.TempDir(), "cache.db")
+	cache, err := retrieval.LoadCache(nil, path)
+	assert.NoError(t, err)
+	assert.Empty(t, cache.SystemNicknamesOf())
+	cache.SetSystemNickname(31000001, "Ursa Home")
+	cache.SetSystemNickname(31000002, "Staging")
+	cache.SetSystemNickname(31000002, "")
+	assert.NoError(t, retrieval.SaveCache(cache))
+	assert.NoError(t, cache.Close())
+
+	cache, err = retrieval.LoadCache(nil, path)
+	assert.NoError(t, err)
+	assert.Equal(t, map[int]string{31000001: "Ursa Home"}, cache.SystemNicknamesOf())
+	cache.ClearAll(false)
+	assert.Len(t, cache.SystemNicknamesOf(), 1, "a clear leaves it")
+	cache.ClearAll(true)
+	assert.Empty(t, cache.SystemNicknamesOf(), "unless told not to")
+	assert.NoError(t, cache.Close())
+}

@@ -814,11 +814,18 @@ func TestWarBattleEdits(t *testing.T) {
 		assert.Equal(t, before.Battles, undone.Battles)
 	})
 
-	t.Run("an edit can start from a war whose report was not the last built", func(t *testing.T) {
-		app.lastWar = nil
+	t.Run("a row from an older report is refused", func(t *testing.T) {
 		merged, err := app.MergeWarBattles(card.ID, []string{newer.ID, older.ID})
 		assert.NoError(t, err)
 		assert.Len(t, merged.Battles, 1)
+		saved := len(app.cache.WarEditsOf(card.ID).Edits)
+		for _, stale := range []string{newer.ID, older.ID} {
+			if stale != merged.Battles[0].ID {
+				_, err = app.IgnoreWarBattle(card.ID, stale)
+				assert.ErrorIs(t, err, errNoWarBattle)
+			}
+		}
+		assert.Len(t, app.cache.WarEditsOf(card.ID).Edits, saved)
 	})
 }
 
@@ -852,4 +859,61 @@ func TestIgnoreWarBattle(t *testing.T) {
 	assert.Equal(t, before.B, back.B)
 	assert.Equal(t, before.Battles, back.Battles)
 	assert.Zero(t, back.IgnoredBattles)
+}
+
+func TestWarNotesAndNicknames(t *testing.T) {
+	comm.InitLogger(logrus.PanicLevel)
+	now := time.Now().UTC()
+	app, _ := warApp(t, fightLists(now))
+	card := savedWar(t, app, "")
+	report, err := app.CollectWar(card.ID)
+	assert.NoError(t, err)
+	battle := report.Battles[0].ID
+
+	t.Run("a note is added, changed, and removed, and changes no figure", func(t *testing.T) {
+		added, err := app.SaveWarBattleNote(card.ID, battle, 0, "  held the gate  ")
+		assert.NoError(t, err)
+		assert.Equal(t, []WarNote{{ID: 1, Text: "held the gate"}}, added.Battles[0].Notes)
+		assert.Equal(t, report.A, added.A)
+		changed, err := app.SaveWarBattleNote(card.ID, battle, 1, "lost the gate")
+		assert.NoError(t, err)
+		assert.Equal(t, "lost the gate", changed.Battles[0].Notes[0].Text)
+		empty, err := app.SaveWarBattleNote(card.ID, battle, 0, "   ")
+		assert.NoError(t, err)
+		assert.Len(t, empty.Battles[0].Notes, 1, "an empty new note is nothing")
+		removed, err := app.SaveWarBattleNote(card.ID, battle, 1, "")
+		assert.NoError(t, err)
+		assert.Empty(t, removed.Battles[0].Notes)
+		_, err = app.SaveWarBattleNote(card.ID, "gone", 0, "text")
+		assert.ErrorIs(t, err, errNoWarBattle)
+	})
+
+	t.Run("a nickname's scope is chosen, the war's winning inside it and going when named everywhere", func(t *testing.T) {
+		const system = 31000001
+		assert.NoError(t, app.SetSystemNickname(system, "Mango", card.ID, false))
+		names, _ := app.GetSystemNicknames()
+		assert.Empty(t, names, "the war's own is not everywhere")
+		opened, _ := app.OpenWar(card.ID)
+		assert.Equal(t, map[int]string{system: "Mango"}, opened.SystemNicknames)
+
+		assert.NoError(t, app.SetSystemNickname(system, "Ursa Home", card.ID, true))
+		names, _ = app.GetSystemNicknames()
+		assert.Equal(t, map[int]string{system: "Ursa Home"}, names)
+		opened, _ = app.OpenWar(card.ID)
+		assert.Empty(t, opened.SystemNicknames)
+
+		assert.NoError(t, app.SetSystemNickname(system, "Mango", card.ID, false))
+		assert.NoError(t, app.SetSystemNickname(system, "", card.ID, false))
+		opened, _ = app.OpenWar(card.ID)
+		assert.Empty(t, opened.SystemNicknames)
+		names, _ = app.GetSystemNicknames()
+		assert.Len(t, names, 1, "removing the war's leaves the app's")
+
+		assert.ErrorIs(t, app.SetSystemNickname(system, "x", 0, false), errNoWar)
+		assert.ErrorIs(t, app.SetSystemNickname(system, "x", 12345, false), errNoWar)
+		assert.ErrorIs(t, app.SetSystemNickname(system, "Not Set", 12345, true), errNoWar)
+		names, _ = app.GetSystemNicknames()
+		assert.Equal(t, "Ursa Home", names[system], "a refusal changes nothing")
+		assert.NoError(t, app.SetSystemNickname(system, "No War", 0, true))
+	})
 }

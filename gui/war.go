@@ -3,6 +3,7 @@ package gui
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -143,9 +144,11 @@ type WarBattle struct {
 	Class              string            `json:"class"` // the system's wormhole class, else its security band
 	Pilots             int               `json:"pilots"`
 	Killmails          int               `json:"killmails"`
-	Skirmish           bool              `json:"skirmish"` // marked beside its date
-	Edits              []WarEditMark     `json:"edits"`    // what the user did to it, never null
-	Ignored            bool              `json:"ignored"`  // set aside by the user: grayed out, its figures its row's alone
+	Skirmish           bool              `json:"skirmish"`      // marked beside its date
+	Edits              []WarEditMark     `json:"edits"`         // what the user did to it, never null
+	Ignored            bool              `json:"ignored"`       // set aside by the user: grayed out, its figures its row's alone
+	IgnoredJoined      int               `json:"ignoredJoined"` // killmails that have joined it since it was ignored, which also count nowhere
+	Notes              []WarNote         `json:"notes"`         // never null
 	A                  WarBattleSide     `json:"a"`
 	B                  WarBattleSide     `json:"b"`
 	Others             WarBattleSide     `json:"others"`
@@ -157,6 +160,7 @@ type WarBattle struct {
 
 // WarSystemReport is the battle report links of one system of a battle
 type WarSystemReport struct {
+	ID           int    `json:"id"`
 	Name         string `json:"name"`
 	ZkillURL     string `json:"zkillUrl"`
 	EveToolsURL  string `json:"evetoolsUrl"`
@@ -215,27 +219,28 @@ type WarReachLine struct {
 
 // WarReport is what a war's report shows. New categories join WarMeasures and WarBattleSide, which have room for Stage 3's.
 type WarReport struct {
-	War            WarCard         `json:"war"`
-	A              WarMeasures     `json:"a"`
-	B              WarMeasures     `json:"b"`
-	Others         WarMeasures     `json:"others"`
-	Battles        []WarBattle     `json:"battles"`     // newest first, skirmishes among them. Never null, as all the lists here.
-	BattleCount    int             `json:"battleCount"` // those not Skirmish
-	Skirmishes     int             `json:"skirmishes"`
-	IgnoredBattles int             `json:"ignoredBattles"` // set aside by the user, in Battles but not in BattleCount or Skirmishes
-	SystemCount    int             `json:"systemCount"`
-	Classes        []WarClassCount `json:"classes"` // most systems first
-	Systems        []WarSystem     `json:"systems"` // most killmails first
-	Killmails      []WarKillmail   `json:"-"`
-	KillmailCount  int             `json:"killmailCount"`
-	OtherGroups    []WarOtherGroup `json:"otherGroups"` // most ISK lost first
-	NPCPilots      WarNPCPilots    `json:"npcPilots"`
-	Days           []WarDay        `json:"days"` // oldest first, only days with a loss on either side
-	Reach          []WarReachLine  `json:"reach"`
-	FullRunDue     bool            `json:"fullRunDue"` // the sides or start changed since its last full run, so its next run reads every list from its start. Also true before its first run.
-	Stopped        bool            `json:"stopped"`
-	RateLimited    bool            `json:"rateLimited"`
-	Sources        string          `json:"sources"` // as IntelReport's, empty on opening with nothing collected
+	War             WarCard         `json:"war"`
+	A               WarMeasures     `json:"a"`
+	B               WarMeasures     `json:"b"`
+	Others          WarMeasures     `json:"others"`
+	Battles         []WarBattle     `json:"battles"`     // newest first, skirmishes among them. Never null, as all the lists here.
+	BattleCount     int             `json:"battleCount"` // those not Skirmish
+	Skirmishes      int             `json:"skirmishes"`
+	IgnoredBattles  int             `json:"ignoredBattles"` // set aside by the user, in Battles but not in BattleCount or Skirmishes
+	SystemCount     int             `json:"systemCount"`
+	Classes         []WarClassCount `json:"classes"` // most systems first
+	Systems         []WarSystem     `json:"systems"` // most killmails first
+	Killmails       []WarKillmail   `json:"-"`
+	KillmailCount   int             `json:"killmailCount"`
+	SystemNicknames map[int]string  `json:"systemNicknames"` // names for systems in this war only, by system id, never null
+	OtherGroups     []WarOtherGroup `json:"otherGroups"`     // most ISK lost first
+	NPCPilots       WarNPCPilots    `json:"npcPilots"`
+	Days            []WarDay        `json:"days"` // oldest first, only days with a loss on either side
+	Reach           []WarReachLine  `json:"reach"`
+	FullRunDue      bool            `json:"fullRunDue"` // the sides or start changed since its last full run, so its next run reads every list from its start. Also true before its first run.
+	Stopped         bool            `json:"stopped"`
+	RateLimited     bool            `json:"rateLimited"`
+	Sources         string          `json:"sources"` // as IntelReport's, empty on opening with nothing collected
 }
 
 // warDateLayout is how a war's dates are saved and sent
@@ -984,7 +989,8 @@ Parameters:
   - war: the war as saved
   - sides: its sides as they are now
 */
-func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarReport {
+// buildWarData works out a war's figures from what it holds, with the edits they used. The caller must hold a.mu.
+func (a *App) buildWarData(war retrieval.War, sides aggregate.WarSides) (*aggregate.WarData, retrieval.WarEdits) {
 	held := []retrieval.RawKillmail{}
 	for _, raw := range a.cache.WarKillmails(war.ID) {
 		if raw.ESIKillmail != nil && raw.Zkillmail != nil && war.Within(raw.ESIKillmail.KillmailTime) {
@@ -1002,8 +1008,12 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 		}
 	}
 	comm.ReportProgress("Working out the war's figures")
-	data := aggregate.BuildWar(held, expanded, sides, battleMinPilots, a.cache.WarEditsOf(war.ID))
-	a.lastWar = &builtWar{id: war.ID, data: data}
+	edits := a.cache.WarEditsOf(war.ID)
+	return aggregate.BuildWar(held, expanded, sides, battleMinPilots, edits), edits
+}
+
+func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarReport {
+	data, edits := a.buildWarData(war, sides)
 
 	efficiency := func(other, own float64) float64 {
 		if total := other + own; total > 0 {
@@ -1012,22 +1022,24 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 		return 0
 	}
 	report := WarReport{
-		War:            a.warCard(war),
-		A:              warMeasures(data.A, efficiency(data.B.ISKLost, data.A.ISKLost)),
-		B:              warMeasures(data.B, efficiency(data.A.ISKLost, data.B.ISKLost)),
-		Others:         warMeasures(data.Others, 0),
-		Battles:        []WarBattle{},
-		BattleCount:    data.BattleCount,
-		Skirmishes:     data.Skirmishes,
-		IgnoredBattles: data.IgnoredBattles,
-		Classes:        []WarClassCount{},
-		Systems:        []WarSystem{},
-		Killmails:      []WarKillmail{},
-		OtherGroups:    []WarOtherGroup{},
-		Days:           []WarDay{},
-		Reach:          []WarReachLine{},
-		FullRunDue:     war.RunKey != war.RunKeyFor(sides.A, sides.B),
+		War:             a.warCard(war),
+		A:               warMeasures(data.A, efficiency(data.B.ISKLost, data.A.ISKLost)),
+		B:               warMeasures(data.B, efficiency(data.A.ISKLost, data.B.ISKLost)),
+		Others:          warMeasures(data.Others, 0),
+		Battles:         []WarBattle{},
+		BattleCount:     data.BattleCount,
+		Skirmishes:      data.Skirmishes,
+		IgnoredBattles:  data.IgnoredBattles,
+		Classes:         []WarClassCount{},
+		Systems:         []WarSystem{},
+		Killmails:       []WarKillmail{},
+		OtherGroups:     []WarOtherGroup{},
+		Days:            []WarDay{},
+		Reach:           []WarReachLine{},
+		FullRunDue:      war.RunKey != war.RunKeyFor(sides.A, sides.B),
+		SystemNicknames: map[int]string{},
 	}
+	maps.Copy(report.SystemNicknames, edits.SystemNames)
 	for _, reach := range war.Reach {
 		if !reach.Complete {
 			report.Reach = append(report.Reach, WarReachLine{Group: reach.Group, Oldest: reach.Oldest})
@@ -1043,8 +1055,11 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 	for _, battle := range data.Battles {
 		row := WarBattle{ID: battle.ID, Start: battle.Start, End: battle.End, System: structureSystem(battle.System), OtherSystems: append([]string{}, battle.OtherSystems...),
 			OtherSystemReports: warOtherSystemReports(battle),
-			Class:              warClass(battle.System), Pilots: battle.Pilots, Killmails: len(battle.Killmails), Skirmish: battle.Skirmish, Ignored: battle.Ignored,
-			A: warBattleSide(battle.A), B: warBattleSide(battle.B), Others: warBattleSide(battle.Others), StationRefs: []WarStationRef{}, Edits: []WarEditMark{}}
+			Class:              warClass(battle.System), Pilots: battle.Pilots, Killmails: len(battle.Killmails), Skirmish: battle.Skirmish, Ignored: battle.Ignored, IgnoredJoined: battle.IgnoredJoined,
+			A: warBattleSide(battle.A), B: warBattleSide(battle.B), Others: warBattleSide(battle.Others), StationRefs: []WarStationRef{}, Edits: []WarEditMark{}, Notes: []WarNote{}}
+		for _, note := range battle.Notes {
+			row.Notes = append(row.Notes, WarNote{ID: note.ID, Text: note.Text})
+		}
 		for _, edit := range battle.Edits {
 			row.Edits = append(row.Edits, WarEditMark(edit))
 		}
@@ -1166,7 +1181,7 @@ func warOtherSystemReports(battle *aggregate.WarBattle) []WarSystemReport {
 			start, end = at, last[system.SystemID]
 		}
 		middle := start.Add(end.Sub(start) / 2)
-		out = append(out, WarSystemReport{Name: system.Name, ZkillURL: api.ZkillRelatedURL(system.SystemID, middle),
+		out = append(out, WarSystemReport{ID: system.SystemID, Name: system.Name, ZkillURL: api.ZkillRelatedURL(system.SystemID, middle),
 			EveToolsURL: api.EveToolsRelatedURL(system.SystemID, middle), WarbeaconURL: api.WarbeaconRelatedURL(system.SystemID, middle)})
 	}
 	return out

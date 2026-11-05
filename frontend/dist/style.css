@@ -3123,6 +3123,10 @@ p.tour-text { margin: 0; }
 .war-split-systems { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .war-split-systems:empty { display: none; }
 .war-split-count { flex: 1 1 auto; align-self: center; }
+#system-nickname-name { display: block; width: 100%; box-sizing: border-box; margin-bottom: 8px; }
+.system-nickname { color: var(--accent); font-weight: 700; }
+.war-note-text { display: block; width: 100%; resize: vertical; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; box-sizing: border-box; margin-bottom: 12px; }
+.war-battle-note { overflow: hidden; color: var(--accent); font-size: 12px; font-style: italic; text-overflow: ellipsis; white-space: nowrap; }
 .war-setup .war-setup-body { align-content: start; padding-bottom: 28px; }
 .war-setup h3 { margin: 0; font-size: 13px; }
 
@@ -3283,6 +3287,7 @@ section.war-others { display: grid; gap: 8px; }
 .war-table > tbody > tr.war-battle:hover { background: var(--panel-raised); }
 .war-skirmish { color: var(--muted); }
 .war-battle-ignored > td { opacity: 0.45; }
+.war-battle-ignored > td:has(.war-ignored-joined) { opacity: 1; }
 .war-table > tbody > tr.war-battle-ignored:hover > td { opacity: 0.7; }
 .war-side-cell { border-left: 3px solid var(--border); }
 .war-side-cell.war-a { border-left-color: var(--war-a); }
@@ -3322,6 +3327,7 @@ th[aria-sort="descending"] .war-sort::after { flex: none; margin-left: 4px; cont
 .war-class-cell .sec-high, .war-class-cell .sec-low, .war-class-cell .sec-null, .war-class-cell .sec-trig { margin-left: 4px; font-size: 12px; }
 .war-clock { font-size: 9px; }
 .war-edited { border-style: dashed; }
+.war-edited.war-ignored-joined { border-style: solid; color: var(--accent); font-weight: 600; }
 .war-chit { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid currentColor; border-radius: 3px; color: var(--muted); font-size: 10px; line-height: 14px; vertical-align: 1px; }
 .war-other-systems { color: var(--muted); font-size: 12px; }
 .war-other-systems > span { border-bottom: 1px dotted currentColor; cursor: help; }
