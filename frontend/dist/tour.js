@@ -29,7 +29,7 @@ const TOUR_STEPS = [
     id: "search-bar",
     target: "#search-input",
     title: "The search bar",
-    text: "Type a name, a corp or alliance ticker, or paste a zKillboard or EveWho link, and press Search. Pilots, corporations, alliances, and systems all work.",
+    text: "Type a name, a corp or alliance ticker, or paste a killboard or EveWho link, and press Search. Pilots, corporations, alliances, and systems all work.",
   },
   {
     id: "recent-searches",

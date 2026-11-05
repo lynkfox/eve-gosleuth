@@ -6,7 +6,7 @@ How each feature works, for when you are changing it. The rules that apply every
 
 - The search bar has no type: `SearchTarget(name, "")` looks the name up with `retrieval.MatchTargets` (ESI universe/ids: exact names ignoring case, plus corps and alliances by ticker, ie Jita Holding Inc. (JITA) for Jita, kept as `ByTicker` since a player may only have seen a ticker; items left out) and searches a lone exact match, or with more than one or any by ticker returns `TargetResult.Choices`, ticker ones last, for `chooseTarget` (main.js, `#target-choice`) to ask which, then is called again with the chosen name and type. A typed lookup (`GetTargetInfoOfType`) prefers the exact name among its type.
 - A name filled in by the app, ie a recent search or a menu's Search, carries its type and eve id as `searchTypeHint`/`searchIdHint`, cleared by typing, and `SearchTarget(name, type, id)` then looks it up by id (`GetTargetInfoByID`, `lookupTargetByID`), with no name lookup: the ESI's universe/ids can not find every name, ie the alliance L A Z E R H A W K S. Pass the id wherever a search is offered; recent searches save it (`RecentSearch.ID`) and the holding redirect uses the main's.
-- A zKillboard or EveWho link typed into the search bar, My Intel, or the holding dialog is read by `api.ParseEntityLink` and looked up by its id, its own type winning over a dropdown's where that kind is allowed (`lookupEntity`).
+- A killboard (zKillboard, kb.evetools.org, eve-kill.com) or EveWho link typed into the search bar, My Intel, the holding dialog, a coalition's members, or a war's sides is read by `api.ParseEntityLink` and looked up by its id, its own type winning over a dropdown's where that kind is allowed (`lookupEntity`).
 
 ## Recent searches
 

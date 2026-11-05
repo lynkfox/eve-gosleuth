@@ -233,7 +233,7 @@ func (a *App) SetCoalitionStructures(id int, include bool) (card CoalitionCard, 
 
 Parameters:
   - id: the coalition's id
-  - name: the member's exact name, ignoring case, or a zKillboard or EveWho link to it
+  - name: the member's exact name, ignoring case, or a killboard or EveWho link to it
   - memberType: CORPORATION or ALLIANCE, for a name
 
 Returns:

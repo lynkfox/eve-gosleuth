@@ -565,7 +565,7 @@ func (a *App) holdingMain(target *retrieval.IntelTarget) (retrieval.HoldingLink,
 	SearchTarget looks up a pilot, corporation, alliance, system, or coalition, by id when it is known, else by name, and builds its display values
 
 Parameters:
-  - name: the exact in game name of the target, ignoring case, or a zKillboard or EveWho link to it, which is searched by the id in it
+  - name: the exact in game name of the target, ignoring case, or a killboard or EveWho link to it, which is searched by the id in it
   - searchType: PILOT, CORPORATION, ALLIANCE, SYSTEM, COALITION, or WAR, only accepting a match of this type, or empty to accept any: a lone match is searched,
     and with more than one, or any by ticker, or a coalition or war of that exact name, the result has only Choices, for the search to be asked again for the one chosen.
     A coalition or war named exactly is searched at once when the ESI finds nothing else by the name or can not be reached, and if both are named so, they are the choices.
@@ -606,7 +606,7 @@ func (a *App) SearchTarget(name string, searchType string, id int) (result Targe
 	// imported names are checked before a search uses them, a call or two, or nothing when there is none
 	a.runIntelChecks()
 
-	// a pasted zKillboard or EveWho link is searched by the id in it
+	// a pasted killboard or EveWho link is searched by the id in it
 	if linkType, linkID, isLink := api.ParseEntityLink(name); isLink {
 		searchType, id = linkType.String(), linkID
 	}

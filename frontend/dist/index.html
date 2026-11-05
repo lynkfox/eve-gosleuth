@@ -17,7 +17,7 @@
     </div>
     <form id="search-form" class="search" autocomplete="off">
       <div class="search-field">
-        <input id="search-input" type="text" placeholder="Exact name, a zKillboard or EveWho link, a:affiliate group, or c:coalition" spellcheck="false" autofocus
+        <input id="search-input" type="text" placeholder="Exact name, a killboard or EveWho link, a:affiliate group, or c:coalition" spellcheck="false" autofocus
           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="recent-list">
         <button id="recent-toggle" class="recent-toggle" type="button" title="Recent searches" aria-label="Recent searches" aria-expanded="false" aria-controls="recent-list" tabindex="-1">▾</button>
         <ul id="recent-list" class="menu-dropdown recent-list" role="listbox" aria-label="Recent searches" hidden></ul>
@@ -748,7 +748,7 @@
               <option value="CORPORATION">Corporation</option>
               <option value="PILOT">Pilot</option>
             </select>
-            <input id="myintel-add-name" type="text" placeholder="Exact name or a zKillboard link, to add a card for it" autocomplete="off" spellcheck="false" aria-label="Name">
+            <input id="myintel-add-name" type="text" placeholder="Exact name or a killboard link, to add a card for it" autocomplete="off" spellcheck="false" aria-label="Name">
             <button type="submit">Add</button>
           </form>
           <p id="myintel-error" class="preferences-error" role="alert" hidden></p>
@@ -1054,7 +1054,7 @@
       </label>
       <label class="holding-field">
         <span class="preference-name">Name</span>
-        <input id="holding-name" type="text" autocomplete="off" spellcheck="false" placeholder="Exact in-game name">
+        <input id="holding-name" type="text" autocomplete="off" spellcheck="false" placeholder="Exact in-game name, or a killboard or EveWho link">
       </label>
       <label class="holding-field">
         <span class="preference-name">Note</span>
@@ -1101,7 +1101,7 @@
         <div class="war-row">
           <span class="preference-name war-label war-label-a">Side A</span>
           <div class="war-side">
-            <input id="war-side-a-input" type="text" spellcheck="false" placeholder="Coalition, affiliate group, or corp or alliance name" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="war-side-a-list" aria-label="Side A">
+            <input id="war-side-a-input" type="text" spellcheck="false" placeholder="Coalition, affiliate group, corp or alliance name, or a link" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="war-side-a-list" aria-label="Side A">
             <ul id="war-side-a-list" class="menu-dropdown recent-list war-suggest" role="listbox" aria-label="Side A choices" hidden></ul>
             <p id="war-side-a-note" class="row-detail war-side-note"></p>
           </div>
@@ -1109,7 +1109,7 @@
         <div class="war-row">
           <span class="preference-name war-label war-label-b">Side B</span>
           <div class="war-side">
-            <input id="war-side-b-input" type="text" spellcheck="false" placeholder="Coalition, affiliate group, or corp or alliance name" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="war-side-b-list" aria-label="Side B">
+            <input id="war-side-b-input" type="text" spellcheck="false" placeholder="Coalition, affiliate group, corp or alliance name, or a link" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="war-side-b-list" aria-label="Side B">
             <ul id="war-side-b-list" class="menu-dropdown recent-list war-suggest" role="listbox" aria-label="Side B choices" hidden></ul>
             <p id="war-side-b-note" class="row-detail war-side-note"></p>
           </div>

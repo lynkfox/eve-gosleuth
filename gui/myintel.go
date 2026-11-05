@@ -119,7 +119,7 @@ func (a *App) cachedTicker(entity EntityRef) string {
 }
 
 /*
-	lookupEntity finds a pilot, corporation, or alliance by its exact name, or by a zKillboard or EveWho link to it, spelled as EVE spells it
+	lookupEntity finds a pilot, corporation, or alliance by its exact name, or by a killboard or EveWho link to it, spelled as EVE spells it
 
 Parameters:
   - text: the name, ignoring case, or a link, which is looked up by the id in it, as the ESI can not find every name
@@ -160,7 +160,7 @@ func (a *App) lookupEntity(text string, typeName string, allowed ...types.Entity
 	LookupEntity finds a pilot, corporation, or alliance by its exact name, for My Intel to start a card for. It does not wait for a running search.
 
 Parameters:
-  - name: the name, ignoring case, or a zKillboard or EveWho link
+  - name: the name, ignoring case, or a killboard or EveWho link
   - entityType: PILOT, CORPORATION, or ALLIANCE, for a name
 
 Returns:
@@ -177,7 +177,7 @@ func (a *App) LookupEntity(name string, entityType string) (entity EntityRef, er
 
 Parameters:
   - targetType, targetID: the pilot, corporation, or alliance whose Allies it is left out of
-  - allyName: the ally's exact name, ignoring case, or a zKillboard or EveWho link
+  - allyName: the ally's exact name, ignoring case, or a killboard or EveWho link
   - allyType: CORPORATION or ALLIANCE, for a name
 
 Returns:

@@ -1378,7 +1378,7 @@ function coalitionCard(group) {
   coalitionDropTarget(line, coalition, showError);
   const change = (save, message) => myIntelChange(save, showError, message);
 
-  const addMember = myIntelAddRow(`${key}:members`, "Name, or a zKillboard or EveWho link", false, (memberName, type) =>
+  const addMember = myIntelAddRow(`${key}:members`, "Name, or a killboard or EveWho link", false, (memberName, type) =>
     change(() => backend().AddCoalitionMember(coalition.id, memberName, type), `Added ${memberName} to ${coalition.name}`));
   body.append(myIntelTitle("Members", addMember, "Add a member"));
   if (coalition.members.length === 0) body.append(myIntelNone("No members"));
@@ -7043,7 +7043,7 @@ function pickWarGroup(key, group) {
 
 /*
   resolveWarSide turns what is typed in a side's box into the side, unless it already is one: a coalition or a group a tag names (c: or a:, one match), else a corp or alliance
-  looked up by its exact name or a zKillboard or EveWho link, alone with no affiliates. Throws a message for a pilot, a system, or a name nothing has.
+  looked up by its exact name or a killboard or EveWho link, alone with no affiliates. Throws a message for a pilot, a system, or a name nothing has.
 */
 async function resolveWarSide(key) {
   const text = el(`war-side-${key}-input`).value.trim();

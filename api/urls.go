@@ -180,14 +180,19 @@ func ZkillEntityURL(typeOfEntity types.EntityType, idNumber int) string {
 // notALink is ParseEntityLink's type for text that is not a link, outside every real type
 const notALink = types.EntityType(-1)
 
-// linkPages are the page names zKillboard and EveWho use for each kind of entity, ie zkillboard.com/alliance/99007237/
+// killboardPages are the page names the killboards share for each kind of entity, ie zkillboard.com/alliance/99007237/
+var killboardPages = map[string]types.EntityType{"character": types.PILOT, "corporation": types.CORPORATION, "alliance": types.ALLIANCE, "system": types.SYSTEM}
+
+// linkPages are the sites whose links can be read, and their page names for each kind of entity
 var linkPages = map[string]map[string]types.EntityType{
-	"zkillboard.com": {"character": types.PILOT, "corporation": types.CORPORATION, "alliance": types.ALLIANCE, "system": types.SYSTEM},
-	"evewho.com":     {"character": types.PILOT, "corporation": types.CORPORATION, "alliance": types.ALLIANCE},
+	"zkillboard.com":  killboardPages,
+	"kb.evetools.org": killboardPages,
+	"eve-kill.com":    killboardPages,
+	"evewho.com":      {"character": types.PILOT, "corporation": types.CORPORATION, "alliance": types.ALLIANCE},
 }
 
 /*
-	ParseEntityLink reads a pilot, corporation, alliance, or system from a zKillboard or EveWho link, so it can be found by id, as the ESI can not find every name
+	ParseEntityLink reads a pilot, corporation, alliance, or system from a killboard (zKillboard, EVE Tools, EVE-KILL) or EveWho link, so it can be found by id, as the ESI can not find every name
 
 Parameters:
   - text: what was typed, ie https://zkillboard.com/alliance/99007237/ or evewho.com/character/2121139046, with or without https:// and www.

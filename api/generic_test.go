@@ -187,6 +187,14 @@ func TestParseEntityLink(t *testing.T) {
 		{"https://zkillboard.com/system/30000142/", types.SYSTEM, 30000142},
 		{"https://evewho.com/character/2121139046", types.PILOT, 2121139046},
 		{"evewho.com/alliance/99013330", types.ALLIANCE, 99013330},
+		{"https://kb.evetools.org/alliance/99011372", types.ALLIANCE, 99011372},
+		{"kb.evetools.org/corporation/98744491/", types.CORPORATION, 98744491},
+		{"https://kb.evetools.org/character/2121139046", types.PILOT, 2121139046},
+		{"https://kb.evetools.org/system/30000142", types.SYSTEM, 30000142},
+		{"https://eve-kill.com/alliance/99011372", types.ALLIANCE, 99011372},
+		{"www.eve-kill.com/corporation/98744491", types.CORPORATION, 98744491},
+		{"https://eve-kill.com/character/2121139046", types.PILOT, 2121139046},
+		{"https://eve-kill.com/system/30000142/", types.SYSTEM, 30000142},
 	} {
 		entityType, id, ok := api.ParseEntityLink(link.text)
 		assert.True(t, ok, link.text)
@@ -194,7 +202,7 @@ func TestParseEntityLink(t *testing.T) {
 		assert.Equal(t, link.id, id, link.text)
 	}
 
-	for _, text := range []string{"L A Z E R H A W K S", "Jita", "https://zkillboard.com/kill/123/", "https://evewho.com/system/30000142",
+	for _, text := range []string{"L A Z E R H A W K S", "Jita", "https://zkillboard.com/kill/123/", "https://evewho.com/system/30000142", "https://eve-kill.com/kill/123", "https://evetools.org/alliance/99011372",
 		"https://example.com/alliance/99007237/", "https://zkillboard.com/alliance/notanumber/", "https://zkillboard.com/alliance/"} {
 		_, _, ok := api.ParseEntityLink(text)
 		assert.False(t, ok, text)

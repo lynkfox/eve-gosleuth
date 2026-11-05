@@ -91,7 +91,7 @@ func (a *App) GetHoldings(targetID int, targetType string) (holdings Holdings, e
 
 Parameters:
   - mainID, mainType, mainName: the corp or alliance target the holding belongs to
-  - holdingName: the holding's exact in game name, or a zKillboard or EveWho link to it
+  - holdingName: the holding's exact in game name, or a killboard or EveWho link to it
   - holdingType: CORPORATION or ALLIANCE
   - note: a few words about it, ie supers parked here. Trimmed to maxHoldingNote characters.
 
