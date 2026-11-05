@@ -63,18 +63,36 @@ type WarStructureCount struct {
 
 // WarMeasures are the sheet's categories for one side. ISKLost is ISKFights + ISKTrash + ISKStructures, and ShipsLost is ShipsFights + ShipsTrash.
 type WarMeasures struct {
-	Killmails     int                 `json:"killmails"`
-	ISKLost       float64             `json:"iskLost"`
-	ISKFights     float64             `json:"iskFights"`
-	ISKTrash      float64             `json:"iskTrash"` // station trash and asset denial, 0 until Stage 3, when the frontend leaves its rows out
-	ISKStructures float64             `json:"iskStructures"`
-	ShipsLost     int                 `json:"shipsLost"`
-	ShipsFights   int                 `json:"shipsFights"`
-	ShipsTrash    int                 `json:"shipsTrash"`
-	Citadels      []WarStructureCount `json:"citadels"` // never null
-	CitadelCount  int                 `json:"citadelCount"`
-	POS           int                 `json:"pos"`
-	Efficiency    float64             `json:"efficiency"` // 0 to 100: the other side's ISK lost as a share of both sides' ISK lost. 0 for Others, and when neither lost any.
+	Killmails          int                 `json:"killmails"`
+	ISKLost            float64             `json:"iskLost"`
+	ISKFights          float64             `json:"iskFights"`
+	ISKTrash           float64             `json:"iskTrash"`         // station trash and asset denial
+	ISKTrashDefinite   float64             `json:"iskTrashDefinite"` // the part of iskTrash graded definite, the rest being probable
+	ISKStructures      float64             `json:"iskStructures"`
+	ShipsLost          int                 `json:"shipsLost"`
+	ShipsFights        int                 `json:"shipsFights"`
+	ShipsTrash         int                 `json:"shipsTrash"`
+	ShipsTrashDefinite int                 `json:"shipsTrashDefinite"`
+	Citadels           []WarStructureCount `json:"citadels"` // never null
+	CitadelCount       int                 `json:"citadelCount"`
+	POS                int                 `json:"pos"`
+	StationRefs        int                 `json:"stationRefs"` // battles marked Station ref for this side
+	RefAttempts        int                 `json:"refAttempts"` // battles marked Ref attempt for this side
+	Efficiency         float64             `json:"efficiency"`  // 0 to 100: the other side's ISK lost as a share of both sides' ISK lost. 0 for Others, and when neither lost any.
+}
+
+// WarDay is a row of the Timeline tab: what each side lost on one day, EVE time. The frontend adds them up into running totals.
+type WarDay struct {
+	Date string      `json:"date"` // YYYY-MM-DD
+	A    WarMeasures `json:"a"`
+	B    WarMeasures `json:"b"`
+}
+
+// WarStationRef marks a battle where a side lost Standup Fighters, so its station was probably under attack
+type WarStationRef struct {
+	Side      string `json:"side"`      // a or b
+	Attempt   bool   `json:"attempt"`   // no structure of that side died in the system within its timer days
+	Structure string `json:"structure"` // the type of the structure that did, empty for an attempt
 }
 
 // WarStructureKind is how many of one kind of structure a side lost in a battle
@@ -85,31 +103,37 @@ type WarStructureKind struct {
 
 // WarBattleSide is a side's part in a row of the Battles tab
 type WarBattleSide struct {
-	Group          *EntityRef         `json:"group"` // its largest group in the battle by pilots, null if it has none there
-	Pilots         int                `json:"pilots"`
-	ISKLost        float64            `json:"iskLost"`
-	ShipsLost      int                `json:"shipsLost"`
-	Structures     int                `json:"structures"`
-	StructureKinds []WarStructureKind `json:"structureKinds"` // never null, most lost first
+	Group              *EntityRef         `json:"group"` // its largest group in the battle by pilots, null if it has none there
+	Pilots             int                `json:"pilots"`
+	ISKLost            float64            `json:"iskLost"`
+	ShipsLost          int                `json:"shipsLost"`
+	Structures         int                `json:"structures"`
+	StructureKinds     []WarStructureKind `json:"structureKinds"` // never null, most lost first
+	TrashKillmails     int                `json:"trashKillmails"` // station trash and asset denial attached to this battle, in none of the figures above
+	TrashISK           float64            `json:"trashIsk"`
+	TrashShips         int                `json:"trashShips"`
+	TrashDefiniteISK   float64            `json:"trashDefiniteIsk"` // the part of trashIsk graded definite, the rest being probable
+	TrashDefiniteShips int                `json:"trashDefiniteShips"`
 }
 
 // WarBattle is a row of the Battles tab: one fight, as in the sheet
 type WarBattle struct {
-	ID           string        `json:"id"`
-	Start        time.Time     `json:"start"`
-	End          time.Time     `json:"end"`
-	System       SystemSummary `json:"system"`       // the system with the most of its killmails, which its links are for
-	OtherSystems []string      `json:"otherSystems"` // never null
-	Class        string        `json:"class"`        // the system's wormhole class, else its security band
-	Pilots       int           `json:"pilots"`
-	Killmails    int           `json:"killmails"`
-	Skirmish     bool          `json:"skirmish"` // marked beside its date
-	A            WarBattleSide `json:"a"`
-	B            WarBattleSide `json:"b"`
-	Others       WarBattleSide `json:"others"`
-	ZkillURL     string        `json:"zkillUrl"`
-	EveToolsURL  string        `json:"evetoolsUrl"`
-	WarbeaconURL string        `json:"warbeaconUrl"`
+	ID           string          `json:"id"`
+	Start        time.Time       `json:"start"`
+	End          time.Time       `json:"end"`
+	System       SystemSummary   `json:"system"`       // the system with the most of its killmails, which its links are for
+	OtherSystems []string        `json:"otherSystems"` // never null
+	Class        string          `json:"class"`        // the system's wormhole class, else its security band
+	Pilots       int             `json:"pilots"`
+	Killmails    int             `json:"killmails"`
+	Skirmish     bool            `json:"skirmish"` // marked beside its date
+	A            WarBattleSide   `json:"a"`
+	B            WarBattleSide   `json:"b"`
+	Others       WarBattleSide   `json:"others"`
+	StationRefs  []WarStationRef `json:"stationRefs"` // never null
+	ZkillURL     string          `json:"zkillUrl"`
+	EveToolsURL  string          `json:"evetoolsUrl"`
+	WarbeaconURL string          `json:"warbeaconUrl"`
 }
 
 // WarClassCount is how many of a war's systems are of one class, ie 13 C5
@@ -178,6 +202,7 @@ type WarReport struct {
 	KillmailCount int             `json:"killmailCount"`
 	OtherGroups   []WarOtherGroup `json:"otherGroups"` // most ISK lost first
 	NPCPilots     WarNPCPilots    `json:"npcPilots"`
+	Days          []WarDay        `json:"days"` // oldest first, only days with a loss on either side
 	Reach         []WarReachLine  `json:"reach"`
 	FullRunDue    bool            `json:"fullRunDue"` // the sides or start changed since its last full run, so its next run reads every list from its start. Also true before its first run.
 	Stopped       bool            `json:"stopped"`
@@ -595,7 +620,7 @@ func (a *App) CollectWar(id int) (report WarReport, err error) {
 	lookupsBefore := a.cache.Counts()
 
 	a.beginWarReport(war)
-	runKey := war.CurrentRunKey()
+	runKey := war.RunKeyFor(sides.A, sides.B)
 	full := war.RunKey != runKey
 	newerThan := war.Start()
 	if !full && !war.NewestKillmail.IsZero() {
@@ -879,7 +904,8 @@ func (a *App) changeWarGroups(id int, change func(*retrieval.War, aggregate.WarS
 func warMeasures(measures aggregate.WarMeasures, efficiency float64) WarMeasures {
 	converted := WarMeasures{Killmails: measures.Killmails, ISKLost: measures.ISKLost, ISKFights: measures.ISKFights, ISKTrash: measures.ISKTrash,
 		ISKStructures: measures.ISKStructures, ShipsLost: measures.ShipsLost, ShipsFights: measures.ShipsFights, ShipsTrash: measures.ShipsTrash,
-		Citadels: []WarStructureCount{}, POS: measures.POS, Efficiency: efficiency}
+		ISKTrashDefinite: measures.ISKTrashDefinite, ShipsTrashDefinite: measures.ShipsTrashDefinite,
+		Citadels: []WarStructureCount{}, POS: measures.POS, StationRefs: measures.StationRefs, RefAttempts: measures.RefAttempts, Efficiency: efficiency}
 	for _, citadel := range measures.Citadels {
 		count := WarStructureCount{Count: citadel.Count}
 		if citadel.Type != nil {
@@ -900,7 +926,8 @@ func warGroupRef(group *aggregate.WarGroup) *EntityRef {
 }
 
 func warBattleSide(side aggregate.WarBattleSide) WarBattleSide {
-	converted := WarBattleSide{Group: warGroupRef(side.Group), Pilots: side.Pilots, ISKLost: side.ISKLost, ShipsLost: side.ShipsLost, Structures: side.StructureLost, StructureKinds: []WarStructureKind{}}
+	converted := WarBattleSide{Group: warGroupRef(side.Group), Pilots: side.Pilots, ISKLost: side.ISKLost, ShipsLost: side.ShipsLost, Structures: side.StructureLost, StructureKinds: []WarStructureKind{},
+		TrashKillmails: side.TrashKillmails, TrashISK: side.TrashISK, TrashShips: side.TrashShips, TrashDefiniteISK: side.TrashDefiniteISK, TrashDefiniteShips: side.TrashDefiniteShips}
 	for _, kind := range side.StructureKinds {
 		converted.StructureKinds = append(converted.StructureKinds, WarStructureKind{Name: kind.Name, Count: kind.Count})
 	}
@@ -967,8 +994,9 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 		Systems:     []WarSystem{},
 		Killmails:   []WarKillmail{},
 		OtherGroups: []WarOtherGroup{},
+		Days:        []WarDay{},
 		Reach:       []WarReachLine{},
-		FullRunDue:  war.RunKey != war.CurrentRunKey(),
+		FullRunDue:  war.RunKey != war.RunKeyFor(sides.A, sides.B),
 	}
 	for _, reach := range war.Reach {
 		if !reach.Complete {
@@ -976,10 +1004,19 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 		}
 	}
 
+	for _, day := range data.Days {
+		report.Days = append(report.Days, WarDay{Date: day.Date,
+			A: warMeasures(day.A, efficiency(day.B.ISKLost, day.A.ISKLost)),
+			B: warMeasures(day.B, efficiency(day.A.ISKLost, day.B.ISKLost))})
+	}
+
 	for _, battle := range data.Battles {
 		row := WarBattle{ID: battle.ID, Start: battle.Start, End: battle.End, System: structureSystem(battle.System), OtherSystems: append([]string{}, battle.OtherSystems...),
 			Class: warClass(battle.System), Pilots: battle.Pilots, Killmails: len(battle.Killmails), Skirmish: battle.Skirmish,
-			A: warBattleSide(battle.A), B: warBattleSide(battle.B), Others: warBattleSide(battle.Others)}
+			A: warBattleSide(battle.A), B: warBattleSide(battle.B), Others: warBattleSide(battle.Others), StationRefs: []WarStationRef{}}
+		for _, ref := range battle.StationRefs {
+			row.StationRefs = append(row.StationRefs, WarStationRef{Side: warSideName(ref.Side), Attempt: ref.Attempt, Structure: ref.Structure})
+		}
 		if battle.System != nil {
 			middle := battle.Start.Add(battle.End.Sub(battle.Start) / 2)
 			row.ZkillURL = api.ZkillRelatedURL(battle.System.SystemID, middle)

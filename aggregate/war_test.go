@@ -659,3 +659,552 @@ func TestWarBattlesMatchFindBattles(t *testing.T) {
 	assert.Equal(t, fromExpanded, fromRaw)
 	assert.Len(t, aggregate.BuildWar(kms, expanded, baseSides(), 1).Battles, 3)
 }
+
+// standup fighters and structures for the trash tests: a Raitaru is a medium, a Fortizar a large
+const (
+	standupTemplar, carrierTemplar = 47035, 23055
+	raitaru, fortizar              = 35825, 35833
+)
+
+func trashIDs(data *aggregate.WarData) []int {
+	out := []int{}
+	for _, km := range data.Killmails {
+		if km.Trash {
+			out = append(out, km.Killmail.KillmailID)
+		}
+	}
+	return out
+}
+
+// onKill makes an attacker's ship a given type, ie a structure on a killmail
+func onKill(km retrieval.RawKillmail, ship int) retrieval.RawKillmail {
+	km.ESIKillmail.Attackers[0].ShipTypeID = ship
+	return km
+}
+
+func TestWarStationTrash(t *testing.T) {
+	warSetup(t)
+	sides := baseSides()
+	owner := wp{corp: corpA1, ally: allyA}
+	const hour = 60
+	build := func(kms ...retrieval.RawKillmail) *aggregate.WarData {
+		return aggregate.BuildWar(kms, expand(kms...), sides, 10)
+	}
+
+	t.Run("a repeat victim's losses are trash and the battle ends without them", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 10, sysHome, pA1(5), rifter, pB(2)),
+			raw(3, 11, sysHome, pA1(5), rifter, pB(2)),
+			raw(4, 24, sysHome, pA1(5), rifter, pB(2)),
+		)
+		assert.ElementsMatch(t, []int{2, 3, 4}, trashIDs(data))
+		if assert.Len(t, data.Battles, 1) {
+			battle := data.Battles[0]
+			assert.Equal(t, battle.Start, battle.End, "the trash doesn't make the battle longer")
+			assert.Equal(t, 3, battle.A.TrashKillmails)
+			assert.Equal(t, 3, battle.A.TrashShips)
+			assert.InDelta(t, 900, battle.A.TrashISK, 0.001)
+			assert.InDelta(t, 100, battle.A.ISKLost, 0.001, "trash is not in the battle's own figures")
+		}
+		assert.InDelta(t, 900, data.A.ISKTrash, 0.001)
+		assert.Equal(t, 3, data.A.ShipsTrash)
+		assert.Zero(t, data.A.ShipsFights)
+		assert.InDelta(t, data.A.ISKLost, data.A.ISKFights+data.A.ISKTrash+data.A.ISKStructures, 0.001)
+		assert.Equal(t, data.A.ShipsLost, data.A.ShipsFights+data.A.ShipsTrash)
+	})
+
+	t.Run("a capsule is never trash", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 60, sysHome, pA1(6), capsule, pB(2)),
+		)
+		assert.Empty(t, trashIDs(data))
+	})
+
+	t.Run("a pilot's capsule dying soon after their ships says they were in them", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 60, sysHome, pA1(5), rifter, pB(2)),
+			raw(3, 61, sysHome, pA1(5), rifter, pB(2)),
+			raw(4, 64, sysHome, pA1(5), capsule, pB(2)),
+			raw(5, 60, sysHome, pA1(6), rifter, pB(2)),
+			raw(6, 64, sysHome, pA1(6), capsule, pB(2)),
+		)
+		assert.Empty(t, trashIDs(data), "the repeat victim and the one in the window alike")
+	})
+
+	t.Run("a capsule long after leaves the empty ships as trash", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 60, sysHome, pA1(5), rifter, pB(2)),
+			raw(3, 61, sysHome, pA1(5), rifter, pB(2)),
+			raw(4, 70, sysHome, pA1(5), capsule, pB(2)),
+		)
+		assert.ElementsMatch(t, []int{2, 3}, trashIDs(data))
+	})
+
+	t.Run("a pilot's earlier empty ships stay trash though they later die in one", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 60, sysHome, pA1(5), rifter, pB(2)),
+			raw(3, 61, sysHome, pA1(5), rifter, pB(2)),
+			raw(4, 90, sysHome, pA1(5), rifter, pB(2)),
+			raw(5, 91, sysHome, pA1(5), capsule, pB(2)),
+		)
+		assert.ElementsMatch(t, []int{2, 3}, trashIDs(data))
+	})
+
+	t.Run("blue on blue after a station died is trash, on the victim's side and whichever side's station it was", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 2, sysHome, pB(5), rifter, pB(2)),
+			raw(3, 3, sysHome, pB(5), rifter, pB(3)),
+			raw(4, 60, sysHome, pB(6), rifter, pB(3)),
+			raw(5, 5*hour+5, sysHome, pB(7), rifter, pB(3)),
+		)
+		assert.ElementsMatch(t, []int{2, 3, 4}, trashIDs(data))
+		assert.Equal(t, 3, data.B.ShipsTrash)
+		assert.Zero(t, data.B.ShipsFights)
+		assert.Equal(t, 2, data.B.ShipsTrashDefinite, "the repeat victim, the third only in the window")
+		if assert.Len(t, data.Battles, 1) {
+			assert.Equal(t, 3, data.Battles[0].B.TrashKillmails)
+		}
+	})
+
+	t.Run("a repeat victim is definite, one only in the window probable", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 60, sysHome, pA1(5), rifter, pB(2)),
+			raw(3, 61, sysHome, pA1(5), rifter, pB(2)),
+			raw(4, 90, sysHome, pA1(6), rifter, pB(2)),
+		)
+		assert.InDelta(t, 200+300, data.A.ISKTrashDefinite, 0.001)
+		assert.InDelta(t, 200+300+400, data.A.ISKTrash, 0.001)
+		assert.Equal(t, 2, data.A.ShipsTrashDefinite)
+		assert.Equal(t, 3, data.A.ShipsTrash)
+		if assert.Len(t, data.Battles, 1) {
+			assert.InDelta(t, 200+300, data.Battles[0].A.TrashDefiniteISK, 0.001)
+			assert.Equal(t, 2, data.Battles[0].A.TrashDefiniteShips)
+		}
+	})
+
+	t.Run("a ship and its pod are not a repeat", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 1, sysHome, pA1(5), rifter, pB(2)),
+			raw(3, 2, sysHome, pA1(5), capsule, pB(2)),
+		)
+		assert.Empty(t, trashIDs(data))
+	})
+
+	t.Run("a repeat victim can be past the 4 hours, but not past the reach", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 30*hour, sysHome, pA1(5), rifter, pB(2)),
+			raw(3, 30*hour+1, sysHome, pA1(5), rifter, pB(2)),
+			raw(4, 8*24*hour, sysHome, pA1(6), rifter, pB(2)),
+			raw(5, 8*24*hour+1, sysHome, pA1(6), rifter, pB(2)),
+		)
+		assert.ElementsMatch(t, []int{2, 3}, trashIDs(data))
+	})
+
+	t.Run("two losses 2 minutes apart or more are not a repeat, as a pilot can reship", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 5*hour, sysHome, pA1(5), rifter, pB(2)),
+			raw(3, 5*hour+2, sysHome, pA1(5), rifter, pB(2)),
+		)
+		assert.Empty(t, trashIDs(data))
+	})
+
+	t.Run("after the battle: 4 hours from its end, not from the structure", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 10, sysHome, pB(3), rifter, pA1(4)), // the battle runs on to here
+			raw(3, 10+4*hour, sysHome, pA1(5), rifter, pB(2)),
+			raw(4, 11+4*hour, sysHome, pA1(6), rifter, pB(2)),
+		)
+		assert.Equal(t, []int{3}, trashIDs(data))
+	})
+
+	t.Run("another system's killmails are not trash", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 60, sysOther, pA1(5), rifter, pB(2)),
+		)
+		assert.Empty(t, trashIDs(data))
+	})
+
+	t.Run("the side that killed the station keeps its real losses out", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 60, sysHome, pB(3), rifter, pA1(4)),
+		)
+		assert.Empty(t, trashIDs(data))
+	})
+
+	t.Run("a revenge fleet shooting back keeps its losses out", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 60, sysHome, pA1(4), rifter, pB(2)),
+			raw(3, 62, sysHome, pB(3), rifter, pA1(5)),
+		)
+		assert.Empty(t, trashIDs(data))
+		assert.Len(t, data.Battles, 2)
+	})
+
+	t.Run("a repeat victim in a later fight where the owner shot back is not trash", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 7*hour, sysHome, pA1(5), rifter, pB(2)),
+			raw(3, 7*hour+1, sysHome, pA1(5), rifter, pB(2)),
+			raw(4, 7*hour+2, sysHome, pB(3), rifter, pA1(6)),
+		)
+		assert.Empty(t, trashIDs(data))
+	})
+
+	t.Run("a killmail goes with the last station to die before it", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 28*hour, sysHome, owner, astrahus, pB(2)),
+			raw(3, 28*hour+1, sysHome, pA1(5), rifter, pB(2)),
+			raw(4, 28*hour+2, sysHome, pA1(5), rifter, pB(2)),
+		)
+		assert.ElementsMatch(t, []int{3, 4}, trashIDs(data))
+		if assert.Len(t, data.Battles, 2) {
+			assert.Equal(t, 2, data.Battles[0].A.TrashKillmails, "newest first, so the second station's")
+			assert.Zero(t, data.Battles[1].A.TrashKillmails)
+		}
+	})
+
+	t.Run("a neutral victim counts for the station's owner, and is held though no side fought", func(t *testing.T) {
+		kms := []retrieval.RawKillmail{
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 60, sysHome, pC(7), rifter, pB(2)),
+		}
+		assert.Equal(t, []int{1, 2}, ids(aggregate.ClassifyRawWar(kms, sides)))
+		data := build(kms...)
+		assert.Equal(t, []int{2}, trashIDs(data))
+		assert.Equal(t, 1, data.A.ShipsTrash)
+		assert.Zero(t, data.Others.Killmails)
+	})
+
+	t.Run("no trash after a third party's station", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, wp{corp: corpC1, ally: allyC}, astrahus, pB(2)),
+			raw(2, 1, sysHome, pA1(9), rifter, pB(2)),
+			raw(3, 60, sysHome, pC(7), rifter, pB(2)),
+		)
+		assert.Empty(t, trashIDs(data))
+	})
+
+	t.Run("another structure dying later stays a structure", func(t *testing.T) {
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 60, sysHome, owner, customs, pB(2)),
+		)
+		assert.Empty(t, trashIDs(data))
+		assert.Equal(t, 1, data.A.POS)
+	})
+}
+
+func TestWarAssetDenial(t *testing.T) {
+	warSetup(t)
+	sides := baseSides()
+	owner := wp{corp: corpA1, ally: allyA}
+	const day = 24 * 60
+	const naglfar = 19722
+	build := func(kms ...retrieval.RawKillmail) *aggregate.WarData {
+		return aggregate.BuildWar(kms, expand(kms...), sides, 10)
+	}
+	// fitted gives a killmail's victim a module in a high slot
+	fitted := func(km retrieval.RawKillmail) retrieval.RawKillmail {
+		km.ESIKillmail.Victim.Items = []api.ESIKillmailItem{{ItemTypeID: 2873, Flag: 27}}
+		return km
+	}
+	blue := func(id, minutes int) retrieval.RawKillmail {
+		return fitted(raw(id, minutes, sysHome, pA1(5), naglfar, pA2(6)))
+	}
+
+	t.Run("a side's capital with nothing fitted is definite, whoever killed it and with no station lost", func(t *testing.T) {
+		data := build(raw(1, 0, sysHome, pA1(5), naglfar, pB(2)))
+		assert.Equal(t, []int{1}, trashIDs(data))
+		assert.Equal(t, 1, data.A.ShipsTrash)
+		assert.Zero(t, data.A.ShipsFights)
+		assert.Empty(t, data.Battles, "it never was a fight")
+		assert.Equal(t, "", data.Killmails[0].BattleID)
+		assert.Equal(t, 1, data.Systems[0].A.Killmails, "it shows under its system")
+		assert.Equal(t, []int{1}, ids(aggregate.ClassifyRawWar([]retrieval.RawKillmail{raw(1, 0, sysHome, pA1(5), naglfar, pC(2))}, sides)), "held even when no side killed it")
+	})
+
+	t.Run("rigs and holds do not make it fitted", func(t *testing.T) {
+		km := raw(1, 0, sysHome, pA1(5), naglfar, pB(2))
+		km.ESIKillmail.Victim.Items = []api.ESIKillmailItem{{ItemTypeID: 30993, Flag: 92}, {ItemTypeID: 2873, Flag: 5}, {ItemTypeID: 2873, Flag: 155}}
+		assert.Equal(t, []int{1}, trashIDs(build(km)))
+	})
+
+	t.Run("a fitted capital killed by the other side is a fight", func(t *testing.T) {
+		data := build(fitted(raw(1, 0, sysHome, pA1(5), naglfar, pB(2))))
+		assert.Empty(t, trashIDs(data))
+		assert.Equal(t, 1, data.A.ShipsFights)
+	})
+
+	t.Run("an unfitted subcapital is not denial, nor a third party's capital", func(t *testing.T) {
+		assert.Empty(t, trashIDs(build(raw(1, 0, sysHome, pA1(5), rifter, pB(2)))))
+		assert.Empty(t, trashIDs(build(raw(1, 0, sysHome, pC(5), naglfar, pB(2)))))
+	})
+
+	t.Run("a subcapital is denial only with nothing but its own station on the kill, and definite", func(t *testing.T) {
+		data := build(onKill(raw(1, 0, sysHome, pA1(5), rifter, owner), astrahus))
+		assert.Equal(t, []int{1}, trashIDs(data))
+		assert.Equal(t, 1, data.A.ShipsTrashDefinite)
+
+		assert.Empty(t, trashIDs(build(onKill(raw(1, 0, sysHome, pA1(5), rifter, owner, pA2(6)), astrahus))), "with a pilot on it too")
+		assert.Empty(t, trashIDs(build(raw(1, 0, sysHome, pA1(5), rifter, pA2(6)), raw(2, 60, sysHome, owner, astrahus, pB(2)))), "blue on blue before a station's loss is capitals only")
+		assert.Empty(t, trashIDs(build(onKill(fitted(raw(1, 0, sysHome, wp{corp: corpB1, ally: allyB, char: 5}, rifter, owner)), astrahus))), "another side's station")
+	})
+
+	t.Run("a fitted capital with its side's station or fighters on the kill is denial, with no loss", func(t *testing.T) {
+		assert.Equal(t, []int{1}, trashIDs(build(onKill(blue(1, 0), astrahus))))
+		assert.Equal(t, []int{1}, trashIDs(build(onKill(blue(1, 0), standupTemplar))))
+	})
+
+	t.Run("its own station among the other side's fleet is still denial, out of the battles", func(t *testing.T) {
+		data := build(onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, owner, pB(2), pB(3))), astrahus))
+		assert.Equal(t, []int{1}, trashIDs(data))
+		assert.Equal(t, 1, data.A.ShipsTrash)
+		assert.Empty(t, data.Battles)
+	})
+
+	t.Run("graded definite with nothing fitted or its station at top damage, else probable", func(t *testing.T) {
+		grade := func(kms ...retrieval.RawKillmail) bool {
+			for _, km := range build(kms...).Killmails {
+				if km.Killmail.KillmailID == 1 {
+					assert.True(t, km.Trash)
+					return km.Definite
+				}
+			}
+			assert.Fail(t, "killmail 1 is not counted")
+			return false
+		}
+		assert.True(t, grade(raw(1, 0, sysHome, pA1(5), naglfar, pB(2))), "nothing fitted")
+
+		top := onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, owner, pB(2))), astrahus)
+		top.ESIKillmail.Attackers[0].DamageDone = 9
+		assert.True(t, grade(top), "its station did the most")
+
+		lower := onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, owner, pB(2))), astrahus)
+		lower.ESIKillmail.Attackers[1].DamageDone = 9
+		assert.False(t, grade(lower), "its station did less")
+
+		assert.False(t, grade(blue(1, 0), raw(2, day, sysHome, owner, astrahus, pB(2))), "only blue on blue before the station died")
+	})
+
+	t.Run("a capsule only its own station shot has nothing to do with the war", func(t *testing.T) {
+		pod := onKill(raw(1, 0, sysHome, pA1(5), capsule, owner), astrahus)
+		assert.Empty(t, aggregate.ClassifyRawWar([]retrieval.RawKillmail{pod}, sides))
+		data := build(pod)
+		assert.Empty(t, data.Killmails)
+		assert.Zero(t, data.A.Killmails)
+
+		pilots := onKill(raw(1, 0, sysHome, pA1(5), capsule, owner, pA2(6)), astrahus)
+		assert.Equal(t, []int{1}, ids(aggregate.ClassifyRawWar([]retrieval.RawKillmail{pilots}, sides)), "with a pilot on it, it is an ordinary same-side killmail")
+	})
+
+	t.Run("the other side's station on the kill is a fight", func(t *testing.T) {
+		data := build(onKill(fitted(raw(1, 0, sysHome, pA1(5), naglfar, pB(2))), astrahus))
+		assert.Empty(t, trashIDs(data))
+		assert.Equal(t, 1, data.A.ShipsFights)
+	})
+
+	t.Run("a fitted capital killed blue on blue with no station and no loss is left out", func(t *testing.T) {
+		data := build(blue(1, 0))
+		assert.Empty(t, trashIDs(data))
+		assert.Zero(t, data.A.Killmails)
+	})
+
+	t.Run("before the side's station dies in its system, and attached to that battle", func(t *testing.T) {
+		data := build(blue(1, 0), raw(2, day, sysHome, owner, astrahus, pB(2)))
+		assert.Equal(t, []int{1}, trashIDs(data))
+		if assert.Len(t, data.Battles, 1) {
+			assert.Equal(t, 1, data.Battles[0].A.TrashKillmails)
+		}
+	})
+
+	t.Run("after the station died, in another system, or by another side's loss is left out", func(t *testing.T) {
+		assert.Empty(t, trashIDs(build(raw(1, 0, sysHome, owner, astrahus, pB(2)), blue(2, 5*60))), "past the 4 hours in which it would be trash")
+		assert.Empty(t, trashIDs(build(blue(1, 0), raw(2, 60, sysOther, owner, astrahus, pB(2)))))
+		assert.Empty(t, trashIDs(build(blue(1, 0), raw(2, 60, sysHome, wp{corp: corpB1, ally: allyB}, astrahus, pA1(2)))))
+	})
+
+	t.Run("only as far before as its timer: 3 days for a medium, 4 for a large", func(t *testing.T) {
+		assert.Empty(t, trashIDs(build(blue(1, 0), raw(2, 3*day+1, sysHome, owner, raitaru, pB(2)))))
+		assert.Equal(t, []int{1}, trashIDs(build(blue(1, 0), raw(2, 3*day, sysHome, owner, raitaru, pB(2)))))
+		assert.Equal(t, []int{1}, trashIDs(build(blue(1, 0), raw(2, 4*day, sysHome, owner, fortizar, pB(2)))))
+		assert.Empty(t, trashIDs(build(blue(1, 0), raw(2, 4*day+1, sysHome, owner, fortizar, pB(2)))))
+	})
+
+	t.Run("a structure lost to a third party is held and still anchors it", func(t *testing.T) {
+		kms := []retrieval.RawKillmail{blue(1, 0), raw(2, 60, sysHome, owner, astrahus, pC(2))}
+		assert.Equal(t, []int{1, 2}, ids(aggregate.ClassifyRawWar(kms, sides)))
+		data := build(kms...)
+		assert.Equal(t, []int{1}, trashIDs(data))
+		assert.Empty(t, data.A.Citadels, "the structure itself is outside any counted battle")
+	})
+}
+
+func TestWarAnchorables(t *testing.T) {
+	warSetup(t)
+	sides := baseSides()
+	owner := wp{corp: corpA1, ally: allyA}
+	const bubble = 12200
+	build := func(kms ...retrieval.RawKillmail) *aggregate.WarData {
+		return aggregate.BuildWar(kms, expand(kms...), sides, 10)
+	}
+
+	t.Run("shot by the other side with no station anywhere, it is definite trash, makes no battle, and is not a ship", func(t *testing.T) {
+		data := build(raw(1, 0, sysHome, owner, bubble, pB(2)))
+		assert.Equal(t, []int{1}, trashIDs(data))
+		assert.InDelta(t, 100, data.A.ISKTrashDefinite, 0.001)
+		assert.Zero(t, data.A.ShipsLost)
+		assert.Empty(t, data.Battles)
+	})
+
+	t.Run("after a station, it goes with that station's battle, past the 4 hours too", func(t *testing.T) {
+		data := build(raw(1, 0, sysHome, owner, astrahus, pB(2)), raw(2, 5*60, sysHome, owner, bubble, pB(2)))
+		assert.Equal(t, []int{2}, trashIDs(data))
+		if assert.Len(t, data.Battles, 1) {
+			assert.Equal(t, 1, data.Battles[0].A.TrashKillmails)
+			assert.InDelta(t, 200, data.Battles[0].A.TrashDefiniteISK, 0.001)
+		}
+	})
+
+	t.Run("a mobile tractor unit is never trash, in the window or with a repeat, and stays in the fights", func(t *testing.T) {
+		const tractor = 33475
+		assert.Empty(t, trashIDs(build(raw(1, 0, sysHome, owner, tractor, pB(2)))))
+		data := build(
+			raw(1, 0, sysHome, owner, astrahus, pB(2)),
+			raw(2, 5, sysHome, pA1(5), tractor, pB(2)),
+			raw(3, 6, sysHome, pA1(5), tractor, pB(2)),
+		)
+		assert.Empty(t, trashIDs(data))
+		assert.InDelta(t, 500, data.A.ISKFights, 0.001)
+		assert.Zero(t, data.A.ShipsLost, "nor is it a ship")
+	})
+
+	t.Run("one only a third party shot is not the war's", func(t *testing.T) {
+		kms := []retrieval.RawKillmail{raw(1, 0, sysHome, owner, bubble, pC(2))}
+		assert.Empty(t, trashIDs(build(kms...)))
+		assert.Empty(t, aggregate.ClassifyRawWar(kms, sides))
+	})
+
+	t.Run("a neutral's in the window is definite too", func(t *testing.T) {
+		data := build(raw(1, 0, sysHome, owner, astrahus, pB(2)), raw(2, 60, sysHome, wp{corp: corpC1, ally: allyC}, bubble, pB(2)))
+		assert.Equal(t, []int{2}, trashIDs(data))
+		assert.InDelta(t, 200, data.A.ISKTrashDefinite, 0.001)
+	})
+}
+
+func TestWarStationRef(t *testing.T) {
+	warSetup(t)
+	sides := baseSides()
+	owner := wp{corp: corpA1, ally: allyA}
+	const day = 24 * 60
+	build := func(kms ...retrieval.RawKillmail) *aggregate.WarData {
+		return aggregate.BuildWar(kms, expand(kms...), sides, 10)
+	}
+	ref := func(data *aggregate.WarData) []aggregate.WarStationRef {
+		for _, battle := range data.Battles {
+			if len(battle.StationRefs) > 0 {
+				return battle.StationRefs
+			}
+		}
+		return nil
+	}
+
+	t.Run("standup fighters with no structure dying are an attempt, in ISK under structures but not ships", func(t *testing.T) {
+		data := build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)))
+		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Attempt: true}}, ref(data))
+		assert.Equal(t, 1, data.A.RefAttempts)
+		assert.Zero(t, data.A.StationRefs)
+		assert.Zero(t, data.A.ShipsLost)
+		assert.InDelta(t, 100, data.A.ISKStructures, 0.001)
+		assert.Empty(t, data.A.Citadels)
+		assert.Zero(t, data.Battles[0].A.StructureLost)
+	})
+
+	t.Run("a carrier's fighter marks nothing", func(t *testing.T) {
+		data := build(raw(1, 0, sysHome, owner, carrierTemplar, pB(2)))
+		assert.Nil(t, ref(data))
+	})
+
+	t.Run("a medium dying within 3 days makes it a station ref, past that an attempt", func(t *testing.T) {
+		data := build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 3*day, sysHome, owner, raitaru, pB(2)))
+		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Structure: "Raitaru"}}, ref(data))
+		assert.Equal(t, 1, data.A.StationRefs)
+		assert.Zero(t, data.A.RefAttempts)
+
+		data = build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 3*day+1, sysHome, owner, raitaru, pB(2)))
+		assert.True(t, ref(data)[0].Attempt)
+	})
+
+	t.Run("a large gets 4 days", func(t *testing.T) {
+		data := build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 4*day, sysHome, owner, fortizar, pB(2)))
+		assert.False(t, ref(data)[0].Attempt)
+		data = build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 4*day+1, sysHome, owner, fortizar, pB(2)))
+		assert.True(t, ref(data)[0].Attempt)
+	})
+
+	t.Run("the structure must be that side's, there, and not dead before", func(t *testing.T) {
+		enemy := wp{corp: corpB1, ally: allyB}
+		assert.True(t, ref(build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 60, sysHome, enemy, raitaru, pA1(2))))[0].Attempt)
+		assert.True(t, ref(build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 60, sysOther, owner, raitaru, pB(2))))[0].Attempt)
+		assert.True(t, ref(build(raw(1, 0, sysHome, owner, raitaru, pB(2)), raw(2, 60, sysHome, owner, standupTemplar, pB(2))))[0].Attempt)
+		assert.True(t, ref(build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 60, sysHome, owner, customs, pB(2))))[0].Attempt)
+	})
+
+	t.Run("a third party beside a side keeps its ref on what the war holds, its station dying outside any counted fight", func(t *testing.T) {
+		third := wp{corp: corpC1, ally: allyC}
+		kms := []retrieval.RawKillmail{
+			raw(1, 0, sysHome, pA1(5), rifter, pB(2)),
+			raw(2, 1, sysHome, third, standupTemplar, pB(2)),
+			raw(3, 3*60, sysHome, third, raitaru, pD(9)),
+		}
+		held := aggregate.ClassifyRawWar(kms, sides)
+		assert.Equal(t, []int{1, 2, 3}, ids(held))
+		data := aggregate.BuildWar(held, expand(held...), sides, 10)
+		if refs := ref(data); assert.Len(t, refs, 1) {
+			assert.False(t, refs[0].Attempt)
+		}
+	})
+
+	t.Run("the fight the structure dies in counts", func(t *testing.T) {
+		data := build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 5, sysHome, owner, raitaru, pB(2)))
+		assert.False(t, ref(data)[0].Attempt)
+	})
+}
+
+func TestWarDays(t *testing.T) {
+	warSetup(t)
+	sides := baseSides()
+	owner := wp{corp: corpA1, ally: allyA}
+	kms := []retrieval.RawKillmail{
+		raw(1, 0, sysHome, pA1(5), rifter, pB(2)),
+		raw(2, 24*60, sysHome, owner, astrahus, pB(2)),
+		raw(3, 24*60+60, sysHome, pC(7), rifter, pB(2)),
+		raw(4, 48*60, sysOther, pB(3), rifter, pC(8)), // no side fought: forgotten
+	}
+	data := aggregate.BuildWar(kms, expand(kms...), sides, 10)
+	if assert.Len(t, data.Days, 2) {
+		assert.Equal(t, "2026-10-01", data.Days[0].Date)
+		assert.Equal(t, 1, data.Days[0].A.ShipsFights)
+		assert.Equal(t, "2026-10-02", data.Days[1].Date)
+		assert.Equal(t, 1, data.Days[1].A.ShipsTrash)
+		assert.InDelta(t, 200, data.Days[1].A.ISKStructures, 0.001)
+		assert.InDelta(t, 300, data.Days[1].A.ISKTrash, 0.001)
+		assert.Len(t, data.Days[1].A.Citadels, 1)
+	}
+	sum := data.Days[0].A.ISKLost + data.Days[1].A.ISKLost
+	assert.InDelta(t, data.A.ISKLost, sum, 0.001, "the days add up to the war")
+}

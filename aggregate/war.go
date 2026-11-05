@@ -53,7 +53,7 @@ Parameters:
   - sides: the war's sides
 
 Returns:
-  - []retrieval.RawKillmail: every killmail in a counted battle, and every same-side killmail: victim and every attacker on one side. A same-side killmail counts for nothing yet, but Stage 3's asset denial looks back at them.
+  - []retrieval.RawKillmail: every killmail in a counted battle, every station trash killmail, every same-side killmail (victim and every attacker on one side, which asset denial looks back at) but a capsule only its own stations shot, and every structure a side or a named third party lost (which asset denial and Station ref look for, and which alone counts for nothing)
 */
 func ClassifyRawWar(raw []retrieval.RawKillmail, sides WarSides) []retrieval.RawKillmail {
 	return classifyRawWar(raw, sides)
@@ -67,16 +67,33 @@ type WarStructureCount struct {
 
 // WarMeasures are the sheet's categories for one side, or for Others. ISKLost is ISKFights + ISKTrash + ISKStructures, and ShipsLost is ShipsFights + ShipsTrash.
 type WarMeasures struct {
-	Killmails     int
-	ISKLost       float64
-	ISKFights     float64
-	ISKTrash      float64 // station trash and asset denial, 0 until Stage 3
-	ISKStructures float64
-	ShipsLost     int // category in comm.ShipCategories and not comm.CapsuleGroups. A type fit_types.json lacks counts if the victim has a pilot.
-	ShipsFights   int
-	ShipsTrash    int                 // 0 until Stage 3
-	Citadels      []WarStructureCount // upwell_structure_groups, most lost first then by name
-	POS           int                 // control_tower_groups and poco_groups
+	Killmails          int
+	ISKLost            float64
+	ISKFights          float64
+	ISKTrash           float64 // station trash and asset denial
+	ISKTrashDefinite   float64 // the part of ISKTrash graded definite, the rest being probable
+	ISKStructures      float64 // Standup Fighters too
+	ShipsLost          int     // category in comm.ShipCategories and not comm.CapsuleGroups. A type fit_types.json lacks counts if the victim has a pilot.
+	ShipsFights        int
+	ShipsTrash         int
+	ShipsTrashDefinite int                 // the part of ShipsTrash graded definite
+	Citadels           []WarStructureCount // upwell_structure_groups, most lost first then by name
+	POS                int                 // control_tower_groups and poco_groups
+	StationRefs        int                 // battles marked Station ref for this side
+	RefAttempts        int                 // battles marked Ref attempt for this side
+}
+
+// WarDay is what each side lost on one day, EVE time
+type WarDay struct {
+	Date string // YYYY-MM-DD
+	A, B WarMeasures
+}
+
+// WarStationRef marks a battle where a side lost Standup Fighters, so its station was probably under attack
+type WarStationRef struct {
+	Side      WarSideKey
+	Attempt   bool   // no structure of that side died in the system within its timer days
+	Structure string // the type of the structure that did, empty for an attempt
 }
 
 // WarStructureKind is how many of one kind of structure a side lost in a battle
@@ -87,12 +104,17 @@ type WarStructureKind struct {
 
 // WarBattleSide is one side's part in a battle, third parties beside it included
 type WarBattleSide struct {
-	Group          *WarGroup // its largest group in the battle by pilots, nil if it has none there
-	Pilots         int
-	ISKLost        float64
-	ShipsLost      int
-	StructureLost  int                // upwell, control tower, and customs office killmails
-	StructureKinds []WarStructureKind // what those were, most lost first then by name
+	Group              *WarGroup // its largest group in the battle by pilots, nil if it has none there
+	Pilots             int
+	ISKLost            float64
+	ShipsLost          int
+	StructureLost      int                // upwell, control tower, and customs office killmails
+	StructureKinds     []WarStructureKind // what those were, most lost first then by name
+	TrashKillmails     int                // station trash and asset denial attached to this battle, in none of the figures above
+	TrashISK           float64
+	TrashShips         int
+	TrashDefiniteISK   float64 // the part of TrashISK graded definite, the rest being probable
+	TrashDefiniteShips int
 }
 
 // WarBattle is a counted battle, or a skirmish
@@ -105,6 +127,7 @@ type WarBattle struct {
 	Killmails    []*retrieval.Killmail // oldest first
 	Skirmish     bool                  // fewer than minPilots pilots
 	A, B, Others WarBattleSide
+	StationRefs  []WarStationRef // side A's first
 }
 
 // WarGroup is a corp or alliance on the killmails: the alliance, or the corp when it has none. An NPC corp is never one.
@@ -137,7 +160,9 @@ type WarSystemSide struct {
 type WarKillmail struct {
 	Killmail   *retrieval.Killmail
 	VictimSide WarSideKey // in its battle, a third party counting for the side it fought beside
-	BattleID   string
+	BattleID   string     // empty for asset denial with no battle
+	Trash      bool       // station trash or asset denial
+	Definite   bool       // of Trash, graded definite rather than probable
 }
 
 // WarData is what a war's report is built from
@@ -150,13 +175,15 @@ type WarData struct {
 	Killmails    []WarKillmail // newest first
 	OtherGroups  []WarOther    // most ISK lost first
 	NPCPilots    WarMeasures   // the part of Others lost by pilots in NPC corps, who have no group and can not join a side
+	Days         []WarDay      // oldest first, only days with a loss on either side
 }
 
 /*
 	BuildWar works out the report's figures from what a war holds. See .claude/docs/war-plan.md's What counts and Measures.
 
 Sides are read from the raw killmail's ids, which are as they were at the kill, and the rest from the expanded killmail.
-Battles are found on the raw killmails, as ClassifyRawWar does, leaving out same-side killmails, and uncounted battles are forgotten.
+Battles are found on the raw killmails, as ClassifyRawWar does, leaving out same-side killmails and station trash, and uncounted battles are forgotten.
+Station trash and asset denial are their own bucket, attached to the battle their station died in, see .claude/docs/war-plan.md's Stage 3.
 
 A third party group in a counted battle counts in that battle for the side it fought beside: the opposite of whichever side it shot at or was shot by on more killmails.
 Even or none, it is under Others. So is any killmail of an added group before its FromDate, whatever it shot at. A killmail's ISK and ship are its victim's side's losses.
@@ -429,13 +456,37 @@ func classifyRawWar(raw []retrieval.RawKillmail, sides WarSides) []retrieval.Raw
 	kills := analyseWarKills(raw, sides.index())
 	keep := []*warKill{}
 	for _, kill := range kills {
-		if kill.sameSide {
+		if kill.sameSide && !warOwnPodOnly(kill) {
+			keep = append(keep, kill)
+		}
+	}
+	kept := map[int]bool{}
+	for _, kill := range keep {
+		kept[kill.id] = true
+	}
+	hold := func(kill *warKill) {
+		if !kept[kill.id] {
+			kept[kill.id] = true
 			keep = append(keep, kill)
 		}
 	}
 	for _, battle := range warBattlesOf(kills) {
 		if battle.counted() {
-			keep = append(keep, battle.kills...)
+			for _, kill := range battle.kills {
+				hold(kill)
+			}
+		}
+	}
+	trash := findWarTrash(kills)
+	for _, kill := range kills {
+		if _, marked := trash.marks[kill.id]; marked {
+			hold(kill)
+		}
+	}
+	for _, kill := range kills {
+		// a named third party's too, as a Station ref can name it
+		if victim := kill.parties[0]; warIsStation(warVictimType(kill)) && (victim.side != WarSideNone || (victim.hasGroup && !victim.ignored)) {
+			hold(kill)
 		}
 	}
 	slices.SortFunc(keep, func(a, b *warKill) int { return cmp.Or(a.at.Compare(b.at), cmp.Compare(a.id, b.id)) })
@@ -473,6 +524,7 @@ type warLoss struct {
 	citadel   bool
 	structure bool // upwell, control tower, or customs office
 	pos       bool
+	fighter   bool // a Standup Fighter: ISK under structures, not a structure lost
 	typeID    int
 	item      *retrieval.Item
 }
@@ -490,6 +542,7 @@ func warLossOf(kill *warKill, km *retrieval.Killmail) warLoss {
 	loss.citadel = comm.UpwellStructureGroups.ContainsGroupOf(loss.typeID)
 	loss.pos = comm.ControlTowerGroups.ContainsGroupOf(loss.typeID) || comm.PocoGroups.ContainsGroupOf(loss.typeID)
 	loss.structure = loss.citadel || loss.pos
+	loss.fighter = comm.StandupFighterGroups.ContainsGroupOf(loss.typeID)
 
 	if fit := comm.FitTypeOf(loss.typeID); fit != nil {
 		loss.ship = comm.ShipCategories.ContainsIDNumber(fit.CategoryID) && !comm.CapsuleGroups.ContainsIDNumber(fit.GroupID)
@@ -497,6 +550,14 @@ func warLossOf(kill *warKill, km *retrieval.Killmail) warLoss {
 		loss.ship = intOf(kill.raw.ESIKillmail.Victim.CharacterID) != 0
 	}
 	return loss
+}
+
+// warExpandedOrEmpty is a killmail's expanded form, or an empty one when it has none, as a structure that only names a ref may have no lookups
+func warExpandedOrEmpty(expanded map[int]*retrieval.Killmail, kill *warKill) *retrieval.Killmail {
+	if km := expanded[kill.id]; km != nil {
+		return km
+	}
+	return &retrieval.Killmail{}
 }
 
 // structureKind is the name a structure loss goes under in a battle, control towers being one kind
@@ -528,7 +589,7 @@ func (side *WarBattleSide) addStructureKind(name string) {
 func (m *warMeasureBuilder) add(loss warLoss) {
 	m.Killmails++
 	m.ISKLost += loss.isk
-	if loss.structure {
+	if loss.structure || loss.fighter {
 		m.ISKStructures += loss.isk
 	} else {
 		m.ISKFights += loss.isk
@@ -548,6 +609,23 @@ func (m *warMeasureBuilder) add(loss warLoss) {
 	}
 	if loss.pos {
 		m.POS++
+	}
+}
+
+// addTrash adds a station trash or asset denial killmail, never a structure
+func (m *warMeasureBuilder) addTrash(loss warLoss, definite bool) {
+	m.Killmails++
+	m.ISKLost += loss.isk
+	m.ISKTrash += loss.isk
+	if definite {
+		m.ISKTrashDefinite += loss.isk
+	}
+	if loss.ship {
+		m.ShipsLost++
+		m.ShipsTrash++
+		if definite {
+			m.ShipsTrashDefinite++
+		}
 	}
 }
 
@@ -612,8 +690,37 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 	systemOrder := []int{}
 	missing := 0
 
-	for _, battle := range warBattlesOf(kills) {
-		if !battle.counted() {
+	// what each side lost each day, EVE time
+	days := map[string]map[WarSideKey]*warMeasureBuilder{}
+	dayOf := func(at time.Time, side WarSideKey) *warMeasureBuilder {
+		date := at.UTC().Format("2006-01-02")
+		if days[date] == nil {
+			days[date] = map[WarSideKey]*warMeasureBuilder{WarSideA: {}, WarSideB: {}, WarSideNone: {}}
+		}
+		return days[date][side]
+	}
+	// systemBucket is a side's part of a system in the Systems tab
+	systemBucket := func(system *retrieval.System, side WarSideKey) (*WarSystem, *WarSystemSide) {
+		entry := systems[system.SystemID]
+		if entry == nil {
+			entry = &WarSystem{System: system}
+			systems[system.SystemID] = entry
+			systemOrder = append(systemOrder, system.SystemID)
+		}
+		switch side {
+		case WarSideA:
+			return entry, &entry.A
+		case WarSideB:
+			return entry, &entry.B
+		}
+		return entry, &entry.Others
+	}
+
+	trash := findWarTrash(kills)
+	battleOfStation := map[int]*WarBattle{} // the battle each station with trash died in
+
+	for _, battle := range trash.battles {
+		if !trash.counts(battle) {
 			continue
 		}
 
@@ -711,7 +818,11 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		countedIn := map[int]*WarSystem{}
 		systemKills := map[int]int{}
 		systemFirst := []*retrieval.System{}
+		fighters := []*warRefFighters{}
 		for _, kill := range battle.kills {
+			if trash.anchors[kill.id] {
+				battleOfStation[kill.id] = wb
+			}
 			km := expanded[kill.id]
 			if km == nil {
 				missing++
@@ -724,6 +835,16 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 			if !victim.ignored {
 				wb.Killmails = append(wb.Killmails, km)
 				measures[side].add(loss)
+				dayOf(kill.at, side).add(loss)
+				if loss.fighter && side != WarSideNone {
+					system := kill.raw.ESIKillmail.SolarSystemID
+					index := slices.IndexFunc(fighters, func(f *warRefFighters) bool { return f.side == side && f.system == system })
+					if index < 0 {
+						fighters = append(fighters, &warRefFighters{side: side, listed: victim.side, group: victim.group, system: system, first: kill.at})
+						index = len(fighters) - 1
+					}
+					fighters[index].last = kill.at
+				}
 				if side == WarSideNone && victim.hasGroup && otherGroups[victim.group] != nil {
 					otherGroups[victim.group].add(loss)
 				}
@@ -750,21 +871,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 				if victim.ignored {
 					continue
 				}
-				entry := systems[km.System.SystemID]
-				if entry == nil {
-					entry = &WarSystem{System: km.System}
-					systems[km.System.SystemID] = entry
-					systemOrder = append(systemOrder, km.System.SystemID)
-				}
-				var bucket *WarSystemSide
-				switch side {
-				case WarSideA:
-					bucket = &entry.A
-				case WarSideB:
-					bucket = &entry.B
-				default:
-					bucket = &entry.Others
-				}
+				entry, bucket := systemBucket(km.System, side)
 				bucket.Killmails++
 				bucket.ISKLost += loss.isk
 				countedIn[km.System.SystemID] = entry
@@ -772,6 +879,32 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		}
 		for _, entry := range countedIn {
 			entry.Battles++
+		}
+
+		// a station under attack, for each side that lost its fighters
+		wb.StationRefs = []WarStationRef{}
+		for _, side := range []WarSideKey{WarSideA, WarSideB} {
+			lost := false
+			var confirmed *warKill
+			for _, f := range fighters {
+				if f.side == side {
+					lost = true
+					if confirmed == nil {
+						confirmed = f.confirmedBy(trash.stations)
+					}
+				}
+			}
+			if !lost {
+				continue
+			}
+			ref := WarStationRef{Side: side, Attempt: confirmed == nil}
+			if confirmed != nil {
+				ref.Structure = warLossOf(confirmed, warExpandedOrEmpty(expanded, confirmed)).structureKind()
+				measures[side].StationRefs++
+			} else {
+				measures[side].RefAttempts++
+			}
+			wb.StationRefs = append(wb.StationRefs, ref)
 		}
 
 		// where it was fought
@@ -830,6 +963,64 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 
 		data.Battles = append(data.Battles, wb)
 	}
+
+	// station trash and asset denial, in their own bucket
+	for _, kill := range kills {
+		mark, marked := trash.marks[kill.id]
+		if !marked {
+			continue
+		}
+		km := expanded[kill.id]
+		if km == nil {
+			missing++
+			continue
+		}
+		victim := kill.parties[0]
+		if victim.ignored {
+			continue
+		}
+		// a neutral at the station stood beside its owner
+		side := victim.side
+		if side == WarSideNone && victim.hasGroup && !victim.forced {
+			side = mark.owner
+		}
+		loss := warLossOf(kill, km)
+		measures[side].addTrash(loss, mark.definite)
+		dayOf(kill.at, side).addTrash(loss, mark.definite)
+		if side == WarSideNone {
+			if victim.hasGroup {
+				if otherGroups[victim.group] == nil {
+					otherGroups[victim.group] = &warMeasureBuilder{}
+				}
+				otherGroups[victim.group].addTrash(loss, mark.definite)
+			} else {
+				npcPilots.addTrash(loss, mark.definite)
+			}
+		}
+		battleID := ""
+		if wb := battleOfStation[mark.anchor]; wb != nil {
+			battleID = wb.ID
+			target := map[WarSideKey]*WarBattleSide{WarSideA: &wb.A, WarSideB: &wb.B, WarSideNone: &wb.Others}[side]
+			target.TrashKillmails++
+			target.TrashISK += loss.isk
+			if mark.definite {
+				target.TrashDefiniteISK += loss.isk
+			}
+			if loss.ship {
+				target.TrashShips++
+				if mark.definite {
+					target.TrashDefiniteShips++
+				}
+			}
+		}
+		if km.System != nil {
+			_, bucket := systemBucket(km.System, side)
+			bucket.Killmails++
+			bucket.ISKLost += loss.isk
+		}
+		data.Killmails = append(data.Killmails, WarKillmail{Killmail: km, VictimSide: side, BattleID: battleID, Trash: true, Definite: mark.definite})
+	}
+
 	if missing > 0 {
 		comm.Logger.Warnf("%d killmails of a war's battles have no expanded form and are left out", missing)
 	}
@@ -857,6 +1048,14 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 
 	data.A, data.B, data.Others = measures[WarSideA].result(), measures[WarSideB].result(), measures[WarSideNone].result()
 	data.NPCPilots = npcPilots.result()
+	data.Days = []WarDay{}
+	for date, sides := range days {
+		day := WarDay{Date: date, A: sides[WarSideA].result(), B: sides[WarSideB].result()}
+		if day.A.Killmails > 0 || day.B.Killmails > 0 {
+			data.Days = append(data.Days, day)
+		}
+	}
+	slices.SortFunc(data.Days, func(a, b WarDay) int { return cmp.Compare(a.Date, b.Date) })
 	for group, builder := range otherGroups {
 		data.OtherGroups = append(data.OtherGroups, WarOther{Group: groupOf(group), Measures: builder.result()})
 	}

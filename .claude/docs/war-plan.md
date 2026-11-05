@@ -1,6 +1,6 @@
 # War tracker and group search
 
-Plan of 2026-11-04, decisions from the user the same night. Stage 1 built, Stage 2 under way.
+Plan of 2026-11-04, decisions from the user the same night. Stages 1, 2, and 3 built.
 
 The model is the user's hand-kept 2024 Coalition vs Lazerhawks sheet (id `11i7aE7hB7ES0Q-mtVmYRaO8dBj6DX7B6IL6GGNQQLP8`): gid 722070133 is one row per fight, gid 1013484469 the totals by side and day.
 
@@ -63,7 +63,7 @@ Wars are saved, and so is each report: it opens again across sessions with no ne
 
 - **New user sections:** `war` for the definition, notes, and flags; `war_killmail` for the killmails a war holds, one row each, gzipped like `killmails`. Both join `userSections`, so a cache clear leaves them unless the user ticks "Also clear what you set by hand". They are separate from the `killmail` section because Clear everything empties that.
 - **A war keeps the killmails it counted.** Once held, a killmail stays held even after zKillboard's cap has slid past it.
-- **Update** lists only from the last run's newest killmail, less a day's overlap, so a tracked war rarely meets the cap. A change of sides or start date does a full run.
+- **Update** lists only from the last run's newest killmail, less a day's overlap, so a tracked war rarely meets the cap. A change of sides or start date does a full run, as does a change in the groups its sides resolve to, ie a coalition gaining a member or a member gaining an affiliate (`RunKeyFor`).
 - Names are looked up through the usual cache.
 
 ## Stage 1: group search
@@ -115,21 +115,42 @@ The side boxes use the Stage 1 list plus any corp or alliance typed or linked (`
 
 These are estimates from killmails and are labelled so, as the user sorted them by hand in the sheet.
 
-Station trash is looked for after a structure dies, in its system, for `trashWindow` (3 hours):
+Station trash is looked for after a side's citadel, engineering complex, refinery, or control tower dies in a counted battle, in its system. Customs offices and moon drills are not stations. A trash killmail's victim is on the structure owner's side or on neither side, or the killmail is blue on blue on either side (user, 2026-11-05: Wormageddon's pilot lost 36 ships to its own side around Lethal Estates' dead Astrahus; it was no fight, and it goes on the victim's side). It is never itself a structure or a Standup Fighter. **Trash is empty ships (user, 2026-11-05):** killmails name whoever last flew them, so a pilot's capsule dying in that system during a run of their losses, or within `warPodGap` (5 minutes, my number) after, means they were in those ships, and that run is not trash. Runs split where a pilot's losses are `warPodGap` or more apart.
 
-1. **Repeat victims:** a pilot lost in that system at least twice less than 5 minutes apart after the structure died. All that pilot's losses in the window are trash.
+1. **Repeat victims:** a pilot who lost two ships in that system less than 2 minutes apart, after the structure died, too short to reship with session timers (user, 2026-11-05). All that pilot's losses there after the structure died are trash. **Capsules are never trash or asset denial (user, 2026-11-05)**, so they stay where they fall, and don't count towards the two. This is not held to the 4 hour window (user, 2026-11-05); it reaches `warRepeatReach` (7 days, my number, so a pilot's bad night months later is not trash). Not in a later battle where the owner killed the other side: on the Apes Strong Together vs MSF war, an Apocalypse Navy fleet whose pilots lost a battleship then a frigate 3 days after a POS died came to 15B of false trash. A killmail goes with the last station to die before it.
 2. **Battles are found again without those.** Otherwise a stream of trash kills keeps the battle open for hours under its 15 minute rule, and it never "ends".
-3. **After the battle:** any later killmail in that system in the window is trash, when its victim is on the structure owner's side or on neither side. A fleet returning for revenge keeps its real losses out of trash that way.
+3. **After the battle:** any later killmail in that system, up to `warTrashWindow` (4 hours, user, 2026-11-05) after the battle the structure died in ends, is trash. Not a loss of the side that killed the structure, as those are real losses. **Not a killmail in a later battle where the structure's owner killed the other side** (mine, 2026-11-05): the owner's revenge fleet shot back, so its losses are a fight.
 
-Trash stays attached to the structure's battle, in its own columns, and doesn't count towards that battle's fight ISK or duration.
+Trash stays attached to the structure's battle, in its own columns, and doesn't count towards that battle's fight ISK or duration. A neutral victim counts for the structure's owner, as the side it stood beside; one held by an added group's date, or a pilot in an NPC corp, stays under Others.
 
-**Asset denial:** a side destroying its own ships in its station before the station dies, ie one High Bear pilot killing another's ship (user, 2026-11-04). A killmail in the war's dates with victim and all attackers on one side, in a system where that side later loses a structure, before that loss. A structure need not be among the attackers. These may fall outside any counted battle, the one exception to that rule, and join trash in one bucket, as in the sheet. An update can turn earlier same-side killmails into asset denial once the structure falls, so the war holds same-side killmails too. Every other same-side killmail is left out, as with `IsInternal`.
+**Asset denial is capital ships only (user, 2026-11-05),** those of `capital_groups` and `capital_types`, of a side, in the war's dates:
 
-**Station being reffed:** a fight where one side's losses include Standup Fighters (user, 2026-11-04) is probably that side's station being reinforced, as only structures launch them. The battle gets an automatic **Station ref** mark on its row, naming that side, and the Overview counts them. Standup Fighters never count as ships lost, only in ISK lost, under structures (user, 2026-11-04). They are their own groups, 4777, 4778, and 4779 (`category` 87 in `fit_types.json`), apart from carrier fighters' 1537, 1652, and 1653. They go in a new `standup_fighter_groups` section of `structures.json`, read with `ContainsGroupOf`, so a minor bump at most. Fights are found on killmails, so a station reffed with none of its fighters dying is not marked. In Stage 4 the mark starts the For Timer flag ticked, and the user can clear it.
+- **Definite: nothing in any high, mid, or low slot (user).** Rigs and holds can hold anything. Whoever killed it, with no structure loss needed (mine). It stays out of the battles.
+- **Its own side's station on the kill, whoever else shot it (user, 2026-11-05: a high weight, more so as top damage).** An attacker's ship is an upwell structure, control tower, tower battery, or Standup Fighter, on the victim's side. A station does not shoot its own side's capital by accident, so being on the kill is enough; top damage makes it definite. The user's example, killmail 116654321, is an Atrax Naglfar, with Atrax's side's Fortizar at top damage among the Hawks fleet, in the sheet's "Atrax asset denial and death of their system". It stays out of the battles.
+- **Fitted, with victim and all attackers on one side,** when that side loses a station in that system within its timer days after (3 medium, 4 large, as below; the bound is mine, 2026-11-05, so a friendly kill months earlier is not denial).
+
+These may fall outside any counted battle, the one exception to that rule, and join trash in one bucket, as in the sheet. An update can turn earlier same-side killmails into asset denial once the structure falls, so the war holds same-side killmails too. Every other same-side killmail is left out, as with `IsInternal`.
+
+**Anchorables (user, 2026-11-05):** mobile warp disruptors, depots, and the like (`anchorable_categories`, deployables, which sdegen now keeps) are always definite trash when the war's sides shot them: the other side, or blue on blue. No station is needed, they make no battle, and they go with the last station their side lost in that system before them, up to `warRepeatReach`. One only a third party shot is not the war's. A neutral's counts in the 4 hour window as other trash does. **Mobile tractor units are never trash (user, 2026-11-05, `not_trash_groups`):** they can hold a fight's loot, 732M each on their war, so their ISK stays in the fights.
+
+**A subcapital is asset denial only with nothing but its own side's station on the kill (user, 2026-11-05),** which is definite.
+
+**A capsule only its own side's stations shot is ignored and not held (user, 2026-11-05):** in EVE's Crimson event implants can drop, so a pilot gets their own station to pod them to fetch them.
+
+**Grades (user, 2026-11-05):** the bucket shows how much of it is **definite** and how much **probable** (`warTrashMark.definite`), on the Overview, a battle row's hover, and a Timeline Trash figure's hover. Definite: a repeat victim's empty ships, an anchorable, a capital with nothing fitted or with its own side's station at top damage, ties counting, or a subcapital with only its own station on the kill. Probable: anything else only in the 4 hour window, a capital with its own station lower on the kill, and a fitted capital's blue on blue before the station's loss.
+
+**Held for this:** besides counted battles and same-side killmails, a war holds every trash killmail, and every structure lost by a side or a named third party even outside a counted battle, as asset denial and Station ref look at them. Those count for nothing themselves. `CurrentRunKey` gained a rules mark so a saved war reads its lists once more for them.
+
+**Station being reffed:** a fight where one side's losses include Standup Fighters (user, 2026-11-04) is probably that side's station under attack, as only structures launch them. The battle gets an automatic mark on its row, naming that side, and the Overview counts them:
+
+- **Station ref** when that side's upwell structure in that system then dies within 3 days for a medium structure, 4 days for a large (user, 2026-11-05). The fight it dies in counts. `medium_structure_types` in `structures.json` lists the mediums, as size has no group of its own; everything else, Keepstars and Sotiyos too, takes 4 days.
+- **Ref attempt** otherwise, so a mark can move from one to the other at a later Update.
+
+Standup Fighters never count as ships lost, only in ISK lost, under structures (user, 2026-11-04). They are their own groups, 4777, 4778, and 4779 (`category` 87 in `fit_types.json`), apart from carrier fighters' 1537, 1652, and 1653. They go in a new `standup_fighter_groups` section of `structures.json`, read with `ContainsGroupOf`, so a minor bump at most. Fights are found on killmails, so a station reffed with none of its fighters dying is not marked. In Stage 4 either mark starts the For Timer flag ticked, and the user can clear it.
 
 **Structure lookups in a war (user, 2026-11-05):** only Citadel, POS, and POCO losses and Standup Fighters are looked for. A war does not run the full structure lookup.
 
-**Timeline:** the sheet's tab: for each day and each side, every category as running totals and as that day's own figures, with a chart over them drawn like the Activity one.
+**Timeline:** the sheet's tab: for each day in EVE time and each side, every category, with toggle buttons on the left for By Day (By Week while on weeks) or Running Total, and on the right for Days or Weeks, weeks starting on a Monday. Above it a strip drawn like the Activity chart, one cell per period in the side's color, the more ISK lost the stronger. The strip and switches stay pinned while the table scrolls; past 14 cells the strip scrolls sideways, starting at the newest (user, 2026-11-05).
 
 ## Stage 4: notes, flags, and battle edits
 
@@ -192,8 +213,8 @@ The contract is the code: `retrieval/wars.go`, `aggregate/war.go`, and `gui/war.
 - **Third parties:** beside A, beside B, even, and one added to a side by hand, from the beginning and from a date.
 - **`FindBattles` split:** existing tests pass untouched; raw and expanded input give the same battles.
 - **Saved wars:** round trip, a held killmail surviving a cache clear and the list no longer reaching it, update reading only from the last run, a side change doing a full run.
-- **Station ref:** a Standup Fighter loss marks the battle for that side, a carrier fighter's does not, and it adds to ISK lost but not ships lost.
-- **Trash:** repeat victim, a battle ending once they are removed, the 3 hour edge, a returning fleet not counted, a neutral victim counted, asset denial before the loss but not after it or with no loss. Stage 3's rules should also be compared by eye with a real structure fight.
+- **Station ref:** a Standup Fighter loss marks the battle for that side, a carrier fighter's does not, and it adds to ISK lost but not ships lost. A medium dying at 3 days confirms it and past that does not, a large at 4 days, and no kill leaves an attempt.
+- **Trash:** repeat victim, a ship and its pod not being one, a repeat past the window, a battle ending once they are removed, the 4 hour edge, a returning fleet not counted, a revenge fight not counted, a neutral victim counted, a capsule never being trash, a pilot's capsule soon after their ships clearing those ships but not an earlier run, blue on blue trash on the victim's side, a capsule only its own station shot not being held, anchorables with and without a station and with only a third party, a subcapital only with nothing but its own station on the kill, the grades, a capital with nothing fitted being definite whoever killed it, a subcapital never being denial, a fitted capital with its own side's station on the kill among the other side's fleet being denial and the other side's station not, a fitted capital's blue on blue before the loss but not after it or with no loss. Stage 3's rules should also be compared by eye with a real structure fight.
 - **Report totals** by hand on a small fixture, the three ISK buckets adding to the total.
 - **Battle report links:** systems listed in the order reached with their own times, the copied text in EVE time whatever the preference, a saved link following its battle through an update, and a link not `https` refused.
 - **Frontend:** load check, and a stand-in report in the Edge harness.

@@ -116,6 +116,7 @@
         <button id="tab-war-overview" class="tab" type="button" role="tab" aria-controls="panel-war-overview" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-glance"/></svg><span class="tab-name">Overview</span><span class="tab-count"></span></button>
         <button id="tab-war-battles" class="tab" type="button" role="tab" aria-controls="panel-war-battles" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-battles"/></svg><span class="tab-name">Battles</span><span class="tab-count"></span></button>
         <button id="tab-war-systems" class="tab" type="button" role="tab" aria-controls="panel-war-systems" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-systems"/></svg><span class="tab-name">Systems</span><span class="tab-count"></span></button>
+        <button id="tab-war-timeline" class="tab" type="button" role="tab" aria-controls="panel-war-timeline" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-activity"/></svg><span class="tab-name">Timeline</span><span class="tab-count"></span></button>
       </nav>
     </section>
 
@@ -463,6 +464,28 @@
               <tbody id="war-systems-body"></tbody>
             </table>
             <p id="war-systems-empty" class="muted" hidden></p>
+          </div>
+
+          <div id="panel-war-timeline" class="tab-panel paged-panel" role="tabpanel" aria-labelledby="tab-war-timeline" hidden>
+            <div class="war-toolbar war-timeline-toolbar">
+              <div class="war-toggle" role="group" aria-label="Figures shown">
+                <button id="war-timeline-own" class="secondary" type="button" data-mode="day" aria-pressed="true">By Day</button>
+                <button class="secondary" type="button" data-mode="running" aria-pressed="false">Running Total</button>
+              </div>
+              <span class="muted war-toolbar-note">In EVE time. Trash and denial are estimates from killmails.</span>
+              <div class="war-toggle" role="group" aria-label="Group by">
+                <button class="secondary" type="button" data-unit="day" aria-pressed="true">Days</button>
+                <button class="secondary" type="button" data-unit="week" aria-pressed="false">Weeks</button>
+              </div>
+            </div>
+            <div id="war-timeline-chart" class="activity-scroll"></div>
+            <div class="panel-scroll">
+              <table class="war-table war-timeline-table">
+                <thead id="war-timeline-head"></thead>
+                <tbody id="war-timeline-body"></tbody>
+              </table>
+            </div>
+            <p id="war-timeline-empty" class="muted" hidden></p>
           </div>
         </div>
       </div>

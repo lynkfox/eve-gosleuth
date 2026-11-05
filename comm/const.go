@@ -35,6 +35,10 @@ var (
 	PosBatteryGroups      = newStaticValues() // control tower batteries, which stand in for their tower on kills
 	MinorStructureGroups  = newStaticValues() // structures with no guns, ie Metenox moon drills and customs offices: listed with the structures destroyed, but never as a j-space system's last structure lost
 	PocoGroups            = newStaticValues() // customs offices, which a war counts among its POS, as well as in MinorStructureGroups
+	AnchorableCategories  = newStaticValues() // what a war always counts as trash when the war's sides shot it, leaving out NotTrashGroups: mobile warp disruptors, depots. Categories, matched through fit_types.json.
+	NotTrashGroups        = newStaticValues() // what a war never counts as trash, its ISK staying in the fights: mobile tractor units, which can hold a fight's loot
+	StandupFighterGroups  = newStaticValues() // fighters only structures launch: a war counts them in ISK under structures, never as ships, and their loss marks a station under attack
+	MediumStructureTypes  = newStaticValues() // the upwell structures a war gives 3 days from a ref to the kill rather than 4. Types, as size has no group.
 
 	PIMaterialGroups = newStaticValues() // Planetary Industry resources and commodities
 	SmartbombGroups  = newStaticValues() // smartbomb modules, the weapon a player on a ratting loss may have only bombed it with
@@ -78,6 +82,10 @@ func sectionedFiles() []sectionedFile {
 			"pos_battery_groups":      &PosBatteryGroups,
 			"minor_structure_groups":  &MinorStructureGroups,
 			"poco_groups":             &PocoGroups,
+			"anchorable_categories":   &AnchorableCategories,
+			"not_trash_groups":        &NotTrashGroups,
+			"standup_fighter_groups":  &StandupFighterGroups,
+			"medium_structure_types":  &MediumStructureTypes,
 		}},
 		{"items.json", map[string]**StaticValues{
 			"pi_material_groups": &PIMaterialGroups,

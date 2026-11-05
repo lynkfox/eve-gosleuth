@@ -271,7 +271,9 @@ func TestCollectWar(t *testing.T) {
 		}
 		war, _ := app.cache.WarByID(card.ID)
 		assert.Equal(t, now.Add(-55*time.Minute), war.NewestKillmail)
-		assert.Equal(t, war.CurrentRunKey(), war.RunKey)
+		sides, err := app.warSides(war)
+		assert.NoError(t, err)
+		assert.Equal(t, war.RunKeyFor(sides.A, sides.B), war.RunKey)
 		assert.Len(t, war.Reach, 2, "a list per side")
 
 		zkill.reset()
@@ -615,5 +617,85 @@ func TestSearchWar(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, []TargetChoice{{Type: "COALITION", ID: coalition.ID, Name: "Twins"}, {Type: "WAR", ID: war.ID, Name: "twins"}}, result.Choices)
+	})
+}
+
+func TestWarFullRunOnNewAffiliate(t *testing.T) {
+	comm.InitLogger(logrus.PanicLevel)
+	now := time.Now().UTC().Truncate(time.Second)
+	app, zkill := warApp(t, fightLists(now))
+	side := alphaSide()
+	side.WithAffiliates = true
+	card, err := app.SaveWar(WarCard{SideA: side, SideB: betaSide(), FromDate: "2026-03-01"})
+	assert.NoError(t, err)
+	start := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	_, err = app.CollectWar(card.ID)
+	assert.NoError(t, err)
+	zkill.reset()
+	report, err := app.CollectWar(card.ID)
+	assert.NoError(t, err)
+	assert.False(t, report.FullRunDue)
+	assert.NotContains(t, zkill.newerThan(), start, "an update reads only what is new")
+
+	app.cache.SaveHoldingLink(retrieval.HoldingLink{MainType: "ALLIANCE", MainID: warAlpha, MainName: "Alpha", HoldingType: "CORPORATION", HoldingID: warGamma, HoldingName: "Gamma"})
+	opened, err := app.OpenWar(card.ID)
+	assert.NoError(t, err)
+	assert.True(t, opened.FullRunDue, "the new affiliate's list has not been read")
+	zkill.reset()
+	_, err = app.CollectWar(card.ID)
+	assert.NoError(t, err)
+	assert.Contains(t, zkill.newerThan(), start)
+}
+
+func TestWarReportStage3(t *testing.T) {
+	comm.InitLogger(logrus.PanicLevel)
+	now := time.Now().UTC().Truncate(time.Second)
+	const standupTemplar, astrahus = 47035, 35832
+
+	t.Run("a war with no run has its days and marks as empty lists", func(t *testing.T) {
+		app, _ := warApp(t, map[int][]api.ZkbResponse{})
+		report, err := app.OpenWar(savedWar(t, app, "2026-03-01").ID)
+		assert.NoError(t, err)
+		assert.NotNil(t, report.Days)
+		assert.Empty(t, report.Days)
+	})
+
+	t.Run("the report carries a ref mark, trash, and each day's figures with their efficiency", func(t *testing.T) {
+		fighter := coalitionKillmail(20, now.Add(-3*time.Hour), 98000100, warAlpha, warBeta)
+		fighter.Victim.ShipTypeID = standupTemplar
+		fighter.Victim.CharacterID = nil
+		station := coalitionKillmail(21, now.Add(-2*time.Hour), 98000100, warAlpha, warBeta)
+		station.Victim.ShipTypeID = astrahus
+		station.Victim.CharacterID = nil
+		trash := coalitionKillmail(22, now.Add(-time.Hour), 98000100, warAlpha, warBeta)
+		app, _ := warApp(t, map[int][]api.ZkbResponse{warBeta: {fighter, station, trash}})
+
+		report, err := app.CollectWar(savedWar(t, app, "2026-03-01").ID)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 1, report.B.StationRefs)
+		assert.Zero(t, report.B.RefAttempts)
+		assert.Equal(t, 1, report.B.ShipsTrash)
+		if assert.NotEmpty(t, report.Days) {
+			shipsTrash := 0
+			for _, day := range report.Days {
+				shipsTrash += day.B.ShipsTrash
+			}
+			assert.Equal(t, 1, shipsTrash)
+		}
+		marked, trashed := 0, 0
+		for _, battle := range report.Battles {
+			assert.NotNil(t, battle.StationRefs)
+			for _, ref := range battle.StationRefs {
+				marked++
+				assert.Equal(t, "b", ref.Side)
+				assert.False(t, ref.Attempt)
+				assert.NotEmpty(t, ref.Structure)
+			}
+			trashed += battle.B.TrashKillmails
+		}
+		assert.Equal(t, 1, marked)
+		assert.Equal(t, 1, trashed)
 	})
 }

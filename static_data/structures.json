@@ -25,5 +25,21 @@
     },
     "poco_groups": {
         "1025": "Orbital Infrastructure"
+    },
+    "anchorable_categories": {
+        "22": "Deployable"
+    },
+    "not_trash_groups": {
+        "1250": "Mobile Tractor Unit"
+    },
+    "standup_fighter_groups": {
+        "4777": "Light Fighter",
+        "4778": "Support Fighter",
+        "4779": "Heavy Fighter"
+    },
+    "medium_structure_types": {
+        "35832": "Astrahus",
+        "35825": "Raitaru",
+        "35835": "Athanor"
     }
 }

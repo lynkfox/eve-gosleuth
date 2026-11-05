@@ -3960,8 +3960,16 @@ const TAB_HELP = {
     "One row per fight, newest first: when, where, each side's largest group, and what each side lost.",
     "Click When, Class, System, or a side to sort by it, a side by the name of its largest group. Hover over And other systems or a structure count for the details.",
     "Skirmishes are the smaller fights, marked beside their date. The table at the top counts both as Engagements.",
+    "Station ref or Ref attempt beside a date: a side lost Standup Fighters there, so its station was under attack. It is a Station ref once its structure died within 3 days for a medium, 4 for a large.",
+    "Trash under a side is station trash and asset denial that goes with the structure lost in that fight, not in its other figures.",
     "Click a class in the table at the top to show only those. Several can be on at once.",
     "The icons open the battle on zKillboard, EVE Tools, and Warbeacon. Right-click a row for the same.",
+  ],
+  "tab-war-timeline": [
+    "What each side lost on each day in EVE time, newest first: ISK, ships, and structures, with efficiency.",
+    "The buttons on the left switch between each period's own figures and a running total, which adds up to the Overview's. Those on the right switch between days and weeks, which start on a Monday.",
+    "The strip on top stays in place while the table scrolls: the stronger a cell's color, the more ISK lost. Past 14 cells it scrolls sideways, starting at the newest.",
+    "Trash and asset denial are estimates from killmails. Hover over a Trash figure to see how much is definite and how much probable.",
   ],
   "tab-war-systems": [
     "Where the war was fought: the count by class, then each system's ISK lost and killmails by side.",
@@ -3980,6 +3988,12 @@ const TAB_HELP = {
 
 function selectTab(tabId) {
   if (tabId !== "tab-fits") closeFitKey();
+  // a strip drawn while its tab was hidden has no width to scroll, so it goes to its newest once the tab has opened, however it was opened
+  if (tabId === "tab-war-timeline") {
+    requestAnimationFrame(() => {
+      el("war-timeline-chart").scrollLeft = el("war-timeline-chart").scrollWidth;
+    });
+  }
   const points = typeof TAB_HELP[tabId] === "function" ? TAB_HELP[tabId](roster ? roster.type : "") : TAB_HELP[tabId];
   const key = TAB_COLOR_KEYS[tabId];
   const title = el(tabId).querySelector(".tab-name").textContent;
@@ -4308,6 +4322,7 @@ const TAB_COLOR_KEYS = {
   "tab-war-overview": [WAR_SIDE_KEY],
   "tab-war-battles": [WAR_SIDE_KEY, SECURITY_KEY, WORMHOLE_KEY],
   "tab-war-systems": [WAR_SIDE_KEY, SECURITY_KEY, WORMHOLE_KEY],
+  "tab-war-timeline": [WAR_SIDE_KEY],
 };
 
 // securityClass colors a security status by its band, high, low, or null, which the backend decides (api.SecurityBand)
@@ -5546,13 +5561,13 @@ function battleSections(battle) {
 
 /*
   The war tracker. A war is two sides, each a coalition, an affiliate group, or one corp or alliance, and a start and end date. The setup window (openWarSetup) saves them,
-  and a war's report takes the whole window under the top bar (setWarMode): a strip with the two sides and its three tabs, Overview, Battles, and Systems, with no sidebar or target panel.
+  and a war's report takes the whole window under the top bar (setWarMode): a strip with the two sides and its tabs, Overview, Battles, Systems, and Timeline, with no sidebar or target panel.
   The killmails it holds are never listed, as a war has far too many to read.
   The report is the backend's WarReport. Side A is blue and side B orange in the report, fixed colors in style.css as red and green mean a loss and a kill.
 */
 
 // WAR_TABS are the war report's tabs, in its strip
-const WAR_TABS = ["tab-war-overview", "tab-war-battles", "tab-war-systems"];
+const WAR_TABS = ["tab-war-overview", "tab-war-battles", "tab-war-systems", "tab-war-timeline"];
 
 // WAR_BANDS name the security bands a battle's or system's class can be, for spaceLabel
 const WAR_BANDS = { high: "Highsec", low: "Lowsec", null: "Nullsec" };
@@ -5779,7 +5794,7 @@ async function loadWarReport(war, collect) {
 }
 
 /*
-  showWarReport draws a war's report: the versus card and the three tabs. On the same war's report again, ie after adding a group, it keeps the tab and page the user is on.
+  showWarReport draws a war's report: the versus card and the tabs. On the same war's report again, ie after adding a group, it keeps the tab and page the user is on.
 */
 function showWarReport(report) {
   const sameWar = warReport !== null && warReport.war.id === report.war.id;
@@ -5810,6 +5825,7 @@ function showWarReport(report) {
   showWarCounts("systems");
   renderWarBattlePage();
   renderWarSystems(report);
+  renderWarTimeline(report);
 
   selectTab(sameWar && selected ? selected : "tab-war-overview");
   el("intel-loading").hidden = true;
@@ -5844,9 +5860,16 @@ function renderWarOverview(report) {
   el("war-overview").replaceChildren(...parts);
 }
 
+// WAR_TRASH_TIP, WAR_REF_TIP, and WAR_ATTEMPT_TIP say what these estimates mean wherever they show
+const WAR_TRASH_TIP = "An estimate from killmails. Station trash: empty ships shot after a station died in their system. Asset denial: capitals a side destroyed rather than lose them.";
+const WAR_DEFINITE_TIP = "Station trash: one pilot's ships dying under 2 minutes apart, too fast to reship, with no capsule lost, and any anchorable, ie a mobile warp disruptor. Asset denial: a capital with nothing in its high, mid, or low slots or with its own side's station at top damage, and any ship with only its own side's station on the kill.";
+const WAR_PROBABLE_TIP = "Station trash: other losses within 4 hours of the fight the station died in, with no capsule lost. Asset denial: a capital with its own side's station lower on the kill, or killed by its own side shortly before that side lost a station there.";
+const WAR_REF_TIP = "Fights where this side lost Standup Fighters, and its structure in that system then died: within 3 days for a medium, 4 for a large.";
+const WAR_ATTEMPT_TIP = "Fights where this side lost Standup Fighters, so its station was probably under attack, with no structure of its lost there in the 3 days for a medium or 4 for a large that followed.";
+
 /*
-  warMeasuresTable is the measures of each side and Others, as the sheet's top rows: ISK lost in total, then in fights and structures indented to add up, ships lost,
-  the structures lost, and efficiency. Trash rows are left out while every side has none.
+  warMeasuresTable is the measures of each side and Others, as the sheet's top rows: ISK lost in total, then in fights, trash, and structures indented to add up, ships lost,
+  the structures lost, station refs, and efficiency. Rows for trash and refs are left out while every side has none.
 */
 function warMeasuresTable(report) {
   const war = report.war;
@@ -5872,7 +5895,7 @@ function warMeasuresTable(report) {
     const line = document.createElement("tr");
     if (options.strong) line.className = "war-total";
     const name = document.createElement("td");
-    name.className = options.indent ? "war-measure war-indent" : "war-measure";
+    name.className = options.indent === 2 ? "war-measure war-indent war-indent-two" : options.indent ? "war-measure war-indent" : "war-measure";
     name.textContent = label;
     if (options.title) name.title = options.title;
     line.append(name);
@@ -5892,11 +5915,19 @@ function warMeasuresTable(report) {
   row("Killmails held", (m) => count(m.killmails), { title: "The killmails the war holds that are a loss of this side" });
   row("ISK lost", (m) => formatIsk(m.iskLost), { strong: true });
   row("In fights", (m) => formatIsk(m.iskFights), { indent: true });
-  if (any((m) => m.iskTrash)) row("Station trash and asset denial", (m) => formatIsk(m.iskTrash), { indent: true });
+  if (any((m) => m.iskTrash)) {
+    row("Station trash and asset denial", (m) => formatIsk(m.iskTrash), { indent: true, title: WAR_TRASH_TIP });
+    row("Definite", (m) => formatIsk(m.iskTrashDefinite), { indent: 2, title: WAR_DEFINITE_TIP });
+    row("Probable", (m) => formatIsk(m.iskTrash - m.iskTrashDefinite), { indent: 2, title: WAR_PROBABLE_TIP });
+  }
   row("Structures", (m) => formatIsk(m.iskStructures), { indent: true });
   row("Ships lost", (m) => count(m.shipsLost), { strong: true });
   row("In fights", (m) => count(m.shipsFights), { indent: true });
-  if (any((m) => m.shipsTrash)) row("Station trash and asset denial", (m) => count(m.shipsTrash), { indent: true });
+  if (any((m) => m.shipsTrash)) {
+    row("Station trash and asset denial", (m) => count(m.shipsTrash), { indent: true, title: WAR_TRASH_TIP });
+    row("Definite", (m) => count(m.shipsTrashDefinite), { indent: 2, title: WAR_DEFINITE_TIP });
+    row("Probable", (m) => count(m.shipsTrash - m.shipsTrashDefinite), { indent: 2, title: WAR_PROBABLE_TIP });
+  }
 
   // the citadels' count, with the count of each type under it
   row("All Citadels", (m) => {
@@ -5921,6 +5952,8 @@ function warMeasuresTable(report) {
     return figures;
   });
   row("All POS", (m) => count(m.pos));
+  if (any((m) => m.stationRefs)) row("Station refs", (m) => count(m.stationRefs), { title: WAR_REF_TIP });
+  if (any((m) => m.refAttempts)) row("Ref attempts", (m) => count(m.refAttempts), { title: WAR_ATTEMPT_TIP });
 
   const enough = report.a.iskLost + report.b.iskLost > 0;
   row("Efficiency", (m, key) => (key === "others" || !enough ? "—" : `${m.efficiency.toFixed(1)}%`), {
@@ -6301,7 +6334,7 @@ function warClassCell(cls, system) {
 // warBattleSideCell is a side's part of a battle row: its largest group there, then what it lost. key is a, b, or others, and Others is left bare when it lost nothing.
 function warBattleSideCell(side, key) {
   const cell = document.createElement("td");
-  if (key === "others" && !side.iskLost && !side.shipsLost) return cell;
+  if (key === "others" && !side.iskLost && !side.shipsLost && !side.trashKillmails) return cell;
   cell.className = `war-side-cell war-${key}`;
   const group = side.group ? groupLine(side.group) : null;
   if (key !== "others") {
@@ -6326,6 +6359,13 @@ function warBattleSideCell(side, key) {
     pilots.textContent = warPlural(side.pilots, "pilot");
     cell.append(pilots);
   }
+  if (side.trashKillmails) {
+    const trash = document.createElement("div");
+    trash.className = "row-detail war-trash-line";
+    trash.textContent = `Trash ${formatIsk(side.trashIsk)} · ${warPlural(side.trashShips, "ship")}`;
+    trash.title = `${trash.textContent}: ${formatIsk(side.trashDefiniteIsk)} and ${warPlural(side.trashDefiniteShips, "ship")} definite, ${formatIsk(side.trashIsk - side.trashDefiniteIsk)} and ${warPlural(side.trashShips - side.trashDefiniteShips, "ship")} probable. Not in the figures above. ${WAR_TRASH_TIP}`;
+    cell.append(trash);
+  }
   return cell;
 }
 
@@ -6348,6 +6388,16 @@ function renderWarBattlePage() {
       const tag = document.createElement("span");
       tag.className = "war-chit";
       tag.textContent = "Skirmish";
+      date.append(tag);
+    }
+    for (const ref of battle.stationRefs) {
+      const tag = document.createElement("span");
+      tag.className = `war-chit war-ref war-ref-${ref.side}${ref.attempt ? " war-ref-attempt" : ""}`;
+      tag.textContent = ref.attempt ? "Ref attempt" : "Station ref";
+      const name = warSideName(report.war, ref.side);
+      tag.title = ref.attempt
+        ? `${name} lost Standup Fighters here. ${WAR_ATTEMPT_TIP}`
+        : `${name} lost Standup Fighters here, and then its ${ref.structure} in this system.`;
       date.append(tag);
     }
     const clock = document.createElement("div");
@@ -6450,6 +6500,215 @@ function renderWarSystems(report) {
   const empty = el("war-systems-empty");
   empty.textContent = warEmptyText(report, "No systems on the killmails the war holds.");
   empty.hidden = rows.length > 0;
+}
+
+/* Timeline */
+
+// warTimelineMode is what the Timeline shows: day for each period's own figures, running for the totals up to it. warTimelineUnit is its period, day or week.
+let warTimelineMode = "day";
+let warTimelineUnit = "day";
+
+// WAR_TIMELINE_SHOWN is how many periods fit the strip's width before it scrolls sideways
+const WAR_TIMELINE_SHOWN = 14;
+// WAR_TIMELINE_LABEL is the strip's first column, the side names, in pixels
+const WAR_TIMELINE_LABEL = 160;
+
+// WAR_TIMELINE_COLUMNS are the Timeline's figures for each side: its heading, how to read it, how to write it, and whether it is the strong column
+const WAR_TIMELINE_COLUMNS = [
+  { title: "ISK lost", read: (m) => m.iskLost, write: warShortIsk, strong: true },
+  { title: "Fights", read: (m) => m.iskFights, write: warShortIsk },
+  { title: "Trash", read: (m) => m.iskTrash, write: warShortIsk, tip: WAR_TRASH_TIP, definite: (m) => m.iskTrashDefinite },
+  { title: "Structures", read: (m) => m.iskStructures, write: warShortIsk },
+  { title: "Ships", read: (m) => m.shipsLost, write: warCount, strong: true },
+  { title: "Fights", read: (m) => m.shipsFights, write: warCount },
+  { title: "Trash", read: (m) => m.shipsTrash, write: warCount, tip: WAR_TRASH_TIP, definite: (m) => m.shipsTrashDefinite },
+  { title: "Citadels", read: (m) => m.citadelCount, write: warCount },
+  { title: "POS", read: (m) => m.pos, write: warCount },
+];
+
+// warShortIsk writes ISK small enough for a Timeline cell, with no unit word, and a dash for none
+function warShortIsk(value) {
+  return value ? formatIsk(value).replace(" ISK", "") : "—";
+}
+
+// warCount writes a count, and a dash for none
+function warCount(value) {
+  return value ? value.toLocaleString("en-US") : "—";
+}
+
+// warEfficiency is one side's share of what both lost, as text, a dash when neither lost any
+function warEfficiency(own, other) {
+  const total = own + other;
+  return total > 0 ? `${((other / total) * 100).toFixed(1)}%` : "—";
+}
+
+// WAR_TIMELINE_KEYS are the figures of a day that add up over weeks and running totals
+const WAR_TIMELINE_KEYS = ["iskLost", "iskFights", "iskTrash", "iskTrashDefinite", "iskStructures", "shipsLost", "shipsFights", "shipsTrash", "shipsTrashDefinite", "citadelCount", "pos"];
+
+// warWeekOf is the Monday of a date's week, as YYYY-MM-DD
+function warWeekOf(date) {
+  const when = new Date(`${date}T00:00:00Z`);
+  when.setUTCDate(when.getUTCDate() - ((when.getUTCDay() + 6) % 7));
+  return when.toISOString().slice(0, 10);
+}
+
+/*
+  warTimelinePeriods is the report's days as the Timeline's periods, oldest first: the days themselves or the weeks they fall in, and their figures as they are or running from the first.
+  Each is { date, a, b }, its date a week's Monday, with only WAR_TIMELINE_KEYS.
+*/
+function warTimelinePeriods(report) {
+  const periods = new Map();
+  for (const day of report.days) {
+    const date = warTimelineUnit === "week" ? warWeekOf(day.date) : day.date;
+    if (!periods.has(date)) periods.set(date, { date, a: {}, b: {} });
+    const period = periods.get(date);
+    for (const side of ["a", "b"]) {
+      for (const key of WAR_TIMELINE_KEYS) period[side][key] = (period[side][key] || 0) + day[side][key];
+    }
+  }
+  const list = [...periods.values()];
+  if (warTimelineMode !== "running") return list;
+  const running = { a: {}, b: {} };
+  return list.map((period) => {
+    for (const side of ["a", "b"]) {
+      for (const key of WAR_TIMELINE_KEYS) running[side][key] = (running[side][key] || 0) + period[side][key];
+    }
+    return { date: period.date, a: { ...running.a }, b: { ...running.b } };
+  });
+}
+
+// warEveryPeriod is each date from the first to the last given, a day or a week apart, so the chart shows the quiet ones between
+function warEveryPeriod(first, last) {
+  const dates = [];
+  const when = new Date(`${first}T00:00:00Z`);
+  const end = new Date(`${last}T00:00:00Z`);
+  while (when <= end) {
+    dates.push(when.toISOString().slice(0, 10));
+    when.setUTCDate(when.getUTCDate() + (warTimelineUnit === "week" ? 7 : 1));
+  }
+  return dates;
+}
+
+// warPeriodName names a period in full, ie Oct 26th, 2026 or Week of Oct 26th, 2026
+function warPeriodName(date) {
+  return warTimelineUnit === "week" ? `Week of ${writtenDay(date)}` : writtenDay(date);
+}
+
+// renderWarTimeline draws the Timeline tab: a strip per side with a cell a period, the more ISK lost the stronger, pinned over every category for each period, newest first
+function renderWarTimeline(report) {
+  const shown = warTimelinePeriods(report);
+  setTabCount("tab-war-timeline", shown.length);
+  el("war-timeline-own").textContent = warTimelineUnit === "week" ? "By Week" : "By Day";
+  for (const button of el("panel-war-timeline").querySelectorAll(".war-toggle button")) {
+    const on = button.dataset.mode ? button.dataset.mode === warTimelineMode : button.dataset.unit === warTimelineUnit;
+    button.setAttribute("aria-pressed", String(on));
+  }
+  el("war-timeline-chart").replaceChildren();
+  el("war-timeline-head").replaceChildren();
+  el("war-timeline-body").replaceChildren();
+  const empty = el("war-timeline-empty");
+  empty.textContent = warEmptyText(report, "No losses on the killmails the war holds.");
+  empty.hidden = shown.length > 0;
+  el("war-timeline-chart").hidden = shown.length === 0;
+  if (shown.length === 0) return;
+
+  // the chart: running figures carry through a quiet day, a day's own are simply empty
+  const byDate = new Map(shown.map((day) => [day.date, day]));
+  const dates = warEveryPeriod(shown[0].date, shown[shown.length - 1].date);
+  let carried = null;
+  const columns = dates.map((date) => {
+    if (byDate.has(date)) carried = byDate.get(date);
+    else if (warTimelineMode !== "running") carried = null;
+    return { date, day: carried };
+  });
+  const most = Math.max(0, ...columns.flatMap(({ day }) => (day ? [day.a.iskLost, day.b.iskLost] : [])));
+  const grid = document.createElement("div");
+  grid.className = "war-timeline-grid";
+  // up to WAR_TIMELINE_SHOWN fill the width, and more keep that width and scroll sideways
+  // the grid is as wide as its cells, or the pinned side names would have nothing to stay inside
+  if (dates.length > WAR_TIMELINE_SHOWN) grid.style.width = `calc(${WAR_TIMELINE_LABEL}px + (100% - ${WAR_TIMELINE_LABEL}px) * ${dates.length} / ${WAR_TIMELINE_SHOWN})`;
+  grid.style.gridTemplateColumns = `${WAR_TIMELINE_LABEL}px repeat(${dates.length}, minmax(52px, 1fr))`;
+  const cell = (className, content = "") => {
+    const div = document.createElement("div");
+    div.className = className;
+    div.textContent = content;
+    return div;
+  };
+  grid.append(cell("activity-corner"), ...dates.map((date) => {
+    const head = cell("activity-hour", writtenDay(date).split(",")[0]);
+    head.title = warPeriodName(date);
+    return head;
+  }));
+  for (const side of ["a", "b"]) {
+    const name = cell(`activity-day war-timeline-side war-label-${side}`, warSideName(report.war, side));
+    name.title = warSideName(report.war, side);
+    grid.append(name);
+    for (const { date, day } of columns) {
+      const lost = day ? day[side].iskLost : 0;
+      const block = cell("activity-cell", lost ? warShortIsk(lost) : "");
+      block.title = `${warPeriodName(date)}, ${warSideName(report.war, side)}: ${lost ? formatIsk(lost) : "nothing"} lost${warTimelineMode === "running" ? " so far" : ""}`;
+      if (lost && most) {
+        const share = lost / most;
+        block.style.background = `color-mix(in srgb, var(--war-${side}) ${Math.round(15 + 85 * share)}%, var(--panel-raised))`;
+        if (share >= 0.55) block.classList.add("war-timeline-strong");
+      }
+      grid.append(block);
+    }
+  }
+  el("war-timeline-chart").append(grid);
+  // the newest are what is usually wanted, so a strip too long to fit starts at its end
+  el("war-timeline-chart").scrollLeft = el("war-timeline-chart").scrollWidth;
+
+  // the table
+  const top = document.createElement("tr");
+  const bottom = document.createElement("tr");
+  const dateHead = document.createElement("th");
+  dateHead.rowSpan = 2;
+  dateHead.textContent = warTimelineUnit === "week" ? "Week" : "Day";
+  top.append(dateHead);
+  for (const side of ["a", "b"]) {
+    const head = document.createElement("th");
+    head.colSpan = WAR_TIMELINE_COLUMNS.length + 1;
+    head.className = `war-head-${side}`;
+    head.textContent = warSideName(report.war, side);
+    top.append(head);
+    for (const [index, column] of WAR_TIMELINE_COLUMNS.entries()) {
+      const sub = document.createElement("th");
+      sub.className = index === 0 ? "num war-timeline-first" : "num";
+      sub.textContent = column.title;
+      if (column.tip) sub.title = column.tip;
+      bottom.append(sub);
+    }
+    const share = document.createElement("th");
+    share.className = "num";
+    share.textContent = "Eff.";
+    share.title = "Efficiency: the other side's ISK lost as a share of both sides' ISK lost. Not a verdict on who won.";
+    bottom.append(share);
+  }
+  el("war-timeline-head").append(top, bottom);
+
+  el("war-timeline-body").append(...[...shown].reverse().map((day) => {
+    const row = document.createElement("tr");
+    const date = document.createElement("td");
+    date.className = "war-timeline-date";
+    date.textContent = warPeriodName(day.date);
+    row.append(date);
+    for (const side of ["a", "b"]) {
+      const other = side === "a" ? "b" : "a";
+      for (const [index, column] of WAR_TIMELINE_COLUMNS.entries()) {
+        const figure = numberCell(column.write(column.read(day[side])));
+        if (index === 0) figure.classList.add("war-timeline-first");
+        if (column.strong) figure.classList.add("war-timeline-strong-cell");
+        if (column.definite && column.read(day[side])) {
+          const definite = column.definite(day[side]);
+          figure.title = `${column.write(definite)} definite, ${column.write(column.read(day[side]) - definite)} probable`;
+        }
+        row.append(figure);
+      }
+      row.append(numberCell(warEfficiency(day[side].iskLost, day[other].iskLost)));
+    }
+    return row;
+  }));
 }
 
 /* The setup window */
@@ -6891,6 +7150,13 @@ function wireWarSetup() {
       saveWarAdd();
     }
   });
+  for (const button of el("panel-war-timeline").querySelectorAll(".war-toggle button")) {
+    button.addEventListener("click", () => {
+      if (button.dataset.mode) warTimelineMode = button.dataset.mode;
+      else warTimelineUnit = button.dataset.unit;
+      if (warReport) renderWarTimeline(warReport);
+    });
+  }
   for (const radio of el("war-add-form").elements["war-add-from"]) {
     radio.addEventListener("change", () => {
       const off = el("war-add-form").elements["war-add-from"].value !== "date";

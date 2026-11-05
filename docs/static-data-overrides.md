@@ -122,7 +122,7 @@ For example, to stop showing the Astero's losses on the Fits tab, and stop freig
 
 ### `structures.json`
 
-All sections hold groups.
+All sections hold groups, but for `medium_structure_types`, which holds types, and `anchorable_categories`, which holds categories.
 
 | Section | Used for |
 |---|---|
@@ -131,6 +131,10 @@ All sections hold groups.
 | `pos_battery_groups` | Control tower guns and ewar batteries, which appear on kills in place of their tower |
 | `minor_structure_groups` | Structures with no guns, such as Metenox moon drills and customs offices: listed among structures destroyed, never as a system's last structure lost |
 | `poco_groups` | Customs offices, which a war report counts under POS |
+| `anchorable_categories` | Deployables such as mobile warp disruptors and depots, which a war report always counts as station trash when the war's sides shot them |
+| `not_trash_groups` | Never station trash in a war report, whatever else says so, with their ISK staying in the fights: built in, mobile tractor units |
+| `standup_fighter_groups` | Fighters only structures launch: a war report counts their ISK under structures and never as ships, and losing them marks a Station ref or Ref attempt on the fight |
+| `medium_structure_types` | The structures a war report allows 3 days from a ref to the kill, and from asset denial to the loss. Every other upwell structure gets 4 |
 
 For example, to let a Metenox moon drill count as a wormhole system's last structure lost, move its group from the minor structures to the upwell ones:
 

@@ -63,6 +63,9 @@ type War struct {
 
 const warDateLayout = "2006-01-02"
 
+// warRules is in the run key, and changes when a war comes to hold killmails it used to drop, so a saved war reads its lists once more. rules3 added station trash and any structure a side lost.
+const warRules = "rules3"
+
 /*
 	Start is the war's first moment
 
@@ -120,7 +123,25 @@ func (w War) CurrentRunKey() string {
 		slices.Sort(keys)
 		return strings.Join(slices.Compact(keys), ",")
 	}
-	return fmt.Sprintf("A=%s+[%s]|B=%s+[%s]|from=%s", side(w.SideA), added(w.AddedA), side(w.SideB), added(w.AddedB), w.FromDate)
+	return fmt.Sprintf("%s|A=%s+[%s]|B=%s+[%s]|from=%s", warRules, side(w.SideA), added(w.AddedA), side(w.SideB), added(w.AddedB), w.FromDate)
+}
+
+/*
+	RunKeyFor is CurrentRunKey with the groups its sides resolve to now, so a member or affiliate added to a coalition has its list read from the war's start at the next run.
+
+Parameters:
+  - sideA, sideB: the groups each side resolves to, see WarSideGroups
+
+Returns:
+  - string: differs from RunKey when the next run must read every list from the war's start
+*/
+func (w War) RunKeyFor(sideA []TargetGroup, sideB []TargetGroup) string {
+	keys := []string{}
+	for _, group := range slices.Concat(sideA, sideB) {
+		keys = append(keys, fmt.Sprintf("%s:%d", group.Type.String(), group.ID))
+	}
+	slices.Sort(keys)
+	return w.CurrentRunKey() + "|groups=" + strings.Join(slices.Compact(keys), ",")
 }
 
 // warKey is a war's key in SavedWars: its id

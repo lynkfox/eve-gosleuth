@@ -3186,6 +3186,7 @@ table.war-counts { width: auto; margin: 0 auto; border: 1px solid var(--border);
 .war-table th.war-head-b { box-shadow: inset 0 -3px 0 var(--war-b); color: var(--text); }
 .war-table th.war-head-others { box-shadow: inset 0 -3px 0 var(--muted); color: var(--text); }
 .war-measure.war-indent { padding-left: 28px; color: var(--muted); }
+.war-measure.war-indent-two { padding-left: 48px; font-size: 13px; }
 .war-total td { font-weight: 600; }
 .war-citadel-types { margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 400; }
 .war-citadel-types img { width: 18px; height: 18px; margin-right: 6px; vertical-align: middle; border-radius: 3px; }
@@ -3268,3 +3269,30 @@ th[aria-sort="descending"] .war-sort::after { flex: none; margin-left: 4px; cont
   .war-versus-sides { flex: 0 1 auto; flex-wrap: wrap; }
   .war-run { margin-left: 0; }
 }
+
+/* the Timeline tab: a strip drawn like the Activity chart, in each side's fixed color, over a table of every category */
+.war-timeline-toolbar { justify-content: space-between; }
+.war-toggle { display: inline-flex; gap: 4px; }
+.war-toggle button { padding: 4px 12px; font-size: 13px; }
+.war-toggle button[aria-pressed="true"], .war-toggle button[aria-pressed="true"]:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+.war-timeline-grid { display: grid; gap: 2px; width: 100%; margin-bottom: 12px; font-variant-numeric: tabular-nums; }
+.war-timeline-grid .activity-corner, .war-timeline-side { position: sticky; left: 0; z-index: 1; background: var(--panel); }
+.war-timeline-side { display: block; overflow: hidden; font-weight: 600; line-height: 30px; text-overflow: ellipsis; white-space: nowrap; }
+.war-timeline-grid .activity-hour { white-space: nowrap; }
+.war-timeline-grid .activity-cell { padding: 0 2px; font-size: 11px; }
+.war-timeline-grid .activity-cell.war-timeline-strong { color: #fff; font-weight: 600; }
+.war-timeline-table { width: 100%; min-width: 1240px; }
+.war-timeline-table th, .war-timeline-table td { padding-right: 6px; padding-left: 6px; font-size: 12px; white-space: nowrap; }
+/* the first row's height is set exactly, as the second row is pinned right under it */
+.war-timeline-table thead tr:first-child th { height: 30px; padding-top: 0; padding-bottom: 0; border-bottom: 0; line-height: 30px; text-align: center; }
+.war-timeline-table thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); }
+.war-timeline-table thead tr:nth-child(2) th { top: 30px; }
+.war-timeline-date { white-space: nowrap; }
+.war-timeline-first { border-left: 2px solid var(--border); }
+.war-timeline-strong-cell { font-weight: 600; }
+
+/* a battle's mark that a station was under attack: solid once its structure died, dashed for an attempt */
+.war-ref-a { color: var(--war-a); }
+.war-ref-b { color: var(--war-b); }
+.war-ref-attempt { border-style: dashed; }
+.war-trash-line { color: var(--muted); font-style: italic; }
