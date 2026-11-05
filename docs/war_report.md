@@ -35,10 +35,14 @@ The **War** button sets up two sides and a start date, and GoSleuth follows the 
     - *A Fitted Capital with no blues on it is never Asset Denial*
     - *Subcapitals are only considered Asset Denial if a blue station is the only attacker*
     - *Capsules are never counted as Asset Denial*
-- **Station ref and Ref attempt**
+- **Citadel Ref'd, and Citadel or POS Attacked**
   - *A citadel being ref'd does not show up by itself on killmails*
   - *The search attempts to show them if it finds a battle where Standup Fighters are used or a station not destroyed in the battle participates in the fight*
     - *This very well may miss ref attempts! It also does not say if it is successful or not*
+  - *The mark's color is the side whose station it is, and hovering over it says what fired, where, and on how many killmails*
+  - *Citadel, POS, or POCO Destroyed means one died in that very fight*
+  - *Citadel Ref'd means the citadel died later, when one of its reinforcement timers could have ended, and hovering over it says when. POS and POCO timers aren't worked out, so they are never Ref'd*
+  - *Attacked?: a citadel or POS fired with no fighters, and only on killmails with fewer than 5 pilots. These could be a ref where only one person was killed, or maybe not.*
 
 ### The various report pages
 

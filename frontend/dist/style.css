@@ -3346,8 +3346,12 @@ th[aria-sort="descending"] .war-sort::after { flex: none; margin-left: 4px; cont
 .war-timeline-first { border-left: 2px solid var(--border); }
 .war-timeline-strong-cell { font-weight: 600; }
 
-/* a battle's mark that a station was under attack: solid once its structure died, dashed for an attempt */
+/* a battle's mark that a station was under attack: filled when it died in that fight, solid when it died days later, dashed for an attempt, dotted and faded for one on thin evidence */
+.war-ref-marks { display: flex; flex-wrap: wrap; gap: 2px 4px; margin-top: 2px; }
+.war-ref-marks .war-chit { margin-left: 0; }
 .war-ref-a { color: var(--war-a); }
 .war-ref-b { color: var(--war-b); }
+.war-ref-destroyed { background: color-mix(in srgb, currentColor 22%, transparent); font-weight: 600; }
 .war-ref-attempt { border-style: dashed; }
+.war-ref-unsure { border-style: dotted; opacity: 0.7; }
 .war-trash-line { color: var(--muted); font-style: italic; }

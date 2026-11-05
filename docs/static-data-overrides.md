@@ -133,8 +133,8 @@ All sections hold groups, but for `medium_structure_types`, which holds types, a
 | `poco_groups` | Customs offices, which a war report counts under POS |
 | `anchorable_categories` | Deployables such as mobile warp disruptors and depots, which a war report always counts as station trash when the war's sides shot them |
 | `not_trash_groups` | Never station trash in a war report, whatever else says so, with their ISK staying in the fights: built in, mobile tractor units |
-| `standup_fighter_groups` | Fighters only structures launch: a war report counts their ISK under structures and never as ships, and losing them marks a Station ref or Ref attempt on the fight |
-| `medium_structure_types` | The structures a war report allows 3 days from a ref to the kill, and from asset denial to the loss. Every other upwell structure gets 4 |
+| `standup_fighter_groups` | Fighters only structures launch: a war report counts their ISK under structures and never as ships, and losing them marks a Citadel Ref'd or Citadel Attacked on the fight |
+| `medium_structure_types` | The upwell structures a war report times as medium, with one reinforcement timer from a ref to the kill, and to asset denial's loss. Every other upwell structure has a hull timer too, so can take longer |
 
 For example, to let a Metenox moon drill count as a wormhole system's last structure lost, move its group from the minor structures to the upwell ones:
 

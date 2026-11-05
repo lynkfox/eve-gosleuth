@@ -4313,8 +4313,10 @@ const WAR_COUNTED_KEY = {
     { sample: "Efficiency", className: "", meaning: WAR_EFFICIENCY_TIP },
     { sample: "Station trash", className: "", meaning: "Empty ships shot after a station died in their system." },
     { sample: "Asset denial", className: "", meaning: "Capitals a side destroyed rather than lose them." },
-    { sample: "Station ref", className: "", meaning: "A side's Standup Fighters or a station of its in a fight, then its structure there within 3 days (medium) or 4 (large)." },
-    { sample: "Ref attempt", className: "", meaning: "A side's Standup Fighters or a station of its in a fight, with no structure lost there in that time. Possible ref attempt." },
+    { sample: "Citadel, POS, POCO Destroyed", className: "", meaning: "A side's structure of that kind died in this fight." },
+    { sample: "Citadel Ref'd", className: "", meaning: "A side's Standup Fighters or citadel in a fight, then its citadel there died when one of its reinforcement timers would have ended." },
+    { sample: "Citadel, POS Attacked", className: "", meaning: "A side's Standup Fighters, or a structure of its on a killmail with 5 or more pilots, with none of them lost there on its timers. It was probably attacked." },
+    { sample: "Citadel, POS Attacked?", className: "", meaning: "A side's structure fired, with no fighters, only on killmails with fewer than 5 pilots. It may have been attacked, or just been shooting a lone ship." },
   ],
 };
 
@@ -5921,8 +5923,9 @@ function renderWarOverview(report) {
 const WAR_TRASH_TIP = "Station Trash: empty ships shot after a station died in their system.\nAsset Denial: capitals a side destroyed rather than lose them.";
 const WAR_PROBABLE_TIP = "Station Trash: multiple ships dying from the same pilot in rapid succession, with no capsule lost. Any anchorable besides tractor units.\nAsset Denial: capitals with top damage from the same side's station, or with nothing fitted outside of rigs when the side then lost a station there. Anything whose only attacker is the same side's station.";
 const WAR_UNCERTAIN_TIP = "Station Trash: other losses in the 4 hours after the fight a station died in, with no capsule lost, unless fitted with more than one attacker.\nAsset Denial: capitals with nothing fitted and no station lost there yet, as it may never die. Capitals with the same side's station lower on the kill, or killed by their own side shortly before it lost a station there.";
-const WAR_REF_TIP = "This side's Standup Fighters, or a station of its that survived the fight, were in it, then its structure there died within 3 days for a medium, 4 for a large.";
-const WAR_ATTEMPT_TIP = "This side's Standup Fighters, or a station of its that survived the fight, were in it, with no structure of its lost there after. Possible ref attempt.";
+const WAR_REF_TIP = "This side's Standup Fighters, or a citadel of its that survived the fight, were in it, then its citadel there died when one of its reinforcement timers would have ended, which depends on its size and the space it is in.";
+const WAR_ATTEMPT_TIP = "This side's Standup Fighters, or a citadel or POS of its on a killmail with 5 or more pilots that survived the fight, were in it, with no structure of its lost there after. Its station was probably attacked.";
+const WAR_ATTEMPT_UNSURE_TIP = "A citadel or POS of this side that survived the fight fired, with no Standup Fighters, only on killmails with fewer than 5 pilots, with no structure of its lost there after. It may have been attacked, or just been shooting a lone ship.";
 
 // warCollapsedMeasures are the Overview's heading rows closed, by section, kept for the session. Their rows are left out rather than hidden, so the lines still alternate.
 const warCollapsedMeasures = new Set();
@@ -6048,8 +6051,9 @@ function warMeasuresTable(report) {
     return figures;
   }, { indent: true, top: true, under: "structures" });
   row("POS / POCO", (m) => count(m.pos), { indent: true, under: "structures" });
-  if (any((m) => m.stationRefs)) row("Station refs", (m) => count(m.stationRefs), { indent: true, help: WAR_REF_TIP, under: "structures" });
-  if (any((m) => m.refAttempts)) row("Ref attempts", (m) => count(m.refAttempts), { indent: true, help: WAR_ATTEMPT_TIP, under: "structures" });
+  if (any((m) => m.stationRefs)) row("Citadel Ref'd", (m) => count(m.stationRefs), { indent: true, help: WAR_REF_TIP, under: "structures" });
+  if (any((m) => m.refAttempts)) row("Attacked", (m) => count(m.refAttempts), { indent: true, help: WAR_ATTEMPT_TIP, under: "structures" });
+  if (any((m) => m.refAttemptsUnsure)) row("Attacked?", (m) => count(m.refAttemptsUnsure), { indent: true, help: WAR_ATTEMPT_UNSURE_TIP, under: "structures" });
 
   const enough = report.a.iskLost + report.b.iskLost > 0;
   row("Efficiency", (m, key) => (key === "others" || !enough ? "—" : `${m.efficiency.toFixed(1)}%`), {
@@ -6509,20 +6513,30 @@ function renderWarBattlePage() {
       tag.textContent = "Skirmish";
       date.append(tag);
     }
+    // on a line of their own, as they would not fit beside the date
+    const marks = document.createElement("div");
+    marks.className = "war-ref-marks";
     for (const ref of battle.stationRefs) {
       const tag = document.createElement("span");
-      tag.className = `war-chit war-ref war-ref-${ref.side}${ref.attempt ? " war-ref-attempt" : ""}`;
-      tag.textContent = ref.attempt ? "Ref attempt" : "Station ref";
+      tag.className = `war-chit war-ref war-ref-${ref.side}${ref.destroyed ? " war-ref-destroyed" : ""}${ref.attempt ? " war-ref-attempt" : ""}${ref.unsure ? " war-ref-unsure" : ""}`;
+      const kind = WAR_STRUCTURE_KINDS[ref.kind] || WAR_STRUCTURE_KINDS.citadel;
+      tag.textContent = `${kind.title} ${ref.destroyed ? "Destroyed" : !ref.attempt ? "Ref'd" : ref.unsure ? "Attacked?" : "Attacked"}`;
       const name = warSideName(report.war, ref.side);
-      tag.title = ref.attempt
-        ? `Standup Fighters or a station of ${name} in this fight. Possible ref attempt.`
-        : `Standup Fighters or a station of ${name} in this fight, and then it lost its ${ref.structure} in this system.`;
-      date.append(tag);
+      const why = ref.destroyed
+        ? `A ${kind.word} from ${name} was destroyed in this fight`
+        : !ref.attempt
+          ? `A ${kind.word} from ${name} was attacked here - it was destroyed later on ${spokenDate(ref.structureAt)}`
+          : ref.unsure
+            ? `A ${kind.word} from ${name} may have been attacked - too few killmails to be certain`
+            : `A ${kind.word} from ${name} was probably attacked here.`;
+      tag.title = [why, ...(ref.notes || []).map(warRefNoteLine)].join("\n");
+      marks.append(tag);
     }
     const clock = document.createElement("div");
     clock.className = "row-detail war-clock";
     clock.textContent = battleClock(battle);
     whenCell.append(date, clock);
+    if (battle.stationRefs.length > 0) whenCell.append(marks);
 
     const systemCell = document.createElement("td");
     const name = document.createElement("div");

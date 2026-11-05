@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lynkfox/go_eve_sleuth/aggregate"
 	"github.com/lynkfox/go_eve_sleuth/api"
 	"github.com/lynkfox/go_eve_sleuth/comm"
 	"github.com/lynkfox/go_eve_sleuth/comm/types"
@@ -662,7 +663,7 @@ func TestWarReportStage3(t *testing.T) {
 	})
 
 	t.Run("the report carries a ref mark, trash, and each day's figures with their efficiency", func(t *testing.T) {
-		fighter := coalitionKillmail(20, now.Add(-3*time.Hour), 98000100, warAlpha, warBeta)
+		fighter := coalitionKillmail(20, now.Add(-90*time.Hour), 98000100, warAlpha, warBeta)
 		fighter.Victim.ShipTypeID = standupTemplar
 		fighter.Victim.CharacterID = nil
 		station := coalitionKillmail(21, now.Add(-2*time.Hour), 98000100, warAlpha, warBeta)
@@ -684,18 +685,71 @@ func TestWarReportStage3(t *testing.T) {
 			}
 			assert.Equal(t, 1, shipsTrash)
 		}
-		marked, trashed := 0, 0
+		marked, destroyed, trashed := 0, 0, 0
 		for _, battle := range report.Battles {
 			assert.NotNil(t, battle.StationRefs)
 			for _, ref := range battle.StationRefs {
-				marked++
 				assert.Equal(t, "b", ref.Side)
+				if ref.Destroyed {
+					destroyed++
+					assert.Equal(t, "Astrahus", ref.Structure)
+					continue
+				}
+				marked++
 				assert.False(t, ref.Attempt)
 				assert.NotEmpty(t, ref.Structure)
 			}
 			trashed += battle.B.TrashKillmails
 		}
 		assert.Equal(t, 1, marked)
+		assert.Equal(t, 1, destroyed)
 		assert.Equal(t, 1, trashed)
 	})
+}
+
+func TestWarOtherSystemReports(t *testing.T) {
+	main := &retrieval.System{SystemID: 31001677, Name: "J113551"}
+	other := &retrieval.System{SystemID: 31002328, Name: "J155928"}
+	unseen := &retrieval.System{SystemID: 31000001, Name: "J100001"}
+	start := time.Date(2026, 11, 5, 16, 40, 0, 0, time.UTC)
+	battle := &aggregate.WarBattle{
+		Start: start, End: start.Add(4 * time.Hour),
+		OtherDetails: []*retrieval.System{other, unseen},
+		Killmails: []*retrieval.Killmail{
+			{System: main, KillmailTime: start.Add(4 * time.Hour)},
+			{System: other, KillmailTime: start},
+			{System: other, KillmailTime: start.Add(10 * time.Minute)},
+			{KillmailTime: start},
+		},
+	}
+
+	reports := warOtherSystemReports(battle)
+
+	if assert.Len(t, reports, 2) {
+		// at the middle of its own killmails, not the battle's, which is 18:40
+		assert.Equal(t, "J155928", reports[0].Name)
+		assert.Equal(t, "https://zkillboard.com/related/31002328/202611051600/", reports[0].ZkillURL)
+		assert.Equal(t, "https://br.evetools.org/related/31002328/202611051600", reports[0].EveToolsURL)
+		assert.Equal(t, "https://warbeacon.net/br/related/31002328/202611051600/", reports[0].WarbeaconURL)
+		// with no killmail counted there, the battle's middle
+		assert.Equal(t, "https://zkillboard.com/related/31000001/202611051800/", reports[1].ZkillURL)
+	}
+	assert.NotNil(t, warOtherSystemReports(&aggregate.WarBattle{}))
+}
+
+func TestWarSearchGroups(t *testing.T) {
+	comm.InitLogger(logrus.PanicLevel)
+	app, _ := warApp(t, nil)
+	card := savedWar(t, app, "")
+
+	card.Name = "The Big One"
+	renamed, err := app.SaveWar(card)
+	assert.NoError(t, err)
+	assert.Equal(t, "The Big One", renamed.Name)
+
+	groups, err := app.GetSearchGroups()
+	assert.NoError(t, err)
+	if assert.Len(t, groups, 1) {
+		assert.Equal(t, SearchGroup{Name: "The Big One", Type: warType, ID: card.ID, Sides: []string{"Alpha", "Beta"}}, groups[0])
+	}
 }

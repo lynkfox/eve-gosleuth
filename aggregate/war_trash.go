@@ -10,12 +10,15 @@ import (
 )
 
 const (
-	warTrashWindow = 4 * time.Hour      // how long after the battle a station dies in ends that later killmails in its system are trash
-	warRepeatGap   = 2 * time.Minute    // a pilot losing two ships closer than this after a station died is a repeat victim: too short to reship, session timers being what they are
-	warRepeatReach = 7 * 24 * time.Hour // how long after a station died a repeat victim is still looked for
-	warPodGap      = 5 * time.Minute    // a pilot's capsule dying this soon after their ship says they were in it: trash is empty ships
-	warDaysMedium  = 3 * 24 * time.Hour // from a ref or asset denial to a medium structure's death
-	warDaysLarge   = 4 * 24 * time.Hour // the same for any other
+	warMediumJitter  = 90 * time.Minute   // how far a medium's timer can end from its owner's chosen hour
+	warLargeJitter   = 3 * time.Hour      // the same for a large or XL
+	warShootTime     = 3 * time.Hour      // how long a station can take to kill once it is out of its last timer
+	warWormholeFirst = 31000000           // the eve ids of wormhole systems
+	warWormholeLast  = 31999999           //
+	warTrashWindow   = 4 * time.Hour      // how long after the battle a station dies in ends that later killmails in its system are trash
+	warRepeatGap     = 2 * time.Minute    // a pilot losing two ships closer than this after a station died is a repeat victim: too short to reship, session timers being what they are
+	warRepeatReach   = 7 * 24 * time.Hour // how long after a station died a repeat victim is still looked for
+	warPodGap        = 5 * time.Minute    // a pilot's capsule dying this soon after their ship says they were in it: trash is empty ships
 )
 
 // warTrashMark says a killmail is station trash or asset denial, which are one bucket
@@ -62,9 +65,64 @@ func warStationFiring(ship int, died map[int]bool) bool {
 	case warIsStation(ship):
 		return !died[ship]
 	case comm.PosBatteryGroups.ContainsGroupOf(ship):
-		return len(died) == 0
+		// a battery goes with its tower
+		for typeID := range died {
+			if comm.ControlTowerGroups.ContainsGroupOf(typeID) {
+				return false
+			}
+		}
+		return true
 	}
 	return false
+}
+
+// warDestroyedKind is the kind of structure a loss marks a battle as destroying, empty for anything else
+func warDestroyedKind(typeID int) string {
+	switch {
+	case comm.UpwellStructureGroups.ContainsGroupOf(typeID):
+		return WarKindCitadel
+	case comm.ControlTowerGroups.ContainsGroupOf(typeID):
+		return WarKindPOS
+	case comm.PocoGroups.ContainsGroupOf(typeID):
+		return WarKindPOCO
+	}
+	return ""
+}
+
+// warRefKind is the kind of structure a station part firing or lost says was attacked: its tower for a battery, a citadel for Standup Fighters
+func warRefKind(typeID int) string {
+	if comm.ControlTowerGroups.ContainsGroupOf(typeID) || comm.PosBatteryGroups.ContainsGroupOf(typeID) {
+		return WarKindPOS
+	}
+	return WarKindCitadel
+}
+
+// warRefSurePilots is how many pilots must be on a killmail with a firing station for it to look like a fight at the station, not its guns on a lone ship
+const warRefSurePilots = 5
+
+// warRefFired is one side's type of station part on a killmail, noted once however many of it fired
+type warRefFired struct {
+	side WarSideKey
+	ship int
+}
+
+// warPilotsOn is how many attackers on a killmail are pilots
+func warPilotsOn(kill *warKill) int {
+	count := 0
+	for _, attacker := range kill.raw.ESIKillmail.Attackers {
+		if intOf(attacker.CharacterID) != 0 {
+			count++
+		}
+	}
+	return count
+}
+
+// warRefTypeName is the name of a station part for a ref's note
+func warRefTypeName(typeID int) string {
+	if fit := comm.FitTypeOf(typeID); fit != nil && fit.Name != "" {
+		return fit.Name
+	}
+	return "Unknown station"
 }
 
 // warOwnStationOnKill is whether an attacker on a killmail is a station, one of its batteries, or its fighters on the victim's side, whoever else shot: a station does not shoot its own side's capital by accident
@@ -148,12 +206,39 @@ func warEmptyShips(losses []*warKill, pods []time.Time) []*warKill {
 	return empty
 }
 
-// warTimerDays is how long before a station's death a ref or asset denial goes with it
-func warTimerDays(typeID int) time.Duration {
-	if comm.MediumStructureTypes.ContainsIDNumber(typeID) {
-		return warDaysMedium
+/*
+	warStationTimers is how long before an upwell structure's death a fight can have been on one of its reinforcement timers, from https://wiki.eveuniversity.org/Vulnerability.
+	A timer ends at the next of the owner's chosen hours after a set wait, so up to a day past it, give or take its jitter. The wait depends on the structure's size and the space it is in.
+
+	A medium has one timer, its armor's, and dies on coming out of it. A large or XL has its armor's, 24 hours in any space, then its hull's. Without a service module online it is low power and its hull
+	goes with its armor, so its soonest death is a day after the first fight, whatever its hull's timer. Its latest is both timers at their longest after the first fight, as a mark may be on either.
+
+Returns:
+  - time.Duration: the soonest after a fight the station can die of it
+  - time.Duration: the latest
+*/
+func warStationTimers(station *warKill) (time.Duration, time.Duration) {
+	const hour, day = time.Hour, 24 * time.Hour
+	system := station.raw.ESIKillmail.SolarSystemID
+	wormhole := system >= warWormholeFirst && system <= warWormholeLast
+	if comm.MediumStructureTypes.ContainsIDNumber(warVictimType(station)) {
+		armor := 3*day + 12*hour
+		switch {
+		case wormhole:
+			armor = 2*day + 12*hour
+		case station.highsec:
+			armor = 4*day + 12*hour
+		}
+		return armor - warMediumJitter, armor + day + warMediumJitter + warShootTime
 	}
-	return warDaysLarge
+	hull := 2*day + 12*hour
+	switch {
+	case wormhole:
+		hull = day + 12*hour
+	case station.highsec:
+		hull = 4*day + 12*hour
+	}
+	return day - warLargeJitter, 2*day + warLargeJitter + hull + day + warLargeJitter + warShootTime
 }
 
 // warOtherSide is the other of sides A and B
@@ -212,8 +297,10 @@ func findWarTrash(kills []*warKill) *warTrash {
 	// the station a side loses in a killmail's system soon after it, if any
 	stationSoon := func(kill *warKill, side WarSideKey) *warKill {
 		next := warStationAfter(t.stations, kill, side)
-		if next != nil && !kill.at.Before(next.at.Add(-warTimerDays(warVictimType(next)))) {
-			return next
+		if next != nil {
+			if _, latest := warStationTimers(next); !kill.at.Before(next.at.Add(-latest)) {
+				return next
+			}
 		}
 		return nil
 	}
@@ -393,10 +480,25 @@ func warStationBefore(stations []*warKill, kill *warKill, side WarSideKey) bool 
 
 // warRefFighters is one side's station under attack in one system of a battle: its Standup Fighters lost or used, or a station of its firing that did not die in the battle
 type warRefFighters struct {
+	kind         string
 	side, listed WarSideKey // listed is by SideOf alone, side also takes in a third party fighting beside it
 	group        warGroupKey
 	system       int
-	first, last  time.Time
+	last         time.Time
+	sure         bool // Standup Fighters, or a station firing on a killmail with enough pilots
+	notes        []WarRefNote
+}
+
+// addNote counts a killmail under its note, adding the note the first time
+func (f *warRefFighters) addNote(note WarRefNote) {
+	for index := range f.notes {
+		if existing := &f.notes[index]; existing.Type == note.Type && existing.Owner == note.Owner && existing.System == note.System && existing.Lost == note.Lost {
+			existing.Killmails++
+			return
+		}
+	}
+	note.Killmails = 1
+	f.notes = append(f.notes, note)
 }
 
 // confirmedBy is the upwell structure whose death makes these fighters a station ref, nil for none
@@ -407,7 +509,8 @@ func (f *warRefFighters) confirmedBy(stations []*warKill) *warKill {
 		if !sameOwner || station.raw.ESIKillmail.SolarSystemID != f.system || !comm.UpwellStructureGroups.ContainsGroupOf(warVictimType(station)) {
 			continue
 		}
-		if !station.at.Before(f.first) && !station.at.After(f.last.Add(warTimerDays(warVictimType(station)))) {
+		soonest, latest := warStationTimers(station)
+		if !station.at.Before(f.last.Add(soonest)) && !station.at.After(f.last.Add(latest)) {
 			return station
 		}
 	}

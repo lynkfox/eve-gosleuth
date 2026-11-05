@@ -38,7 +38,7 @@ var (
 	AnchorableCategories  = newStaticValues() // what a war always counts as trash when the war's sides shot it, leaving out NotTrashGroups: mobile warp disruptors, depots. Categories, matched through fit_types.json.
 	NotTrashGroups        = newStaticValues() // what a war never counts as trash, its ISK staying in the fights: mobile tractor units, which can hold a fight's loot
 	StandupFighterGroups  = newStaticValues() // fighters only structures launch: a war counts them in ISK under structures, never as ships, and their loss marks a station under attack
-	MediumStructureTypes  = newStaticValues() // the upwell structures a war gives 3 days from a ref to the kill rather than 4. Types, as size has no group.
+	MediumStructureTypes  = newStaticValues() // the upwell structures a war times as medium, with one reinforcement timer rather than two. Types, as size has no group.
 
 	PIMaterialGroups = newStaticValues() // Planetary Industry resources and commodities
 	SmartbombGroups  = newStaticValues() // smartbomb modules, the weapon a player on a ratting loss may have only bombed it with

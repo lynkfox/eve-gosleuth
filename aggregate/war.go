@@ -79,8 +79,9 @@ type WarMeasures struct {
 	ShipsTrashDefinite int                 // the part of ShipsTrash graded definite
 	Citadels           []WarStructureCount // upwell_structure_groups, most lost first then by name
 	POS                int                 // control_tower_groups and poco_groups
-	StationRefs        int                 // battles marked Station ref for this side
-	RefAttempts        int                 // battles marked Ref attempt for this side
+	StationRefs        int                 // battles marked Citadel Ref'd for this side
+	RefAttempts        int                 // battles marked Station Attacked for this side
+	RefAttemptsUnsure  int                 // battles marked Station Attacked? for this side, not among RefAttempts
 }
 
 // WarDay is what each side lost on one day, EVE time
@@ -92,8 +93,29 @@ type WarDay struct {
 // WarStationRef marks a battle where a side lost or used Standup Fighters, or a station of its fired and survived, so its station was probably under attack
 type WarStationRef struct {
 	Side      WarSideKey
-	Attempt   bool   // no structure of that side died in the system within its timer days
-	Structure string // the type of the structure that did, empty for an attempt
+	Kind      string    // WarKindCitadel, WarKindPOS, or WarKindPOCO
+	Attempt   bool      // no structure of that side died in the system within its timer days
+	Destroyed bool      // its station died in this very fight, so it is no ref. The rest of the marks are for one that lived through the fight.
+	Unsure    bool      // an attempt on thin evidence: no Standup Fighters, and its station only fired on killmails with few pilots, as one will at a lone ship
+	Structure string    // the type of the structure that did, empty for an attempt
+	DiedAt    time.Time // when it did, zero for an attempt
+	Notes     []WarRefNote
+}
+
+// the kinds of structure a battle's marks are for
+const (
+	WarKindCitadel = "citadel" // any upwell structure
+	WarKindPOS     = "pos"
+	WarKindPOCO    = "poco"
+)
+
+// WarRefNote is one thing that marked a battle: a type of station, battery, or fighter, in one system
+type WarRefNote struct {
+	Type      string
+	Owner     string // its group when that is a third party fighting beside the side, else empty
+	System    string
+	Lost      bool // lost, not firing
+	Killmails int
 }
 
 // WarStructureKind is how many of one kind of structure a side lost in a battle
@@ -358,6 +380,7 @@ type warKill struct {
 	at       time.Time
 	parties  []warParty // the victim first
 	sameSide bool
+	highsec  bool // only known once the killmail is expanded, for a station's timers
 }
 
 func intOf(value *int) int {
@@ -717,6 +740,11 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		return entry, &entry.Others
 	}
 
+	for _, kill := range kills {
+		if km := expanded[kill.id]; km != nil && km.System != nil && api.SecurityBand(km.System.SecurityStatus) == api.SECURITY_HIGH {
+			kill.highsec = true
+		}
+	}
 	trash := findWarTrash(kills)
 	battleOfStation := map[int]*WarBattle{} // the battle each station with trash died in
 
@@ -820,14 +848,36 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		systemKills := map[int]int{}
 		systemFirst := []*retrieval.System{}
 		fighters := []*warRefFighters{}
-		noteRef := func(kill *warKill, side WarSideKey, party warParty) {
+		noteRef := func(kill *warKill, km *retrieval.Killmail, side WarSideKey, party warParty, ship int, lost, sure bool) {
 			system := kill.raw.ESIKillmail.SolarSystemID
-			index := slices.IndexFunc(fighters, func(f *warRefFighters) bool { return f.side == side && f.system == system })
+			kind := warRefKind(ship)
+			index := slices.IndexFunc(fighters, func(f *warRefFighters) bool { return f.side == side && f.system == system && f.kind == kind })
 			if index < 0 {
-				fighters = append(fighters, &warRefFighters{side: side, listed: party.side, group: party.group, system: system, first: kill.at})
+				fighters = append(fighters, &warRefFighters{kind: kind, side: side, listed: party.side, group: party.group, system: system})
 				index = len(fighters) - 1
 			}
 			fighters[index].last = kill.at
+			fighters[index].sure = fighters[index].sure || sure
+			note := WarRefNote{Type: warRefTypeName(ship), Lost: lost}
+			if party.side == WarSideNone {
+				note.Owner = names[party.group]
+			}
+			if km.System != nil {
+				note.System = km.System.Name
+			}
+			fighters[index].addNote(note)
+		}
+		// the structures each side lost in this battle, by kind, and the systems its citadels died in: fighters there are taken for the dying citadel's, as nothing says which launched them
+		destroyed := map[WarSideKey]map[string]*warRefFighters{}
+		destroyedIn := map[WarSideKey]map[int]bool{}
+		for _, kill := range battle.kills {
+			victim := kill.parties[0]
+			if side := effective(victim); side != WarSideNone && !victim.ignored && comm.UpwellStructureGroups.ContainsGroupOf(warVictimType(kill)) {
+				if destroyedIn[side] == nil {
+					destroyedIn[side] = map[int]bool{}
+				}
+				destroyedIn[side][kill.raw.ESIKillmail.SolarSystemID] = true
+			}
 		}
 		// the stations that died in this battle, by owner and type, as one firing before it dies is not one that was reffed
 		stationDied := map[warGroupKey]map[int]bool{}
@@ -856,13 +906,37 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 				wb.Killmails = append(wb.Killmails, km)
 				measures[side].add(loss)
 				dayOf(kill.at, side).add(loss)
-				if loss.fighter && side != WarSideNone {
-					noteRef(kill, side, victim)
+				system := kill.raw.ESIKillmail.SolarSystemID
+				if loss.fighter && side != WarSideNone && !destroyedIn[side][system] {
+					noteRef(kill, km, side, victim, loss.typeID, true, true)
 				}
+				if kind := warDestroyedKind(loss.typeID); side != WarSideNone && kind != "" {
+					if destroyed[side] == nil {
+						destroyed[side] = map[string]*warRefFighters{}
+					}
+					if destroyed[side][kind] == nil {
+						destroyed[side][kind] = &warRefFighters{}
+					}
+					note := WarRefNote{Type: warRefTypeName(loss.typeID), Lost: true}
+					if victim.side == WarSideNone {
+						note.Owner = names[victim.group]
+					}
+					if km.System != nil {
+						note.System = km.System.Name
+					}
+					destroyed[side][kind].addNote(note)
+				}
+				pilotsOn := warPilotsOn(kill)
+				noted := map[warRefFired]bool{}
 				for index, attacker := range kill.raw.ESIKillmail.Attackers {
 					shooter := kill.parties[index+1]
-					if shooterSide := effective(shooter); shooterSide != WarSideNone && warStationFiring(attacker.ShipTypeID, stationDied[shooter.group]) {
-						noteRef(kill, shooterSide, shooter)
+					shooterSide := effective(shooter)
+					fired := warRefFired{shooterSide, attacker.ShipTypeID}
+					isFighter := comm.StandupFighterGroups.ContainsGroupOf(attacker.ShipTypeID)
+					if shooterSide != WarSideNone && !noted[fired] && !(isFighter && destroyedIn[shooterSide][system]) && warStationFiring(attacker.ShipTypeID, stationDied[shooter.group]) {
+						noted[fired] = true
+						sure := isFighter || pilotsOn >= warRefSurePilots
+						noteRef(kill, km, shooterSide, shooter, attacker.ShipTypeID, false, sure)
 					}
 				}
 				if side == WarSideNone && victim.hasGroup && otherGroups[victim.group] != nil {
@@ -904,27 +978,41 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		// a station under attack, for each side with its fighters or a station in the fight
 		wb.StationRefs = []WarStationRef{}
 		for _, side := range []WarSideKey{WarSideA, WarSideB} {
-			lost := false
-			var confirmed *warKill
-			for _, f := range fighters {
-				if f.side == side {
-					lost = true
-					if confirmed == nil {
-						confirmed = f.confirmedBy(trash.stations)
-					}
+			for _, kind := range []string{WarKindCitadel, WarKindPOS, WarKindPOCO} {
+				if died := destroyed[side][kind]; died != nil {
+					wb.StationRefs = append(wb.StationRefs, WarStationRef{Side: side, Kind: kind, Destroyed: true, Structure: died.notes[0].Type, Notes: died.notes})
 				}
 			}
-			if !lost {
-				continue
+			for _, kind := range []string{WarKindCitadel, WarKindPOS} {
+				lost, sure := false, false
+				notes := []WarRefNote{}
+				var confirmed *warKill
+				for _, f := range fighters {
+					if f.side == side && f.kind == kind {
+						lost = true
+						sure = sure || f.sure
+						notes = append(notes, f.notes...)
+						// only an upwell structure's timers are known, so a tower is never Ref'd
+						if confirmed == nil && kind == WarKindCitadel {
+							confirmed = f.confirmedBy(trash.stations)
+						}
+					}
+				}
+				if !lost {
+					continue
+				}
+				ref := WarStationRef{Side: side, Kind: kind, Attempt: confirmed == nil, Unsure: confirmed == nil && !sure, Notes: notes}
+				if confirmed != nil {
+					ref.Structure = warLossOf(confirmed, warExpandedOrEmpty(expanded, confirmed)).structureKind()
+					ref.DiedAt = confirmed.at
+					measures[side].StationRefs++
+				} else if ref.Unsure {
+					measures[side].RefAttemptsUnsure++
+				} else {
+					measures[side].RefAttempts++
+				}
+				wb.StationRefs = append(wb.StationRefs, ref)
 			}
-			ref := WarStationRef{Side: side, Attempt: confirmed == nil}
-			if confirmed != nil {
-				ref.Structure = warLossOf(confirmed, warExpandedOrEmpty(expanded, confirmed)).structureKind()
-				measures[side].StationRefs++
-			} else {
-				measures[side].RefAttempts++
-			}
-			wb.StationRefs = append(wb.StationRefs, ref)
 		}
 
 		// where it was fought

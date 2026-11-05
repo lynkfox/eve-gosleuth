@@ -76,9 +76,10 @@ type WarMeasures struct {
 	Citadels           []WarStructureCount `json:"citadels"` // never null
 	CitadelCount       int                 `json:"citadelCount"`
 	POS                int                 `json:"pos"`
-	StationRefs        int                 `json:"stationRefs"` // battles marked Station ref for this side
-	RefAttempts        int                 `json:"refAttempts"` // battles marked Ref attempt for this side
-	Efficiency         float64             `json:"efficiency"`  // 0 to 100: the other side's ISK lost as a share of both sides' ISK lost. 0 for Others, and when neither lost any.
+	StationRefs        int                 `json:"stationRefs"`       // battles marked Citadel Ref'd for this side
+	RefAttempts        int                 `json:"refAttempts"`       // battles marked Station Attacked for this side
+	RefAttemptsUnsure  int                 `json:"refAttemptsUnsure"` // battles marked Station Attacked? for this side
+	Efficiency         float64             `json:"efficiency"`        // 0 to 100: the other side's ISK lost as a share of both sides' ISK lost. 0 for Others, and when neither lost any.
 }
 
 // WarDay is a row of the Timeline tab: what each side lost on one day, EVE time. The frontend adds them up into running totals.
@@ -88,11 +89,25 @@ type WarDay struct {
 	B    WarMeasures `json:"b"`
 }
 
-// WarStationRef marks a battle where a side lost Standup Fighters, so its station was probably under attack
+// WarStationRef marks a battle where a side lost or used Standup Fighters, or a station of its fired and survived, so its station was probably under attack
 type WarStationRef struct {
-	Side      string `json:"side"`      // a or b
-	Attempt   bool   `json:"attempt"`   // no structure of that side died in the system within its timer days
-	Structure string `json:"structure"` // the type of the structure that did, empty for an attempt
+	Side        string       `json:"side"`        // a or b
+	Attempt     bool         `json:"attempt"`     // no structure of that side died in the system within its timer days
+	Destroyed   bool         `json:"destroyed"`   // its station died in this very fight, so it is no ref
+	Kind        string       `json:"kind"`        // citadel, pos, or poco
+	Unsure      bool         `json:"unsure"`      // an attempt on thin evidence, see aggregate.WarStationRef
+	Structure   string       `json:"structure"`   // the type of the structure that did, empty for an attempt
+	StructureAt time.Time    `json:"structureAt"` // when it did, zero for an attempt
+	Notes       []WarRefNote `json:"notes"`       // what marked it, never null
+}
+
+// WarRefNote is one thing that marked a battle: a type of station, battery, or fighter, in one system
+type WarRefNote struct {
+	Type      string `json:"type"`
+	Owner     string `json:"owner"` // its group when that is a third party fighting beside the side, else empty
+	System    string `json:"system"`
+	Lost      bool   `json:"lost"` // lost, not firing
+	Killmails int    `json:"killmails"`
 }
 
 // WarStructureKind is how many of one kind of structure a side lost in a battle
@@ -915,7 +930,7 @@ func warMeasures(measures aggregate.WarMeasures, efficiency float64) WarMeasures
 	converted := WarMeasures{Killmails: measures.Killmails, ISKLost: measures.ISKLost, ISKFights: measures.ISKFights, ISKTrash: measures.ISKTrash,
 		ISKStructures: measures.ISKStructures, ShipsLost: measures.ShipsLost, ShipsFights: measures.ShipsFights, ShipsTrash: measures.ShipsTrash,
 		ISKTrashDefinite: measures.ISKTrashDefinite, ShipsTrashDefinite: measures.ShipsTrashDefinite,
-		Citadels: []WarStructureCount{}, POS: measures.POS, StationRefs: measures.StationRefs, RefAttempts: measures.RefAttempts, Efficiency: efficiency}
+		Citadels: []WarStructureCount{}, POS: measures.POS, StationRefs: measures.StationRefs, RefAttempts: measures.RefAttempts, RefAttemptsUnsure: measures.RefAttemptsUnsure, Efficiency: efficiency}
 	for _, citadel := range measures.Citadels {
 		count := WarStructureCount{Count: citadel.Count}
 		if citadel.Type != nil {
@@ -1026,7 +1041,11 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 			Class:              warClass(battle.System), Pilots: battle.Pilots, Killmails: len(battle.Killmails), Skirmish: battle.Skirmish,
 			A: warBattleSide(battle.A), B: warBattleSide(battle.B), Others: warBattleSide(battle.Others), StationRefs: []WarStationRef{}}
 		for _, ref := range battle.StationRefs {
-			row.StationRefs = append(row.StationRefs, WarStationRef{Side: warSideName(ref.Side), Attempt: ref.Attempt, Structure: ref.Structure})
+			mark := WarStationRef{Side: warSideName(ref.Side), Kind: ref.Kind, Destroyed: ref.Destroyed, Attempt: ref.Attempt, Unsure: ref.Unsure, Structure: ref.Structure, StructureAt: ref.DiedAt, Notes: []WarRefNote{}}
+			for _, note := range ref.Notes {
+				mark.Notes = append(mark.Notes, WarRefNote(note))
+			}
+			row.StationRefs = append(row.StationRefs, mark)
 		}
 		if battle.System != nil {
 			middle := battle.Start.Add(battle.End.Sub(battle.Start) / 2)

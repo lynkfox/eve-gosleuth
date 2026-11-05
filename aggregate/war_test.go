@@ -1149,11 +1149,11 @@ func TestWarAssetDenial(t *testing.T) {
 		assert.Empty(t, trashIDs(build(blue(1, 0), raw(2, 60, sysHome, wp{corp: corpB1, ally: allyB}, astrahus, pA1(2)))))
 	})
 
-	t.Run("only as far before as its timer: 3 days for a medium, 4 for a large", func(t *testing.T) {
-		assert.Empty(t, trashIDs(build(blue(1, 0), raw(2, 3*day+1, sysHome, owner, raitaru, pB(2)))))
-		assert.Equal(t, []int{1}, trashIDs(build(blue(1, 0), raw(2, 3*day, sysHome, owner, raitaru, pB(2)))))
-		assert.Equal(t, []int{1}, trashIDs(build(blue(1, 0), raw(2, 4*day, sysHome, owner, fortizar, pB(2)))))
-		assert.Empty(t, trashIDs(build(blue(1, 0), raw(2, 4*day+1, sysHome, owner, fortizar, pB(2)))))
+	t.Run("only as far before as its timers can reach, by its size", func(t *testing.T) {
+		assert.Empty(t, trashIDs(build(blue(1, 0), raw(2, 112*60+31, sysHome, owner, raitaru, pB(2)))))
+		assert.Equal(t, []int{1}, trashIDs(build(blue(1, 0), raw(2, 112*60+30, sysHome, owner, raitaru, pB(2)))))
+		assert.Equal(t, []int{1}, trashIDs(build(blue(1, 0), raw(2, 141*60, sysHome, owner, fortizar, pB(2)))))
+		assert.Empty(t, trashIDs(build(blue(1, 0), raw(2, 141*60+1, sysHome, owner, fortizar, pB(2)))))
 	})
 
 	t.Run("a structure lost to a third party is held and still anchors it", func(t *testing.T) {
@@ -1225,18 +1225,45 @@ func TestWarStationRef(t *testing.T) {
 	build := func(kms ...retrieval.RawKillmail) *aggregate.WarData {
 		return aggregate.BuildWar(kms, expand(kms...), sides, 10)
 	}
-	ref := func(data *aggregate.WarData) []aggregate.WarStationRef {
+	// a station's reinforcement timers outside a wormhole, in minutes, from sysHome being neither
+	const (
+		mediumSoonest = 82*60 + 30
+		mediumLatest  = 112*60 + 30
+		largeSoonest  = 21 * 60
+		largeLatest   = 141 * 60
+	)
+	// marks is the newest battle's marks that are, or are not, Station Destroyed
+	marks := func(data *aggregate.WarData, destroyed bool) []aggregate.WarStationRef {
 		for _, battle := range data.Battles {
-			if len(battle.StationRefs) > 0 {
-				return battle.StationRefs
+			found := []aggregate.WarStationRef{}
+			for _, mark := range battle.StationRefs {
+				if mark.Destroyed == destroyed {
+					found = append(found, mark)
+				}
+			}
+			if len(found) > 0 {
+				return found
 			}
 		}
 		return nil
 	}
+	ref := func(data *aggregate.WarData) []aggregate.WarStationRef { return marks(data, false) }
+
+	// noNotes leaves a mark's side, grade, and structure to compare
+	noNotes := func(marks []aggregate.WarStationRef) []aggregate.WarStationRef {
+		for index := range marks {
+			marks[index].Notes = nil
+			marks[index].DiedAt = time.Time{}
+			marks[index].Kind = ""
+		}
+		return marks
+	}
 
 	t.Run("standup fighters with no structure dying are an attempt, in ISK under structures but not ships", func(t *testing.T) {
 		data := build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)))
-		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Attempt: true}}, ref(data))
+		assert.Equal(t, aggregate.WarSideA, ref(data)[0].Side)
+		assert.True(t, ref(data)[0].Attempt)
+		assert.False(t, ref(data)[0].Unsure)
 		assert.Equal(t, 1, data.A.RefAttempts)
 		assert.Zero(t, data.A.StationRefs)
 		assert.Zero(t, data.A.ShipsLost)
@@ -1256,11 +1283,42 @@ func TestWarStationRef(t *testing.T) {
 	}
 
 	t.Run("standup fighters used, or a side's station firing, mark that side, with no fighter lost", func(t *testing.T) {
-		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Attempt: true}}, ref(build(firing(standupTemplar))))
+		fighters := ref(build(firing(standupTemplar)))
+		assert.Equal(t, aggregate.WarSideA, fighters[0].Side)
+		assert.True(t, fighters[0].Attempt)
+		assert.False(t, fighters[0].Unsure)
 		data := build(firing(astrahus))
-		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Attempt: true}}, ref(data))
+		assert.Equal(t, aggregate.WarSideA, ref(data)[0].Side)
+		assert.True(t, ref(data)[0].Attempt)
+		assert.Equal(t, 1, data.A.RefAttemptsUnsure)
+		assert.Zero(t, data.B.RefAttemptsUnsure)
+	})
+
+	t.Run("a station alone among few pilots is unsure, with five pilots beside it it is not, and each says what fired where", func(t *testing.T) {
+		data := build(firing(astrahus))
+		marks := ref(data)
+		assert.True(t, marks[0].Unsure)
+		assert.Equal(t, 1, data.A.RefAttemptsUnsure)
+		assert.Zero(t, data.A.RefAttempts)
+		if assert.Len(t, marks[0].Notes, 1) {
+			assert.False(t, marks[0].Notes[0].Lost)
+			assert.Equal(t, 1, marks[0].Notes[0].Killmails)
+			assert.NotEmpty(t, marks[0].Notes[0].Type)
+		}
+
+		data = build(onKill(raw(1, 0, sysHome, pB(2), rifter, owner, pA1(5), pA1(6), pA1(7), pA1(8), pA1(9)), astrahus))
+		assert.False(t, ref(data)[0].Unsure)
 		assert.Equal(t, 1, data.A.RefAttempts)
-		assert.Zero(t, data.B.RefAttempts)
+		assert.Zero(t, data.A.RefAttemptsUnsure)
+	})
+
+	t.Run("a station that goes on to die is a station ref, never unsure", func(t *testing.T) {
+		first := ref(build(firing(raitaru), raw(2, 4*day, sysHome, owner, raitaru, pB(2))))
+		assert.False(t, first[0].Attempt)
+		assert.False(t, first[0].Unsure)
+		later := ref(build(firing(raitaru), raw(2, 4*day+60, sysHome, owner, raitaru, pB(2))))
+		assert.Equal(t, 60*time.Minute, later[0].DiedAt.Sub(first[0].DiedAt), "it says when the station died")
+		assert.True(t, ref(build(firing(astrahus)))[0].DiedAt.IsZero())
 	})
 
 	t.Run("a carrier's fighter or a pilot firing marks nothing", func(t *testing.T) {
@@ -1268,35 +1326,114 @@ func TestWarStationRef(t *testing.T) {
 		assert.Nil(t, ref(build(raw(1, 0, sysHome, pB(2), rifter, pA1(5)))))
 	})
 
-	t.Run("a station firing that dies in the battle marks nothing, though fighters used still do", func(t *testing.T) {
+	t.Run("a station that dies in the battle is destroyed, with no other mark for what fired there", func(t *testing.T) {
 		dies := raw(2, 5, sysHome, owner, astrahus, pB(2))
-		assert.Nil(t, ref(build(firing(astrahus), dies)))
+		for _, data := range []*aggregate.WarData{build(firing(astrahus), dies), build(firing(standupTemplar), dies), build(dies)} {
+			assert.Nil(t, ref(data))
+			mark := marks(data, true)
+			if assert.Len(t, mark, 1) {
+				assert.Equal(t, aggregate.WarSideA, mark[0].Side)
+				assert.Equal(t, "Astrahus", mark[0].Structure)
+				if assert.Len(t, mark[0].Notes, 1) {
+					assert.True(t, mark[0].Notes[0].Lost)
+				}
+			}
+			assert.Zero(t, data.A.StationRefs)
+			assert.Zero(t, data.A.RefAttempts)
+		}
+	})
 
-		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Structure: "Astrahus"}}, ref(build(firing(standupTemplar), dies)))
+	t.Run("another station firing where one dies can still be that fight's ref, and fighters there are taken for the dying one's", func(t *testing.T) {
+		dies := raw(2, 5, sysHome, owner, astrahus, pB(2))
+		data := build(firing(fortizar), dies, raw(3, 26*60, sysHome, owner, fortizar, pB(2)))
+		var fight *aggregate.WarBattle
+		for _, battle := range data.Battles {
+			if battle.Start.Equal(data.Battles[len(data.Battles)-1].Start) {
+				fight = battle
+			}
+		}
+		destroyed, reffed := 0, 0
+		for _, mark := range fight.StationRefs {
+			if mark.Destroyed {
+				destroyed++
+			} else if !mark.Attempt {
+				reffed++
+				assert.Equal(t, "Fortizar", mark.Structure)
+			}
+		}
+		assert.Equal(t, 1, destroyed)
+		assert.Equal(t, 1, reffed)
+		assert.Equal(t, 1, data.A.StationRefs)
+	})
+
+	t.Run("a station dying sooner after a fight than its timers allow is not that fight's ref", func(t *testing.T) {
+		data := build(firing(astrahus), raw(2, mediumSoonest-1, sysHome, owner, astrahus, pB(2)))
+		assert.True(t, ref(data)[0].Attempt)
+		assert.Len(t, marks(data, true), 1)
+
+		data = build(firing(astrahus), raw(2, mediumSoonest, sysHome, owner, astrahus, pB(2)))
+		assert.False(t, ref(data)[0].Attempt)
+		assert.Equal(t, 1, data.A.StationRefs)
+		assert.Len(t, marks(data, true), 1)
 	})
 
 	t.Run("a station firing is a station ref if it dies later, within its timer", func(t *testing.T) {
-		data := build(firing(raitaru), raw(2, 3*day, sysHome, owner, raitaru, pB(2)))
-		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Structure: "Raitaru"}}, ref(data))
+		data := build(firing(raitaru), raw(2, mediumLatest, sysHome, owner, raitaru, pB(2)))
+		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Structure: "Raitaru"}}, noNotes(ref(data)))
 		assert.Equal(t, 1, data.A.StationRefs)
-		assert.True(t, ref(build(firing(raitaru), raw(2, 3*day+1, sysHome, owner, raitaru, pB(2))))[0].Attempt)
+		assert.True(t, ref(build(firing(raitaru), raw(2, mediumLatest+1, sysHome, owner, raitaru, pB(2))))[0].Attempt)
 	})
 
-	t.Run("a medium dying within 3 days makes it a station ref, past that an attempt", func(t *testing.T) {
-		data := build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 3*day, sysHome, owner, raitaru, pB(2)))
-		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Structure: "Raitaru"}}, ref(data))
+	t.Run("a medium dying on its armor timer makes it a station ref, either side of that an attempt", func(t *testing.T) {
+		data := build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, mediumSoonest, sysHome, owner, raitaru, pB(2)))
+		assert.Equal(t, []aggregate.WarStationRef{{Side: aggregate.WarSideA, Structure: "Raitaru"}}, noNotes(ref(data)))
 		assert.Equal(t, 1, data.A.StationRefs)
 		assert.Zero(t, data.A.RefAttempts)
 
-		data = build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 3*day+1, sysHome, owner, raitaru, pB(2)))
+		data = build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, mediumLatest+1, sysHome, owner, raitaru, pB(2)))
+		assert.True(t, ref(data)[0].Attempt)
+		data = build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, mediumSoonest-1, sysHome, owner, raitaru, pB(2)))
 		assert.True(t, ref(data)[0].Attempt)
 	})
 
-	t.Run("a large gets 4 days", func(t *testing.T) {
-		data := build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 4*day, sysHome, owner, fortizar, pB(2)))
+	t.Run("a large can die from a day after its first fight, low on power, to its two timers' latest", func(t *testing.T) {
+		data := build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, largeSoonest, sysHome, owner, fortizar, pB(2)))
 		assert.False(t, ref(data)[0].Attempt)
-		data = build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 4*day+1, sysHome, owner, fortizar, pB(2)))
+		data = build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, largeSoonest-1, sysHome, owner, fortizar, pB(2)))
 		assert.True(t, ref(data)[0].Attempt)
+		data = build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, largeLatest, sysHome, owner, fortizar, pB(2)))
+		assert.False(t, ref(data)[0].Attempt)
+		data = build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, largeLatest+1, sysHome, owner, fortizar, pB(2)))
+		assert.True(t, ref(data)[0].Attempt)
+	})
+
+	t.Run("a wormhole's timers are shorter", func(t *testing.T) {
+		const hole = 31000001
+		dies := func(at, ship int) *aggregate.WarData {
+			return build(raw(1, 0, hole, owner, standupTemplar, pB(2)), raw(2, at, hole, owner, ship, pB(2)))
+		}
+		assert.False(t, ref(dies(58*60+30, raitaru))[0].Attempt)
+		assert.True(t, ref(dies(58*60+29, raitaru))[0].Attempt)
+		assert.False(t, ref(dies(88*60+30, raitaru))[0].Attempt)
+		assert.True(t, ref(dies(88*60+31, raitaru))[0].Attempt)
+		assert.False(t, ref(dies(117*60, fortizar))[0].Attempt)
+		assert.True(t, ref(dies(117*60+1, fortizar))[0].Attempt)
+	})
+
+	t.Run("a tower firing is its kind's mark and never Ref'd, a customs office dying is its own kind", func(t *testing.T) {
+		attacked := ref(build(firing(tower), raw(2, 4*day, sysHome, owner, tower, pB(2))))
+		assert.Equal(t, aggregate.WarKindPOS, attacked[0].Kind)
+		assert.True(t, attacked[0].Attempt)
+
+		for _, test := range []struct {
+			ship int
+			kind string
+		}{{astrahus, aggregate.WarKindCitadel}, {tower, aggregate.WarKindPOS}, {customs, aggregate.WarKindPOCO}} {
+			died := marks(build(raw(1, 0, sysHome, owner, test.ship, pB(2))), true)
+			if assert.Len(t, died, 1) {
+				assert.Equal(t, test.kind, died[0].Kind)
+			}
+		}
 	})
 
 	t.Run("the structure must be that side's, there, and not dead before", func(t *testing.T) {
@@ -1312,7 +1449,7 @@ func TestWarStationRef(t *testing.T) {
 		kms := []retrieval.RawKillmail{
 			raw(1, 0, sysHome, pA1(5), rifter, pB(2)),
 			raw(2, 1, sysHome, third, standupTemplar, pB(2)),
-			raw(3, 3*60, sysHome, third, raitaru, pD(9)),
+			raw(3, 4*day, sysHome, third, raitaru, pD(9)),
 		}
 		held := aggregate.ClassifyRawWar(kms, sides)
 		assert.Equal(t, []int{1, 2, 3}, ids(held))
@@ -1322,10 +1459,6 @@ func TestWarStationRef(t *testing.T) {
 		}
 	})
 
-	t.Run("the fight the structure dies in counts", func(t *testing.T) {
-		data := build(raw(1, 0, sysHome, owner, standupTemplar, pB(2)), raw(2, 5, sysHome, owner, raitaru, pB(2)))
-		assert.False(t, ref(data)[0].Attempt)
-	})
 }
 
 func TestWarDays(t *testing.T) {
