@@ -63,7 +63,7 @@ Wars are saved, and so is each report: it opens again across sessions with no ne
 
 - **New user sections:** `war` for the definition, notes, and flags; `war_killmail` for the killmails a war holds, one row each, gzipped like `killmails`. Both join `userSections`, so a cache clear leaves them unless the user ticks "Also clear what you set by hand". They are separate from the `killmail` section because Clear everything empties that.
 - **A war keeps the killmails it counted.** Once held, a killmail stays held even after zKillboard's cap has slid past it.
-- **Update** lists only from the last run's newest killmail, less a day's overlap, so a tracked war rarely meets the cap. A change of sides or start date does a full run, as does a change in the groups its sides resolve to, ie a coalition gaining a member or a member gaining an affiliate (`RunKeyFor`).
+- **Update** lists only from the last run's newest killmail, less 5 days' overlap, so a tracked war rarely meets the cap. A change of sides or start date does a full run, as does a change in the groups its sides resolve to, ie a coalition gaining a member or a member gaining an affiliate (`RunKeyFor`).
 - Names are looked up through the usual cache.
 
 ## Stage 1: group search

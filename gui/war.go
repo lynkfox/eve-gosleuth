@@ -213,8 +213,8 @@ type WarReport struct {
 // warDateLayout is how a war's dates are saved and sent
 const warDateLayout = "2006-01-02"
 
-// warUpdateOverlap is how far before its newest killmail an update lists, so a killmail zKillboard listed late is not missed
-const warUpdateOverlap = 24 * time.Hour
+// warUpdateOverlap is how far before its newest killmail an update lists, so a killmail posted late is not missed. zKillboard allows itself 3 days, and it is rare for a killmail to be held back longer than a couple of business days.
+const warUpdateOverlap = 5 * 24 * time.Hour
 
 // warSideTypes are the types a side can be
 var warSideTypes = []string{types.COALITION.String(), types.CORPORATION.String(), types.ALLIANCE.String()}
@@ -580,7 +580,7 @@ func (a *App) applyWarRun(id int, run warRunUpdate) {
 
 /*
 	CollectWar lists both sides' killmails, keeps what counts with what the war held, and builds its report. It takes a.mu, reports progress, and stops as CollectIntel does.
-	A war whose RunKey is CurrentRunKey lists only from its NewestKillmail less a day. Any other reads from its start. It ignores the search limits button.
+	A war whose RunKey is CurrentRunKey lists only from its NewestKillmail less warUpdateOverlap, 5 days. Any other reads from its start. It ignores the search limits button.
 
 Parameters:
   - id: the war

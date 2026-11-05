@@ -253,7 +253,7 @@ func TestCollectWar(t *testing.T) {
 	comm.InitLogger(logrus.PanicLevel)
 	now := time.Now().UTC().Truncate(time.Second)
 
-	t.Run("the first run reads in full from the start, then an update only from the newest killmail less a day", func(t *testing.T) {
+	t.Run("the first run reads in full from the start, then an update only from the newest killmail less 5 days", func(t *testing.T) {
 		app, zkill := warApp(t, fightLists(now))
 		card := savedWar(t, app, "2026-03-01")
 		start := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
@@ -279,7 +279,7 @@ func TestCollectWar(t *testing.T) {
 		zkill.reset()
 		report, err = app.CollectWar(card.ID)
 		assert.NoError(t, err)
-		want := now.Add(-55 * time.Minute).Add(-24 * time.Hour)
+		want := now.Add(-55 * time.Minute).Add(-5 * 24 * time.Hour)
 		assert.Equal(t, []time.Time{want, want}, zkill.newerThan())
 		assert.Len(t, report.Killmails, 2)
 

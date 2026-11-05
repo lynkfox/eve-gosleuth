@@ -55,7 +55,7 @@ type War struct {
 	Ignored []WarAddedGroup `json:"ignored,omitempty"`
 
 	LastRun        time.Time  `json:"lastRun,omitempty"`        // when it last collected, the zero time before its first run
-	NewestKillmail time.Time  `json:"newestKillmail,omitempty"` // the newest killmail it has listed, which an update lists from, less a day
+	NewestKillmail time.Time  `json:"newestKillmail,omitempty"` // the newest killmail it has listed, which an update lists from, less 5 days
 	RunKey         string     `json:"runKey,omitempty"`         // RunKey at its last full run, which an update needs to match
 	Reach          []WarReach `json:"reach,omitempty"`
 	SetAt          time.Time  `json:"setAt"`
