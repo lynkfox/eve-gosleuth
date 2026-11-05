@@ -72,7 +72,10 @@ Roadmap of planned features.
   * Custom Collation searches (generated in My Intel)
     * unlike affiliates, these wont necessarily have a "main"
     * affiliate searches that cross over into a collation wont pull its other collation members
-
+    * Run search straight from there
+  * Small scope searches - run a narrow search and check just those killmails
+    * Ie: All MSF + Machariel
+  
 * Future plans
   * wails v3 upgrade for multiple windows (side tools)
     * Side Tools
