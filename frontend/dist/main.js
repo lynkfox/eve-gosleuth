@@ -3964,7 +3964,7 @@ const TAB_HELP = {
     "A skirmish is a fight with fewer than 10 pilots, both sides together.",
     "Trash, ref marks, notes, structure counts, and other systems can all be hovered over to show more info.",
     "Click a heading to sort, or a class at the top to filter. Several classes can be on at once.",
-    "Right-click a row to open the battle report of any of its systems, nickname a system, add a note, or merge, split, or ignore it.",
+    "Right-click a row to open the battle report of any of its systems, nickname a system, add a note, filter to what it shows, or merge, split, or ignore it.",
   ],
   "tab-war-timeline": [
     "A total of the war, either by smaller unit or as a running total.",
@@ -5991,6 +5991,7 @@ function showWarReport(report) {
   renderWarOverview(report);
   renderWarClassFilter("battles", "Engagements", report.battles.filter((battle) => !battle.ignored));
   renderWarClassFilter("systems", "Systems", report.systems);
+  renderWarActiveFilters();
   showWarCounts("battles");
   showWarCounts("systems");
   renderWarBattlePage();
@@ -6373,7 +6374,92 @@ function warBattles() {
 // warFiltered is a table's rows of the classes it is filtered to
 function warFiltered(name, rows) {
   const on = warClassFilters[name];
-  return on.size === 0 ? rows : rows.filter((row) => on.has(row.class));
+  const classed = on.size === 0 ? rows : rows.filter((row) => on.has(row.class));
+  return name === "battles" ? classed.filter(warBattlePasses) : classed;
+}
+
+// warBattleFilters are what the Battles tab's right-click menu filters to, each null while off: a system's name, a group, and a battle's start, whose day is matched as the time preference writes it. The class filter is warClassFilters.
+const warBattleFilters = { system: null, group: null, date: null };
+
+// warBattleHasGroup is true if a group is the top group listed for any side of a battle
+function warBattleHasGroup(battle, wanted) {
+  return ["a", "b", "others"].some((key) => {
+    const group = battle[key].group;
+    return group && group.id === wanted.id && group.type === wanted.type;
+  });
+}
+
+// warBattlePasses is true if a battle is one the menu's filters leave. A battle that also went through a system counts for it.
+function warBattlePasses(battle) {
+  const { system, group, date } = warBattleFilters;
+  return (!system || battle.system.name === system || battle.otherSystems.includes(system))
+    && (!group || warBattleHasGroup(battle, group))
+    && (!date || spokenDate(battle.start) === spokenDate(date));
+}
+
+// applyWarBattleFilters draws the Battles tab again after a filter changed, from its first page
+function applyWarBattleFilters() {
+  renderWarClassFilter("battles", "Engagements", warReport.battles.filter((battle) => !battle.ignored));
+  renderWarActiveFilters();
+  showWarBattlePage(0);
+  showWarCounts("battles", true);
+}
+
+// warBattleFilterSection is the part of a battle's menu that filters the tab to what the battle shows, each turning to Show all while it is on
+function warBattleFilterSection(battle) {
+  const setting = (name, value) => () => {
+    warBattleFilters[name] = value;
+    applyWarBattleFilters();
+  };
+  const items = [];
+  items.push(warBattleFilters.system
+    ? { label: "Show all systems", action: setting("system", null) }
+    : { label: `Only ${systemLabel(battle.system)}`, action: setting("system", battle.system.name) });
+  if (warBattleFilters.group) {
+    items.push({ label: "Show all groups", action: setting("group", null) });
+  } else {
+    const seen = new Set();
+    for (const key of ["a", "b"]) {
+      const group = battle[key].group;
+      if (!group || seen.has(`${group.type}/${group.id}`)) continue;
+      seen.add(`${group.type}/${group.id}`);
+      items.push({ label: `Only ${group.name}`, action: setting("group", group) });
+    }
+  }
+  items.push(warBattleFilters.date
+    ? { label: "Show all dates", action: setting("date", null) }
+    : { label: `Only ${spokenDate(battle.start)}`, action: setting("date", battle.start) });
+  const classes = warClassFilters.battles;
+  items.push(classes.size > 0
+    ? { label: "Show all classes", action: () => {
+      classes.clear();
+      applyWarBattleFilters();
+    } }
+    : { label: `Only ${WAR_BANDS[battle.class] || battle.class || "unknown class"}`, action: () => {
+      classes.add(battle.class);
+      applyWarBattleFilters();
+    } });
+  return { heading: "Filter battles", items };
+}
+
+// renderWarActiveFilters says what the menu's filters are on, each with an x to take it off, as nothing else on the tab shows them
+function renderWarActiveFilters() {
+  const { system, group, date } = warBattleFilters;
+  const active = [[system, "system"], [group && group.name, "group"], [date && spokenDate(date), "date"]].filter(([text]) => text);
+  const box = el("war-battles-active");
+  box.hidden = active.length === 0;
+  box.replaceChildren(...active.map(([text, name]) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "secondary war-active-filter";
+    chip.title = "Stop filtering to this";
+    chip.textContent = `${text} ×`;
+    chip.addEventListener("click", () => {
+      warBattleFilters[name] = null;
+      applyWarBattleFilters();
+    });
+    return chip;
+  }));
 }
 
 // showWarCounts puts how many rows a table's filters leave on its tab and in the total of its count table, flashing both when asked and they changed
@@ -6914,7 +7000,7 @@ function renderWarBattlePage() {
     reports.append(siteLinks(`the battle in ${battle.system.name}`, battle));
 
     row.append(whenCell, warClassCell(battle.class, battle.system), systemCell, warBattleSideCell(battle.a, "a"), warBattleSideCell(battle.b, "b"), warBattleSideCell(battle.others, "others"), structures, reports);
-    return withMenu(row, () => [warBattleEditSection(battle), ...warBattleSections(battle)]);
+    return withMenu(row, () => [warBattleEditSection(battle), warBattleFilterSection(battle), ...warBattleSections(battle)]);
   });
 
   el("war-battles-body").replaceChildren(...rows);
