@@ -8872,9 +8872,7 @@ function showUpdateChip(release) {
 // openUpdateNotice opens the update popup for a release, closing About first when it asked, as only one window is open at a time
 function openUpdateNotice(release) {
   updateShown = release;
-  el("update-notice-title").textContent = `Version ${release.version} is out`;
-  renderReleaseNotes(el("update-notice-body"), [release], false);
-  el("update-notice-body").scrollTop = 0;
+  el("update-notice-version").textContent = `Version ${release.version} is ready to download.`;
   el("update-skip").checked = false;
   if (el("about").open) el("about").close();
   el("update-notice").showModal();

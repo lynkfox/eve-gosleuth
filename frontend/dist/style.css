@@ -1512,6 +1512,7 @@ button.text-link {
 .bug-report-steps { display: grid; gap: 4px; margin-bottom: 0; padding-left: 20px; }
 /* the update notice and What's New: a reading width, the box left of the buttons, notes drawn from blocks */
 .update-window { width: min(520px, calc(100vw - 32px)); max-height: 85vh; }
+.update-notice-window { width: min(420px, calc(100vw - 32px)); }
 .update-actions { justify-content: space-between; align-items: center; }
 .update-buttons { display: flex; gap: 8px; }
 .release-notes { gap: 10px; font-size: 13px; line-height: 1.5; }

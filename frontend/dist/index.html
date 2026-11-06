@@ -635,12 +635,14 @@
   </dialog>
 
   <!-- shown when a release newer than this one is found: the first time as a popup, then as the top bar's chip after Later -->
-  <dialog id="update-notice" class="window update-window" aria-labelledby="update-notice-title">
+  <dialog id="update-notice" class="window update-window update-notice-window" aria-labelledby="update-notice-title">
     <div class="window-titlebar">
-      <h2 id="update-notice-title"></h2>
+      <h2 id="update-notice-title">New update is available!</h2>
       <button id="update-notice-close" class="window-close" type="button" aria-label="Close" title="Close">×</button>
     </div>
-    <div id="update-notice-body" class="window-body release-notes"></div>
+    <div class="window-body">
+      <p id="update-notice-version"></p>
+    </div>
     <div class="window-actions update-actions">
       <label class="caveat-dismiss">
         <input id="update-skip" type="checkbox">
