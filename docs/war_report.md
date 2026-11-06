@@ -18,7 +18,7 @@ The **War** button sets up two sides and a start date, and GoSleuth follows the 
 - **What counts**
   - *The search filters through killmails from both sides back to the start date - the earlier in a war you start generating reports, the easier it will be for the search to keep up without being overwhelmed or getting rate limited*
   - *A 'battle' only counts if one side killed the other on at least one of its killmails - so if one of your sides goes off on a null roam and kills a bunch of goons, it won't count for your wormhole war*
-  - *Even so, some of those others may show up - they can be ignored by right-clicking them on the Overview and Participants pages*
+  - *Even so, some of those others may show up - they can be ignored by right-clicking them in the Others list on the Overview page*
 - **Station Trash and Asset Denial**
   - *The tool attempts to label kms as Asset Denial or Station Trash. Given that there is no real way to tell other than human intuition, these are marked as either probable or uncertain*
   - ***Station Trash***
