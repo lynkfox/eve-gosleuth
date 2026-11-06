@@ -17,7 +17,7 @@ type WarEditMark struct {
 
 /*
 	warFoughtBeside works out the side each third party group in a battle fought beside: the opposite of whichever side it shot at or was shot by on more killmails.
-	A group that fought both evenly, or neither, is left out.
+	A group that fought both evenly, or neither, is left out. So is one where that side has no pilot on a killmail in any system the group fought in: having the same enemy elsewhere is not fighting beside them, as a battle can link systems by the enemy's pilots alone.
 
 Parameters:
   - battle: a battle as FindBattlesOf found it, before any edit
@@ -27,7 +27,21 @@ Returns:
 */
 func warFoughtBeside(battle *warBattleOf) map[warGroupKey]WarSideKey {
 	against := map[warGroupKey]*[3]int{}
+	sidePilotsIn := map[WarSideKey]map[int]bool{WarSideA: {}, WarSideB: {}}
+	foughtIn := map[warGroupKey]map[int]bool{}
 	for _, kill := range battle.kills {
+		system := kill.raw.ESIKillmail.SolarSystemID
+		for _, party := range kill.parties {
+			if party.side != WarSideNone && party.char != 0 {
+				sidePilotsIn[party.side][system] = true
+			}
+			if party.side == WarSideNone && party.hasGroup {
+				if foughtIn[party.group] == nil {
+					foughtIn[party.group] = map[int]bool{}
+				}
+				foughtIn[party.group][system] = true
+			}
+		}
 		counted := map[[2]int]bool{}
 		add := func(group warGroupKey, x WarSideKey) {
 			mark := [2]int{int(group.Type)*1_000_000_000 + group.ID, int(x)}
@@ -52,11 +66,21 @@ func warFoughtBeside(battle *warBattleOf) map[warGroupKey]WarSideKey {
 	}
 	beside := map[warGroupKey]WarSideKey{}
 	for group, tally := range against {
+		side := WarSideNone
 		switch {
 		case tally[WarSideA] > tally[WarSideB]:
-			beside[group] = WarSideB
+			side = WarSideB
 		case tally[WarSideB] > tally[WarSideA]:
-			beside[group] = WarSideA
+			side = WarSideA
+		}
+		if side == WarSideNone {
+			continue
+		}
+		for system := range foughtIn[group] {
+			if sidePilotsIn[side][system] {
+				beside[group] = side
+				break
+			}
 		}
 	}
 	return beside

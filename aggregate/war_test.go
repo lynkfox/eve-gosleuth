@@ -395,6 +395,38 @@ func TestBuildWarThirdParties(t *testing.T) {
 		assert.Zero(t, data.Others.Killmails)
 	})
 
+	t.Run("a group fighting B where A has no pilot is not beside A, though the battle links them", func(t *testing.T) {
+		for name, aHere := range map[string]wp{"a fighter of A's": {corp: corpA1, ally: allyA}, "a pilot of A's": pA1(1)} {
+			kms := []retrieval.RawKillmail{
+				raw(1, 0, sysOther, aHere, rifter, pB(2)), // B's pilot links this to the fight at home
+				raw(2, 1, sysHome, pC(10), rifter, pB(2)),
+				raw(3, 2, sysHome, pB(3), rifter, pC(10)),
+				raw(4, 3, sysHome, pC(11), rifter, pB(3)),
+			}
+			data := aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
+			if assert.Len(t, data.Battles, 1, name) {
+				assert.InDelta(t, 100, data.Battles[0].A.ISKLost, 0.001, name+": only A's own loss")
+				assert.Equal(t, 2, data.Battles[0].Others.Pilots, name)
+			}
+			assert.Equal(t, 1, data.A.Killmails, name)
+			assert.Equal(t, 1, data.B.Killmails, name)
+			assert.Equal(t, 2, data.Others.Killmails, name)
+			if assert.Len(t, data.OtherGroups, 1, name) {
+				assert.Equal(t, allyC, data.OtherGroups[0].Group.ID, name)
+			}
+		}
+	})
+
+	t.Run("one pilot of A's in one of a group's systems puts it beside A", func(t *testing.T) {
+		kms := []retrieval.RawKillmail{
+			raw(1, 0, sysOther, pB(2), rifter, pC(10), pA1(1)),
+			raw(2, 1, sysHome, pC(10), rifter, pB(2)),
+		}
+		data := aggregate.BuildWar(kms, expand(kms...), sides, 10, retrieval.WarEdits{})
+		assert.Equal(t, 1, data.A.Killmails, "C's loss at home is A's")
+		assert.Zero(t, data.Others.Killmails)
+	})
+
 	t.Run("even, or no contact, leaves a group under Others with a row for it", func(t *testing.T) {
 		kms := []retrieval.RawKillmail{
 			raw(1, 0, sysHome, pC(10), rifter, pA1(1)),
