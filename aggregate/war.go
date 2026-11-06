@@ -208,6 +208,7 @@ type WarData struct {
 	Days           []WarDay      // oldest first, only days with a loss on either side
 	// who fought on each side, for the Pilots, Flown, and Participants tabs
 	PeopleA, PeopleB, PeopleOthers WarSidePeople
+	Export                         WarExport // what only the war's export shows
 }
 
 /*
@@ -804,6 +805,7 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 		}
 	}
 	data.PeopleA, data.PeopleB, data.PeopleOthers = people.side(WarSideA), people.side(WarSideB), people.side(WarSideNone)
+	data.Export = warExportOf(battles, people)
 	battleOfStation := map[int]*WarBattle{} // the battle each station with trash died in
 
 	for _, battle := range battles {

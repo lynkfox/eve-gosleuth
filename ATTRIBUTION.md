@@ -21,6 +21,10 @@ The rest:
 
 The PDF report is set in Noto Sans (Regular, Bold, and Italic) and Noto Sans Mono, by the [Noto Project Authors](https://github.com/notofonts), embedded in `report/fonts/` under the SIL Open Font License 1.1 (`report/fonts/OFL.txt`).
 
+## Charts
+
+The page a war exports draws their charts with [plotly.js](https://github.com/plotly/plotly.js) (basic bundle, v2.35.2), © Plotly, Inc., under the MIT License, embedded in `warexport/assets/` and written into that page.
+
 ## EVE Online and Fenris Creations
 
 EVE Online® and Fenris Creations™ (formerly CCP Games) and all related logos and other elements are trademarks of Fenris Creations. ©2026 Fenris Creations. All rights reserved. All other trademarks are the property of their respective owners.

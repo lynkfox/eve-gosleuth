@@ -1858,3 +1858,69 @@ func TestWarPeople(t *testing.T) {
 		assert.Equal(t, warFiguresOf(data), warFiguresOf(build()))
 	})
 }
+
+func TestWarExportFigures(t *testing.T) {
+	warSetup(t)
+	build := func(edits retrieval.WarEdits, raws ...retrieval.RawKillmail) *aggregate.WarData {
+		return aggregate.BuildWar(raws, expand(raws...), baseSides(), 1, edits)
+	}
+	structureB := wp{corp: corpB1, ally: allyB}
+
+	t.Run("a citadel or POCO lost or firing is seen, its first loss kept, and a POS is not", func(t *testing.T) {
+		data := build(retrieval.WarEdits{},
+			raw(1, 0, sysHome, structureB, astrahus, pA1(1)),
+			raw(2, 5, sysHome, structureB, customs, pA1(1)),
+			raw(3, 10, sysOther, structureB, tower, pA1(1)),
+			onKill(raw(4, 15, 30000003, pB(2), rifter, wp{corp: corpA1, ally: allyA}), astrahus),
+		)
+		home := data.Export.Presence[sysHome]
+		assert.True(t, home.B.Seen)
+		assert.False(t, home.A.Seen)
+		assert.Equal(t, warStart, home.B.FirstLost, "the first of the two losses")
+		_, seen := data.Export.Presence[sysOther]
+		assert.False(t, seen, "a POS is left out")
+		firing := data.Export.Presence[30000003]
+		assert.True(t, firing.A.Seen)
+		assert.True(t, firing.A.FirstLost.IsZero(), "firing is not a loss")
+	})
+
+	t.Run("appearances count battles per side, once each, with corps under their alliance", func(t *testing.T) {
+		data := build(retrieval.WarEdits{},
+			raw(1, 0, sysHome, pB(2), rifter, pA1(1)),
+			raw(2, 5, sysHome, pB(3), rifter, pA1(1), pA2(4)),
+			raw(3, 600, sysHome, pA1(1), rifter, pB(2)),
+		)
+		rows := data.Export.Appearances[aggregate.WarSideA]
+		if assert.Len(t, rows, 1) {
+			assert.Equal(t, allyA, rows[0].Group.ID)
+			assert.Equal(t, 2, rows[0].Battles)
+			if assert.Len(t, rows[0].Corps, 2) {
+				assert.Equal(t, corpA1, rows[0].Corps[0].Corp.ID)
+				assert.Equal(t, 2, rows[0].Corps[0].Battles)
+				assert.Equal(t, 1, rows[0].Corps[1].Battles)
+			}
+		}
+	})
+
+	t.Run("a corp with no alliance stands alone, and a third party goes with the side it fought beside", func(t *testing.T) {
+		data := build(retrieval.WarEdits{}, raw(1, 0, sysHome, pB(2), rifter, pA1(1), wp{corp: corpLone, char: 9}))
+		rows := data.Export.Appearances[aggregate.WarSideA]
+		if assert.Len(t, rows, 2) {
+			lone := rows[0]
+			if lone.Group.ID != corpLone {
+				lone = rows[1]
+			}
+			assert.Equal(t, corpLone, lone.Group.ID)
+			assert.Empty(t, lone.Corps)
+		}
+	})
+
+	t.Run("an ignored battle counts for nothing", func(t *testing.T) {
+		kms := []retrieval.RawKillmail{raw(1, 0, sysHome, structureB, astrahus, pA1(1))}
+		first := aggregate.BuildWar(kms, expand(kms...), baseSides(), 1, retrieval.WarEdits{})
+		edits := retrieval.WarEdits{Edits: []retrieval.WarBattleEdit{{ID: 1, Kind: retrieval.WarEditIgnore, Groups: [][]int{first.Battles[0].KillmailIDs}}}}
+		data := aggregate.BuildWar(kms, expand(kms...), baseSides(), 1, edits)
+		assert.Empty(t, data.Export.Presence)
+		assert.Empty(t, data.Export.Appearances)
+	})
+}

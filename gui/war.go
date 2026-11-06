@@ -291,6 +291,7 @@ type WarReport struct {
 	NPCPilots       WarNPCPilots             `json:"npcPilots"`
 	Days            []WarDay                 `json:"days"`   // oldest first, only days with a loss on either side
 	People          map[string]WarSidePeople `json:"people"` // by side: a, b, and others
+	Export          aggregate.WarExport      `json:"-"`      // what only the war's export shows
 	Reach           []WarReachLine           `json:"reach"`
 	FullRunDue      bool                     `json:"fullRunDue"` // the sides or start changed since its last full run, so its next run reads every list from its start. Also true before its first run.
 	Stopped         bool                     `json:"stopped"`
@@ -1093,6 +1094,7 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 		Reach:           []WarReachLine{},
 		FullRunDue:      war.RunKey != war.RunKeyFor(sides.A, sides.B),
 		SystemNicknames: map[int]string{},
+		Export:          data.Export,
 		People:          map[string]WarSidePeople{"a": warSidePeople(data.PeopleA), "b": warSidePeople(data.PeopleB), "others": warSidePeople(data.PeopleOthers)},
 	}
 	maps.Copy(report.SystemNicknames, edits.SystemNames)

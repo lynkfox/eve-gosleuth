@@ -1089,9 +1089,10 @@ function openScopeWindow(report) {
   el("scope-window").showModal();
 }
 
-// setExportPDF shows the top bar's Generate Report button, or hides it
+// setExportPDF shows the top bar's Generate Report button, or hides it. On a war it writes the war's folder of pages, not a PDF.
 function setExportPDF(shown) {
   el("export-pdf-top").hidden = !shown;
+  el("export-pdf-top").title = warMode ? "Save this war's report as a web page" : "Save this report as a PDF";
 }
 
 // PDF_SECTIONS are the PDF report's sections, until the section picker chooses them (phase 3); the Summary is always first
@@ -1102,8 +1103,14 @@ async function exportPDF() {
   const button = el("export-pdf-top");
   button.disabled = true;
   try {
-    const path = await backend().ExportPDF(PDF_SECTIONS);
-    if (path) tickerPush(`Saved ${path.split(/[\\/]/).pop()}`);
+    if (warMode && warReport) {
+      const war = warReport.war; // the report can be cleared while the folder picker is open
+      const path = await backend().ExportWar(war.id);
+      if (path) tickerPush(`Exported ${war.name}`);
+    } else {
+      const path = await backend().ExportPDF(PDF_SECTIONS);
+      if (path) tickerPush(`Saved ${path.split(/[\\/]/).pop()}`);
+    }
   } catch (err) {
     setStatus(String(err), true);
     tickerPush(`Error: ${err}`);
@@ -5997,7 +6004,7 @@ function showWarReport(report) {
   }
 
   setWarMode(true);
-  setExportPDF(false);
+  setExportPDF(report.killmailCount > 0);
   renderWarVersus(report.war, report);
   for (const key of ["a", "b"]) {
     const name = warSideName(report.war, key);
@@ -9591,6 +9598,7 @@ function openPreferences() {
   showTabOrderReset();
   el("preferences-advanced").open = false;
   el("preferences").showModal();
+  backend().GetWarExportFolder().then(showWarExportFolder).catch(() => {});
   backend().GetCacheInfo().then(showCacheInfo).catch(() => {});
   backend().GetDebugInfo().then(showDebugInfo).catch(() => {});
   el("static-export-result").textContent = STATIC_EXPORT_HINT;
@@ -9633,6 +9641,11 @@ function showCacheInfo(info) {
   const size = info.sizeBytes ? `, ${formatBytes(info.sizeBytes)} on disk` : "";
   el("cache-summary").textContent = `${info.entries.toLocaleString("en-US")} entries${size}${info.isDefault ? " · default location" : ""}`;
   el("cache-default").disabled = info.isDefault;
+}
+
+// showWarExportFolder shows the parent folder of war exports in Preferences
+function showWarExportFolder(folder) {
+  el("war-export-path").textContent = folder || "Not chosen yet. You'll be asked at the first export.";
 }
 
 /*
@@ -9814,6 +9827,14 @@ el("preferences-save").addEventListener("click", savePreferences);
 el("preferences").addEventListener("cancel", (event) => {
   event.preventDefault();
   closePreferences();
+});
+el("war-export-folder").addEventListener("click", async () => {
+  showPreferencesError("");
+  try {
+    showWarExportFolder(await backend().ChooseWarExportFolder());
+  } catch (err) {
+    showPreferencesError(String(err));
+  }
 });
 el("cache-move").addEventListener("click", () => cacheAction(() => backend().ChooseCacheFolder()));
 el("cache-default").addEventListener("click", () => cacheAction(() => backend().ResetCacheFolder()));

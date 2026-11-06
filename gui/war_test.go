@@ -2,6 +2,8 @@ package gui
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -945,4 +947,57 @@ func TestWarSidePeople(t *testing.T) {
 	assert.NotNil(t, empty.Pilots)
 	assert.NotNil(t, empty.Flown)
 	assert.NotNil(t, empty.Participants)
+}
+
+func TestExportWar(t *testing.T) {
+	comm.InitLogger(logrus.PanicLevel)
+	now := time.Now().UTC()
+	app, _ := warApp(t, fightLists(now))
+	card := savedWar(t, app, "")
+	_, err := app.CollectWar(card.ID)
+	assert.NoError(t, err)
+
+	parent := t.TempDir()
+	path, err := app.exportWarTo(parent, card.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, ".html", filepath.Ext(path))
+	entries, err := os.ReadDir(filepath.Dir(path))
+	assert.NoError(t, err)
+	assert.Len(t, entries, 2)
+
+	_, err = app.exportWarTo(parent, 999)
+	assert.ErrorIs(t, err, errNoWar)
+}
+
+func TestWarExportInput(t *testing.T) {
+	report := WarReport{
+		War:             WarCard{Name: "W", SideA: WarSideCard{Name: "A"}, SideB: WarSideCard{Name: "B"}},
+		A:               WarMeasures{ISKLost: 10, Efficiency: 25},
+		Others:          WarMeasures{ISKLost: 99},
+		SystemNicknames: map[int]string{1: "Mango"},
+		Systems:         []WarSystem{{System: SystemSummary{ID: 1, Name: "J1"}, Class: "C5"}, {System: SystemSummary{ID: 2, Name: "J2"}, Class: "C4"}},
+		Battles:         []WarBattle{{System: SystemSummary{ID: 2, Name: "J2"}, StationRefs: []WarStationRef{{Attempt: true}}, ZkillURL: "https://z"}, {System: SystemSummary{ID: 1, Name: "J1"}, Ignored: true}},
+		Export:          aggregate.WarExport{Presence: map[int]aggregate.WarSystemPresence{1: {A: aggregate.WarPresence{Seen: true}}}},
+	}
+	input := warExportInput(report, map[int]string{1: "Plum", 2: "Cherry"}, "1.4.0", time.Now())
+
+	assert.Equal(t, "Mango", input.Systems[0].Nickname, "the war's own name wins")
+	assert.Equal(t, "Cherry", input.Systems[1].Nickname)
+	assert.True(t, input.Systems[0].SeenA)
+	assert.False(t, input.Systems[1].SeenA)
+	if assert.Len(t, input.Battles, 1, "an ignored battle is left out") {
+		assert.True(t, input.Battles[0].Attacked)
+		assert.Equal(t, "Cherry", input.Battles[0].Nickname)
+	}
+	if assert.Len(t, input.Battles[0].Marks, 1) {
+		assert.Equal(t, "attacked", input.Battles[0].Marks[0].State)
+	}
+	assert.Equal(t, "reffed", warExportMark(WarStationRef{Kind: "citadel"}).State)
+	assert.Equal(t, "destroyed", warExportMark(WarStationRef{Destroyed: true}).State)
+	unsure := warExportMark(WarStationRef{Kind: "pos", Attempt: true, Unsure: true, Notes: []WarRefNote{{Type: "Fortizar", System: "J1", Killmails: 2}}})
+	assert.Equal(t, "unsure", unsure.State)
+	assert.Equal(t, "POS", unsure.Title)
+	assert.Equal(t, []string{"Fortizar fired in J1 on 2 killmails"}, unsure.Notes)
+	assert.True(t, input.A.HasEfficiency)
+	assert.False(t, input.Others.HasEfficiency)
 }

@@ -24,9 +24,11 @@ const maxThemeNameLength = 64
 
 // Settings are the user's app preferences, saved beside the cache
 type Settings struct {
-	Theme    string   `json:"theme"`              // the frontend theme key, empty for the default theme
-	CacheDir string   `json:"cacheDir,omitempty"` // the folder the user moved the cache to, empty for the default. Changed with ChooseCacheFolder, not the Save button.
-	TabOrder []string `json:"tabOrder,omitempty"` // the intel tabs' ids in the order the user dragged them into, empty for the default order. Changed with SetTabOrder.
+	Theme string `json:"theme"` // the frontend theme key, empty for the default theme
+	// the parent folder of war exports, empty until one is chosen. Changed with ChooseWarExportFolder, not the Save button.
+	WarExportDir string   `json:"warExportDir,omitempty"`
+	CacheDir     string   `json:"cacheDir,omitempty"` // the folder the user moved the cache to, empty for the default. Changed with ChooseCacheFolder, not the Save button.
+	TabOrder     []string `json:"tabOrder,omitempty"` // the intel tabs' ids in the order the user dragged them into, empty for the default order. Changed with SetTabOrder.
 	// the report's tab sidebar was shrunk to its icons when the app last ran, false (shown in full) on a first run. Changed with SetSidebarCollapsed.
 	SidebarCollapsed bool `json:"sidebarCollapsed,omitempty"`
 	// My Intel opens with Coalitions pulled out beside Affiliates, false (one window with tabs) on a first run. Changed with SetMyIntelSplit.
