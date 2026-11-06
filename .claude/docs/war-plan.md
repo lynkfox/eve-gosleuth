@@ -1,6 +1,6 @@
 # War tracker and group search
 
-Plan of 2026-11-04, decisions from the user the same night. Stages 1, 2, 3, and 4 built.
+Plan of 2026-11-04, decisions from the user the same night. Stages 1 to 5 built.
 
 The model is the user's hand-kept 2024 Coalition vs Lazerhawks sheet (id `11i7aE7hB7ES0Q-mtVmYRaO8dBj6DX7B6IL6GGNQQLP8`): gid 722070133 is one row per fight, gid 1013484469 the totals by side and day.
 
@@ -12,10 +12,10 @@ The model is the user's hand-kept 2024 Coalition vs Lazerhawks sheet (id `11i7aE
 | 2 | War core: setup, saved wars, collection, classification, Overview, Battles, Systems |
 | 3 | Station trash and asset denial, and the Timeline with every category |
 | 4 | Merging, splitting, and ignoring battles, then notes and system nicknames |
-| 5 | Pilots and Ships tabs |
-| 6 | Last: data export, then the PDF report |
+| 5 | Pilots & Ships and Participants tabs |
+| 6 | Last: the war's export, a folder of HTML pages and a JSON file, in place of a war PDF |
 
-Each stage is usable when it lands. **After these, in a later version:** membership changes during a war, importing zKillboard killmail dumps, who joined in, fleet doctrines, the tour, right-click "Add to a war", multi-system battle reports, user assigned markers.
+Each stage is usable when it lands. **After these, in a later version:** membership changes during a war, importing zKillboard killmail dumps, who joined in, fleet doctrines, the tour, right-click "Add to a war", multi-system battle reports, user assigned markers, coloring k-space Timeline bubbles by sov.
 
 ## Settled rules
 
@@ -191,13 +191,29 @@ Stages 5 and 6 must leave ignored battles out.
 
 **User assigned markers** (a mark added or dismissed by hand): wanted, in a future version, and **they replace the sheet's flags entirely (user, 2026-11-05)**, so One Fight, Not war, 3rd Party, For Timer and the rest will not be built. When built, one added by hand should say so in its hover, as killmails don't show everything. Until then a wrong mark like the Ahbazon tower's is dealt with by ignoring its battle.
 
-## Stage 5: Pilots and Ships
+## Stage 5: Pilots & Ships and Participants
 
-**Pilots:** top pilots per side, by kills and ISK destroyed. **Ships:** hulls lost and flown per side, trash left out.
+Settled with the user 2026-11-05. Both tabs read the war's battles as edited, so a merged battle is one battle and ignored ones count nowhere. Sides are per battle as everywhere (`warKill.effective`), so the tallies are made in `buildWar`, as `WarKillmail` keeps only the victim's side.
 
-## Stage 6: export and PDF
+- **Pilots & Ships:** three columns that each scroll alone, stacking in a narrow window: side A's pilots, side B's, then ships flown above Others' pilots. Each list is sorted by ISK destroyed or killmails on, 50 a page, paged, with a filter for several alliances at once. Every pilot on a killmail gets the kill and its full ISK, as on zKillboard, with no line explaining it. A capsule counts in ISK but not as a kill.
+- **Ships flown:** for sides A and B, each ship flown and the number seen, a pilot counting once per battle per hull. Only ships count, so no capsules, structures, or fighters.
+- **Participants:** sides A and B beside each other, stacked with A on top in a narrow window, with no Others: an accordion of Alliance, then Corp, then Pilots, the pilots condensed into several columns. A corp with no alliance sits at the alliance level. A pilot who changed corps is under each, as everything goes by the group at the kill, with a small chit noting the change and their previous corp and alliance on hover.
+- Trash stays out of both tabs. A pilot who counts for a side anywhere in the war has their killmails from time in an NPC corp left out of both tabs, so they show only on their side (user, 2026-11-05).
 
-A JSON export of the report's data, as the sheet offered, with each battle's saved report link. Then the war report in the PDF, built like the existing one.
+## Stage 6: the war's export
+
+Settled with the user 2026-11-05: **HTML pages replace a war PDF**, as they keep hover and click through, and printing does not matter. Sharing is by zip or upload. The corp and alliance PDF stays as it is. The model is the user's own 2024 pages (totals, type_totals, timeline at lynkfox.github.io/eve_battle_report_timeline, now only an archive, so nothing exports to that repo).
+
+- **Button:** where Generate Report is in the top bar, which on a war generates this instead.
+- **Folder:** each war gets its own folder under a parent folder that is picked once and remembered in Preferences. Exporting again replaces its files.
+- **Files, in order:** `01_Summary`, `02_Totals`, `03_Ship_counts`, `04_Timeline`, `05_Battles`, `06_<war name>.json`. Each page works alone, with Plotly's basic bundle in it (2.35.2 measured 1.07 MB), and links to the others. No network and no API calls. The app's dark look and side colors. Each page has the export date, app version, and the killmail caveat.
+- **Totals:** ISK, ships, structures, and systems, each a running line and daily bars, as on the user's page, labeled as losses, with no "Bigger numbers are BAD".
+- **Ship counts:** Stage 5's ships flown with those destroyed stacked on it, per side, in two panels A to Z.
+- **Timeline:** a bubble per fight, skirmishes included and ignored battles not. Time across, system down, size by ISK, ringed where a structure is involved, click to its battle report. Notes are callouts cut to about 40 characters, in full on hover. A nicknamed system gets a dashed line with its name.
+- **Timeline colors:** by the side whose citadels or POCOs killmails show in that system. **POS are ignored for this, as invaders often anchor them.** Nothing, or both sides, is grey. It can't be automated when both have one, as invaders will often drop an Astrahus, so that waits on a decision, perhaps Stage 6's user marks (undecided). K-space should go by sov, later.
+- **Safety (no eval):** names, notes, and nicknames are data, written with `textContent`, escaped so they can't close a script, and with links and tags stripped from them and from Plotly's hover text, so they can't link or run. Only the battle report links the app makes itself work, `https` only. Each page has a Content-Security-Policy with no `unsafe-eval` and its script hashes, blocking injected script. The basic bundle's only `new Function` is webpack's fallback for browsers with no `globalThis`, never reached, but confirm it by rendering under the policy.
+- **The JSON** holds these sections of the archive's jsons page, leaving out its two txt files and all_battle_reports: `alliance_appearances` and `corporation_appearances` (battles seen, per side and Others, corps under their alliance), and `system_appearances` (system, class, statics, battles). `major_players` was a judgement call, so it waits for user marks.
+- **A "lost" system** is the first time a side loses a citadel or POCO there, POS ignored as for the colors.
 
 ## Later: multi-system battle reports
 
