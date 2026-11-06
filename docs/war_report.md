@@ -48,9 +48,6 @@ The **War** button sets up two sides and a start date, and GoSleuth follows the 
 
 - **Overview**
   - *ISK lost, ships lost, losses, structures lost, and more information at a glance*
-- **Participants**
-  - **Forthcoming**
-  - *A list of corps that can be expanded to show individual pilots per side*
 - **Battles**
   - *A listing of fights that may stretch multiple systems. Each line reports the group that had the most pilots for their respective side, and stations killed*
   - *Skirmishes are fewer than 10 pilots in the whole fight*
@@ -64,5 +61,9 @@ The **War** button sets up two sides and a start date, and GoSleuth follows the 
   - *Similar to the Battles, but showing everything for a given system*
 - **Timeline**
   - *What each side lost by day or by week, as that period's figures or running totals*
-
+- **Pilots and Ships**
+  - *A listing of all pilots on ether side, in sortable tables by total ISK destroyed and number of killmails they appeared on*
+  - *A listing by ship count how many ships were used bye each side in battle.*
+- **Participants**
+  - *A list of corps that can be expanded to show individual pilots per side*
 

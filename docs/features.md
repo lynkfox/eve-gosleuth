@@ -4,6 +4,8 @@ GoSleuth reads a target's killmails from zKillboard, fills in the details from E
 
 Killmails only record deaths, so keep in mind what they can't show: fights nobody died in, the other side of a gate, logi, objectives, and much more. GoSleuth collates; reading the results is up to you.
 
+
+
 ## Searching
 
 - **One search bar for everything.** 
@@ -15,6 +17,9 @@ Killmails only record deaths, so keep in mind what they can't show: fights nobod
 - **Stop at any time.** 
   - *Stopping a search builds the report from what has been collected so far.*
 
+## War Report
+
+Got an ongoing war between two groups? GoSleuth can track it. [See the docs on the War Report feature](war_report.md)
 
 ## What a report shows
 
