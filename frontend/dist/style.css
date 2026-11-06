@@ -3126,7 +3126,6 @@ p.tour-text { margin: 0; }
 #system-nickname-name { display: block; width: 100%; box-sizing: border-box; margin-bottom: 8px; }
 .system-nickname { color: var(--accent); font-weight: 700; }
 .war-note-text { display: block; width: 100%; resize: vertical; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; box-sizing: border-box; margin-bottom: 12px; }
-.war-battle-note { overflow: hidden; color: var(--accent); font-size: 12px; font-style: italic; text-overflow: ellipsis; white-space: nowrap; }
 .war-setup .war-setup-body { align-content: start; padding-bottom: 28px; }
 .war-setup h3 { margin: 0; font-size: 13px; }
 
@@ -3304,7 +3303,7 @@ section.war-others { display: grid; gap: 8px; }
 .war-table.war-fixed td, .war-table.war-fixed th { overflow: hidden; overflow-wrap: normal; text-overflow: ellipsis; white-space: nowrap; }
 .war-fixed td > div { overflow: hidden; text-overflow: ellipsis; }
 .war-fixed .group-line { display: block; overflow: hidden; text-overflow: ellipsis; }
-.war-col-when { width: 190px; }
+.war-col-when { width: 222px; }
 .war-col-class { width: 70px; }
 .war-col-system { width: 16%; }
 .war-col-name { width: 30%; }

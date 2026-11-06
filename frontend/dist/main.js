@@ -3962,7 +3962,7 @@ const TAB_HELP = {
   "tab-war-battles": [
     "Every row is a fight, showing the largest group of pilots on each side.",
     "A skirmish is a fight with fewer than 10 pilots, both sides together.",
-    "Trash, ref marks, structure counts, and other systems can all be hovered over to show more info.",
+    "Trash, ref marks, notes, structure counts, and other systems can all be hovered over to show more info.",
     "Click a heading to sort, or a class at the top to filter. Several classes can be on at once.",
     "Right-click a row to open the battle report of any of its systems, nickname a system, add a note, or merge, split, or ignore it.",
   ],
@@ -6832,6 +6832,16 @@ function renderWarBattlePage() {
       tag.textContent = "Skirmish";
       date.append(tag);
     }
+    if (battle.notes.length > 0) {
+      const tag = document.createElement("span");
+      tag.className = "war-chit war-note-chit";
+      tag.textContent = battle.notes.length > 1 ? `${battle.notes.length} Notes` : "Note";
+      tag.title = battle.notes.map((note) => note.text).join("\n");
+      date.append(tag);
+    }
+    // on a line of their own, as they would not fit beside the date
+    const marks = document.createElement("div");
+    marks.className = "war-ref-marks";
     for (const kind of new Set(battle.edits.map((edit) => edit.kind))) {
       const about = WAR_EDIT_KINDS[kind];
       if (!about) continue;
@@ -6844,11 +6854,8 @@ function renderWarBattlePage() {
         tag.textContent = `Ignored, +${battle.ignoredJoined.toLocaleString("en-US")}`;
         tag.title = `${warPlural(battle.ignoredJoined, "killmail")} joined this battle since you ignored it, and ${battle.ignoredJoined === 1 ? "is" : "are"} left out of the war's figures too. If they belong, take it back and split off only what doesn't.`;
       }
-      date.append(tag);
+      marks.append(tag);
     }
-    // on a line of their own, as they would not fit beside the date
-    const marks = document.createElement("div");
-    marks.className = "war-ref-marks";
     for (const ref of battle.stationRefs) {
       const tag = document.createElement("span");
       tag.className = `war-chit war-ref war-ref-${ref.side}${ref.destroyed ? " war-ref-destroyed" : ""}${ref.attempt ? " war-ref-attempt" : ""}${ref.unsure ? " war-ref-unsure" : ""}`;
@@ -6869,7 +6876,7 @@ function renderWarBattlePage() {
     clock.className = "row-detail war-clock";
     clock.textContent = battleClock(battle);
     whenCell.append(date, clock);
-    if (battle.stationRefs.length > 0) whenCell.append(marks);
+    if (marks.childElementCount > 0) whenCell.append(marks);
 
     const systemCell = document.createElement("td");
     const name = document.createElement("div");
@@ -6880,13 +6887,6 @@ function renderWarBattlePage() {
     detail.textContent = `${warPlural(battle.killmails, "killmail")} · ${warPlural(battle.pilots, "pilot")}`;
     detail.title = "Every killmail in this fight, one for each thing any side lost: ships, capsules, structures, and fighters. Trash is counted apart.";
     systemCell.append(name, detail);
-    for (const note of battle.notes) {
-      const line = document.createElement("div");
-      line.className = "war-battle-note";
-      line.textContent = note.text;
-      line.title = note.text;
-      systemCell.append(line);
-    }
     if (battle.otherSystems.length > 0) {
       const others = document.createElement("div");
       others.className = "war-other-systems";
@@ -7939,6 +7939,12 @@ function wireWarSetup() {
   for (const id of ["war-split-close", "war-split-cancel"]) el(id).addEventListener("click", () => el("war-split").close());
   el("war-split-save").addEventListener("click", saveWarSplit);
   el("war-note").addEventListener("close", closeWarNote);
+  el("war-note-text").addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      el("war-note").close("save");
+    }
+  });
   el("system-nickname-cancel").addEventListener("click", () => el("system-nickname").close());
   el("system-nickname-scope").addEventListener("change", showNicknameElsewhere);
   el("system-nickname-form").addEventListener("submit", (event) => {
