@@ -224,6 +224,7 @@ type WarPilot struct {
 	Alliance     *EntityRef `json:"alliance"` // null for none
 	ISKDestroyed float64    `json:"iskDestroyed"`
 	Killmails    int        `json:"killmails"`
+	Capsules     int        `json:"capsules"`
 }
 
 // WarHull is a ship a side flew, a row of the Flown tab
@@ -1196,7 +1197,7 @@ func warSidePeople(side aggregate.WarSidePeople) WarSidePeople {
 	for _, pilot := range side.Pilots {
 		corp := pilot.Corporation
 		out.Pilots = append(out.Pilots, WarPilot{EntityRef: *entityRef(types.PILOT, pilot.CharacterID, pilot.Name), Corporation: warGroupRef(&corp), Alliance: warGroupRef(pilot.Alliance),
-			ISKDestroyed: pilot.ISKDestroyed, Killmails: pilot.Killmails})
+			ISKDestroyed: pilot.ISKDestroyed, Killmails: pilot.Killmails, Capsules: pilot.Capsules})
 	}
 	for _, hull := range side.Flown {
 		out.Flown = append(out.Flown, WarHull{TypeID: hull.TypeID, Name: hull.Name, ImageURL: api.TypeImageURL(hull.TypeID), Seen: hull.Seen, Lost: hull.Lost})

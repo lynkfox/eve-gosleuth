@@ -1789,8 +1789,10 @@ func TestWarPeople(t *testing.T) {
 	t.Run("a capsule counts in ISK and not as a kill, and everyone on a killmail has its full ISK", func(t *testing.T) {
 		assert.Equal(t, float64(100+200+400), pilot(data.PeopleA, 1).ISKDestroyed)
 		assert.Equal(t, 2, pilot(data.PeopleA, 1).Killmails)
+		assert.Equal(t, 1, pilot(data.PeopleA, 1).Capsules)
 		assert.Equal(t, float64(100), pilot(data.PeopleA, 2).ISKDestroyed)
 		assert.Equal(t, 1, pilot(data.PeopleA, 2).Killmails)
+		assert.Equal(t, 0, pilot(data.PeopleA, 2).Capsules)
 		assert.Equal(t, 1, data.PeopleA.Pilots[0].CharacterID, "most ISK destroyed first")
 	})
 

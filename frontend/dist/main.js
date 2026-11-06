@@ -3979,7 +3979,7 @@ const TAB_HELP = {
     "Stronger color means more lost. Hover Trash figures for more information.",
   ],
   "tab-war-pilots": [
-    "Every pilot in the war's battles by side, with the full value of each killmail they are on. Capsules count in ISK but not as killmails.",
+    "Every pilot in the war's battles by side, with the full value of each killmail they are on. Capsule kills count in ISK, and show in parentheses after the killmails.",
     "Ships flown count a pilot once per battle per ship, a merged battle being one battle. Hover a figure for how many were destroyed.",
     "Click a heading to sort. The button above each list filters it to some alliances.",
     PILOT_MENU_HELP,
@@ -7311,6 +7311,12 @@ function renderWarPilotFilter(key) {
 }
 
 // renderWarPilots draws a page of a side's pilot list
+// warPilotKills is a pilot's killmails, then in parentheses their capsule kills, if any
+function warPilotKills(pilot) {
+  const kills = pilot.killmails.toLocaleString("en-US");
+  return pilot.capsules > 0 ? `${kills} (${pilot.capsules.toLocaleString("en-US")})` : kills;
+}
+
 function renderWarPilots(key) {
   renderWarPilotFilter(key);
   const all = warReport.people[key].pilots.length;
@@ -7336,7 +7342,7 @@ function renderWarPilots(key) {
       detail.append(group);
       nameCell.append(detail);
     }
-    row.append(nameCell, numberCell(formatIsk(pilot.iskDestroyed)), numberCell(pilot.killmails.toLocaleString("en-US")));
+    row.append(nameCell, numberCell(formatIsk(pilot.iskDestroyed)), numberCell(warPilotKills(pilot)));
     return withMenu(row, () => pilotSections(pilot));
   }));
   const empty = el(`war-pilots-${key}-empty`);

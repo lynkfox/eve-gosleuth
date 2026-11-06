@@ -19,6 +19,7 @@ type WarPilot struct {
 	Alliance     *WarGroup // of that corp at the time, nil for none
 	ISKDestroyed float64   // the full value of every killmail they are on, on those a side's own loss is not
 	Killmails    int       // of those, the ones that are not a capsule
+	Capsules     int       // of those, the ones that are a capsule
 }
 
 // WarHull is a ship flown by a side
@@ -68,8 +69,9 @@ type WarSidePeople struct {
 type warStintKey struct{ corp, ally int }
 
 type warPilotTally struct {
-	isk   float64
-	kills int
+	isk      float64
+	kills    int
+	capsules int
 }
 
 // warPeople tallies who fought, per side
@@ -218,7 +220,9 @@ func (p *warPeople) addBattle(battle *warBattleOf, expanded map[int]*retrieval.K
 			}
 			credited[party.char] = true
 			p.pilots[side][party.char].isk += loss.isk
-			if !capsule {
+			if capsule {
+				p.pilots[side][party.char].capsules++
+			} else {
 				p.pilots[side][party.char].kills++
 			}
 		}
@@ -271,7 +275,7 @@ func (p *warPeople) side(side WarSideKey) WarSidePeople {
 			return !p.members[side][warStintKey{stint.CorporationID, stint.AllianceID}][char]
 		})
 		latest := stints[len(stints)-1]
-		row := WarPilot{CharacterID: char, Name: p.pilotNames[char], Corporation: corpGroup(latest.CorporationID), ISKDestroyed: tally.isk, Killmails: tally.kills}
+		row := WarPilot{CharacterID: char, Name: p.pilotNames[char], Corporation: corpGroup(latest.CorporationID), ISKDestroyed: tally.isk, Killmails: tally.kills, Capsules: tally.capsules}
 		if latest.AllianceID != 0 {
 			ally := allyGroup(latest.AllianceID)
 			row.Alliance = &ally

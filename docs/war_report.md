@@ -63,6 +63,7 @@ The **War** button sets up two sides and a start date, and GoSleuth follows the 
   - *What each side lost by day or by week, as that period's figures or running totals*
 - **Pilots and Ships**
   - *A listing of all pilots on either side, in tables sortable by total ISK destroyed and the number of killmails they appeared on*
+    - *Capsule kills are not among those killmails, and show in parentheses after them. They do count in the ISK destroyed*
   - *A listing, by ship, of how many of each were used by each side in battle*
 - **Participants**
   - *A list of corps that can be expanded to show individual pilots per side*

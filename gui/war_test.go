@@ -923,7 +923,7 @@ func TestWarNotesAndNicknames(t *testing.T) {
 func TestWarSidePeople(t *testing.T) {
 	stint := aggregate.WarPilotStint{CorporationID: 2, Corporation: "Corp"}
 	side := warSidePeople(aggregate.WarSidePeople{
-		Pilots: []aggregate.WarPilot{{CharacterID: 1, Name: "Pilot", Corporation: aggregate.WarGroup{Type: "CORPORATION", ID: 2, Name: "Corp"}, ISKDestroyed: 5, Killmails: 3}},
+		Pilots: []aggregate.WarPilot{{CharacterID: 1, Name: "Pilot", Corporation: aggregate.WarGroup{Type: "CORPORATION", ID: 2, Name: "Corp"}, ISKDestroyed: 5, Killmails: 3, Capsules: 2}},
 		Flown:  []aggregate.WarHull{{TypeID: 587, Name: "Rifter", Seen: 4, Lost: 1}},
 		Participants: []aggregate.WarParticipantGroup{
 			{Group: aggregate.WarGroup{Type: "ALLIANCE", ID: 9, Name: "Ally"}, Count: 1, Corps: []aggregate.WarParticipantCorp{{Corp: aggregate.WarGroup{Type: "CORPORATION", ID: 2, Name: "Corp"}, Pilots: []aggregate.WarParticipant{{CharacterID: 1, Name: "Pilot", Stints: []aggregate.WarPilotStint{stint}}}}}},
@@ -932,6 +932,7 @@ func TestWarSidePeople(t *testing.T) {
 	})
 
 	assert.Equal(t, "Pilot", side.Pilots[0].Name)
+	assert.Equal(t, 2, side.Pilots[0].Capsules)
 	assert.NotEmpty(t, side.Pilots[0].ZkillURL, "the pilot's menu needs its links")
 	assert.Equal(t, "Corp", side.Pilots[0].Corporation.Name)
 	assert.Nil(t, side.Pilots[0].Alliance)
