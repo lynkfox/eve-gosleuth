@@ -1,6 +1,6 @@
 # War tracker and group search
 
-Plan of 2026-11-04, decisions from the user the same night. Stages 1 to 5 built.
+Plan of 2026-11-04, decisions from the user the same night. Stages 1 to 6 built.
 
 The model is the user's hand-kept 2024 Coalition vs Lazerhawks sheet (id `11i7aE7hB7ES0Q-mtVmYRaO8dBj6DX7B6IL6GGNQQLP8`): gid 722070133 is one row per fight, gid 1013484469 the totals by side and day.
 
@@ -13,7 +13,7 @@ The model is the user's hand-kept 2024 Coalition vs Lazerhawks sheet (id `11i7aE
 | 3 | Station trash and asset denial, and the Timeline with every category |
 | 4 | Merging, splitting, and ignoring battles, then notes and system nicknames |
 | 5 | Pilots & Ships and Participants tabs |
-| 6 | Last: the war's export, a folder of HTML pages and a JSON file, in place of a war PDF |
+| 6 | Last: the war's export, one HTML page and a JSON file, in place of a war PDF |
 
 Each stage is usable when it lands. **After these, in a later version:** membership changes during a war, importing zKillboard killmail dumps, who joined in, fleet doctrines, the tour, right-click "Add to a war", multi-system battle reports, user assigned markers, coloring k-space Timeline bubbles by sov.
 
@@ -201,6 +201,10 @@ Settled with the user 2026-11-05. Both tabs read the war's battles as edited, so
 - Trash stays out of both tabs. A pilot who counts for a side anywhere in the war has their killmails from time in an NPC corp left out of both tabs, so they show only on their side (user, 2026-11-05).
 
 ## Stage 6: the war's export
+
+Built 2026-11-05, as below but for what the user settled when it was planned: a Timeline bubble's click opens a small panel with its details and all three battle report links, to take an attached report later; Summary (the Overview's measures, counts, and each side's groups) and Battles (its table, sorts, class filters, links, notes) leave out Plotly, as they have no chart; a structure firing counts toward the color as well as one lost; a bubble's size is all sides' ISK less trash, on the main system. Also: Standup Fighters count as seen, and Totals' lines and bars are two charts side by side, not two scales.
+
+**Changed after trying it (user, 2026-11-05):** one page with tabs and a JSON file, not a numbered set of pages, with Plotly once. Logos and ship icons load from `images.evetech.net` as plain image tags, so "no network" no longer holds for them. The export date and version sit beside the war's name in warning colors. Ship counts is one chart with the two sides beside each other in each ship's row, not two panels.
 
 Settled with the user 2026-11-05: **HTML pages replace a war PDF**, as they keep hover and click through, and printing does not matter. Sharing is by zip or upload. The corp and alliance PDF stays as it is. The model is the user's own 2024 pages (totals, type_totals, timeline at lynkfox.github.io/eve_battle_report_timeline, now only an archive, so nothing exports to that repo).
 
