@@ -932,6 +932,9 @@ button.secondary {
   font-size: 13px;
 }
 
+/* a key whose samples are words, not colors or tags: long ones wrap, leaving the room to the meanings */
+.help-content dl.help-key-wrap { grid-template-columns: fit-content(96px) 1fr; }
+
 .help-content dt {
   font-weight: 600;
   font-variant-numeric: tabular-nums;

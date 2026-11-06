@@ -4121,6 +4121,7 @@ function helpContent(points, sections) {
     title.textContent = section.title;
 
     const list = document.createElement("dl");
+    if (section.wrapSamples) list.classList.add("help-key-wrap");
     for (const item of section.items) {
       const sample = document.createElement("dt");
       sample.className = item.className;
@@ -4331,14 +4332,15 @@ const WAR_EFFICIENCY_TIP = "The other side's ISK lost as a share of both sides' 
 // WAR_COUNTED_KEY defines the war report's terms, in the Overview's help only: the other tabs explain theirs on hover
 const WAR_COUNTED_KEY = {
   title: "How a war is counted",
+  wrapSamples: true,
   items: [
     { sample: "Efficiency", className: "", meaning: WAR_EFFICIENCY_TIP },
     { sample: "Station trash", className: "", meaning: "Empty ships shot after a station died in their system." },
     { sample: "Asset denial", className: "", meaning: "Capitals a side destroyed rather than lose them." },
-    { sample: "Citadel, POS, POCO Destroyed", className: "", meaning: "A side's structure of that kind died in this fight." },
+    { sample: "Structure Destroyed", className: "", meaning: "A side's citadel, POS, or POCO died in this fight." },
     { sample: "Citadel Ref'd", className: "", meaning: "A side's Standup Fighters or citadel in a fight, then its citadel there died when one of its reinforcement timers would have ended." },
-    { sample: "Citadel, POS Attacked", className: "", meaning: "A side's Standup Fighters, or a structure of its on a killmail with 5 or more pilots, with none of them lost there on its timers. It was probably attacked." },
-    { sample: "Citadel, POS Attacked?", className: "", meaning: "A side's structure fired, with no fighters, only on killmails with fewer than 5 pilots. It may have been attacked, or just been shooting a lone ship." },
+    { sample: "Structure Attacked", className: "", meaning: "A side's Standup Fighters, or a citadel or POS of its on a killmail with 5 or more pilots, with none of them lost there on its timers. It was probably attacked." },
+    { sample: "Structure Attacked?", className: "", meaning: "A side's citadel or POS fired, with no fighters, only on killmails with fewer than 5 pilots. It may have been attacked, or just been shooting a lone ship." },
   ],
 };
 
