@@ -15,10 +15,28 @@ body = """
 {%- else -%}{{ scope | capitalize }}
 {%- endif -%}
 {%- endmacro area -%}
+{#- each section lists its breaking changes first, then the rest in A to Z order of the area as shown, and of the change within it; those with no area come last, as ** sorts before a letter -#}
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | striptags | trim }}
-{% for commit in commits %}
-- {% if commit.breaking %}**Breaking:** {% endif %}{% if commit.scope %}**{{ self::area(scope=commit.scope) }}**: {% endif %}{{ commit.message }}\
+{% set_global breaking = [] -%}
+{% set_global others = [] -%}
+{% for commit in commits -%}
+{% set line = commit.message -%}
+{% if commit.scope -%}
+{% set shown = self::area(scope=commit.scope) -%}
+{% set line = "**" ~ shown ~ "**: " ~ commit.message -%}
+{% endif -%}
+{% if commit.breaking -%}
+{% set_global breaking = breaking | concat(with="**Breaking:** " ~ line) -%}
+{% else -%}
+{% set_global others = others | concat(with=line) -%}
+{% endif -%}
+{% endfor -%}
+{% for line in breaking %}
+- {{ line }}\
+{% endfor -%}
+{% for line in others | sort %}
+- {{ line }}\
 {% endfor %}
 {% endfor %}
 """
