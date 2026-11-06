@@ -2071,6 +2071,7 @@ function showRosterPage(page) {
   if (!roster) return;
   roster.page = page;
   renderRosterPage();
+  scrollShownPanelToTop();
 }
 
 // intelReport is the report shown, kept so its dates can be redrawn when the time zone preference changes
@@ -4585,6 +4586,11 @@ function renderPager(label, current, pageCount, onSelect, jumps) {
   label.replaceChildren(...links, of);
 }
 
+// scrollShownPanelToTop puts the list of the tab shown back at its top, as a new page should start there
+function scrollShownPanelToTop() {
+  for (const list of document.querySelectorAll(".tab-panel:not([hidden]) .panel-scroll")) list.scrollTop = 0;
+}
+
 // wirePagerJumps makes a pager's first and last page buttons go to page 0 and the last page, which pageCount gives when clicked
 function wirePagerJumps(first, last, pageCount, onSelect) {
   first.addEventListener("click", () => onSelect(0));
@@ -4635,6 +4641,7 @@ function changeKillmailPage(step) {
 function showKillmailPage(page) {
   killmailPage = page;
   renderKillmailPage();
+  scrollShownPanelToTop();
 }
 
 /*
@@ -5599,6 +5606,7 @@ function renderBattles(list) {
 function showBattlePage(page) {
   battlePage = page;
   renderBattlePage();
+  scrollShownPanelToTop();
 }
 
 // renderBattlePage draws a page of the Battles tab: a row per battle, newest first, with its battle report links, over the pager
@@ -6476,8 +6484,7 @@ const WAR_SORTS = {
       b: { compare: warByGroup("b") },
     },
     redraw() {
-      warBattlePage = 0;
-      renderWarBattlePage();
+      showWarBattlePage(0);
     },
   },
   systems: {
@@ -6926,6 +6933,7 @@ function renderWarBattlePage() {
 function showWarBattlePage(page) {
   warBattlePage = page;
   renderWarBattlePage();
+  scrollShownPanelToTop();
 }
 
 /* Systems */
