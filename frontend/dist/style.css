@@ -3201,9 +3201,10 @@ body.war-report #tab-sidebar { display: none; }
 
 /* the strip above it: the versus card in one line. The tabs run across the top of the report under it. */
 .war-strip { display: flex; flex-direction: column; gap: 8px; padding: 8px 12px; }
-.war-versus { display: flex; gap: 8px 24px; align-items: center; width: 100%; }
+.war-versus { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; width: 100%; }
 .war-versus-sides { flex: none; }
 .war-title { min-width: 0; margin: 0; font-size: 16px; }
+.war-facts { flex: 1 1 240px; min-width: 240px; }
 .war-tabs { display: flex; flex: none; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
 .war-tabs .tab { border-left: 0; border-bottom: 2px solid transparent; border-radius: var(--radius) var(--radius) 0 0; }
 .war-tabs .tab[aria-selected="true"] { border-bottom-color: var(--highlight); }
@@ -3225,7 +3226,6 @@ button.war-side-card:hover { background: color-mix(in srgb, var(--text) 10%, var
 .war-side-card.war-a { border-left-color: var(--war-a); }
 .war-side-card.war-b { border-left-color: var(--war-b); }
 .war-vs { align-self: center; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
-.war-facts { min-width: 0; }
 .war-run { display: flex; flex: none; gap: 6px; margin-left: auto; }
 
 /* the war report */
@@ -3343,7 +3343,6 @@ th[aria-sort="descending"] .war-sort::after { flex: none; margin-left: 4px; cont
 .key-war-b { border-left-color: var(--war-b); color: var(--war-b); }
 
 @media (max-width: 760px) {
-  .war-versus { flex-wrap: wrap; }
   .war-versus-sides { flex: 0 1 auto; flex-wrap: wrap; }
   .war-run { margin-left: 0; }
 }
