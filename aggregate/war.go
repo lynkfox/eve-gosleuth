@@ -206,6 +206,8 @@ type WarData struct {
 	OtherGroups    []WarOther    // most ISK lost first
 	NPCPilots      WarMeasures   // the part of Others lost by pilots in NPC corps, who have no group and can not join a side
 	Days           []WarDay      // oldest first, only days with a loss on either side
+	// who fought on each side, for the Pilots, Flown, and Participants tabs
+	PeopleA, PeopleB, PeopleOthers WarSidePeople
 }
 
 /*
@@ -790,6 +792,18 @@ func buildWar(raw []retrieval.RawKillmail, expanded map[int]*retrieval.Killmail,
 	}
 	trash, battles, ignoredMarks := warIgnoring(kills, edits.Edits)
 	warAttachNotes(battles, edits.Notes)
+	people := newWarPeople()
+	for _, battle := range battles {
+		if !battle.ignored {
+			people.noteSided(battle)
+		}
+	}
+	for _, battle := range battles {
+		if !battle.ignored {
+			people.addBattle(battle, expanded)
+		}
+	}
+	data.PeopleA, data.PeopleB, data.PeopleOthers = people.side(WarSideA), people.side(WarSideB), people.side(WarSideNone)
 	battleOfStation := map[int]*WarBattle{} // the battle each station with trash died in
 
 	for _, battle := range battles {

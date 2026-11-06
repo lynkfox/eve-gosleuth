@@ -217,30 +217,85 @@ type WarReachLine struct {
 	Oldest time.Time `json:"oldest"`
 }
 
+// WarPilot is a row of the Pilots tab
+type WarPilot struct {
+	EntityRef
+	Corporation  *EntityRef `json:"corporation"`
+	Alliance     *EntityRef `json:"alliance"` // null for none
+	ISKDestroyed float64    `json:"iskDestroyed"`
+	Killmails    int        `json:"killmails"`
+}
+
+// WarHull is a ship a side flew, a row of the Flown tab
+type WarHull struct {
+	TypeID   int    `json:"typeId"`
+	Name     string `json:"name"`
+	ImageURL string `json:"imageUrl"`
+	Seen     int    `json:"seen"` // each pilot once per battle
+	Lost     int    `json:"lost"`
+}
+
+// WarPilotStint is a corp and alliance a pilot was seen in during the war
+type WarPilotStint struct {
+	CorporationID int       `json:"corporationId"`
+	AllianceID    int       `json:"allianceId"` // 0 for none
+	Corporation   string    `json:"corporation"`
+	Alliance      string    `json:"alliance"`
+	From          time.Time `json:"from"`
+}
+
+// WarParticipant is a pilot in the Participants tab
+type WarParticipant struct {
+	EntityRef
+	Stints []WarPilotStint `json:"stints"` // oldest first, null unless they changed corp or alliance during the war
+}
+
+// WarParticipantCorp is a corp under an alliance in the Participants tab
+type WarParticipantCorp struct {
+	Corp   EntityRef        `json:"corp"`
+	Pilots []WarParticipant `json:"pilots"`
+}
+
+// WarParticipantGroup is an alliance with its corps, or a corp with no alliance with its pilots
+type WarParticipantGroup struct {
+	Group  EntityRef            `json:"group"`
+	Count  int                  `json:"count"`
+	Corps  []WarParticipantCorp `json:"corps"`  // never null
+	Pilots []WarParticipant     `json:"pilots"` // never null
+}
+
+// WarSidePeople is who fought on a side
+type WarSidePeople struct {
+	Pilots       []WarPilot            `json:"pilots"`       // most ISK destroyed first, never null
+	Flown        []WarHull             `json:"flown"`        // most seen first, never null
+	Participants []WarParticipantGroup `json:"participants"` // most pilots first, never null
+}
+
 // WarReport is what a war's report shows. New categories join WarMeasures and WarBattleSide, which have room for Stage 3's.
 type WarReport struct {
-	War             WarCard         `json:"war"`
-	A               WarMeasures     `json:"a"`
-	B               WarMeasures     `json:"b"`
-	Others          WarMeasures     `json:"others"`
-	Battles         []WarBattle     `json:"battles"`     // newest first, skirmishes among them. Never null, as all the lists here.
-	BattleCount     int             `json:"battleCount"` // those not Skirmish
-	Skirmishes      int             `json:"skirmishes"`
-	IgnoredBattles  int             `json:"ignoredBattles"` // set aside by the user, in Battles but not in BattleCount or Skirmishes
-	SystemCount     int             `json:"systemCount"`
-	Classes         []WarClassCount `json:"classes"` // most systems first
-	Systems         []WarSystem     `json:"systems"` // most killmails first
-	Killmails       []WarKillmail   `json:"-"`
-	KillmailCount   int             `json:"killmailCount"`
-	SystemNicknames map[int]string  `json:"systemNicknames"` // names for systems in this war only, by system id, never null
-	OtherGroups     []WarOtherGroup `json:"otherGroups"`     // most ISK lost first
-	NPCPilots       WarNPCPilots    `json:"npcPilots"`
-	Days            []WarDay        `json:"days"` // oldest first, only days with a loss on either side
-	Reach           []WarReachLine  `json:"reach"`
-	FullRunDue      bool            `json:"fullRunDue"` // the sides or start changed since its last full run, so its next run reads every list from its start. Also true before its first run.
-	Stopped         bool            `json:"stopped"`
-	RateLimited     bool            `json:"rateLimited"`
-	Sources         string          `json:"sources"` // as IntelReport's, empty on opening with nothing collected
+	War             WarCard                  `json:"war"`
+	A               WarMeasures              `json:"a"`
+	B               WarMeasures              `json:"b"`
+	Others          WarMeasures              `json:"others"`
+	Battles         []WarBattle              `json:"battles"`     // newest first, skirmishes among them. Never null, as all the lists here.
+	BattleCount     int                      `json:"battleCount"` // those not Skirmish
+	Skirmishes      int                      `json:"skirmishes"`
+	IgnoredBattles  int                      `json:"ignoredBattles"` // set aside by the user, in Battles but not in BattleCount or Skirmishes
+	SystemCount     int                      `json:"systemCount"`
+	Classes         []WarClassCount          `json:"classes"` // most systems first
+	Systems         []WarSystem              `json:"systems"` // most killmails first
+	Killmails       []WarKillmail            `json:"-"`
+	KillmailCount   int                      `json:"killmailCount"`
+	SystemNicknames map[int]string           `json:"systemNicknames"` // names for systems in this war only, by system id, never null
+	OtherGroups     []WarOtherGroup          `json:"otherGroups"`     // most ISK lost first
+	NPCPilots       WarNPCPilots             `json:"npcPilots"`
+	Days            []WarDay                 `json:"days"`   // oldest first, only days with a loss on either side
+	People          map[string]WarSidePeople `json:"people"` // by side: a, b, and others
+	Reach           []WarReachLine           `json:"reach"`
+	FullRunDue      bool                     `json:"fullRunDue"` // the sides or start changed since its last full run, so its next run reads every list from its start. Also true before its first run.
+	Stopped         bool                     `json:"stopped"`
+	RateLimited     bool                     `json:"rateLimited"`
+	Sources         string                   `json:"sources"` // as IntelReport's, empty on opening with nothing collected
 }
 
 // warDateLayout is how a war's dates are saved and sent
@@ -1038,6 +1093,7 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 		Reach:           []WarReachLine{},
 		FullRunDue:      war.RunKey != war.RunKeyFor(sides.A, sides.B),
 		SystemNicknames: map[int]string{},
+		People:          map[string]WarSidePeople{"a": warSidePeople(data.PeopleA), "b": warSidePeople(data.PeopleB), "others": warSidePeople(data.PeopleOthers)},
 	}
 	maps.Copy(report.SystemNicknames, edits.SystemNames)
 	for _, reach := range war.Reach {
@@ -1117,6 +1173,42 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 			ISKLost: other.Measures.ISKLost, ShipsLost: other.Measures.ShipsLost})
 	}
 	return report
+}
+
+// warParticipants are a corp's pilots for the report
+func warParticipants(pilots []aggregate.WarParticipant) []WarParticipant {
+	out := make([]WarParticipant, 0, len(pilots))
+	for _, pilot := range pilots {
+		row := WarParticipant{EntityRef: *entityRef(types.PILOT, pilot.CharacterID, pilot.Name)}
+		for _, stint := range pilot.Stints {
+			row.Stints = append(row.Stints, WarPilotStint(stint))
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// warSidePeople is who fought on a side, for the report
+func warSidePeople(side aggregate.WarSidePeople) WarSidePeople {
+	out := WarSidePeople{Pilots: make([]WarPilot, 0, len(side.Pilots)), Flown: make([]WarHull, 0, len(side.Flown)), Participants: make([]WarParticipantGroup, 0, len(side.Participants))}
+	for _, pilot := range side.Pilots {
+		corp := pilot.Corporation
+		out.Pilots = append(out.Pilots, WarPilot{EntityRef: *entityRef(types.PILOT, pilot.CharacterID, pilot.Name), Corporation: warGroupRef(&corp), Alliance: warGroupRef(pilot.Alliance),
+			ISKDestroyed: pilot.ISKDestroyed, Killmails: pilot.Killmails})
+	}
+	for _, hull := range side.Flown {
+		out.Flown = append(out.Flown, WarHull{TypeID: hull.TypeID, Name: hull.Name, ImageURL: api.TypeImageURL(hull.TypeID), Seen: hull.Seen, Lost: hull.Lost})
+	}
+	for _, group := range side.Participants {
+		top := group.Group
+		row := WarParticipantGroup{Group: *warGroupRef(&top), Count: group.Count, Corps: make([]WarParticipantCorp, 0, len(group.Corps)), Pilots: warParticipants(group.Pilots)}
+		for _, corp := range group.Corps {
+			named := corp.Corp
+			row.Corps = append(row.Corps, WarParticipantCorp{Corp: *warGroupRef(&named), Pilots: warParticipants(corp.Pilots)})
+		}
+		out.Participants = append(out.Participants, row)
+	}
+	return out
 }
 
 /*

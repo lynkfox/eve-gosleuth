@@ -3971,6 +3971,17 @@ const TAB_HELP = {
     "Weeks start on Monday.",
     "Stronger color means more lost. Hover Trash figures for more information.",
   ],
+  "tab-war-pilots": [
+    "Every pilot in the war's battles by side, with the full value of each killmail they are on. Capsules count in ISK but not as killmails.",
+    "Ships flown count a pilot once per battle per ship, a merged battle being one battle. Hover a figure for how many were destroyed.",
+    "Click a heading to sort. The button above each list filters it to some alliances.",
+    PILOT_MENU_HELP,
+  ],
+  "tab-war-participants": [
+    "Who fought on each side, by alliance, corp, then pilot, as they were at the time.",
+    "A pilot seen in more than one corp or alliance is under each, with a chit whose hover says where else. Time in an NPC corp is left out.",
+    PILOT_MENU_HELP,
+  ],
   "tab-war-systems": [
     "Each system's ISK lost and killmails by side.",
     "Click a heading to sort, or a class at the top to filter. Several classes can be on at once.",
@@ -4335,6 +4346,7 @@ const TAB_COLOR_KEYS = {
   "tab-war-battles": [WAR_SIDE_KEY, SECURITY_KEY, WORMHOLE_KEY],
   "tab-war-systems": [WAR_SIDE_KEY, SECURITY_KEY, WORMHOLE_KEY],
   "tab-war-timeline": [WAR_SIDE_KEY],
+  "tab-war-pilots": [WAR_SIDE_KEY],
 };
 
 // securityClass colors a security status by its band, high, low, or null, which the backend decides (api.SecurityBand)
@@ -5685,7 +5697,7 @@ function battleSections(battle) {
 */
 
 // WAR_TABS are the war report's tabs, in its strip
-const WAR_TABS = ["tab-war-overview", "tab-war-battles", "tab-war-systems", "tab-war-timeline"];
+const WAR_TABS = ["tab-war-overview", "tab-war-battles", "tab-war-systems", "tab-war-timeline", "tab-war-pilots", "tab-war-participants"];
 
 // WAR_BANDS name the security bands a battle's or system's class can be, for spaceLabel
 const WAR_BANDS = { high: "Highsec", low: "Lowsec", null: "Nullsec" };
@@ -5974,6 +5986,12 @@ function showWarReport(report) {
     warBattlePage = 0;
     warTimelineScroll = 1;
     warOthersAll = false;
+    for (const key of WAR_SIDE_KEYS) {
+      warPilotPages[key] = 0;
+      warPilotFilters[key].clear();
+    }
+    warParticipantsOpen.clear();
+    warBattleFilters.system = warBattleFilters.group = warBattleFilters.date = null;
     warClassFilters.battles.clear();
     warClassFilters.systems.clear();
   }
@@ -5983,7 +6001,7 @@ function showWarReport(report) {
   renderWarVersus(report.war, report);
   for (const key of ["a", "b"]) {
     const name = warSideName(report.war, key);
-    for (const id of [`war-battles-head-${key}`, `war-systems-head-${key}`]) {
+    for (const id of [`war-battles-head-${key}`, `war-systems-head-${key}`, `war-flown-head-${key}`]) {
       el(id).textContent = name;
       el(id).title = name;
     }
@@ -5997,6 +6015,7 @@ function showWarReport(report) {
   renderWarBattlePage();
   renderWarSystems(report);
   renderWarTimeline(report);
+  renderWarPeople(report);
 
   selectTab(sameWar && selected ? selected : "tab-war-overview");
   el("intel-loading").hidden = true;
@@ -6588,6 +6607,22 @@ const WAR_SORTS = {
       renderWarSystems(warReport);
     },
   },
+  "pilots-a": warPilotSort("a"),
+  "pilots-b": warPilotSort("b"),
+  "pilots-others": warPilotSort("others"),
+  flown: {
+    key: "a",
+    descending: true,
+    then: (x, y) => x.name.localeCompare(y.name),
+    columns: {
+      ship: { compare: (x, y) => x.name.localeCompare(y.name) },
+      a: { compare: (x, y) => x.a.seen - y.a.seen, mostFirst: true },
+      b: { compare: (x, y) => x.b.seen - y.b.seen, mostFirst: true },
+    },
+    redraw() {
+      renderWarFlown(warReport);
+    },
+  },
 };
 
 // warSorted is a copy of a table's rows in its current sort
@@ -7166,6 +7201,276 @@ function keepWarTimelineScroll() {
   const chart = el("war-timeline-chart");
   const room = chart.scrollWidth - chart.clientWidth;
   if (room > 0) warTimelineScroll = chart.scrollLeft / room;
+}
+
+/* Pilots & Ships, and Participants */
+
+const WAR_PILOTS_PER_PAGE = 50;
+const WAR_SIDE_KEYS = ["a", "b", "others"];
+// warPilotPages are the page each side's pilot list is on
+const warPilotPages = { a: 0, b: 0, others: 0 };
+// warPilotFilters are the alliances each side's pilot list is filtered to, by a pilot's group's id, everyone while empty
+const warPilotFilters = { a: new Set(), b: new Set(), others: new Set() };
+// warParticipantsOpen are the Participants tab's open rows, kept when the tab is drawn again
+const warParticipantsOpen = new Set();
+
+// warPilotSort is the sort of a side's pilot list. It is a function, called as WAR_SORTS is made, so it can stand with the rest of the tab.
+function warPilotSort(key) {
+  return {
+    key: "isk",
+    descending: true,
+    then: (a, b) => a.name.localeCompare(b.name),
+    columns: {
+      pilot: { compare: (a, b) => a.name.localeCompare(b.name) },
+      isk: { compare: (a, b) => a.iskDestroyed - b.iskDestroyed, mostFirst: true },
+      killmails: { compare: (a, b) => a.killmails - b.killmails, mostFirst: true },
+    },
+    redraw() {
+      showWarPilotPage(key, 0);
+    },
+  };
+}
+
+// closeWarPilotFilters closes the pilot lists' alliance menus
+function closeWarPilotFilters() {
+  for (const key of WAR_SIDE_KEYS) setMenuOpen(el(`war-pilot-filter-${key}`), el(`war-pilot-filter-menu-${key}`), false);
+}
+
+// renderWarPeople draws the Pilots & Ships and Participants tabs
+function renderWarPeople(report) {
+  setTabCount("tab-war-pilots", WAR_SIDE_KEYS.reduce((total, key) => total + report.people[key].pilots.length, 0));
+  setTabCount("tab-war-participants", report.people.a.participants.length + report.people.b.participants.length);
+  for (const key of WAR_SIDE_KEYS) renderWarPilots(key);
+  el("war-pilots-pane-others").hidden = report.people.others.pilots.length === 0;
+  renderWarFlown(report);
+  renderWarParticipants();
+}
+
+// warPilotGroup is the group a pilot is filtered by: their alliance, or their corp if it has none
+function warPilotGroup(pilot) {
+  return pilot.alliance || pilot.corporation;
+}
+
+// warPilots are a side's pilots in its list's filter and sort
+function warPilots(key) {
+  const filter = warPilotFilters[key];
+  const pilots = warReport.people[key].pilots;
+  return warSorted(`pilots-${key}`, filter.size === 0 ? pilots : pilots.filter((pilot) => filter.has(warPilotGroup(pilot).id)));
+}
+
+// renderWarPilotFilter fills a side's alliance menu: each group with its pilots, most first, ticking several at once
+function renderWarPilotFilter(key) {
+  const filter = warPilotFilters[key];
+  const groups = new Map();
+  for (const pilot of warReport.people[key].pilots) {
+    const group = warPilotGroup(pilot);
+    if (!groups.has(group.id)) groups.set(group.id, { group, count: 0 });
+    groups.get(group.id).count += 1;
+  }
+  // one no longer on the list, ie after an update, must not leave the list empty with nothing to untick
+  for (const id of [...filter]) if (!groups.has(id)) filter.delete(id);
+  const button = el(`war-pilot-filter-${key}`);
+  button.textContent = filter.size === 0 ? "All alliances ▾" : `${warPlural(filter.size, "alliance")} ▾`;
+  button.classList.toggle("war-filter-on", filter.size > 0);
+  const rows = [...groups.values()].sort((x, y) => y.count - x.count || x.group.name.localeCompare(y.group.name)).map(({ group, count }) => {
+    const row = document.createElement("label");
+    row.className = "war-filter-row";
+    const tick = document.createElement("input");
+    tick.type = "checkbox";
+    tick.checked = filter.has(group.id);
+    tick.addEventListener("change", () => {
+      if (tick.checked) filter.add(group.id);
+      else filter.delete(group.id);
+      showWarPilotPage(key, 0);
+    });
+    const figure = document.createElement("span");
+    figure.className = "muted";
+    figure.textContent = count.toLocaleString("en-US");
+    row.append(tick, groupLine(group) || group.name, figure);
+    return row;
+  });
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.className = "text-link war-filter-clear";
+  clear.textContent = "Show all";
+  clear.disabled = filter.size === 0;
+  clear.addEventListener("click", () => {
+    filter.clear();
+    showWarPilotPage(key, 0);
+  });
+  el(`war-pilot-filter-menu-${key}`).replaceChildren(clear, ...rows);
+}
+
+// renderWarPilots draws a page of a side's pilot list
+function renderWarPilots(key) {
+  renderWarPilotFilter(key);
+  const all = warReport.people[key].pilots.length;
+  el(`war-pilots-head-${key}`).textContent = `${warSideName(warReport.war, key)} · ${warPlural(all, "pilot")}`;
+  el(`war-pilots-head-${key}`).title = el(`war-pilots-head-${key}`).textContent;
+  const list = warPilots(key);
+  const pageCount = Math.ceil(list.length / WAR_PILOTS_PER_PAGE);
+  const current = Math.max(0, Math.min(warPilotPages[key], pageCount - 1));
+  warPilotPages[key] = current;
+  const start = current * WAR_PILOTS_PER_PAGE;
+  el(`war-pilots-${key}-body`).replaceChildren(...list.slice(start, start + WAR_PILOTS_PER_PAGE).map((pilot) => {
+    const row = document.createElement("tr");
+    const nameCell = document.createElement("td");
+    const name = document.createElement("div");
+    name.append(groupLine(pilot) || pilot.name);
+    name.title = pilot.name;
+    nameCell.append(name);
+    const group = groupLine(pilot.corporation, pilot.alliance);
+    if (group) {
+      const detail = document.createElement("div");
+      detail.className = "row-detail";
+      detail.title = group.textContent;
+      detail.append(group);
+      nameCell.append(detail);
+    }
+    row.append(nameCell, numberCell(formatIsk(pilot.iskDestroyed)), numberCell(pilot.killmails.toLocaleString("en-US")));
+    return withMenu(row, () => pilotSections(pilot));
+  }));
+  const empty = el(`war-pilots-${key}-empty`);
+  if (list.length === 0) empty.textContent = warEmptyText(warReport, "No pilots here in the war's battles.");
+  empty.hidden = list.length > 0;
+  // a page count in words, as a row of page links doesn't fit a list this narrow
+  el(`war-pilot-pager-${key}`).hidden = pageCount <= 1;
+  el(`war-pilot-label-${key}`).textContent = `Page ${(current + 1).toLocaleString("en-US")} of ${pageCount.toLocaleString("en-US")}`;
+  el(`war-pilot-first-${key}`).disabled = el(`war-pilot-prev-${key}`).disabled = current === 0;
+  el(`war-pilot-last-${key}`).disabled = el(`war-pilot-next-${key}`).disabled = current >= pageCount - 1;
+}
+
+// showWarPilotPage shows a page of a side's pilot list, from its top
+function showWarPilotPage(key, page) {
+  warPilotPages[key] = page;
+  renderWarPilots(key);
+  el(`war-pilots-${key}-body`).closest(".panel-scroll").scrollTop = 0;
+}
+
+// renderWarFlown draws the ships flown: a row per ship, with the number seen on each side
+function renderWarFlown(report) {
+  const none = { seen: 0, lost: 0 };
+  const ships = new Map();
+  for (const key of ["a", "b"]) {
+    for (const hull of report.people[key].flown) {
+      if (!ships.has(hull.typeId)) ships.set(hull.typeId, { name: hull.name, imageUrl: hull.imageUrl, a: none, b: none });
+      ships.get(hull.typeId)[key] = hull;
+    }
+  }
+  el("war-flown-body").replaceChildren(...warSorted("flown", [...ships.values()]).map((ship) => {
+    const row = document.createElement("tr");
+    const nameCell = document.createElement("td");
+    nameCell.title = ship.name;
+    nameCell.append(groupLine({ name: ship.name, iconUrl: ship.imageUrl }));
+    row.append(nameCell);
+    for (const key of ["a", "b"]) {
+      const cell = numberCell(ship[key].seen ? ship[key].seen.toLocaleString("en-US") : "—");
+      cell.classList.add(`war-${key}`);
+      if (ship[key].lost) cell.title = `${ship[key].lost.toLocaleString("en-US")} destroyed`;
+      row.append(cell);
+    }
+    return row;
+  }));
+  const empty = el("war-flown-empty");
+  if (ships.size === 0) empty.textContent = warEmptyText(report, "No ships in the war's battles.");
+  empty.hidden = ships.size > 0;
+}
+
+// warStintLine writes a corp and alliance a pilot was in, ie Corp (Alliance)
+function warStintLine(stint) {
+  return stint.alliance ? `${stint.corporation} (${stint.alliance})` : stint.corporation;
+}
+
+// warPilotChange is the chit on a pilot seen in more than one corp or alliance, its hover saying where else and from when
+function warPilotChange(pilot, corporationId, allianceId) {
+  const tag = document.createElement("span");
+  tag.className = "war-chit war-pilot-change";
+  tag.textContent = "Corp change";
+  const here = pilot.stints.findIndex((stint) => stint.corporationId === corporationId && stint.allianceId === allianceId);
+  const when = (index) => (here < 0 ? "Also" : index < here ? "Previously" : "Later");
+  tag.title = pilot.stints
+    .map((stint, index) => (index === here ? null : `${when(index)} ${warStintLine(stint)}, first seen ${spokenDate(stint.from)}`))
+    .filter(Boolean)
+    .join("\n");
+  return tag;
+}
+
+// warPilotColumns lists pilots in several columns
+function warPilotColumns(pilots, corporation, alliance) {
+  const list = document.createElement("div");
+  list.className = "war-pilot-columns";
+  list.append(...pilots.map((pilot) => {
+    const line = document.createElement("div");
+    line.className = "war-pilot-line";
+    const name = document.createElement("span");
+    name.className = "war-pilot-name";
+    name.textContent = pilot.name;
+    name.title = pilot.name;
+    line.append(name);
+    if (pilot.stints) line.append(warPilotChange(pilot, corporation.id, alliance ? alliance.id : 0));
+    return withMenu(line, () => pilotSections({ ...pilot, corporation, alliance }));
+  }));
+  return list;
+}
+
+// warAccordion is a row that opens, drawing what is in it only when first opened as a side can have thousands of pilots
+function warAccordion(id, entity, count, fill) {
+  const row = document.createElement("details");
+  row.className = "war-accordion";
+  const summary = document.createElement("summary");
+  summary.append(groupLine(entity) || entity.name);
+  const figure = document.createElement("span");
+  figure.className = "muted war-accordion-count";
+  figure.textContent = warPlural(count, "pilot");
+  summary.append(figure);
+  withMenu(summary, () => [refSection(entity, `${searchTypeLabel(entity.type)}: ${entity.name}`)]);
+  row.append(summary);
+  let filled = false;
+  const open = () => {
+    if (filled) return;
+    filled = true;
+    row.append(fill());
+  };
+  if (warParticipantsOpen.has(id)) {
+    row.open = true;
+    open();
+  }
+  row.addEventListener("toggle", () => {
+    if (row.open) {
+      warParticipantsOpen.add(id);
+      open();
+    } else {
+      warParticipantsOpen.delete(id);
+    }
+  });
+  return row;
+}
+
+// renderWarParticipants draws the Participants tab: each side's alliances, their corps, and their pilots
+function renderWarParticipants() {
+  for (const key of ["a", "b"]) {
+    const groups = warReport.people[key].participants;
+    const pilots = warReport.people[key].pilots.length;
+    el(`war-participants-head-${key}`).textContent = `${warSideName(warReport.war, key)} · ${warPlural(pilots, "pilot")}`;
+    el(`war-participants-${key}`).replaceChildren(...groups.map((group) => {
+      const id = `${key}/${group.group.type}/${group.group.id}`;
+      if (group.corps.length === 0) {
+        return warAccordion(id, group.group, group.count, () => warPilotColumns(group.pilots, group.group, null));
+      }
+      return warAccordion(id, group.group, group.count, () => {
+        const corps = document.createElement("div");
+        corps.className = "war-accordion-body";
+        corps.append(...group.corps.map((corp) => warAccordion(`${id}/${corp.corp.id}`, corp.corp, corp.pilots.length, () => warPilotColumns(corp.pilots, corp.corp, group.group))));
+        return corps;
+      });
+    }));
+    if (groups.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = warEmptyText(warReport, "No pilots on this side in the war's battles.");
+      el(`war-participants-${key}`).replaceChildren(empty);
+    }
+  }
 }
 
 // renderWarTimeline draws the Timeline tab: a strip per side with a cell a period, the more ISK lost the stronger, pinned over every category for each period, newest first
@@ -8138,6 +8443,20 @@ function wireWarSetup() {
   wirePagerJumps(el("war-battle-first"), el("war-battle-last"), () => Math.ceil(warBattles().length / BATTLES_PER_PAGE), showWarBattlePage);
   wireWarSort("battles");
   wireWarSort("systems");
+  wireWarSort("flown");
+  for (const key of WAR_SIDE_KEYS) {
+    wireWarSort(`pilots-${key}`);
+    const button = el(`war-pilot-filter-${key}`);
+    const menu = el(`war-pilot-filter-menu-${key}`);
+    button.addEventListener("click", () => {
+      const open = menu.hidden;
+      closeWarPilotFilters();
+      setMenuOpen(button, menu, open);
+    });
+    el(`war-pilot-prev-${key}`).addEventListener("click", () => showWarPilotPage(key, warPilotPages[key] - 1));
+    el(`war-pilot-next-${key}`).addEventListener("click", () => showWarPilotPage(key, warPilotPages[key] + 1));
+    wirePagerJumps(el(`war-pilot-first-${key}`), el(`war-pilot-last-${key}`), () => Math.ceil(warPilots(key).length / WAR_PILOTS_PER_PAGE), (page) => showWarPilotPage(key, page));
+  }
 }
 
 function clearIntel() {
@@ -9467,11 +9786,13 @@ showSearchLimits(); // the built-in defaults until the saved settings arrive
 document.addEventListener("click", (event) => {
   if (!event.target.closest || !event.target.closest(".menu-anchor")) closeThemesMenu();
   if (!event.target.closest || !event.target.closest(".limits-anchor")) closeLimitsMenu();
+  if (!event.target.closest || !event.target.closest(".war-pane-head .menu-anchor")) closeWarPilotFilters();
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeThemesMenu();
     closeLimitsMenu();
+    closeWarPilotFilters();
     setHelpWindowOpen(false);
   }
 });

@@ -1730,3 +1730,131 @@ func TestWarBattleNotes(t *testing.T) {
 	assert.ElementsMatch(t, [][]string{{"first"}, {"second"}}, texts(ignored), "an ignored row keeps its note")
 	assert.Equal(t, warFiguresOf(plain), warFiguresOf(build()), "notes change no figure")
 }
+
+func TestWarPeople(t *testing.T) {
+	comm.InitLogger(logrus.ErrorLevel)
+	assert.NoError(t, comm.InitStaticData(staticdata.Files))
+	kms := []retrieval.RawKillmail{
+		raw(1, 0, sysHome, pB(10), rifter, pA1(1), pA1(2)),
+		raw(2, 3, sysHome, pB(10), capsule, pA1(1)),
+		raw(3, 6, sysHome, pA2(1), rifter, pB(11)),
+		// a later battle: pilot 1 is seen in a Rifter again, and is the same pilot once per battle per hull
+		raw(4, 200, sysHome, pB(12), rifter, pA1(1)),
+	}
+	build := func(edits ...retrieval.WarBattleEdit) *aggregate.WarData {
+		return aggregate.BuildWar(kms, expand(kms...), baseSides(), 1, retrieval.WarEdits{Edits: edits})
+	}
+	pilot := func(side aggregate.WarSidePeople, char int) aggregate.WarPilot {
+		for _, row := range side.Pilots {
+			if row.CharacterID == char {
+				return row
+			}
+		}
+		return aggregate.WarPilot{}
+	}
+	data := build()
+
+	t.Run("a capsule counts in ISK and not as a kill, and everyone on a killmail has its full ISK", func(t *testing.T) {
+		assert.Equal(t, float64(100+200+400), pilot(data.PeopleA, 1).ISKDestroyed)
+		assert.Equal(t, 2, pilot(data.PeopleA, 1).Killmails)
+		assert.Equal(t, float64(100), pilot(data.PeopleA, 2).ISKDestroyed)
+		assert.Equal(t, 1, pilot(data.PeopleA, 2).Killmails)
+		assert.Equal(t, 1, data.PeopleA.Pilots[0].CharacterID, "most ISK destroyed first")
+	})
+
+	t.Run("flown counts a pilot once per battle per hull, and no capsules", func(t *testing.T) {
+		if assert.Len(t, data.PeopleA.Flown, 1) {
+			assert.Equal(t, rifter, data.PeopleA.Flown[0].TypeID)
+			// pilots 1 and 2 in the first battle, pilot 1 in the second
+			assert.Equal(t, 3, data.PeopleA.Flown[0].Seen)
+			assert.Equal(t, 1, data.PeopleA.Flown[0].Lost)
+		}
+		if assert.Len(t, data.PeopleB.Flown, 1) {
+			// 10 and 11 in the first battle, 12 in the second
+			assert.Equal(t, 3, data.PeopleB.Flown[0].Seen)
+			assert.Equal(t, 2, data.PeopleB.Flown[0].Lost)
+		}
+	})
+
+	t.Run("merged battles are one battle to flown", func(t *testing.T) {
+		merged := build(retrieval.WarBattleEdit{ID: 1, Kind: retrieval.WarEditMerge, Groups: [][]int{{1, 2, 3}, {4}}})
+		assert.Equal(t, 2, merged.PeopleA.Flown[0].Seen)
+	})
+
+	t.Run("an ignored battle counts for no one", func(t *testing.T) {
+		ignored := build(retrieval.WarBattleEdit{ID: 1, Kind: retrieval.WarEditIgnore, Groups: [][]int{{4}}})
+		assert.Equal(t, 0, pilot(ignored.PeopleB, 12).CharacterID)
+		assert.Equal(t, float64(100+200), pilot(ignored.PeopleA, 1).ISKDestroyed)
+	})
+
+	t.Run("a pilot who changed corps is under each, oldest stint first", func(t *testing.T) {
+		if !assert.Len(t, data.PeopleA.Participants, 1) {
+			return
+		}
+		group := data.PeopleA.Participants[0]
+		assert.Equal(t, allyA, group.Group.ID)
+		assert.Equal(t, 2, group.Count, "each pilot once")
+		if !assert.Len(t, group.Corps, 2) {
+			return
+		}
+		assert.Equal(t, corpA1, group.Corps[0].Corp.ID)
+		for _, corp := range group.Corps {
+			for _, row := range corp.Pilots {
+				if row.CharacterID == 1 && assert.Len(t, row.Stints, 2) {
+					assert.Equal(t, corpA1, row.Stints[0].CorporationID)
+					assert.Equal(t, corpA2, row.Stints[1].CorporationID)
+				}
+				if row.CharacterID == 2 {
+					assert.Nil(t, row.Stints)
+				}
+			}
+		}
+	})
+
+	t.Run("a corp with no alliance sits at the top with its pilots", func(t *testing.T) {
+		lone := wp{corp: corpLone, char: 30}
+		sides := baseSides()
+		kms := []retrieval.RawKillmail{raw(1, 0, sysHome, pB(10), rifter, pA1(1), lone)}
+		others := aggregate.BuildWar(kms, expand(kms...), sides, 1, retrieval.WarEdits{})
+		found := false
+		for _, side := range []aggregate.WarSidePeople{others.PeopleA, others.PeopleOthers} {
+			for _, group := range side.Participants {
+				if group.Group.ID == corpLone {
+					found = true
+					assert.Equal(t, "CORPORATION", group.Group.Type)
+					assert.Len(t, group.Pilots, 1)
+					assert.Empty(t, group.Corps)
+				}
+			}
+		}
+		assert.True(t, found)
+	})
+
+	t.Run("a pilot of a side has their NPC corp time left out, with no change noted", func(t *testing.T) {
+		rookie := wp{corp: npcCorp, char: 40}
+		kms := []retrieval.RawKillmail{raw(1, 0, sysHome, pB(10), rifter, rookie, pA1(1)), raw(2, 200, sysHome, pB(11), rifter, pA1(40)), raw(3, 400, sysHome, pB(12), rifter, wp{corp: npcCorp, char: 41}, pA1(1))}
+		data := aggregate.BuildWar(kms, expand(kms...), baseSides(), 1, retrieval.WarEdits{})
+		assert.Equal(t, 0, pilot(data.PeopleOthers, 40).CharacterID, "not under Others")
+		assert.Equal(t, float64(200), pilot(data.PeopleA, 40).ISKDestroyed, "only the killmail from their time on the side")
+		assert.Equal(t, 41, pilot(data.PeopleOthers, 41).CharacterID, "an NPC corp pilot who is on no side stays under Others")
+		assert.Equal(t, float64(100+300), pilot(data.PeopleA, 1).ISKDestroyed, "others on those killmails keep them")
+		for _, group := range data.PeopleA.Participants {
+			for _, corp := range group.Corps {
+				for _, row := range corp.Pilots {
+					assert.Nil(t, row.Stints)
+				}
+			}
+		}
+	})
+
+	t.Run("a pilot on both sides shows the corp they had on each", func(t *testing.T) {
+		kms := []retrieval.RawKillmail{raw(1, 0, sysHome, pB(10), rifter, pA1(50)), raw(2, 200, sysHome, pA2(11), rifter, pB(50))}
+		data := aggregate.BuildWar(kms, expand(kms...), baseSides(), 1, retrieval.WarEdits{})
+		assert.Equal(t, corpA1, pilot(data.PeopleA, 50).Corporation.ID)
+		assert.Equal(t, corpB1, pilot(data.PeopleB, 50).Corporation.ID)
+	})
+
+	t.Run("people change no figure", func(t *testing.T) {
+		assert.Equal(t, warFiguresOf(data), warFiguresOf(build()))
+	})
+}

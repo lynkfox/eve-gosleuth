@@ -123,6 +123,8 @@
         <button id="tab-war-battles" class="tab" type="button" role="tab" aria-controls="panel-war-battles" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-battles"/></svg><span class="tab-name">Battles</span><span class="tab-count"></span></button>
         <button id="tab-war-systems" class="tab" type="button" role="tab" aria-controls="panel-war-systems" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-systems"/></svg><span class="tab-name">Systems</span><span class="tab-count"></span></button>
         <button id="tab-war-timeline" class="tab" type="button" role="tab" aria-controls="panel-war-timeline" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-activity"/></svg><span class="tab-name">Timeline</span><span class="tab-count"></span></button>
+        <button id="tab-war-pilots" class="tab" type="button" role="tab" aria-controls="panel-war-pilots" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-pilots"/></svg><span class="tab-name">Pilots &amp; Ships</span><span class="tab-count"></span></button>
+        <button id="tab-war-participants" class="tab" type="button" role="tab" aria-controls="panel-war-participants" aria-selected="false"><svg class="tab-icon" aria-hidden="true"><use href="#icon-members"/></svg><span class="tab-name">Participants</span><span class="tab-count"></span></button>
       </nav>
       <p id="intel-loading" class="muted">Pulling killmails from zKillboard and the ESI. This can take a while, progress is shown in the bar below.</p>
 
@@ -484,6 +486,111 @@
               </table>
             </div>
             <p id="war-timeline-empty" class="muted" hidden></p>
+          </div>
+
+          <div id="panel-war-pilots" class="tab-panel paged-panel war-people-panel" role="tabpanel" aria-labelledby="tab-war-pilots" hidden>
+            <div class="war-people">
+              <section id="war-pilots-pane-a" class="war-pane">
+                <div class="war-pane-head war-side-head war-side-head-a">
+                  <h3 id="war-pilots-head-a"></h3>
+                  <div class="menu-anchor">
+                    <button id="war-pilot-filter-a" class="secondary war-filter-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="war-pilot-filter-menu-a"></button>
+                    <div id="war-pilot-filter-menu-a" class="menu-dropdown war-filter-menu" hidden></div>
+                  </div>
+                </div>
+                <div class="panel-scroll war-pane-scroll">
+                  <table class="war-table war-fixed war-pilots-table">
+                    <colgroup><col><col class="war-col-pilot-isk"><col class="war-col-pilot-count"></colgroup>
+                    <thead>
+                      <tr><th data-sort="pilot"><button class="war-sort" type="button"><span>Pilot</span></button></th><th class="num" data-sort="isk" aria-sort="descending"><button class="war-sort" type="button"><span>ISK destroyed</span></button></th><th class="num" data-sort="killmails"><button class="war-sort" type="button"><span>Killmails</span></button></th></tr>
+                    </thead>
+                    <tbody id="war-pilots-a-body"></tbody>
+                  </table>
+                  <p id="war-pilots-a-empty" class="muted" hidden></p>
+                </div>
+                <nav id="war-pilot-pager-a" class="pager war-pane-pager" hidden>
+                  <button id="war-pilot-first-a" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
+                  <button id="war-pilot-prev-a" class="secondary" type="button">Previous</button>
+                  <span id="war-pilot-label-a"></span>
+                  <button id="war-pilot-next-a" class="secondary" type="button">Next</button>
+                  <button id="war-pilot-last-a" class="secondary page-jump" type="button" title="Last page" aria-label="Last page">»</button>
+                </nav>
+              </section>
+              <section id="war-pilots-pane-b" class="war-pane">
+                <div class="war-pane-head war-side-head war-side-head-b">
+                  <h3 id="war-pilots-head-b"></h3>
+                  <div class="menu-anchor">
+                    <button id="war-pilot-filter-b" class="secondary war-filter-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="war-pilot-filter-menu-b"></button>
+                    <div id="war-pilot-filter-menu-b" class="menu-dropdown war-filter-menu" hidden></div>
+                  </div>
+                </div>
+                <div class="panel-scroll war-pane-scroll">
+                  <table class="war-table war-fixed war-pilots-table">
+                    <colgroup><col><col class="war-col-pilot-isk"><col class="war-col-pilot-count"></colgroup>
+                    <thead>
+                      <tr><th data-sort="pilot"><button class="war-sort" type="button"><span>Pilot</span></button></th><th class="num" data-sort="isk" aria-sort="descending"><button class="war-sort" type="button"><span>ISK destroyed</span></button></th><th class="num" data-sort="killmails"><button class="war-sort" type="button"><span>Killmails</span></button></th></tr>
+                    </thead>
+                    <tbody id="war-pilots-b-body"></tbody>
+                  </table>
+                  <p id="war-pilots-b-empty" class="muted" hidden></p>
+                </div>
+                <nav id="war-pilot-pager-b" class="pager war-pane-pager" hidden>
+                  <button id="war-pilot-first-b" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
+                  <button id="war-pilot-prev-b" class="secondary" type="button">Previous</button>
+                  <span id="war-pilot-label-b"></span>
+                  <button id="war-pilot-next-b" class="secondary" type="button">Next</button>
+                  <button id="war-pilot-last-b" class="secondary page-jump" type="button" title="Last page" aria-label="Last page">»</button>
+                </nav>
+              </section>
+              <div class="war-people-right">
+                <section class="war-pane war-flown-pane">
+                  <div class="war-pane-head war-side-head"><h3>Ships flown</h3></div>
+                  <div class="panel-scroll war-pane-scroll">
+                    <table class="war-table war-fixed war-flown-table">
+                      <colgroup><col><col class="war-col-flown"><col class="war-col-flown"></colgroup>
+                      <thead>
+                        <tr><th data-sort="ship"><button class="war-sort" type="button"><span>Ship</span></button></th><th class="num war-head-a" data-sort="a" aria-sort="descending"><button class="war-sort" type="button"><span id="war-flown-head-a">Side A</span></button></th><th class="num war-head-b" data-sort="b"><button class="war-sort" type="button"><span id="war-flown-head-b">Side B</span></button></th></tr>
+                      </thead>
+                      <tbody id="war-flown-body"></tbody>
+                    </table>
+                    <p id="war-flown-empty" class="muted" hidden></p>
+                  </div>
+                </section>
+                <section id="war-pilots-pane-others" class="war-pane">
+                <div class="war-pane-head war-side-head war-side-head-others">
+                  <h3 id="war-pilots-head-others"></h3>
+                  <div class="menu-anchor">
+                    <button id="war-pilot-filter-others" class="secondary war-filter-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="war-pilot-filter-menu-others"></button>
+                    <div id="war-pilot-filter-menu-others" class="menu-dropdown war-filter-menu war-filter-menu-up" hidden></div>
+                  </div>
+                </div>
+                <div class="panel-scroll war-pane-scroll">
+                  <table class="war-table war-fixed war-pilots-table">
+                    <colgroup><col><col class="war-col-pilot-isk"><col class="war-col-pilot-count"></colgroup>
+                    <thead>
+                      <tr><th data-sort="pilot"><button class="war-sort" type="button"><span>Pilot</span></button></th><th class="num" data-sort="isk" aria-sort="descending"><button class="war-sort" type="button"><span>ISK destroyed</span></button></th><th class="num" data-sort="killmails"><button class="war-sort" type="button"><span>Killmails</span></button></th></tr>
+                    </thead>
+                    <tbody id="war-pilots-others-body"></tbody>
+                  </table>
+                  <p id="war-pilots-others-empty" class="muted" hidden></p>
+                </div>
+                <nav id="war-pilot-pager-others" class="pager war-pane-pager" hidden>
+                  <button id="war-pilot-first-others" class="secondary page-jump" type="button" title="First page" aria-label="First page">«</button>
+                  <button id="war-pilot-prev-others" class="secondary" type="button">Previous</button>
+                  <span id="war-pilot-label-others"></span>
+                  <button id="war-pilot-next-others" class="secondary" type="button">Next</button>
+                  <button id="war-pilot-last-others" class="secondary page-jump" type="button" title="Last page" aria-label="Last page">»</button>
+                </nav>
+              </section>
+              </div>
+            </div>
+          </div>
+
+          <div id="panel-war-participants" class="tab-panel paged-panel war-sides-panel" role="tabpanel" aria-labelledby="tab-war-participants" hidden>
+            <div class="war-sides">
+              <section class="war-side-column"><h3 id="war-participants-head-a" class="war-side-head war-side-head-a"></h3><div id="war-participants-a"></div></section>
+              <section class="war-side-column"><h3 id="war-participants-head-b" class="war-side-head war-side-head-b"></h3><div id="war-participants-b"></div></section>
+            </div>
           </div>
         </div>
       </div>
