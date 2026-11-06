@@ -18,14 +18,15 @@ repo="$CLAUDE_PROJECT_DIR"
 gitdir=$(git -C "$repo" rev-parse --absolute-git-dir 2>/dev/null) || exit 0
 marker="$gitdir/claude-code-reviewed"
 
-# find_copy prints the newest commit on this branch that is the given commit under
+# find_copy prints the oldest commit on this branch that is the given commit under
 # a new hash: the same files (a squash merge, a reworded commit), or the same author
-# date and subject (a rebase, which keeps both even when the files differ).
+# date and subject (a rebase, which keeps both even when the files differ). Oldest,
+# as a wrong pick then reminds too soon, where a newer one would hide unreviewed commits.
 find_copy() {
   local tree at subject
   IFS=$'\t' read -r tree at subject < <(git -C "$repo" log -1 --format=$'%T\t%at\t%s' "$1")
   git -C "$repo" log --format=$'%H\t%T\t%at\t%s' HEAD |
-    T=$tree A=$at S=$subject awk -F'\t' '$2 == ENVIRON["T"] || ($3 == ENVIRON["A"] && $4 == ENVIRON["S"]) {print $1; exit}'
+    T=$tree A=$at S=$subject awk -F'\t' '$2 == ENVIRON["T"] || ($3 == ENVIRON["A"] && $4 == ENVIRON["S"]) {oldest = $1} END {print oldest}'
 }
 
 reason=""
@@ -48,7 +49,9 @@ else
     if [[ -z "$reason" ]]; then
       commits=$(git -C "$repo" rev-list --count "$reviewed..HEAD" 2>/dev/null)
       lines=$(git -C "$repo" diff --shortstat "$reviewed" HEAD 2>/dev/null | grep -Eo '[0-9]+ (insertion|deletion)' | awk '{sum += $1} END {print sum + 0}')
-      if (( commits > MAX_COMMITS )); then
+      if [[ -z "$commits" ]]; then
+        reason="the commits since the last code review could not be counted"
+      elif (( commits > MAX_COMMITS )); then
         reason="$commits commits since the last code review"
       elif (( lines > MAX_LINES )); then
         reason="$lines lines changed since the last code review"
