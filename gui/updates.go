@@ -13,10 +13,11 @@ import (
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
 )
 
-// NoteSpan is a run of text in a note line, bold or not
+// NoteSpan is a run of text in a note line: bold, a link, or neither
 type NoteSpan struct {
 	Text string `json:"text"`
 	Bold bool   `json:"bold,omitempty"`
+	URL  string `json:"url,omitempty"` // only ever https
 }
 
 // NoteBlock is one line of a release's notes as the app draws it
@@ -109,29 +110,43 @@ func newerThan(a, b [3]int) bool {
 }
 
 var (
-	noteLinkPattern = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+	noteLinkPattern = regexp.MustCompile(`\[([^\]]*)\]\(([^)]*)\)`)
+	noteBoldLink    = regexp.MustCompile(`\*\*(\[[^\]]*\]\([^)]*\))\*\*`)
 	noteBoldPattern = regexp.MustCompile(`\*\*(.+?)\*\*`)
 	noteHeading     = regexp.MustCompile(`^#{1,6}\s+`)
 )
 
-// noteSpans reads a line's inline markdown: **bold** becomes bold spans, links keep only their text, backticks go, anything else is plain
+// noteSpans reads a line's inline markdown: **bold** becomes bold spans, an https link keeps its address and any other only its text, backticks go, anything else is left as it is
 func noteSpans(text string) []NoteSpan {
-	text = noteLinkPattern.ReplaceAllString(text, "$1")
 	text = strings.ReplaceAll(text, "`", "")
+	text = noteBoldLink.ReplaceAllString(text, "$1")
 
 	spans := []NoteSpan{}
-	add := func(part string, bold bool) {
+	add := func(part string, bold bool, address string) {
 		if part != "" {
-			spans = append(spans, NoteSpan{Text: part, Bold: bold})
+			spans = append(spans, NoteSpan{Text: part, Bold: bold, URL: address})
 		}
 	}
+	addPlain := func(part string) {
+		last := 0
+		for _, match := range noteBoldPattern.FindAllStringSubmatchIndex(part, -1) {
+			add(part[last:match[0]], false, "")
+			add(part[match[2]:match[3]], true, "")
+			last = match[1]
+		}
+		add(part[last:], false, "")
+	}
 	last := 0
-	for _, match := range noteBoldPattern.FindAllStringSubmatchIndex(text, -1) {
-		add(text[last:match[0]], false)
-		add(text[match[2]:match[3]], true)
+	for _, match := range noteLinkPattern.FindAllStringSubmatchIndex(text, -1) {
+		addPlain(text[last:match[0]])
+		label, address := text[match[2]:match[3]], text[match[4]:match[5]]
+		if !strings.HasPrefix(address, "https://") {
+			address = ""
+		}
+		add(label, false, address)
 		last = match[1]
 	}
-	add(text[last:], false)
+	addPlain(text[last:])
 	return spans
 }
 

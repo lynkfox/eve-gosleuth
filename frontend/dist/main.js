@@ -8831,7 +8831,15 @@ function renderReleaseNotes(container, releases, withTitles) {
     for (const block of release.blocks || []) {
       const line = document.createElement(block.kind === "heading" ? "h4" : block.kind === "item" ? "li" : "p");
       for (const span of block.spans || []) {
-        if (span.bold) {
+        if (span.url) {
+          const link = document.createElement("button");
+          link.type = "button";
+          link.className = "text-link";
+          link.textContent = span.text;
+          link.title = span.url;
+          link.addEventListener("click", () => window.runtime.BrowserOpenURL(span.url));
+          line.append(link);
+        } else if (span.bold) {
           const strong = document.createElement("strong");
           strong.textContent = span.text;
           line.append(strong);

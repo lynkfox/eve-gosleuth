@@ -70,7 +70,7 @@ func TestParseReleaseNotes(t *testing.T) {
 
 		assert.Equal(t, "Battles in the PDF report, and the app now tells you when it's out of date", tagline)
 		assert.Len(t, blocks, 6)
-		assert.Equal(t, NoteBlock{Kind: "para", Spans: []NoteSpan{{Text: "The report's "}, {Text: "PDF", Bold: true}, {Text: " now lists the latest battles with battle report links."}}}, blocks[0])
+		assert.Equal(t, NoteBlock{Kind: "para", Spans: []NoteSpan{{Text: "The report's "}, {Text: "PDF", Bold: true}, {Text: " now lists the "}, {Text: "latest battles", URL: "https://zkillboard.com"}, {Text: " with battle report links."}}}, blocks[0])
 		assert.Equal(t, "heading", blocks[1].Kind)
 		assert.Equal(t, "item", blocks[2].Kind)
 		assert.Equal(t, NoteBlock{Kind: "heading", Spans: plain("Fixed")}, blocks[4])
@@ -87,6 +87,9 @@ func TestParseReleaseNotes(t *testing.T) {
 			"bold first line is no tagline": {"**Loud**", "", []NoteBlock{{Kind: "para", Spans: []NoteSpan{{Text: "Loud", Bold: true}}}}},
 			"star items":                    {"* one\n- two", "", []NoteBlock{{Kind: "item", Spans: plain("one")}, {Kind: "item", Spans: plain("two")}}},
 			"## heading":                    {"## Big", "", []NoteBlock{{Kind: "heading", Spans: plain("Big")}}},
+			"a link keeps its address":      {"See [the guide](https://example.com/a) now", "", []NoteBlock{{Kind: "para", Spans: []NoteSpan{{Text: "See "}, {Text: "the guide", URL: "https://example.com/a"}, {Text: " now"}}}}},
+			"a bold link is a link":         {"**[the guide](https://example.com/a)**", "", []NoteBlock{{Kind: "para", Spans: []NoteSpan{{Text: "the guide", URL: "https://example.com/a"}}}}},
+			"only https links keep theirs":  {"[bad](javascript:alert(1)) [plain](http://example.com)", "", []NoteBlock{{Kind: "para", Spans: []NoteSpan{{Text: "bad"}, {Text: ") "}, {Text: "plain"}}}}},
 			"the marker wins over Installing": {
 				"a\n## Installing\nb\n<!-- end of notes -->\nc", "", []NoteBlock{{Kind: "para", Spans: plain("a")}, {Kind: "heading", Spans: plain("Installing")}, {Kind: "para", Spans: plain("b")}},
 			},
