@@ -25,6 +25,7 @@ type fakeZkill struct {
 	mu    sync.Mutex
 	list  []api.ZkbResponse // newest first
 	pages []int
+	fail  bool // every page fails
 }
 
 func (f *fakeZkill) Request(method, endpoint string, body interface{}) (*http.Response, error) {
@@ -35,6 +36,9 @@ func (f *fakeZkill) Request(method, endpoint string, body interface{}) (*http.Re
 		return nil, err
 	}
 	f.pages = append(f.pages, page)
+	if f.fail {
+		return nil, fmt.Errorf("%w: zKillboard is down", api.ErrRequestFailedToComplete)
+	}
 	start := min((page-1)*api.ZKILL_PAGE_SIZE, len(f.list))
 	data, err := json.Marshal(f.list[start:min(start+api.ZKILL_PAGE_SIZE, len(f.list))])
 	if err != nil {
@@ -113,6 +117,23 @@ func TestCachedZkillLists(t *testing.T) {
 		assert.Equal(t, []int{1}, zkill.asked())
 		assert.Equal(t, ids(zkill.list), got, "the three new killmails, then the thousand known")
 		assert.Zero(t, raw.calls["killmail"], "every killmail came from zKillboard's pages or the cache")
+	})
+
+	t.Run("a pull that fails before listing anything leaves the cached list as it was", func(t *testing.T) {
+		zkill, target, _ := setup(killmails(100000, 1000, 3))
+		all := retrieval.KillmailLimits{Max: retrieval.AllKillmails, Pages: 10}
+		assert.Len(t, collect(target, all), 1000)
+		zkill.asked()
+
+		zkill.fail = true
+		_, err := retrieval.CollectKillmails(target, all)
+		assert.ErrorIs(t, err, api.ErrOnlyPartialZkillPull)
+		zkill.asked()
+
+		zkill.fail = false
+		zkill.prepend(killmails(100003, 3, 0))
+		assert.Equal(t, ids(zkill.list), collect(target, all))
+		assert.Equal(t, []int{1}, zkill.asked(), "page 1 still reaches the cached list")
 	})
 
 	t.Run("a search needing more than the cached list has carries on paging below it", func(t *testing.T) {

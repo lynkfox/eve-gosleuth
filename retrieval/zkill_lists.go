@@ -127,7 +127,8 @@ func listEntity(target IntelTarget, entityType types.EntityType, entityID int, p
 		}
 	}
 
-	if lists != nil {
+	// a pull that failed before listing anything leaves the cached list as it was, rather than saving it with no unbroken part, which would make the next run page it all again
+	if lists != nil && (err == nil || len(pulled.Killmails) > 0) {
 		lists.SaveKnownZkillList(entityType.String(), entityID, paging.Filter, knownList(merged, unbroken, ended))
 	}
 	list := entityList{killmails: merged, within: min(unbroken, need), reached: ended || api.ReachesDate(merged[:unbroken], paging.NewerThan)}
