@@ -5864,7 +5864,11 @@ function renderWarVersus(war, report) {
   update.addEventListener("click", () => runWar(war, true));
   const note = document.createElement("span");
   note.className = "row-detail war-update-note";
-  if (report && report.fullRunDue && !warNeverRun(war)) {
+  const listFailed = report && report.reach.some((line) => line.failed);
+  if (report && report.fullRunDue && listFailed && !warNeverRun(war)) {
+    note.textContent = "Some lists could not be read on the last run, so the next run reads every list again.";
+    update.title = "Reads every list again, as zKillboard did not answer for some of them on the last run";
+  } else if (report && report.fullRunDue && !warNeverRun(war)) {
     note.textContent = "The sides or start changed, so the next run reads every list again.";
     update.title = "Reads every list again, as the sides or start date changed since the last full run";
   } else if (warNeverRun(war)) {
@@ -6052,7 +6056,8 @@ function renderWarOverview(report) {
 
   parts.push(warMeasuresTable(report));
 
-  if (report.reach.length > 0) parts.push(warReachWarning(report));
+  if (report.reach.some((line) => line.failed)) parts.push(warFailedListsWarning(report));
+  if (report.reach.some((line) => !line.failed)) parts.push(warReachWarning(report));
   parts.push(warParagraph("Killmails show neither objectives nor survivors, so these are what was lost, not who won. No battle is called won.", "row-detail war-caveat"));
   parts.push(warOthersSection(report));
   el("war-overview").replaceChildren(...parts);
@@ -6201,6 +6206,27 @@ function warMeasuresTable(report) {
   return table;
 }
 
+// warFailedListsWarning names each list zKillboard did not answer for at the last run, why, and how far it got before that
+function warFailedListsWarning(report) {
+  const box = document.createElement("div");
+  box.className = "status warning war-reach";
+  const title = document.createElement("strong");
+  title.textContent = "zKillboard did not answer for some groups' lists on the last run.";
+  const list = document.createElement("ul");
+  for (const line of report.reach.filter((line) => line.failed)) {
+    const item = document.createElement("li");
+    // a list that failed on its first page read nothing, so it has only the zero time
+    const got = new Date(line.oldest).getUTCFullYear() <= 1 ? "" : `, read back to ${spokenDate(line.oldest)}`;
+    item.textContent = `${line.group}: ${line.failed}${got}`;
+    list.append(item);
+  }
+  const note = document.createElement("div");
+  note.className = "row-detail";
+  note.textContent = "Their killmails may be missing from this report, though those the war already held stay. Update reads every list again from the war's start.";
+  box.append(title, list, note);
+  return box;
+}
+
 // warReachWarning names each zKillboard list that stopped short of the war's start, and the date it got to
 function warReachWarning(report) {
   const box = document.createElement("div");
@@ -6209,10 +6235,9 @@ function warReachWarning(report) {
   const title = document.createElement("strong");
   title.textContent = `Some of zKillboard's lists stop short of the war's start${start}.`;
   const list = document.createElement("ul");
-  for (const line of report.reach) {
+  for (const line of report.reach.filter((line) => !line.failed)) {
     const item = document.createElement("li");
-    // a list that failed on its first page reached nothing, so it has only the zero time
-    item.textContent = new Date(line.oldest).getUTCFullYear() <= 1 ? `${line.group}: could not be read on the last run` : `${line.group}: reached ${spokenDate(line.oldest)}`;
+    item.textContent = `${line.group}: reached ${spokenDate(line.oldest)}`;
     list.append(item);
   }
   const note = document.createElement("div");

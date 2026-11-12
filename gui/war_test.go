@@ -2,6 +2,7 @@ package gui
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,12 +30,16 @@ type pagingRecorder struct {
 	mu     sync.Mutex
 	lists  map[int][]api.ZkbResponse
 	paging []api.ZkillPaging
+	fail   map[int]error // lists that fail before listing anything
 }
 
 func (p *pagingRecorder) GetZkillResults(entityId int, entityType types.EntityType, paging api.ZkillPaging) (api.ZkillList, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.paging = append(p.paging, paging)
+	if err := p.fail[entityId]; err != nil {
+		return api.ZkillList{}, err
+	}
 	return api.ZkillList{Killmails: p.lists[entityId], Ended: true}, nil
 }
 
@@ -294,6 +299,31 @@ func TestCollectWar(t *testing.T) {
 		assert.Equal(t, []time.Time{start, start}, zkill.newerThan(), "a side changed, so every list is read again from the start")
 	})
 
+	t.Run("a list that fails is reported as failed, and makes the next run a full one", func(t *testing.T) {
+		app, zkill := warApp(t, fightLists(now))
+		card := savedWar(t, app, "2026-03-01")
+		start := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+		_, err := app.CollectWar(card.ID)
+		assert.NoError(t, err)
+
+		zkill.fail = map[int]error{warBeta: fmt.Errorf("%w: timed out", api.ErrOnlyPartialZkillPull)}
+		report, err := app.CollectWar(card.ID)
+		assert.NoError(t, err, "Alpha's list and the killmails the war held still make a report")
+		assert.Len(t, report.Reach, 1)
+		assert.Equal(t, "Beta", report.Reach[0].Group)
+		assert.NotEmpty(t, report.Reach[0].Failed)
+		assert.True(t, report.Reach[0].Oldest.IsZero())
+		assert.True(t, report.FullRunDue, "the run key is still the last full run's, but a list failed")
+
+		zkill.fail = nil
+		zkill.reset()
+		report, err = app.CollectWar(card.ID)
+		assert.NoError(t, err)
+		assert.Equal(t, []time.Time{start, start}, zkill.newerThan(), "every list is read again from the start")
+		assert.Empty(t, report.Reach)
+		assert.False(t, report.FullRunDue)
+	})
+
 	t.Run("an added group makes the next run a full one", func(t *testing.T) {
 		app, zkill := warApp(t, fightLists(now))
 		card := savedWar(t, app, "")
@@ -485,13 +515,15 @@ func TestReachLines(t *testing.T) {
 	card := savedWar(t, app, "")
 	war, _ := app.cache.WarByID(card.ID)
 	oldest := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	war.Reach = []retrieval.WarReach{{Group: "Alpha", Oldest: oldest}, {Group: "Beta", Oldest: oldest, Complete: true}}
+	war.Reach = []retrieval.WarReach{{Group: "Alpha", Oldest: oldest}, {Group: "Beta", Oldest: oldest, Complete: true},
+		{Group: "Gamma", Oldest: oldest, Failed: "timed out reaching zkillboard.com"}, {Group: "Delta"}}
 	app.cache.SaveWar(war)
 
 	report, err := app.OpenWar(card.ID)
 
 	assert.NoError(t, err)
-	assert.Equal(t, []WarReachLine{{Group: "Alpha", Oldest: oldest}}, report.Reach, "only the lists that fell short")
+	assert.Equal(t, []WarReachLine{{Group: "Alpha", Oldest: oldest}, {Group: "Gamma", Oldest: oldest, Failed: "timed out reaching zkillboard.com"},
+		{Group: "Delta", Failed: "zKillboard's list could not be read"}}, report.Reach, "only the lists that fell short, those that failed with why, one saved before failures were kept by its zero time")
 }
 
 func TestAddWarGroup(t *testing.T) {

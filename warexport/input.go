@@ -16,7 +16,7 @@ type Input struct {
 	A, B, Others Measures
 	Counts       Counts
 	Classes      []ClassCount // most systems first
-	Reach        []ReachLine  // the groups zKillboard's cap kept from their start of the war
+	Reach        []ReachLine  // the groups whose lists did not reach the start of the war: cut short by zKillboard's cap, or not read as zKillboard did not answer
 	GroupsA      []Group      // most pilots first
 	GroupsB      []Group
 
@@ -73,7 +73,8 @@ type ClassCount struct {
 // ReachLine is a group whose list stopped short of the start of the war
 type ReachLine struct {
 	Group  string `json:"group"`
-	Oldest string `json:"oldest"` // YYYY-MM-DD
+	Oldest string `json:"oldest"`           // YYYY-MM-DD, empty when it read nothing
+	Failed string `json:"failed,omitempty"` // why zKillboard's list could not be read, empty when the list itself stops short
 }
 
 // Group is an alliance, or a corp with no alliance, on a side

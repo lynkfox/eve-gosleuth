@@ -36,9 +36,9 @@ type KillmailLimits struct {
 	// ConfirmIgnoreDate is asked, when the newest killmail is already older than NewerThan, whether to collect without the date limit for this search.
 	// It is given the newest killmail's time, and returns false to keep the limit and collect none. nil always keeps it.
 	ConfirmIgnoreDate func(newest time.Time) bool
-	// OnListed is told how far each of the target's Holdings' lists reached, once it is listed, for a report's reach warning. nil to not.
+	// OnListed is told how far each of the target's Holdings' lists reached, once it is listed, for a report's reach warning, with the error that cut it off, if any. nil to not.
 	// oldest is the oldest killmail read without a gap, the zero time for an empty list. complete is whether the list reached NewerThan or zKillboard's end, with no error.
-	OnListed func(group string, oldest time.Time, complete bool)
+	OnListed func(group string, oldest time.Time, complete bool, err error)
 }
 
 // AllKillmails as KillmailLimits.Max collects every killmail on the first KillmailLimits.Pages pages zKillboard lists, still stopping at NewerThan
@@ -312,7 +312,7 @@ Returns:
   - int: how many from the top of the merged list are within the limits
   - error: nil, or the zkill pull errors, the lists that were pulled are still merged
 */
-func listKillmails(target IntelTarget, paging api.ZkillPaging, need int, onListed func(group string, oldest time.Time, complete bool)) (*[]api.ZkbResponse, []*TargetGroup, int, error) {
+func listKillmails(target IntelTarget, paging api.ZkillPaging, need int, onListed func(group string, oldest time.Time, complete bool, err error)) (*[]api.ZkbResponse, []*TargetGroup, int, error) {
 	type listed struct {
 		killmail api.ZkbResponse
 		via      *TargetGroup
@@ -364,7 +364,7 @@ func listKillmails(target IntelTarget, paging api.ZkillPaging, need int, onListe
 		}
 		add(list, holding)
 		if onListed != nil {
-			onListed(holding.Name, list.oldest, err == nil && list.reached)
+			onListed(holding.Name, list.oldest, err == nil && list.reached, err)
 		}
 	}
 

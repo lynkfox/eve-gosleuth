@@ -214,7 +214,8 @@ type WarNPCPilots struct {
 // WarReachLine is a list that did not reach the war's start at its last run, for the reach warning
 type WarReachLine struct {
 	Group  string    `json:"group"`
-	Oldest time.Time `json:"oldest"`
+	Oldest time.Time `json:"oldest"`           // the oldest killmail it read without a gap, the zero time for none
+	Failed string    `json:"failed,omitempty"` // why zKillboard's list could not be read, empty when zKillboard's list itself stops short
 }
 
 // WarPilot is a row of the Pilots tab
@@ -294,7 +295,7 @@ type WarReport struct {
 	People          map[string]WarSidePeople `json:"people"` // by side: a, b, and others
 	Export          aggregate.WarExport      `json:"-"`      // what only the war's export shows
 	Reach           []WarReachLine           `json:"reach"`
-	FullRunDue      bool                     `json:"fullRunDue"` // the sides or start changed since its last full run, so its next run reads every list from its start. Also true before its first run.
+	FullRunDue      bool                     `json:"fullRunDue"` // the sides or start changed since its last full run, or a list failed at its last run, so its next run reads every list from its start. Also true before its first run.
 	Stopped         bool                     `json:"stopped"`
 	RateLimited     bool                     `json:"rateLimited"`
 	Sources         string                   `json:"sources"` // as IntelReport's, empty on opening with nothing collected
@@ -711,14 +712,16 @@ func (a *App) CollectWar(id int) (report WarReport, err error) {
 
 	a.beginWarReport(war)
 	runKey := war.RunKeyFor(sides.A, sides.B)
-	full := war.RunKey != runKey
+	full := war.FullRunDue(sides.A, sides.B)
 	newerThan := war.Start()
 	if !full && !war.NewestKillmail.IsZero() {
 		if since := war.NewestKillmail.Add(-warUpdateOverlap); since.After(newerThan) {
 			newerThan = since
 		}
 	}
-	if full {
+	if full && war.RunKey == runKey {
+		comm.ReportProgress("Collecting %s in full, as some of its lists could not be read at its last run", war.Name)
+	} else if full {
 		comm.ReportProgress("Collecting %s in full, as its sides or start changed since its last full run", war.Name)
 	} else {
 		comm.ReportProgress("Updating %s from %s", war.Name, api.FormatShortDate(newerThan))
@@ -735,10 +738,14 @@ func (a *App) CollectWar(id int) (report WarReport, err error) {
 	var reachMu sync.Mutex
 	gathered := []retrieval.WarReach{}
 	limits := retrieval.KillmailLimits{Max: retrieval.AllKillmails, Pages: retrieval.AllPages, IncludeCached: true, NewerThan: newerThan,
-		OnListed: func(group string, oldest time.Time, complete bool) {
+		OnListed: func(group string, oldest time.Time, complete bool, err error) {
 			reachMu.Lock()
 			defer reachMu.Unlock()
-			gathered = append(gathered, retrieval.WarReach{Group: group, Oldest: oldest, Complete: complete})
+			reach := retrieval.WarReach{Group: group, Oldest: oldest, Complete: complete}
+			if err != nil {
+				reach.Failed = api.FailureReason(err)
+			}
+			gathered = append(gathered, reach)
 		}}
 	listed, collectErr := retrieval.CollectKillmails(target, limits)
 	rateLimited := errors.Is(collectErr, api.ErrRateLimited)
@@ -1093,7 +1100,7 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 		OtherGroups:     []WarOtherGroup{},
 		Days:            []WarDay{},
 		Reach:           []WarReachLine{},
-		FullRunDue:      war.RunKey != war.RunKeyFor(sides.A, sides.B),
+		FullRunDue:      war.FullRunDue(sides.A, sides.B),
 		SystemNicknames: map[int]string{},
 		Export:          data.Export,
 		People:          map[string]WarSidePeople{"a": warSidePeople(data.PeopleA), "b": warSidePeople(data.PeopleB), "others": warSidePeople(data.PeopleOthers)},
@@ -1101,7 +1108,7 @@ func (a *App) buildWarReport(war retrieval.War, sides aggregate.WarSides) WarRep
 	maps.Copy(report.SystemNicknames, edits.SystemNames)
 	for _, reach := range war.Reach {
 		if !reach.Complete {
-			report.Reach = append(report.Reach, WarReachLine{Group: reach.Group, Oldest: reach.Oldest})
+			report.Reach = append(report.Reach, WarReachLine{Group: reach.Group, Oldest: reach.Oldest, Failed: reach.FailedReason()})
 		}
 	}
 

@@ -141,7 +141,11 @@ func warExportInput(report WarReport, everywhere map[int]string, version string,
 		input.Classes = append(input.Classes, warexport.ClassCount{Class: class.Class, Count: class.Count})
 	}
 	for _, reach := range report.Reach {
-		input.Reach = append(input.Reach, warexport.ReachLine{Group: reach.Group, Oldest: reach.Oldest.UTC().Format(warDateLayout)})
+		line := warexport.ReachLine{Group: reach.Group, Failed: reach.Failed}
+		if !reach.Oldest.IsZero() {
+			line.Oldest = reach.Oldest.UTC().Format(warDateLayout)
+		}
+		input.Reach = append(input.Reach, line)
 	}
 	for _, day := range report.Days {
 		input.Days = append(input.Days, warexport.Day{Date: day.Date, A: warExportDay(day.A), B: warExportDay(day.B)})

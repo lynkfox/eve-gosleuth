@@ -36,8 +36,17 @@ type WarAddedGroup struct {
 // WarReach is how far a list of a war's groups reached at its last run, for the report's reach warning
 type WarReach struct {
 	Group    string    `json:"group"`
-	Oldest   time.Time `json:"oldest"`
-	Complete bool      `json:"complete"` // it reached the war's start or zKillboard's end
+	Oldest   time.Time `json:"oldest"`           // the oldest killmail read without a gap, the zero time for none
+	Complete bool      `json:"complete"`         // it reached the war's start or zKillboard's end
+	Failed   string    `json:"failed,omitempty"` // why zKillboard's list could not be read to the end, empty when it was not cut off by an error
+}
+
+// FailedReason is why the list could not be read, also for a list saved before Failed was kept, which an error left with no killmails. Empty when it did not fail.
+func (r WarReach) FailedReason() string {
+	if r.Failed == "" && !r.Complete && r.Oldest.IsZero() {
+		return "zKillboard's list could not be read"
+	}
+	return r.Failed
 }
 
 // War is two sides tracked against each other, with the killmails it counted held apart from the cache's (WarKillmails)
@@ -142,6 +151,22 @@ func (w War) RunKeyFor(sideA []TargetGroup, sideB []TargetGroup) string {
 	}
 	slices.Sort(keys)
 	return w.CurrentRunKey() + "|groups=" + strings.Join(slices.Compact(keys), ",")
+}
+
+/*
+	FullRunDue reports whether the next run must read every list from the war's start: its sides or start changed since its last full run,
+	or a list failed at its last run, so what that list missed is read again.
+
+Parameters:
+  - sideA, sideB: the groups each side resolves to, see WarSideGroups
+*/
+func (w War) FullRunDue(sideA []TargetGroup, sideB []TargetGroup) bool {
+	return w.RunKey != w.RunKeyFor(sideA, sideB) || w.ListFailed()
+}
+
+// ListFailed reports whether any of its lists failed at its last run
+func (w War) ListFailed() bool {
+	return slices.ContainsFunc(w.Reach, func(reach WarReach) bool { return reach.FailedReason() != "" })
 }
 
 // warKey is a war's key in SavedWars: its id

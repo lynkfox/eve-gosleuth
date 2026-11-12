@@ -55,11 +55,20 @@ TABS.summary = (content, BODY) => {
   panel.append(make("p", "note", "Efficiency is the other side's ISK lost as a share of both sides'. No battle is called won."));
   content.append(panel);
 
-  if (BODY.reach.length > 0) {
+  const failed = BODY.reach.filter((line) => line.failed);
+  if (failed.length > 0) {
+    const reach = make("div", "panel");
+    reach.append(make("h2", "", "Lists that could not be read"),
+      make("p", "note", "zKillboard did not answer for these groups' lists when the war was last updated, so some of their killmails may be missing."),
+      table(["Group", "Why", "Read back to"], failed.map((line) => [line.group, line.failed, line.oldest ? writtenDate(line.oldest) : "–"])));
+    content.append(reach);
+  }
+  const short = BODY.reach.filter((line) => !line.failed);
+  if (short.length > 0) {
     const reach = make("div", "panel");
     reach.append(make("h2", "", "Lists that stop short"),
       make("p", "note", "zKillboard's lists stop before the start of the war for these groups, so older killmails may be missing."),
-      table(["Group", "Reaches back to"], BODY.reach.map((line) => [line.group, writtenDate(line.oldest)])));
+      table(["Group", "Reaches back to"], short.map((line) => [line.group, writtenDate(line.oldest)])));
     content.append(reach);
   }
 
