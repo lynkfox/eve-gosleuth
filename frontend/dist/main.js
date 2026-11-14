@@ -576,6 +576,38 @@ function setTargetCollapsed(collapsed) {
     label.append(shownTarget.name);
   }
   label.hidden = !collapsed || !shownTarget;
+  showTargetScope();
+}
+
+/*
+  showTargetScope puts the report's killmail count and date span under the target's name in the target panel, and after it on the pull bar
+  while the panel is shut, so every view of the panel has it. Without a report, ie while searching, it shows nothing.
+*/
+function showTargetScope() {
+  const line = intelReport ? reportScopeLine(intelReport) : "";
+  const text = el("target-entities").querySelector(".entity-target .entity-text");
+  if (text) {
+    let scope = text.querySelector(".target-scope");
+    if (!scope) {
+      scope = document.createElement("div");
+      scope.className = "target-scope";
+      text.append(scope);
+    }
+    scope.textContent = line;
+    scope.hidden = !line;
+  }
+  const label = el("target-pull-label");
+  let pulled = label.querySelector(".target-scope");
+  if (!line || label.hidden) {
+    if (pulled) pulled.remove();
+    return;
+  }
+  if (!pulled) {
+    pulled = document.createElement("span");
+    pulled.className = "target-scope";
+    label.append(pulled);
+  }
+  pulled.textContent = `· ${line}`;
 }
 
 // setHoldingsTucked puts the target's holdings away, or shows them again. Without holdings saved there is nothing to put away, so the Add holding button stays.
@@ -1036,11 +1068,7 @@ async function exportMyIntel(tab) {
 // scopeRows are the Scope card's and window's rows: all the search's killmails, then, with affiliates, the main's and each affiliate's, with their counts and date spans
 function scopeRows(report) {
   const kms = report.killmails || [];
-  const span = (oldest, newest) => {
-    const first = spokenDate(oldest);
-    const last = spokenDate(newest);
-    return first === last ? first : `${first} – ${last}`;
-  };
+  const span = dateSpan;
   const rows = [];
   if (kms.length) {
     rows.push({ name: "All killmails", detail: span(...timeRange(kms.map((km) => km.time))), value: kms.length.toLocaleString("en-US") });
@@ -1052,6 +1080,20 @@ function scopeRows(report) {
     rows.push({ name: source.name, detail: source.main ? `Main · ${when}` : when, value: source.killmails.toLocaleString("en-US") });
   }
   return rows;
+}
+
+// dateSpan is the dates from oldest to newest as the gui writes them, ie Oct 2nd, 2026 – Nov 14th, 2026, or the one date when both fall on it
+function dateSpan(oldest, newest) {
+  const first = spokenDate(oldest);
+  const last = spokenDate(newest);
+  return first === last ? first : `${first} – ${last}`;
+}
+
+// reportScopeLine is how many killmails a report used and the dates they span, ie 1,234 killmails · Oct 2nd, 2026 – Nov 14th, 2026, for the target panel and its pull bar
+function reportScopeLine(report) {
+  const kms = (report && report.killmails) || [];
+  if (!kms.length) return "No killmails";
+  return `${plural(kms.length, "killmail", "killmails")} · ${dateSpan(...timeRange(kms.map((km) => km.time)))}`;
 }
 
 // openScopeWindow shows the whole scope: every list's killmails, the limits the search used, and the caveat every killmail report has
@@ -2186,6 +2228,8 @@ function renderIntelSections(report) {
   if (report.memberList) renderRosterPage();
 
   renderGlance(report);
+  // its dates follow the EVE or local time preference, which draws the sections again
+  showTargetScope();
 }
 
 // profileOnlyReason is the reason showProfileOnly is showing, null while a report or nothing is
@@ -8649,6 +8693,7 @@ function recentOption(entry, index, typed) {
 
   const type = document.createElement("span");
   type.className = "recent-type";
+  showTargetScope();
   type.textContent = searchTypeLabel(entry.type);
 
   if (entry.savedGroup) {

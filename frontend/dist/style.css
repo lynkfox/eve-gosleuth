@@ -329,6 +329,17 @@ main {
   border-radius: 3px;
 }
 
+/* the report's killmail count and date span: under the target's name, and after it on the shut panel's pull bar */
+.target-scope {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.pull-label .target-scope { margin-top: 0; }
+
 /* the target panel is one row: the target, who it belongs to beside it, then its holdings at the right */
 .target {
   display: flex;
