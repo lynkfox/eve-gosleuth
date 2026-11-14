@@ -8545,6 +8545,7 @@ function wireWarSetup() {
 
 function clearIntel() {
   intelReport = null;
+  showTargetScope();
   warReport = null;
   setWarMode(false);
   profileOnlyReason = null;
@@ -8693,7 +8694,6 @@ function recentOption(entry, index, typed) {
 
   const type = document.createElement("span");
   type.className = "recent-type";
-  showTargetScope();
   type.textContent = searchTypeLabel(entry.type);
 
   if (entry.savedGroup) {
