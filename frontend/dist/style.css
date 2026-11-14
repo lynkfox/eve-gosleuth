@@ -3140,6 +3140,13 @@ p.tour-text { margin: 0; }
 .war-split-count { flex: 1 1 auto; align-self: center; }
 #system-nickname-name { display: block; width: 100%; box-sizing: border-box; margin-bottom: 8px; }
 .system-nickname { color: var(--accent); font-weight: 700; }
+/* the war's Nicknames window: a row per system, only the list scrolls so the title and buttons stay */
+.war-nicknames { width: min(520px, calc(100vw - 32px)); }
+.war-nicknames-list { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: 6px 10px; align-items: center; max-height: min(420px, calc(100vh - 260px)); overflow-y: auto; margin-top: 12px; padding-right: 4px; }
+.war-nicknames-list input { width: 100%; box-sizing: border-box; }
+.war-nicknames-add { display: flex; gap: 8px; margin-top: 10px; }
+.war-nicknames-add input { flex: 1; min-width: 0; }
+.war-nicknames-empty { margin-top: 12px; }
 .war-note-text { display: block; width: 100%; resize: vertical; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; box-sizing: border-box; margin-bottom: 12px; }
 .war-setup .war-setup-body { align-content: start; padding-bottom: 28px; }
 .war-setup h3 { margin: 0; font-size: 13px; }

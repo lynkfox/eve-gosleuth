@@ -57,6 +57,7 @@ The **War** button sets up two sides and a start date, and GoSleuth follows the 
   - *A battle that isn't part of the war can be ignored from the same menu. It stays on the list, grayed out, and it leaves everything else in the report, along with any trash or asset denial attached to it, until it's taken back. If only part of a fight doesn't belong, split that part off first and ignore just the piece*
   - *Add a note to any battle from the same menu. It follows the battle through updates, merges, and splits*
   - *Right-click a system to give it a nickname, for everywhere in the app, like "Velvet Anchor", or only in this war, like an op name such as "Mango"*
+  - *The **Nicknames…** button on the Systems tab lists every nicknamed system, to change or remove their nicknames all in one place. Add one under the list, for this war only: as you type, it suggests the war's systems and shows the nickname a system already has, and it takes any system, even one the war hasn't reached yet*
 - **Systems**
   - *Similar to Battles, but showing everything for a given system*
 - **Timeline**

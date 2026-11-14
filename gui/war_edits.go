@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lynkfox/go_eve_sleuth/aggregate"
+	"github.com/lynkfox/go_eve_sleuth/comm/types"
 	"github.com/lynkfox/go_eve_sleuth/retrieval"
 )
 
@@ -314,6 +315,47 @@ func (a *App) GetSystemNicknames() (names map[int]string, err error) {
 	defer recoverAsError(&err)
 	a.waitReady()
 	return a.cache.SystemNicknamesOf(), nil
+}
+
+/*
+	LookupSystem finds a solar system by its exact name, for the war's Nicknames window to name one the war has not reached yet. It does not wait for a running search.
+
+Parameters:
+  - name: the system's name, ignoring case
+
+Returns:
+  - EntityRef: the system, its name as EVE spells it
+  - error: a user readable message if no system has the name
+*/
+func (a *App) LookupSystem(name string) (system EntityRef, err error) {
+	defer recoverAsError(&err)
+	a.waitReady()
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return EntityRef{}, errors.New("Enter a system's name")
+	}
+	found := retrieval.IntelTarget{Name: name, Clients: a.clients}
+	found.GetTargetInfoOfType(types.SYSTEM)
+	if found.Error != nil {
+		return EntityRef{}, errors.New(found.DisplayMessage)
+	}
+	return EntityRef{ID: found.IDNumber, Type: types.SYSTEM.String(), Name: found.Name}, nil
+}
+
+/*
+	SystemNames returns systems' names, for the nicknamed systems a war's Nicknames window lists that its report does not hold. It does not wait for a running search.
+
+Parameters:
+  - ids: the systems
+
+Returns:
+  - map[int]string: their names, by id
+  - error: a user readable message if the ESI could not be asked
+*/
+func (a *App) SystemNames(ids []int) (names map[int]string, err error) {
+	defer recoverAsError(&err)
+	a.waitReady()
+	return a.cache.GetNamesFromEveIDs(ids)
 }
 
 /*

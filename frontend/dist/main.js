@@ -4970,6 +4970,139 @@ async function saveSystemNickname() {
   redrawSystemNames();
 }
 
+/* System nicknames for a war: every nicknamed system in one window, and any other named from the line under it */
+
+let warNicknameRows = []; // the Nicknames window's rows: { system, input, scope, name, wasScope }, name and wasScope as it opened
+let warNicknameKnown = new Map(); // the systems the add line suggests, the war's and the nicknamed, by lower case name
+
+// openWarNicknames opens the Nicknames window on the war shown: the systems with a nickname, A to Z
+async function openWarNicknames() {
+  if (!warMode || !warReport) return;
+  const systems = new Map(warReport.systems.filter((entry) => entry.system.id).map((entry) => [entry.system.id, entry.system]));
+  const named = [...new Set([...Object.keys(warReport.systemNicknames), ...Object.keys(systemNicknames)].map(Number))];
+  const missing = named.filter((id) => !systems.has(id));
+  if (missing.length > 0) {
+    let names = {};
+    try {
+      names = (await backend().SystemNames(missing)) || {};
+    } catch (err) {
+      setStatus(String(err), true);
+    }
+    for (const id of missing) systems.set(id, { id, name: names[id] || `System ${id}` });
+  }
+  warNicknameKnown = new Map([...systems.values()].map((system) => [system.name.toLowerCase(), system]));
+  warNicknameRows = [];
+  el("war-nicknames-list").replaceChildren();
+  named.map((id) => systems.get(id)).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).forEach(addWarNicknameRow);
+  showWarNicknamesEmpty();
+  el("war-nicknames-suggestions").replaceChildren(...[...systems.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map((system) => {
+    const option = document.createElement("option");
+    option.value = system.name;
+    const nickname = systemNickname(system.id);
+    if (nickname) option.label = `${system.name} - ${nickname}`;
+    return option;
+  }));
+  el("war-nicknames-new").value = "";
+  el("war-nicknames-new-name").value = "";
+  el("war-nicknames-error").hidden = true;
+  el("war-nicknames").showModal();
+}
+
+function showWarNicknamesEmpty() {
+  el("war-nicknames-empty").hidden = warNicknameRows.length > 0;
+}
+
+// addWarNicknameRow adds a system's row to the Nicknames window. Its scope starts where the name now shown lives, as in the single window.
+function addWarNicknameRow(system) {
+  const name = systemNickname(system.id);
+  const wasScope = warReport.systemNicknames[system.id] || !systemNicknames[system.id] ? "war" : "everywhere";
+  const label = document.createElement("span");
+  label.textContent = system.name;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.maxLength = 60;
+  input.spellcheck = false;
+  input.value = name;
+  input.setAttribute("aria-label", `Nickname for ${system.name}`);
+  const scope = document.createElement("select");
+  scope.setAttribute("aria-label", `Where ${system.name}'s nickname shows`);
+  for (const [value, text] of [["war", "This war"], ["everywhere", "Everywhere"]]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    scope.append(option);
+  }
+  scope.value = wasScope;
+  const row = { system, input, scope, name, wasScope };
+  warNicknameRows.push(row);
+  el("war-nicknames-list").append(label, input, scope);
+  return row;
+}
+
+// fillWarNicknameNew puts the nickname of the system typed on the add line in its nickname box, once the name is one the window knows
+function fillWarNicknameNew() {
+  const system = warNicknameKnown.get(el("war-nicknames-new").value.trim().toLowerCase());
+  if (!system) return;
+  const row = warNicknameRows.find((existing) => existing.system.id === system.id);
+  el("war-nicknames-new-name").value = row ? row.input.value : systemNickname(system.id);
+}
+
+// addWarNicknameSystem names the system on the add line for this war only, in its row, or a new one for a system without one. Saved with the rest.
+async function addWarNicknameSystem() {
+  const error = el("war-nicknames-error");
+  error.hidden = true;
+  const typed = el("war-nicknames-new").value.trim();
+  const nickname = el("war-nicknames-new-name").value.trim();
+  let system = warNicknameKnown.get(typed.toLowerCase());
+  try {
+    if (!nickname) throw new Error("Enter a nickname for it");
+    if (!system) {
+      const found = await backend().LookupSystem(typed);
+      system = { id: found.id, name: found.name };
+      warNicknameKnown.set(system.name.toLowerCase(), system);
+    }
+  } catch (err) {
+    error.textContent = String(err.message || err);
+    error.hidden = false;
+    return;
+  }
+  const row = warNicknameRows.find((existing) => existing.system.id === system.id) || addWarNicknameRow(system);
+  row.input.value = nickname;
+  row.scope.value = "war";
+  showWarNicknamesEmpty();
+  el("war-nicknames-new").value = "";
+  el("war-nicknames-new-name").value = "";
+  row.input.scrollIntoView({ block: "nearest" });
+  el("war-nicknames-new").focus();
+}
+
+// saveWarNicknames saves the rows changed. A name moved from everywhere to this war leaves everywhere, as the single window does unless told to keep it.
+async function saveWarNicknames() {
+  const warID = warReport.war.id;
+  const changed = warNicknameRows.filter((row) => row.input.value.trim() !== row.name || row.scope.value !== row.wasScope);
+  try {
+    for (const row of changed) {
+      const id = row.system.id;
+      const nickname = row.input.value.trim();
+      const everywhere = row.scope.value === "everywhere";
+      const dropElsewhere = !everywhere && row.wasScope === "everywhere" && Boolean(systemNicknames[id]);
+      await backend().SetSystemNickname(id, nickname, warID, everywhere);
+      if (dropElsewhere) await backend().SetSystemNickname(id, "", 0, true);
+      if (everywhere && nickname) systemNicknames[id] = nickname;
+      else if (everywhere || dropElsewhere) delete systemNicknames[id];
+      if (nickname && !everywhere) warReport.systemNicknames[id] = nickname;
+      else delete warReport.systemNicknames[id];
+    }
+  } catch (err) {
+    el("war-nicknames-error").textContent = String(err);
+    el("war-nicknames-error").hidden = false;
+    redrawSystemNames(); // those saved before it show
+    return;
+  }
+  el("war-nicknames").close();
+  if (changed.length > 0) redrawSystemNames();
+}
+
 // entitySection is an entity's menu section, under a heading naming its kind, ie "Corporation: URSA PRIMUS"
 function entitySection(entity) {
   return { heading: `${searchTypeLabel(entity.type)}: ${entity.name}`, entity };
@@ -8425,6 +8558,21 @@ function wireWarSetup() {
   el("system-nickname-form").addEventListener("submit", (event) => {
     event.preventDefault();
     saveSystemNickname();
+  });
+  el("war-nicknames-button").addEventListener("click", openWarNicknames);
+  el("war-nicknames-cancel").addEventListener("click", () => el("war-nicknames").close());
+  el("war-nicknames-add").addEventListener("click", addWarNicknameSystem);
+  el("war-nicknames-new").addEventListener("input", fillWarNicknameNew);
+  for (const id of ["war-nicknames-new", "war-nicknames-new-name"]) {
+    el(id).addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault(); // Enter adds the system typed, rather than saving
+      addWarNicknameSystem();
+    });
+  }
+  el("war-nicknames-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveWarNicknames();
   });
   loadSystemNicknames();
   el("war-button").addEventListener("click", openWarSetup);

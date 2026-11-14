@@ -455,6 +455,9 @@
           </div>
 
           <div id="panel-war-systems" class="tab-panel" role="tabpanel" aria-labelledby="tab-war-systems" hidden>
+            <div class="war-toolbar">
+              <button id="war-nicknames-button" class="secondary" type="button" title="Add, change, or remove the nicknames of this war's systems">Nicknames…</button>
+            </div>
             <div id="war-systems-classes" class="war-classes"></div>
             <table class="war-table war-fixed war-systems-table">
               <colgroup><col class="war-col-class"><col class="war-col-name"><col><col><col></colgroup>
@@ -1376,6 +1379,26 @@
         <button class="secondary" value="cancel" formnovalidate>Cancel</button>
         <button id="war-note-remove" class="danger" value="remove" formnovalidate hidden>Remove</button>
         <button value="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="war-nicknames" class="confirm war-nicknames" aria-labelledby="war-nicknames-title">
+    <form id="war-nicknames-form" method="dialog">
+      <p id="war-nicknames-title" class="holding-title">System nicknames</p>
+      <p class="confirm-detail">Change where a name shows, or empty it to remove it. Add names below the list, for this war only. Nothing is kept until you Save.</p>
+      <div id="war-nicknames-list" class="war-nicknames-list"></div>
+      <p id="war-nicknames-empty" class="muted war-nicknames-empty" hidden>No system has a nickname yet.</p>
+      <div class="war-nicknames-add">
+        <input id="war-nicknames-new" type="text" spellcheck="false" list="war-nicknames-suggestions" autocomplete="off" placeholder="System, ie Jita" aria-label="System to nickname">
+        <input id="war-nicknames-new-name" type="text" maxlength="60" spellcheck="false" placeholder="Nickname" aria-label="Its nickname, for this war only">
+        <button id="war-nicknames-add" class="secondary" type="button">Add</button>
+      </div>
+      <datalist id="war-nicknames-suggestions"></datalist>
+      <p id="war-nicknames-error" class="preferences-error" role="alert" hidden></p>
+      <div class="confirm-actions">
+        <button id="war-nicknames-cancel" class="secondary" type="button">Cancel</button>
+        <button type="submit">Save</button>
       </div>
     </form>
   </dialog>
